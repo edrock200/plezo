@@ -160,6 +160,17 @@ class ServerCapabilities {
   /// which Plex probes per server (`PlexClient.capabilities`) — so that is the
   /// only override this type needs. Widen the parameter list if another flag
   /// ever becomes a runtime probe.
+  /// Silo (`/api/v2`): server-defined home sections, 1–5 star ratings,
+  /// favorites and Continue Watching dismissals; no live TV, folder browsing,
+  /// metadata editing or trickplay in this client yet.
+  static const ServerCapabilities silo = ServerCapabilities(
+    videoTranscoding: true,
+    richHubs: true,
+    numericUserRating: true,
+    userFavorites: true,
+    continueWatchingRemoval: true,
+  );
+
   ServerCapabilities copyWith({bool? videoTranscoding}) {
     return ServerCapabilities(
       liveTv: liveTv,

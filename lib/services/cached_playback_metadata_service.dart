@@ -38,6 +38,8 @@ class CachedPlaybackMetadataService {
           backend: backend,
           mediaIndex: mediaIndex,
         ),
+        // Silo items are never downloaded, so nothing is cached for offline use.
+        MediaBackend.silo => Future<MediaSourceInfo?>.value(),
       };
     } catch (e) {
       appLogger.d('Cached media source info unavailable for $cacheServerId:$itemId', error: e);
@@ -70,6 +72,7 @@ class CachedPlaybackMetadataService {
           creditsPattern: creditsPattern,
           forceChapterFallback: forceChapterFallback,
         ),
+        MediaBackend.silo => Future<PlaybackExtras?>.value(),
       };
     } catch (e) {
       appLogger.d('Cached playback extras unavailable for $cacheServerId:$itemId', error: e);

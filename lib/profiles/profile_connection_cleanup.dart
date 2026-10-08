@@ -63,10 +63,10 @@ class ProfileConnectionCleanup {
     await _clearProfileServerPrefsNoLongerReferenced(
       profileId: profileId,
       removedServerIds: removedServerIds,
-      clearEverywhereWhenUnreferenced: connection is JellyfinConnection,
+      clearEverywhereWhenUnreferenced: connection is JellyfinConnection || connection is SiloConnection,
     );
 
-    if (connection is JellyfinConnection) {
+    if (connection is JellyfinConnection || connection is SiloConnection) {
       await _removeUnreferencedJellyfinConnection(connection);
     }
   }
@@ -159,7 +159,7 @@ class ProfileConnectionCleanup {
     final referencedConnectionIds = (await profileConnections.listAll()).map((row) => row.connectionId).toSet();
     var removed = 0;
 
-    for (final connection in all.whereType<JellyfinConnection>()) {
+    for (final connection in all.where((c) => c is JellyfinConnection || c is SiloConnection)) {
       if (referencedConnectionIds.contains(connection.id)) continue;
       await _removeJellyfinConnection(connection);
       removed++;
@@ -168,15 +168,26 @@ class ProfileConnectionCleanup {
     return removed;
   }
 
-  Future<void> _removeUnreferencedJellyfinConnection(JellyfinConnection connection) async {
+  Future<void> _removeUnreferencedJellyfinConnection(Connection connection) async {
     if ((await profileConnections.listForConnection(connection.id)).isNotEmpty) return;
     await _removeJellyfinConnection(connection);
   }
 
-  Future<void> _removeJellyfinConnection(JellyfinConnection connection) async {
+  /// Removes a per-connection (MediaBrowser or Silo) connection and its client.
+  Future<void> _removeJellyfinConnection(Connection connection) async {
     await connections.remove(connection.id);
-    serverManager?.removeJellyfinConnection(connection);
-    final serverId = ServerId.tryParse(connection.serverMachineId);
+    final String rawServerId;
+    switch (connection) {
+      case JellyfinConnection():
+        serverManager?.removeJellyfinConnection(connection);
+        rawServerId = connection.serverMachineId;
+      case SiloConnection():
+        serverManager?.removeSiloConnection(connection);
+        rawServerId = connection.serverId;
+      case PlexAccountConnection():
+        return;
+    }
+    final serverId = ServerId.tryParse(rawServerId);
     if (serverId != null && !await _isServerReferenced(serverId)) {
       await storage.clearLibraryPreferencesForServerEverywhere(serverId);
     }
@@ -245,5 +256,6 @@ Set<ServerId> _serverIdsForConnection(Connection connection) {
       for (final server in servers) ?ServerId.tryParse(server.clientIdentifier),
     },
     JellyfinConnection(:final serverMachineId) => {?ServerId.tryParse(serverMachineId)},
+    SiloConnection(:final serverId) => {?ServerId.tryParse(serverId)},
   };
 }

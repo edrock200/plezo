@@ -72,7 +72,8 @@ AccountPreferenceResolution resolveAccountPreferenceAccounts({
         row: row,
         connection: connection,
       ),
-      null => null,
+      // Silo keeps its preferences in server-side settings, not mapped here.
+      SiloConnection() || null => null,
     };
     if (account == null) continue;
     accounts.add(account);

@@ -90,7 +90,9 @@ abstract class MediaListPlaybackLauncher {
   /// [MediaItem.backend] / [MediaPlaylist.backend].
   static MediaListPlaybackLauncher forItem(BuildContext context, Object item) {
     final backend = _backendOf(item);
-    if (backend.usesMediaBrowserApi) {
+    // Only Plex has server-side play queues; every other backend builds a
+    // local queue through the neutral client API.
+    if (backend != MediaBackend.plex) {
       return JellyfinSequentialLauncher(context: context);
     }
     return PlexPlayQueueLauncher.forContext(context, item);

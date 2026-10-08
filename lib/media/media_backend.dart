@@ -9,18 +9,23 @@ import 'media_browser_dialect.dart';
 enum MediaBackend {
   plex,
   jellyfin,
-  emby;
+  emby,
+
+  /// Silo (siloserver.org), spoken over its own `/api/v2` REST contract.
+  silo;
 
   String get id => switch (this) {
     MediaBackend.plex => 'plex',
     MediaBackend.jellyfin => 'jellyfin',
     MediaBackend.emby => 'emby',
+    MediaBackend.silo => 'silo',
   };
 
   static MediaBackend fromId(String id) => switch (id) {
     'plex' => MediaBackend.plex,
     'jellyfin' => MediaBackend.jellyfin,
     'emby' => MediaBackend.emby,
+    'silo' => MediaBackend.silo,
     _ => throw ArgumentError('Unknown MediaBackend id: $id'),
   };
 
@@ -31,12 +36,13 @@ enum MediaBackend {
   ///   surfaces corrupted cache rows or schema drift instead of silently
   ///   misclassifying Jellyfin items as Plex.
   static MediaBackend fromString(String? id) {
-    if (id != null && id != 'plex' && id != 'jellyfin' && id != 'emby') {
+    if (id != null && id != 'plex' && id != 'jellyfin' && id != 'emby' && id != 'silo') {
       appLogger.w('Unknown MediaBackend id "$id"; defaulting to plex');
     }
     return switch (id) {
       'jellyfin' => MediaBackend.jellyfin,
       'emby' => MediaBackend.emby,
+      'silo' => MediaBackend.silo,
       _ => MediaBackend.plex,
     };
   }
@@ -47,9 +53,14 @@ enum MediaBackend {
   /// of comparing against [MediaBackend.jellyfin].
   bool get usesMediaBrowserApi => dialect != null;
 
-  /// The MediaBrowser dialect this backend speaks, or `null` for Plex.
+  /// Whether items from this backend can be downloaded for offline use.
+  /// Silo stream URLs belong to short-lived playback sessions, so this
+  /// client does not offer downloads for it.
+  bool get supportsDownloads => this != MediaBackend.silo;
+
+  /// The MediaBrowser dialect this backend speaks, or `null` for Plex and Silo.
   MediaBrowserDialect? get dialect => switch (this) {
-    MediaBackend.plex => null,
+    MediaBackend.plex || MediaBackend.silo => null,
     MediaBackend.jellyfin => MediaBrowserDialect.jellyfin,
     MediaBackend.emby => MediaBrowserDialect.emby,
   };

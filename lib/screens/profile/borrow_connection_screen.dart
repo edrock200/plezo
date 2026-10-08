@@ -254,6 +254,8 @@ class _BorrowConnectionScreenState extends State<BorrowConnectionScreen> {
           await _borrowPlex(cand);
         case JellyfinConnection():
           await _borrowJellyfin(cand);
+        case SiloConnection():
+          await _borrowSilo(cand);
       }
     } catch (e, st) {
       // Without this, a throw from the verify/borrow steps (network, DB)
@@ -353,6 +355,22 @@ class _BorrowConnectionScreenState extends State<BorrowConnectionScreen> {
         connectionId: jelly.id,
         userToken: cand.pc.hasToken ? cand.pc.userToken : jelly.accessToken,
         userIdentifier: cand.pc.userIdentifier.isNotEmpty ? cand.pc.userIdentifier : jelly.userId,
+        tokenAcquiredAt: DateTime.now(),
+      ),
+    );
+    _finishBorrow();
+  }
+
+  /// A Silo connection is one account acting as one Silo profile; borrowing
+  /// it links the same connection row to the target profile.
+  Future<void> _borrowSilo(_BorrowCandidate cand) async {
+    final silo = cand.connection as SiloConnection;
+    await context.read<ProfileConnectionRegistry>().upsert(
+      ProfileConnection(
+        profileId: widget.targetProfile.id,
+        connectionId: silo.id,
+        userToken: cand.pc.hasToken ? cand.pc.userToken : silo.accessToken,
+        userIdentifier: cand.pc.userIdentifier.isNotEmpty ? cand.pc.userIdentifier : silo.userId,
         tokenAcquiredAt: DateTime.now(),
       ),
     );

@@ -74,6 +74,7 @@ import 'services/download_storage_service.dart';
 import 'services/connectivity_probe.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'services/jellyfin_api_cache.dart';
+import 'services/silo/silo_api_cache.dart';
 import 'services/plex_api_cache.dart';
 import 'database/app_database.dart';
 import 'database/download_operations.dart';
@@ -1320,6 +1321,7 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
 
     PlexApiCache.initialize(_appDatabase);
     JellyfinApiCache.initialize(_appDatabase);
+    SiloApiCache.initialize(_appDatabase);
 
     _downloadManager = DownloadManagerService(
       database: _appDatabase,
@@ -1671,6 +1673,7 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
         ChangeNotifierProvider(
           create: (context) {
             _serverManager.onJellyfinConnectionUpdated = context.read<ConnectionRegistry>().upsert;
+            _serverManager.onSiloConnectionUpdated = context.read<ConnectionRegistry>().upsert;
             return MultiServerProvider(_serverManager, _aggregationService);
           },
         ),
@@ -2160,13 +2163,16 @@ class _SetupScreenState extends State<SetupScreen> with MountedSetStateMixin {
             }
           } else if (conn is JellyfinConnection) {
             _serverStatus[conn.serverMachineId] = (conn.serverName, null);
+          } else if (conn is SiloConnection) {
+            _serverStatus[conn.serverId] = (conn.serverName, null);
           }
         }
       });
     }
 
     final plexCount = allConnections.whereType<PlexAccountConnection>().fold<int>(0, (n, c) => n + c.servers.length);
-    final mediaBrowserCount = allConnections.whereType<JellyfinConnection>().length;
+    final mediaBrowserCount =
+        allConnections.whereType<JellyfinConnection>().length + allConnections.whereType<SiloConnection>().length;
     unawaited(
       Sentry.addBreadcrumb(
         Breadcrumb(

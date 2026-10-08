@@ -110,6 +110,7 @@ Future<void> _expectNativeLibraryMatch(
     MediaBackend.plex => testPlexClient(handler: respond),
     MediaBackend.jellyfin => testJellyfinClient(handler: respond),
     MediaBackend.emby => testEmbyClient(handler: respond),
+    MediaBackend.silo => fail('No Silo fixture for native-title matching'),
   };
   final manager = MultiServerManager()..debugRegisterClientForTesting(client);
   final multiServer = MultiServerProvider(manager, DataAggregationService(manager));
@@ -400,7 +401,7 @@ void main() {
         await db.close();
       });
 
-      for (final backend in MediaBackend.values) {
+      for (final backend in MediaBackend.values.where((backend) => backend != MediaBackend.silo)) {
         test('Kimi no Na wa. finds only the ID-verified native-title copy on ${backend.name}', () async {
           handlers.add(
             (_) => _json(_pageBody([_node(id: 32281, title: 'Kimi no Na wa.', ja: '君の名は。', mediaType: 'movie')])),

@@ -94,9 +94,10 @@ class CredentialVault {
 
   static Future<Map<String, Object?>> protectConnectionConfig(String kind, Map<String, Object?> config) async {
     final copy = Map<String, Object?>.from(config);
-    final tokenKey = _tokenKeyForKind(kind);
-    final token = tokenKey == null ? null : copy[tokenKey];
-    if (token is String) copy[tokenKey!] = await protect(token);
+    for (final tokenKey in _tokenKeysForKind(kind)) {
+      final token = copy[tokenKey];
+      if (token is String) copy[tokenKey] = await protect(token);
+    }
     if (kind == 'plex') {
       copy['servers'] = await _protectPlexServers(copy['servers']);
     }
@@ -108,15 +109,16 @@ class CredentialVault {
     Map<String, dynamic> config,
   ) async {
     final copy = Map<String, dynamic>.from(config);
-    final tokenKey = _tokenKeyForKind(kind);
     var migrated = false;
-    final token = tokenKey == null ? null : copy[tokenKey];
-    if (token is String && token.isNotEmpty) {
-      final revealed = await reveal(token);
-      // An undecryptable token becomes the empty string — the shared
-      // "no credential, re-auth" shape — and must not be rewritten back.
-      migrated = revealed != null && !isProtected(token);
-      copy[tokenKey!] = revealed ?? '';
+    for (final tokenKey in _tokenKeysForKind(kind)) {
+      final token = copy[tokenKey];
+      if (token is String && token.isNotEmpty) {
+        final revealed = await reveal(token);
+        // An undecryptable token becomes the empty string — the shared
+        // "no credential, re-auth" shape — and must not be rewritten back.
+        migrated = migrated || (revealed != null && !isProtected(token));
+        copy[tokenKey] = revealed ?? '';
+      }
     }
     if (kind == 'plex') {
       final result = await _revealPlexServers(copy['servers']);
@@ -126,13 +128,14 @@ class CredentialVault {
     return (config: copy, migrated: migrated);
   }
 
-  /// Config key holding the long-lived credential for a `connections.kind`
-  /// value. Returning `null` means "nothing to encrypt", so every new kind MUST
-  /// be listed here — an omission silently persists the token in plaintext.
-  static String? _tokenKeyForKind(String kind) => switch (kind) {
-    'plex' => 'accountToken',
-    'jellyfin' || 'emby' => 'accessToken',
-    _ => null,
+  /// Config keys holding credentials for a `connections.kind` value. An empty
+  /// list means "nothing to encrypt", so every new kind MUST be listed here —
+  /// an omission silently persists the token in plaintext.
+  static List<String> _tokenKeysForKind(String kind) => switch (kind) {
+    'plex' => const ['accountToken'],
+    'jellyfin' || 'emby' => const ['accessToken'],
+    'silo' => const ['accessToken', 'refreshToken', 'profileToken'],
+    _ => const [],
   };
 
   static Future<Object?> _protectPlexServers(Object? rawServers) async {

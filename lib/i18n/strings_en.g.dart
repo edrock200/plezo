@@ -687,8 +687,8 @@ class Translations$settings$en {
 	/// en: 'Remember audio and subtitle choices per title'
 	String get rememberTrackSelectionsDescription => 'Remember audio and subtitle choices per title';
 
-	/// en: 'Plex saves each choice on the server per file; Jellyfin also turns on the account's Remember selections; Emby is not supported'
-	String get rememberTrackSelectionsBackendRule => 'Plex saves each choice on the server per file; Jellyfin also turns on the account\'s Remember selections; Emby is not supported';
+	/// en: 'Plex saves each choice on the server per file; Jellyfin also turns on the account's Remember selections; Emby and Silo are not supported'
+	String get rememberTrackSelectionsBackendRule => 'Plex saves each choice on the server per file; Jellyfin also turns on the account\'s Remember selections; Emby and Silo are not supported';
 
 	/// en: 'Use server's per-episode track selections'
 	String get followServerTrackSelections => 'Use server\'s per-episode track selections';
@@ -2818,8 +2818,8 @@ class Translations$profiles$en {
 	/// en: 'Nothing to borrow yet.'
 	String get borrowEmpty => 'Nothing to borrow yet.';
 
-	/// en: 'Connect Plex, Jellyfin, or Emby to another profile first.'
-	String get borrowEmptySubtitle => 'Connect Plex, Jellyfin, or Emby to another profile first.';
+	/// en: 'Connect Plex, Jellyfin, Emby, or Silo to another profile first.'
+	String get borrowEmptySubtitle => 'Connect Plex, Jellyfin, Emby, or Silo to another profile first.';
 
 	/// en: 'Available connections could not be loaded. Try again.'
 	String get borrowLoadFailed => 'Available connections could not be loaded. Try again.';
@@ -2884,11 +2884,11 @@ class Translations$connections$en {
 	/// en: 'Add connection'
 	String get addConnection => 'Add connection';
 
-	/// en: 'Sign in with Plex or connect a Jellyfin or Emby server'
-	String get addConnectionSubtitleNoProfile => 'Sign in with Plex or connect a Jellyfin or Emby server';
+	/// en: 'Sign in with Plex or connect a Jellyfin, Emby, or Silo server'
+	String get addConnectionSubtitleNoProfile => 'Sign in with Plex or connect a Jellyfin, Emby, or Silo server';
 
-	/// en: 'Add to ${displayName}: Plex, Jellyfin, Emby, or another profile connection'
-	String addConnectionSubtitleScoped({required Object displayName}) => 'Add to ${displayName}: Plex, Jellyfin, Emby, or another profile connection';
+	/// en: 'Add to ${displayName}: Plex, Jellyfin, Emby, Silo, or another profile connection'
+	String addConnectionSubtitleScoped({required Object displayName}) => 'Add to ${displayName}: Plex, Jellyfin, Emby, Silo, or another profile connection';
 
 	/// en: 'Session expired for ${name}'
 	String sessionExpiredOne({required Object name}) => 'Session expired for ${name}';
@@ -3325,8 +3325,8 @@ class Translations$about$en {
 	/// en: 'Version ${version}'
 	String versionLabel({required Object version}) => 'Version ${version}';
 
-	/// en: 'A beautiful Plex, Jellyfin, and Emby client for Flutter'
-	String get appDescription => 'A beautiful Plex, Jellyfin, and Emby client for Flutter';
+	/// en: 'A beautiful Plex, Jellyfin, Emby, and Silo client for Flutter'
+	String get appDescription => 'A beautiful Plex, Jellyfin, Emby, and Silo client for Flutter';
 
 	/// en: 'View licenses of third-party libraries'
 	String get viewLicensesDescription => 'View licenses of third-party libraries';
@@ -5697,6 +5697,12 @@ class Translations$addServer$en {
 	/// en: 'Sign in to your ${product} server. Binds to ${name}.'
 	String connectToMediaBrowserCardSubtitleScoped({required Object product, required Object name}) => 'Sign in to your ${product} server. Binds to ${name}.';
 
+	/// en: 'Enter your server URL, then sign in with a code or your password.'
+	String get connectToSiloCardSubtitle => 'Enter your server URL, then sign in with a code or your password.';
+
+	/// en: 'Sign in to your Silo server and pick a Silo profile. Binds to ${name}.'
+	String connectToSiloCardSubtitleScoped({required Object name}) => 'Sign in to your Silo server and pick a Silo profile. Binds to ${name}.';
+
 	/// en: 'Borrow from another profile'
 	String get borrowFromAnotherProfile => 'Borrow from another profile';
 
@@ -5759,6 +5765,42 @@ class Translations$addServer$en {
 
 	/// en: 'The server redirected to an unsupported URL. Enter the final ${product} URL directly.'
 	String redirectUnsupportedEnterFinal({required Object product}) => 'The server redirected to an unsupported URL. Enter the final ${product} URL directly.';
+
+	/// en: 'Server URL'
+	String get serverUrl => 'Server URL';
+
+	/// en: 'Sign in with a code'
+	String get siloSignInWithCode => 'Sign in with a code';
+
+	/// en: 'On your phone or computer, open ${url} and enter this code.'
+	String siloDeviceCodeInstructions({required Object url}) => 'On your phone or computer, open ${url} and enter this code.';
+
+	/// en: 'Code opened. Finish signing in on your other device.'
+	String get siloDeviceCodeOpened => 'Code opened. Finish signing in on your other device.';
+
+	/// en: 'The sign-in code expired. Try again.'
+	String get siloDeviceCodeExpired => 'The sign-in code expired. Try again.';
+
+	/// en: 'Sign-in with a code failed: ${error}'
+	String siloDeviceCodeFailed({required Object error}) => 'Sign-in with a code failed: ${error}';
+
+	/// en: 'This Silo server is too old. Update it to a release that provides API v2.'
+	String get siloServerTooOld => 'This Silo server is too old. Update it to a release that provides API v2.';
+
+	/// en: 'No Silo server answered at this address.'
+	String get siloNotASiloServer => 'No Silo server answered at this address.';
+
+	/// en: 'Who's watching?'
+	String get siloChooseProfile => 'Who\'s watching?';
+
+	/// en: 'Pick the Silo profile to use on this device.'
+	String get siloChooseProfileSubtitle => 'Pick the Silo profile to use on this device.';
+
+	/// en: 'This account has no Silo profiles.'
+	String get siloNoProfiles => 'This account has no Silo profiles.';
+
+	/// en: 'This server does not allow password sign-in. Use a code instead.'
+	String get siloPasswordLoginDisabled => 'This server does not allow password sign-in. Use a code instead.';
 }
 
 // Path: common.ratingSource
@@ -7573,7 +7615,7 @@ extension on Translations {
 			'settings.minutesUnit' => ({required Object minutes}) => '${minutes} minutes',
 			'settings.rememberTrackSelections' => 'Remember track selections per show/movie',
 			'settings.rememberTrackSelectionsDescription' => 'Remember audio and subtitle choices per title',
-			'settings.rememberTrackSelectionsBackendRule' => 'Plex saves each choice on the server per file; Jellyfin also turns on the account\'s Remember selections; Emby is not supported',
+			'settings.rememberTrackSelectionsBackendRule' => 'Plex saves each choice on the server per file; Jellyfin also turns on the account\'s Remember selections; Emby and Silo are not supported',
 			'settings.followServerTrackSelections' => 'Use server\'s per-episode track selections',
 			'settings.followServerTrackSelectionsDescription' => 'On episode change, apply the audio and subtitles selected on the server instead of carrying over the current choice',
 			'settings.resumeMusicOnLaunch' => 'Remember music session',
@@ -8271,7 +8313,7 @@ extension on Translations {
 			'profiles.borrowAddTo' => ({required Object displayName}) => 'Add to ${displayName}',
 			'profiles.borrowExplain' => 'Borrow another profile\'s connection. PIN-protected profiles require a PIN.',
 			'profiles.borrowEmpty' => 'Nothing to borrow yet.',
-			'profiles.borrowEmptySubtitle' => 'Connect Plex, Jellyfin, or Emby to another profile first.',
+			'profiles.borrowEmptySubtitle' => 'Connect Plex, Jellyfin, Emby, or Silo to another profile first.',
 			'profiles.borrowLoadFailed' => 'Available connections could not be loaded. Try again.',
 			'profiles.borrowFromProfile' => ({required Object displayName}) => 'From ${displayName}',
 			'profiles.borrowConnectionBorrowed' => 'Connection borrowed.',
@@ -8290,8 +8332,8 @@ extension on Translations {
 			'profiles.tokenIdentityMismatch' => 'The Plex profile token resolved to an unexpected server',
 			'connections.sectionTitle' => 'Connections',
 			'connections.addConnection' => 'Add connection',
-			'connections.addConnectionSubtitleNoProfile' => 'Sign in with Plex or connect a Jellyfin or Emby server',
-			'connections.addConnectionSubtitleScoped' => ({required Object displayName}) => 'Add to ${displayName}: Plex, Jellyfin, Emby, or another profile connection',
+			'connections.addConnectionSubtitleNoProfile' => 'Sign in with Plex or connect a Jellyfin, Emby, or Silo server',
+			'connections.addConnectionSubtitleScoped' => ({required Object displayName}) => 'Add to ${displayName}: Plex, Jellyfin, Emby, Silo, or another profile connection',
 			'connections.sessionExpiredOne' => ({required Object name}) => 'Session expired for ${name}',
 			'connections.sessionExpiredMany' => ({required Object count}) => 'Session expired for ${count} servers',
 			'connections.accessDeniedOne' => ({required Object name}) => '${name} refused access for this account',
@@ -8517,7 +8559,7 @@ extension on Translations {
 			'about.title' => 'About',
 			'about.openSourceLicenses' => 'Open Source Licenses',
 			'about.versionLabel' => ({required Object version}) => 'Version ${version}',
-			'about.appDescription' => 'A beautiful Plex, Jellyfin, and Emby client for Flutter',
+			'about.appDescription' => 'A beautiful Plex, Jellyfin, Emby, and Silo client for Flutter',
 			'about.viewLicensesDescription' => 'View licenses of third-party libraries',
 			'serverSelection.noServersFoundForAccount' => ({required Object username, required Object email}) => 'No servers found for ${username} (${email})',
 			'serverSelection.failedToLoadServers' => ({required Object error}) => 'Failed to load servers: ${error}',
@@ -9477,6 +9519,8 @@ extension on Translations {
 			'addServer.connectToMediaBrowserCard' => ({required Object product}) => 'Connect to ${product}',
 			'addServer.connectToMediaBrowserCardSubtitle' => 'Enter your server URL, username, and password.',
 			'addServer.connectToMediaBrowserCardSubtitleScoped' => ({required Object product, required Object name}) => 'Sign in to your ${product} server. Binds to ${name}.',
+			'addServer.connectToSiloCardSubtitle' => 'Enter your server URL, then sign in with a code or your password.',
+			'addServer.connectToSiloCardSubtitleScoped' => ({required Object name}) => 'Sign in to your Silo server and pick a Silo profile. Binds to ${name}.',
 			'addServer.borrowFromAnotherProfile' => 'Borrow from another profile',
 			'addServer.borrowFromAnotherProfileSubtitle' => 'Reuse another profile\'s connection. PIN-protected profiles require a PIN.',
 			'addServer.invalidCredentials' => 'Invalid username or password',
@@ -9498,6 +9542,18 @@ extension on Translations {
 			'addServer.redirectDifferentHost' => ({required Object product}) => 'The server redirected to a different host. Enter the final ${product} URL directly.',
 			'addServer.redirectInsecure' => 'The server redirected from HTTPS to an insecure URL',
 			'addServer.redirectUnsupportedEnterFinal' => ({required Object product}) => 'The server redirected to an unsupported URL. Enter the final ${product} URL directly.',
+			'addServer.serverUrl' => 'Server URL',
+			'addServer.siloSignInWithCode' => 'Sign in with a code',
+			'addServer.siloDeviceCodeInstructions' => ({required Object url}) => 'On your phone or computer, open ${url} and enter this code.',
+			'addServer.siloDeviceCodeOpened' => 'Code opened. Finish signing in on your other device.',
+			'addServer.siloDeviceCodeExpired' => 'The sign-in code expired. Try again.',
+			'addServer.siloDeviceCodeFailed' => ({required Object error}) => 'Sign-in with a code failed: ${error}',
+			'addServer.siloServerTooOld' => 'This Silo server is too old. Update it to a release that provides API v2.',
+			'addServer.siloNotASiloServer' => 'No Silo server answered at this address.',
+			'addServer.siloChooseProfile' => 'Who\'s watching?',
+			'addServer.siloChooseProfileSubtitle' => 'Pick the Silo profile to use on this device.',
+			'addServer.siloNoProfiles' => 'This account has no Silo profiles.',
+			'addServer.siloPasswordLoginDisabled' => 'This server does not allow password sign-in. Use a code instead.',
 			_ => null,
 		};
 	}

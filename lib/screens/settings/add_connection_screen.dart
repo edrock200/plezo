@@ -13,14 +13,15 @@ import '../../widgets/focused_scroll_scaffold.dart';
 import '../profile/borrow_connection_screen.dart';
 import 'add_jellyfin_screen.dart';
 import 'add_plex_account_screen.dart';
+import 'add_silo_screen.dart';
 
 /// Picker shown when the user taps "Add connection".
 ///
 /// When [targetProfile] is provided, also offers a "Borrow from another
 /// profile" option that opens [BorrowConnectionScreen] for the target. The
 /// global Connections screen invokes this without a target — Plex auto-
-/// surfaces its Home users as new profiles, while MediaBrowser servers bind
-/// to the active profile via [AddJellyfinScreen].
+/// surfaces its Home users as new profiles, while MediaBrowser and Silo
+/// servers bind to the active profile via [AddJellyfinScreen] / [AddSiloScreen].
 ///
 /// Pops with `true` after the underlying flow succeeds so the parent list
 /// refreshes; pops with `null` (the default) when the user backs out.
@@ -62,6 +63,14 @@ class AddConnectionScreen extends StatelessWidget {
               )
             : t.addServer.connectToMediaBrowserCardSubtitle,
         builder: (_) => AddJellyfinScreen(targetProfile: targetProfile, dialect: embyDialect),
+      ),
+      _BackendOption(
+        backend: MediaBackend.silo,
+        title: t.addServer.connectToMediaBrowserCard(product: 'Silo'),
+        subtitle: scoped
+            ? t.addServer.connectToSiloCardSubtitleScoped(name: targetProfile!.displayName)
+            : t.addServer.connectToSiloCardSubtitle,
+        builder: (_) => AddSiloScreen(targetProfile: targetProfile),
       ),
       if (scoped)
         _BackendOption(

@@ -3,7 +3,7 @@
   Plezy
 </h1>
 
-A modern client for Plex, Jellyfin, and Emby on desktop, mobile, and TV. Built with Flutter for native performance and a clean interface.
+A modern client for Plex, Jellyfin, Emby, and Silo on desktop, mobile, and TV. Built with Flutter for native performance and a clean interface.
 
 <p>
   <a href="https://plezy.app">Website</a> ·
@@ -172,7 +172,8 @@ Older relays still accept explicit create/join, but failed recovery requires joi
 
 ### <img src="assets/readme_icons/customization.svg" height="20" alt="" align="center" /> Platform & Customization
 - Desktop, mobile, and TV — full D-pad, keyboard, and gamepad support
-- Multiple servers at once — Plex, Jellyfin, and Emby side by side
+- Multiple servers at once — Plex, Jellyfin, Emby, and Silo side by side
+- Silo servers over Silo's `/api/v2` API: sign in with a code or password, Silo profiles with PINs, server-defined Home rows, and server-chosen Direct Play or transcode[^silo]
 - Profiles with per-profile downloads, watch state, and settings; Plex Home switching with PIN
 - Jellyfin and Emby local-server discovery and multiple URLs per server; Quick Connect sign-in[^jf]
 - TV layout options — corner spotlight backdrop, full-card artwork, and Force TV mode on desktop
@@ -184,6 +185,7 @@ Older relays still accept explicit create/join, but failed recovery requires joi
 [^jf]: Jellyfin only.
 [^mb]: Jellyfin and Emby only.
 [^plex]: Plex only.
+[^silo]: Silo support covers movies and TV shows. Downloads, playlists, live TV, music and audiobooks are not available for Silo servers yet.
 [^connect]: Requires connecting the service under Settings > Services.
 [^hdr]: In-app HDR toggle on Windows, macOS, iOS, tvOS, and Linux — Linux needs a colour-managed Wayland compositor. Dolby Vision on Android and Apple TV.
 [^pass]: Desktop, Android TV, and Apple TV.
@@ -202,7 +204,7 @@ Older relays still accept explicit create/join, but failed recovery requires joi
 
 ### Prerequisites
 - Flutter SDK 3.47.0+
-- A Plex account, or a Jellyfin or Emby server with user credentials
+- A Plex account, or a Jellyfin, Emby, or Silo server with user credentials
 
 ### Setup
 

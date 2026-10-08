@@ -401,7 +401,7 @@ class ActiveProfileBinder {
       // visible" on empty would leak servers attached to other profiles.
       final jellyfinConnectionIds = <String>{
         for (final pc in joinRows)
-          if (connectionsById[pc.connectionId] case JellyfinConnection(:final id)) id,
+          if (connectionsById[pc.connectionId] case JellyfinConnection(:final id) || SiloConnection(:final id)) id,
       };
       for (final serverId in serverManager.registeredServerIds) {
         final belongs = visibleServerIds.contains(serverId) || expectedServerIds.contains(serverId);
@@ -483,6 +483,8 @@ class ActiveProfileBinder {
           expected.addAll(plexMembership(account));
         case JellyfinConnection(:final serverMachineId):
           expected.add(serverMachineId);
+        case SiloConnection(:final serverId):
+          expected.add(serverId);
         case null:
           break;
       }
@@ -636,6 +638,9 @@ class ActiveProfileBinder {
         case JellyfinConnection():
           expected.add(conn.serverMachineId);
           futures.add(_bindMediaBrowser(conn, profileId: profile.id, generation: generation));
+        case SiloConnection():
+          expected.add(conn.serverId);
+          futures.add(_bindSilo(conn, profileId: profile.id, generation: generation));
       }
     }
     final results = await Future.wait(futures);
@@ -1119,6 +1124,22 @@ class ActiveProfileBinder {
       return _ProfileBindResult.visible({conn.serverMachineId});
     }
     return _ProfileBindResult(visibleServerIds: const {}, expectedServerIds: {conn.serverMachineId});
+  }
+
+  Future<_ProfileBindResult> _bindSilo(
+    SiloConnection conn, {
+    required String profileId,
+    required int generation,
+  }) async {
+    final ok = await serverManager.addSiloConnection(conn);
+    if (!_isCurrentBind(profileId, generation)) {
+      return _ProfileBindResult(visibleServerIds: const {}, expectedServerIds: {conn.serverId});
+    }
+    // As for MediaBrowser: a refused server stays visible so its banner shows.
+    if (ok || serverManager.refusedServerIds.contains(conn.serverId)) {
+      return _ProfileBindResult.visible({conn.serverId});
+    }
+    return _ProfileBindResult(visibleServerIds: const {}, expectedServerIds: {conn.serverId});
   }
 
   bool _isCurrentBind(String profileId, int generation) {

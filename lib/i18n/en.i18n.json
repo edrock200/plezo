@@ -216,7 +216,7 @@
     "minutesUnit": "${minutes} minutes",
     "rememberTrackSelections": "Remember track selections per show/movie",
     "rememberTrackSelectionsDescription": "Remember audio and subtitle choices per title",
-    "rememberTrackSelectionsBackendRule": "Plex saves each choice on the server per file; Jellyfin also turns on the account's Remember selections; Emby is not supported",
+    "rememberTrackSelectionsBackendRule": "Plex saves each choice on the server per file; Jellyfin also turns on the account's Remember selections; Emby and Silo are not supported",
     "followServerTrackSelections": "Use server's per-episode track selections",
     "followServerTrackSelectionsDescription": "On episode change, apply the audio and subtitles selected on the server instead of carrying over the current choice",
     "resumeMusicOnLaunch": "Remember music session",
@@ -957,7 +957,7 @@
     "borrowAddTo": "Add to ${displayName}",
     "borrowExplain": "Borrow another profile's connection. PIN-protected profiles require a PIN.",
     "borrowEmpty": "Nothing to borrow yet.",
-    "borrowEmptySubtitle": "Connect Plex, Jellyfin, or Emby to another profile first.",
+    "borrowEmptySubtitle": "Connect Plex, Jellyfin, Emby, or Silo to another profile first.",
     "borrowLoadFailed": "Available connections could not be loaded. Try again.",
     "borrowFromProfile": "From ${displayName}",
     "borrowConnectionBorrowed": "Connection borrowed.",
@@ -978,8 +978,8 @@
   "connections": {
     "sectionTitle": "Connections",
     "addConnection": "Add connection",
-    "addConnectionSubtitleNoProfile": "Sign in with Plex or connect a Jellyfin or Emby server",
-    "addConnectionSubtitleScoped": "Add to ${displayName}: Plex, Jellyfin, Emby, or another profile connection",
+    "addConnectionSubtitleNoProfile": "Sign in with Plex or connect a Jellyfin, Emby, or Silo server",
+    "addConnectionSubtitleScoped": "Add to ${displayName}: Plex, Jellyfin, Emby, Silo, or another profile connection",
     "sessionExpiredOne": "Session expired for ${name}",
     "sessionExpiredMany": "Session expired for ${count} servers",
     "accessDeniedOne": "${name} refused access for this account",
@@ -1238,7 +1238,7 @@
     "title": "About",
     "openSourceLicenses": "Open Source Licenses",
     "versionLabel": "Version ${version}",
-    "appDescription": "A beautiful Plex, Jellyfin, and Emby client for Flutter",
+    "appDescription": "A beautiful Plex, Jellyfin, Emby, and Silo client for Flutter",
     "viewLicensesDescription": "View licenses of third-party libraries"
   },
   "serverSelection": {
@@ -2312,6 +2312,8 @@
     "connectToMediaBrowserCard": "Connect to ${product}",
     "connectToMediaBrowserCardSubtitle": "Enter your server URL, username, and password.",
     "connectToMediaBrowserCardSubtitleScoped": "Sign in to your ${product} server. Binds to ${name}.",
+    "connectToSiloCardSubtitle": "Enter your server URL, then sign in with a code or your password.",
+    "connectToSiloCardSubtitleScoped": "Sign in to your Silo server and pick a Silo profile. Binds to ${name}.",
     "borrowFromAnotherProfile": "Borrow from another profile",
     "borrowFromAnotherProfileSubtitle": "Reuse another profile's connection. PIN-protected profiles require a PIN.",
     "invalidCredentials": "Invalid username or password",
@@ -2332,6 +2334,18 @@
     "redirectUnsupported": "The server redirected to an unsupported URL",
     "redirectDifferentHost": "The server redirected to a different host. Enter the final ${product} URL directly.",
     "redirectInsecure": "The server redirected from HTTPS to an insecure URL",
-    "redirectUnsupportedEnterFinal": "The server redirected to an unsupported URL. Enter the final ${product} URL directly."
+    "redirectUnsupportedEnterFinal": "The server redirected to an unsupported URL. Enter the final ${product} URL directly.",
+    "serverUrl": "Server URL",
+    "siloSignInWithCode": "Sign in with a code",
+    "siloDeviceCodeInstructions": "On your phone or computer, open ${url} and enter this code.",
+    "siloDeviceCodeOpened": "Code opened. Finish signing in on your other device.",
+    "siloDeviceCodeExpired": "The sign-in code expired. Try again.",
+    "siloDeviceCodeFailed": "Sign-in with a code failed: ${error}",
+    "siloServerTooOld": "This Silo server is too old. Update it to a release that provides API v2.",
+    "siloNotASiloServer": "No Silo server answered at this address.",
+    "siloChooseProfile": "Who's watching?",
+    "siloChooseProfileSubtitle": "Pick the Silo profile to use on this device.",
+    "siloNoProfiles": "This account has no Silo profiles.",
+    "siloPasswordLoginDisabled": "This server does not allow password sign-in. Use a code instead."
   }
 }

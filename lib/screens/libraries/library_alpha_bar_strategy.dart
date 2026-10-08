@@ -67,7 +67,9 @@ abstract class LibraryAlphaBarStrategy {
         libraryKey: libraryKey,
         isShared: isShared,
       ),
-      MediaBackend.jellyfin || MediaBackend.emby => const MediaBrowserAlphaBarStrategy(),
+      // Silo's catalog takes the same `name_prefix` jump the MediaBrowser
+      // strategy drives, so it shares the static A–Z bar.
+      MediaBackend.jellyfin || MediaBackend.emby || MediaBackend.silo => const MediaBrowserAlphaBarStrategy(),
     };
   }
 }
