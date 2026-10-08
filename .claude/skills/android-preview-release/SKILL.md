@@ -7,7 +7,8 @@ description: Build, publish and verify Plezy's Android preview APKs (the "Plezy 
 
 ## How a preview is published
 - Workflow: `.github/workflows/silo-preview-apk.yml`. It runs on a push to a `ccr-**` or `silo/**`
-  branch **only when the head commit message contains `[release-apk]`**. The upstream
+  branch **only when the head commit's first line contains `[release-apk]`** (markers in the body are
+  ignored since a body mentioning `[release-apk]` once published an unintended 2.22.4). The upstream
   `build.yml` cannot be used: it only runs from `main` and needs the upstream signing secrets.
 - It builds `flutter build apk --release --split-per-abi` (Flutter 3.47.1, Java 21) in about 13
   minutes and publishes a GitHub **pre-release** numbered by bumping the patch of `pubspec.yaml`'s

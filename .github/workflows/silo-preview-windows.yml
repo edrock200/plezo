@@ -4,6 +4,7 @@ run-name: Silo preview Windows ${{ github.sha }}
 # Builds the Windows app (x64 and arm64) of a Silo-support branch and
 # attaches an installer and portable archives to a Silo preview release.
 #
+# Markers count only in the head commit's first line.
 # - A head commit with "[release-apk]" builds the same commit as the Android
 #   preview and attaches to the release that build publishes (same 2.22.N).
 # - A head commit with "[release-windows]" (and no "[release-apk]") builds the
@@ -30,8 +31,27 @@ env:
   FLUTTER_VERSION: "3.47.1"
 
 jobs:
+  # Release markers count only in the commit's first line, so a message body
+  # may mention them without starting a build.
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      mode: ${{ steps.marker.outputs.mode }}
+    steps:
+      - id: marker
+        env:
+          MODE: ${{ needs.gate.outputs.mode }}
+        run: |
+          subject="${MESSAGE%%$'\n'*}"
+          mode=none
+          if [[ "$subject" == *"[release-apk]"* ]]; then mode=apk
+          elif [[ "$subject" == *"[release-windows]"* ]]; then mode=windows; fi
+          echo "mode=${mode}" >> "$GITHUB_OUTPUT"
+          echo "Release marker: ${mode}"
+
   resolve:
-    if: ${{ contains(github.event.head_commit.message, '[release-apk]') || contains(github.event.head_commit.message, '[release-windows]') }}
+    needs: gate
+    if: ${{ needs.gate.outputs.mode != 'none' }}
     runs-on: ubuntu-latest
     outputs:
       ref: ${{ steps.pick.outputs.ref }}
@@ -47,7 +67,7 @@ jobs:
         run: |
           set -euo pipefail
           pubspec_at() { gh api "repos/${GH_REPO}/contents/pubspec.yaml?ref=$1" --jq .content | base64 -d | grep -m1 '^version:' | awk '{print $2}'; }
-          if [[ "$MESSAGE" == *"[release-apk]"* ]]; then
+          if [[ "$MODE" == apk ]]; then
             # Same numbering as silo-preview-apk.yml: every earlier preview of
             # this major.minor counts, except a release already made from
             # this commit (the APK build may publish first).
