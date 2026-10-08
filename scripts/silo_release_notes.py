@@ -10,16 +10,21 @@ given (a new build): then the page gets a placeholder and the install notes, and
 
 import sys
 
-FOOTER = """
+INSTALL = (
+    "These previews use Plezy's package id but not the store signing key: uninstall a store-installed "
+    "Plezy before installing one. A later preview installs over an earlier one as an update only when "
+    "both are signed with the same key; if Android refuses the update, uninstall the previous preview first."
+)
+
+# One line per paragraph or bullet: release pages render single line breaks as hard breaks.
+FOOTER = f"""
 ### Which APK
 - `arm64-v8a`: most phones, tablets and Android TV devices (Shield, recent Fire TV, Google TV boxes).
 - `armeabi-v7a`: older or 32-bit devices, including Chromecast with Google TV and many TV sticks.
 - `x86_64`: emulators and x86 devices.
 
 ### Installing
-These previews use Plezy's package id but not the store signing key: uninstall a store-installed Plezy
-before installing one. A later preview installs over an earlier one as an update only when both are
-signed with the same key; if Android refuses the update, uninstall the previous preview first.
+{INSTALL}
 """
 
 
