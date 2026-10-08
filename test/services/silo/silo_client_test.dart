@@ -310,6 +310,11 @@ void main() {
       expect(startBody['protocol_version'], 3);
       expect(startBody['quality_preference'], 'original');
       expect((startBody['client_capabilities'] as Map)['video_evidence'], 'declared');
+      final context = startBody['client_playback_context'] as Map;
+      expect(context['form_factor'], 'desktop');
+      expect(startBody['metered'], isFalse);
+      final progressive = (context['deliveries'] as Map)['progressive'] as Map;
+      expect(progressive['enabled'], isFalse);
 
       expect(result.videoUrl, 'https://silo.example.com/api/v2/stream/sess-1?st=sig');
       expect(result.isTranscoding, isFalse);
@@ -447,12 +452,11 @@ void main() {
       expect(requests.where((r) => r.url.path.endsWith('/playback/start')), isEmpty);
     });
 
-    test('falls back to the token-authorised route without direct links', () async {
+    test('a server without direct links fails the download instead of putting the account token in a URL', () async {
       final c = downloadClient(linksSupported: false, externalSubs: false);
-      final resolution = await c.resolveDownload(MediaItem.silo(id: 'movie:m1', kind: MediaKind.movie));
-      expect(
-        resolution.videoUrl,
-        'https://silo.example.com/base/api/v2/direct-download?file_id=42&token=acc-1#container=mkv',
+      await expectLater(
+        c.resolveDownload(MediaItem.silo(id: 'movie:m1', kind: MediaKind.movie)),
+        throwsA(isA<UnsupportedError>()),
       );
     });
 

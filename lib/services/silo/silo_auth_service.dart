@@ -190,13 +190,22 @@ class SiloAuthService {
     );
   }
 
+  /// Silo's default listening port, tried last for a bare host.
+  static const defaultPort = 8090;
+
   /// Candidate base URLs for what the user typed: an explicit scheme is kept;
-  /// otherwise `https://` is tried before `http://`, as Silo's clients do.
+  /// otherwise `https://` is tried before `http://`, and a bare host with no
+  /// port also gets `http://host:8090`, as Silo's own apps do.
   static List<String> candidatesFor(String input) {
     final trimmed = canonicalizeBaseUrl(input.trim());
     if (trimmed.isEmpty) return const [];
     if (hasUrlScheme(trimmed)) return [_normalize(trimmed)];
-    return [_normalize('https://$trimmed'), _normalize('http://$trimmed')];
+    final candidates = [_normalize('https://$trimmed'), _normalize('http://$trimmed')];
+    final parsed = Uri.tryParse('http://$trimmed');
+    if (parsed != null && parsed.host.isNotEmpty && !parsed.hasPort) {
+      candidates.add(_normalize(parsed.replace(port: defaultPort).toString()));
+    }
+    return candidates.toSet().toList();
   }
 
   /// Lower-case scheme and host; keep port, path prefix and query as typed.
@@ -295,8 +304,13 @@ class SiloAuthService {
     try {
       final response = await api.request('GET', '/api/v2/auth/providers', auth: false);
       final data = response.data;
-      if (response.statusCode == 200 && data is Map && data['password_login'] is bool) {
-        return data['password_login'] as bool;
+      if (response.statusCode == 200 && data is Map) {
+        // Also honour a `credentials` provider (LDAP and the like), as Silo's
+        // apps do for servers that predate `password_login`.
+        final items = data['items'];
+        final credentialsProvider = items is List && items.whereType<Map>().any((p) => p['mode'] == 'credentials');
+        if (data['password_login'] is bool) return data['password_login'] as bool || credentialsProvider;
+        if (credentialsProvider) return true;
       }
     } catch (_) {
       // Older servers lack the route; assume the password form works.

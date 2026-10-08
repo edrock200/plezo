@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:ui' as ui;
 
 import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
@@ -53,15 +54,14 @@ class SiloDeviceHeaders {
       deviceId: deviceId,
       deviceName: name,
       platform: identity.isTv && platform == 'android' ? 'android-tv' : _asciiHeaderValue(platform),
-      clientFamily: identity.isTv
-          ? 'tv'
-          : switch (platform) {
-              'android' || 'ios' => 'mobile',
-              _ => 'desktop',
-            },
+      clientFamily: SiloFormFactor.of(identity).name,
       clientVersion: version,
     );
   }
+
+  /// The form factor named by [clientFamily].
+  SiloFormFactor get formFactor =>
+      SiloFormFactor.values.firstWhere((f) => f.name == clientFamily, orElse: () => SiloFormFactor.desktop);
 
   /// Header values must be Latin-1; device names are user-chosen text.
   static String _asciiHeaderValue(String value) => value.replaceAll(RegExp(r'[^\x20-\x7e]'), '').trim();
@@ -74,6 +74,42 @@ class SiloDeviceHeaders {
     'X-Silo-Client-Version': clientVersion,
     'X-Silo-Client-Family': clientFamily,
   };
+}
+
+/// The device class Silo keys per-device behaviour on.
+///
+/// Its name is the `X-Silo-Client-Family` value (a closed set on the server:
+/// `tv`, `mobile`, `tablet`, `desktop`, `web`), which selects the
+/// `profile_client` settings rows, so a tablet must not report `mobile`.
+/// Silo's Android app decides phone vs tablet by a 600 dp shortest side, once
+/// per process so a foldable does not flip mid-session; this does the same.
+enum SiloFormFactor {
+  tv,
+  tablet,
+  mobile,
+  desktop;
+
+  /// Playback `client_playback_context.form_factor`. Silo's phone app sends
+  /// `mobile` on tablets as well; only TVs get TV-specific transformations.
+  String get playbackFormFactor => switch (this) {
+    SiloFormFactor.tv => 'tv',
+    SiloFormFactor.tablet || SiloFormFactor.mobile => 'mobile',
+    SiloFormFactor.desktop => 'desktop',
+  };
+
+  static SiloFormFactor? _cached;
+
+  static SiloFormFactor of(DeviceIdentity identity) => _cached ??= _detect(identity);
+
+  static SiloFormFactor _detect(DeviceIdentity identity) {
+    if (identity.isTv) return SiloFormFactor.tv;
+    final platform = identity.platform.toLowerCase();
+    if (platform != 'android' && platform != 'ios') return SiloFormFactor.desktop;
+    final view = ui.PlatformDispatcher.instance.views.firstOrNull;
+    if (view == null || view.devicePixelRatio <= 0) return SiloFormFactor.mobile;
+    final logical = view.physicalSize / view.devicePixelRatio;
+    return logical.shortestSide >= 600 ? SiloFormFactor.tablet : SiloFormFactor.mobile;
+  }
 }
 
 /// A token pair as `/auth/login`, `/auth/refresh` and the device-code poll

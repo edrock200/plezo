@@ -88,7 +88,8 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
     bool originalOnly = false,
   }) async {
     final appVersion = await _appVersion();
-    final formFactor = PlatformDetector.isTV() ? 'tv' : 'desktop';
+    final formFactor = _api.device.formFactor.playbackFormFactor;
+    final metered = await _isMetered();
     Map<String, Object?> body(String installationId) => {
       'protocol_version': SiloPlaybackCaps.protocolVersion,
       'installation_id': installationId,
@@ -99,7 +100,7 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
       'quality_preference': SiloPlaybackCaps.qualityPreference(preset),
       'bandwidth_cap_kbps': ?preset.videoBitrateKbps,
       'subtitle_fidelity_preference': 'preserve',
-      'metered': false,
+      'metered': metered,
       // Plezy seeks to the resume point itself, as it does on every backend,
       // so the stream always starts at the beginning of the source.
       'start_position': 0,
@@ -131,6 +132,17 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
       throw PlaybackException(t.messages.playbackDataInvalid, reason: PlaybackFailureReason.invalidPlaybackData);
     }
     return {...data, '_installation_id': installationId};
+  }
+
+  /// Whether the active link is metered. Like the rest of Plezy, cellular
+  /// alone counts as metered and Wi-Fi or Ethernet as not; an unknown link
+  /// reads as unmetered.
+  Future<bool> _isMetered() async {
+    try {
+      return (await ConnectivityProbe.check(timeout: const Duration(seconds: 1))).isCellularOnly;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// Make a server stream or subtitle URL absolute without touching its query.
@@ -290,9 +302,8 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
   ///
   /// Plezy's downloader sends no headers, so the URL must authorise itself:
   /// `POST /api/v2/direct-download/links` mints exactly that (a short-lived,
-  /// header-free link to the original file with Range support). A server
-  /// without the route falls back to `/api/v2/direct-download?token=`. The
-  /// URL is signed, so the container rides in the fragment, where
+  /// header-free link to the original file with Range support). The URL is
+  /// signed, so the container rides in the fragment, where
   /// `downloadExtensionFromUrl` reads it and no request ever carries it.
   ///
   /// Embedded subtitles travel inside the original file. External subtitle
@@ -345,21 +356,23 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
     );
   }
 
+  /// A signed, header-free link to the original file. The account token is
+  /// never put in a download URL: the downloader persists task URLs.
   Future<String> _directDownloadUrl(String fileId) async {
     final response = await _api.request('POST', '/api/v2/direct-download/links', body: {'file_id': fileId});
-    if (response.statusCode == 200 && response.data is Map) {
-      final url = (response.data as Map)['url']?.toString();
-      if (url != null && url.isNotEmpty) return _api.resolveUrl(url);
+    if (response.statusCode == 404 || response.statusCode == 405 || response.statusCode == 501) {
+      throw UnsupportedError('This Silo server does not offer direct downloads; update the server.');
     }
-    if (response.statusCode != 404 && response.statusCode != 405 && response.statusCode != 501) {
-      throwIfHttpError(response);
+    throwIfHttpError(response);
+    final url = response.data is Map ? (response.data as Map)['url']?.toString() : null;
+    if (url == null || url.isEmpty) {
+      throw MediaServerHttpException(
+        type: MediaServerHttpErrorType.unknown,
+        statusCode: response.statusCode,
+        message: 'Direct-download link missing from the response',
+      );
     }
-    // Older servers: the same route authorised by the account token. This
-    // path is ours, so it goes under the base URL (with any proxy prefix).
-    final token = _api.accessToken ?? '';
-    final base = _api.baseUrl.endsWith('/') ? _api.baseUrl.substring(0, _api.baseUrl.length - 1) : _api.baseUrl;
-    return '$base/api/v2/direct-download?file_id=${Uri.encodeQueryComponent(fileId)}'
-        '&token=${Uri.encodeQueryComponent(token)}';
+    return _api.resolveUrl(url);
   }
 
   Future<List<DownloadSubtitleSpec>> _externalSubtitleSpecs(String fileId) async {

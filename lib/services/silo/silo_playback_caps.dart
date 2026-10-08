@@ -139,7 +139,14 @@ abstract final class SiloPlaybackCaps {
           ..._delivery(containers: const ['m3u8', 'hls', 'ts', 'mp4', 'fmp4'], video: video),
           'features': const ['hls'],
         },
-        'progressive': _delivery(containers: const ['mp4', 'mkv', 'webm'], video: video),
+        // Declared but off, as Silo's own apps do: a progressive remux is not
+        // seekable on the wire yet.
+        'progressive': {
+          ..._delivery(containers: const ['mp4', 'mkv', 'webm'], video: video),
+          'enabled': false,
+          'supported_on_device': false,
+          'failure_reason': 'disabled_pending_seekable_transport',
+        },
       },
     };
   }
