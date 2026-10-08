@@ -100,7 +100,7 @@ sudo moss it plezy
 ### <img src="assets/readme_icons/browse.svg" height="20" alt="" align="center" /> Browse & Discover
 - Libraries, collections, and playlists — video and audio
 - Discover hub — Continue Watching, Next Up, trending, and recommendations
-- Cross-server search across every connected Plex, Jellyfin, and Emby server, including actors and directors
+- Cross-server search across every connected Plex, Jellyfin, Emby, and Silo server, including actors and directors
 - Filtering, sorting, and alphabetical jump navigation
 - Folder browsing and folder playback — home-video libraries open in folder view
 - Resolution, HDR/Dolby Vision, and audio-format badges on cards and detail pages
@@ -200,6 +200,41 @@ Older relays still accept explicit create/join, but failed recovery requires joi
 [^rt]: Real-time scrobbling on Trakt and Simkl; MyAnimeList and AniList update on completion.
 [^shelf]: Android TV / Fire TV and tvOS.
 
+## Silo support
+
+This fork adds [Silo](https://github.com/Silo-Server/silo-server) as a fourth server type, next to Plex, Jellyfin and Emby, on phones, tablets, desktop and TV. Plezy talks to Silo only through its `/api/v2` API, the same surface Silo's Android and Android TV apps use.
+
+### Connecting
+
+1. Choose **Add connection › Connect to Silo** (or **Connect to Silo** on the first-run sign-in screen).
+2. Enter the server address. A bare host is tried as `https://`, then `http://`, then `http://host:8090` (Silo's default port). A reverse-proxy path prefix such as `https://example.com/silo` works.
+3. Sign in:
+   - **With a code** (the default on TVs): the screen shows a code and a QR code; approve it from Silo on your phone or the web.
+   - **With username and password**, when the server allows password sign-in (local accounts or LDAP-style providers).
+4. Pick a **Silo profile**, entering its PIN if it has one. Each Silo profile you add is its own connection, so add the server again to use another profile, or attach it to a different Plezy profile.
+
+### What works
+
+- **Home:** the rows your Silo server defines, including Continue Watching with next-up episodes (items can be dismissed).
+- **Libraries:** movie, TV and mixed libraries with sorting (title, date added, release date, year, rating, runtime, random), genre and age-rating filters, the A–Z bar, and the library's collections.
+- **Details:** series, seasons and episodes, cast and crew with person pages, ratings (IMDb, TMDB, Rotten Tomatoes), and More Like This.
+- **Search** for titles and people.
+- **Playback:** Plezy tells the server what the player can play and the server chooses Direct Play or a transcode (Silo playback protocol v3). Quality presets cap the bitrate; subtitles, skip intro/credits markers and chapters work; progress is saved to the server as you watch.
+- **Watched, favorites and 1–5 star ratings.**
+- **Downloads** of the original file for offline playback, including external subtitle files, artwork, markers and chapters. Progress from a downloaded file syncs back when you reconnect.
+
+### Not yet supported for Silo
+
+Music, audiobooks and e-books (those libraries are hidden), playlists, live TV, seek-preview thumbnails, metadata editing, library scans, sign-in through a browser (OIDC) or a network identity provider, and Silo's server-side download registry (downloads made by Plezy do not appear in Silo's download list). Sign-in tokens refresh automatically, but a video watched for longer than the server's access-token lifetime (usually an hour) may fail to seek near the end.
+
+### Preview builds
+
+Android preview APKs of this branch are published as [pre-releases](https://github.com/edrock200/plezo/releases):
+
+- `arm64-v8a` for most phones, tablets and Android TV boxes; `armeabi-v7a` for older or 32-bit devices such as Chromecast with Google TV; `x86_64` for emulators.
+- They use Plezy's package name with a different signing key: **uninstall a store-installed Plezy first**. Later previews install over earlier ones as updates.
+- A push to a `ccr-*` or `silo/*` branch whose commit message contains `[release-apk]` builds and publishes a new preview (`.github/workflows/silo-preview-apk.yml`).
+
 ## Building from Source
 
 ### Prerequisites
@@ -296,5 +331,6 @@ Plezy is licensed under [GPL-3.0](LICENSE).
 ## Acknowledgments
 
 - Built with [Flutter](https://flutter.dev)
-- Supports [Plex Media Server](https://www.plex.tv), [Jellyfin](https://jellyfin.org), and [Emby](https://emby.media)
+- Supports [Plex Media Server](https://www.plex.tv), [Jellyfin](https://jellyfin.org), [Emby](https://emby.media), and [Silo](https://github.com/Silo-Server/silo-server)
+- Silo support follows Silo's own [Android and Android TV apps](https://github.com/Silo-Server/silo-android) and the [Siku](https://github.com/edrock200/Siku) Roku client. Plezy is not made or endorsed by Silo Media L.L.C.; "Silo" is their trademark, used here only to name the server Plezy connects to.
 - Playback powered by [mpv](https://mpv.io) via our [mpv-build](https://github.com/edde746/mpv-build) pipeline (started as a fork of [MPVKit](https://github.com/mpvkit/MPVKit); the Android Kotlin/JNI glue descends from [libmpv-android](https://github.com/jarnedemeulemeester/libmpv-android)), Android [ExoPlayer](https://developer.android.com/media/media3/exoplayer), and [libass-android](https://github.com/peerless2012/libass-android)
