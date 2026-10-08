@@ -24,10 +24,23 @@ description: Build, publish and verify Plezy's Android preview APKs (the "Plezy 
   (`AndroidManifest.xml`, `ExternalPlayerChannel.kt`, `SystemShelfArtworkProvider.AUTHORITY` and its
   tests) to follow `applicationId` first.
 
+## Release notes (change log)
+- Every release page carries a plain-language change log from `docs/silo-preview-changelog.md`
+  (written for users, not developers: what they will notice, no class names or API routes).
+- Before a `[release-apk]` push, write the notes under `## Next preview`. The build puts that
+  section (plus the "Which APK" and install notes from `scripts/silo_release_notes.py`) on the new
+  release.
+- After the release is published, rename `## Next preview` to `## <tag>` and add a fresh empty
+  `## Next preview`. Pushing the file runs `.github/workflows/silo-release-notes.yml`, which
+  rewrites every listed release's page with its section (`gh release edit` with the workflow's
+  token). Fix an old release's notes the same way: edit its section and push.
+- The session cannot edit releases itself (the GitHub MCP tools have no release edit and `gh` has
+  no valid token); always go through the change log file.
+
 ## Steps
 1. Make sure `flutter analyze lib test` and `scripts/run_tests.sh` pass; CI does not run tests in
    this workflow.
-2. Commit with `[release-apk]` in the message (a real change, not an empty commit) and push.
+2. Write the `## Next preview` notes in the change log. Commit with `[release-apk]` in the message (a real change, not an empty commit) and push.
    The workflow's concurrency group cancels an in-progress build on **any** later push to the same
    branch (even one without `[release-apk]`, whose own job is skipped). Commit follow-up docs
    locally and push them only after the release is published.
@@ -37,6 +50,8 @@ description: Build, publish and verify Plezy's Android preview APKs (the "Plezy 
    `curl` loop on `releases/download/<tag>/SHA256SUMS.txt` (HTTP 200 when published) is a cheap
    way to wait without polling the API.
 5. Verify the artifacts (below) before telling the user it is ready.
+6. Rename the change log section to the tag and push (no `[release-apk]`); check the notes run
+   with `list_workflow_runs` and the page with `get_release_by_tag`.
 
 ## Verifying an APK in a cloud session
 The Android SDK is not preinstalled and `dl.google.com` must be allowed in the environment's

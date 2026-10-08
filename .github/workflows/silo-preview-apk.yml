@@ -5,6 +5,9 @@ run-name: Silo preview APK ${{ github.sha }}
 # pre-release. Runs only for pushes whose head commit message contains
 # "[release-apk]", so ordinary pushes stay cheap.
 #
+# Release notes come from the "## Next preview" section of
+# docs/silo-preview-changelog.md (see silo-release-notes.yml).
+#
 # Signing: uses the ANDROID_* secrets when the repository has them (same names
 # as build.yml). Otherwise a keystore is generated once and kept in the Actions
 # cache, so later previews keep the same signature and install as updates
@@ -123,6 +126,9 @@ jobs:
           echo "tag=silo-preview-${version}-${short_sha}" >> "$GITHUB_OUTPUT"
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "short_sha=${short_sha}" >> "$GITHUB_OUTPUT"
+          # Plain-language notes from the change log's "## Next preview" section.
+          python3 scripts/silo_release_notes.py docs/silo-preview-changelog.md "Next preview" release-notes.md \
+            "${GITHUB_REF_NAME}" "${GITHUB_SHA}"
 
       - name: Publish pre-release
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
@@ -133,14 +139,6 @@ jobs:
           name: Plezy ${{ steps.apks.outputs.version }} with Silo (preview ${{ steps.apks.outputs.short_sha }})
           tag_name: ${{ steps.apks.outputs.tag }}
           target_commitish: ${{ github.sha }}
-          body: |
-            Preview build of Plezy with Silo server support, from `${{ github.ref_name }}` at ${{ github.sha }}.
-
-            **Which APK**
-            - `arm64-v8a`: most phones, tablets and Android TV devices (Shield, recent Fire TV, Google TV boxes).
-            - `armeabi-v7a`: older or 32-bit devices, including Chromecast with Google TV and many TV sticks.
-            - `x86_64`: emulators and x86 devices.
-
-            This build uses Plezy's package id but not the store signing key: uninstall a store-installed Plezy before installing it. Later previews install over it as updates only when they are signed with the same key; if Android refuses the update, uninstall the previous preview first.
+          body_path: release-notes.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,53 @@
+name: Silo release notes
+run-name: Silo release notes ${{ github.sha }}
+
+# Copies each "## silo-preview-…" section of docs/silo-preview-changelog.md
+# onto the GitHub release with that tag, so release pages carry a plain-
+# language change log. Runs when the change log (or this workflow) changes.
+
+on:
+  push:
+    branches:
+      - "ccr-**"
+      - "silo/**"
+    paths:
+      - "docs/silo-preview-changelog.md"
+      - "scripts/silo_release_notes.py"
+      - ".github/workflows/silo-release-notes.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: silo-release-notes
+  cancel-in-progress: false
+
+jobs:
+  update-notes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Update release pages
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          tags=$(grep -oE '^## silo-preview-[A-Za-z0-9._-]+' docs/silo-preview-changelog.md | cut -c4-)
+          for tag in $tags; do
+            if ! gh release view "$tag" > /dev/null 2>&1; then
+              echo "::notice::No release $tag yet; skipped."
+              continue
+            fi
+            if python3 scripts/silo_release_notes.py docs/silo-preview-changelog.md "$tag" notes.md; then
+              gh release edit "$tag" --notes-file notes.md
+              echo "Updated $tag"
+            else
+              echo "::warning::Section $tag is empty; release left unchanged."
+            fi
+          done

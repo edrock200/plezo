@@ -76,6 +76,8 @@ macOS, Windows and Linux. This fork (`edrock200/plezo`) adds Silo as a fourth ba
   Android emulator cannot run; verify APKs with `apksigner` / `aapt2` and test on a device.
 - `gh` is not available; use the GitHub MCP tools. Releases are created by the preview workflow, not
   from the session.
+- Release pages show the plain-language change log in `docs/silo-preview-changelog.md`; update it
+  for every preview (see the `android-preview-release` skill).
 - The preview workflow cancels an in-progress build when anything else is pushed to the same
   branch. After a `[release-apk]` push, wait for the release before pushing docs or fixes.
 - `dart`/`flutter` live in `/opt/flutter/bin` (add it to `PATH`). Silo's server and Android repos
