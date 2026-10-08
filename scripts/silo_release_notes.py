@@ -16,15 +16,27 @@ INSTALL = (
     "both are signed with the same key; if Android refuses the update, uninstall the previous preview first."
 )
 
+WINDOWS_INSTALL = (
+    "On Windows the installer replaces an installed Plezy (it uses Plezy's app id). The files are not code-signed, so SmartScreen may warn on first run: choose More info, then Run anyway. "
+    "These builds do not check for updates, so they never replace themselves with Plezy without Silo."
+)
+
 # One line per paragraph or bullet: release pages render single line breaks as hard breaks.
 FOOTER = f"""
-### Which APK
+### Which file
+**Android** (`.apk`)
 - `arm64-v8a`: most phones, tablets and Android TV devices (Shield, recent Fire TV, Google TV boxes).
 - `armeabi-v7a`: older or 32-bit devices, including Chromecast with Google TV and many TV sticks.
 - `x86_64`: emulators and x86 devices.
 
+**Windows** (when attached)
+- `windows-installer.exe`: installs on Windows 10/11, picking x64 or ARM automatically.
+- `windows-x64-portable.7z` / `windows-arm64-portable.7z`: no install; unzip and run `plezy.exe`.
+
 ### Installing
 {INSTALL}
+
+{WINDOWS_INSTALL}
 """
 
 

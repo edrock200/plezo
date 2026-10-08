@@ -29,6 +29,20 @@ description: Build, publish and verify Plezy's Android preview APKs (the "Plezy 
   (`AndroidManifest.xml`, `ExternalPlayerChannel.kt`, `SystemShelfArtworkProvider.AUTHORITY` and its
   tests) to follow `applicationId` first.
 
+## Windows builds
+- Workflow: `.github/workflows/silo-preview-windows.yml` (x64 on `windows-latest`, arm64 on
+  `windows-11-arm`, then Inno Setup installer + 7z portables via `windows/build-installer.ps1`).
+  About 30–45 minutes; it compiles mpv's dependencies and installs upstream's patched engine.
+- A `[release-apk]` commit also builds Windows from the same commit and attaches
+  `plezy-silo-<version>-windows-{installer.exe,x64-portable.7z,arm64-portable.7z}` and
+  `SHA256SUMS-windows.txt` to that preview's release (it waits for the Android build to publish).
+  A `[release-windows]` commit builds the code of the **latest** preview release and attaches to it.
+- Never pass `ENABLE_UPDATE_CHECK=true`: the updater reads upstream Plezy's feed and would replace
+  the Silo build with Plezy without Silo. Builds are unsigned (SmartScreen warns).
+- The installer keeps Plezy's AppId, so it replaces an installed Plezy.
+- Verify: the release lists the Windows assets and `SHA256SUMS-windows.txt`; the app itself can
+  only be tested on the user's PC.
+
 ## Release notes (change log)
 - Every release page carries a plain-language change log from `docs/silo-preview-changelog.md`
   (written for users, not developers: what they will notice, no class names or API routes).

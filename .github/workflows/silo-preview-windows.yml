@@ -1,0 +1,216 @@
+name: Silo preview Windows
+run-name: Silo preview Windows ${{ github.sha }}
+
+# Builds the Windows app (x64 and arm64) of a Silo-support branch and
+# attaches an installer and portable archives to a Silo preview release.
+#
+# - A head commit with "[release-apk]" builds the same commit as the Android
+#   preview and attaches to the release that build publishes (same 2.22.N).
+# - A head commit with "[release-windows]" (and no "[release-apk]") builds the
+#   code of the latest existing preview release and attaches to it.
+#
+# The update check is left off (no ENABLE_UPDATE_CHECK): it reads upstream
+# Plezy's feed and would replace this build with Plezy without Silo. The
+# installer uses Plezy's app id, so it replaces an installed Plezy.
+
+on:
+  push:
+    branches:
+      - "ccr-**"
+      - "silo/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: silo-preview-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: "3.47.1"
+
+jobs:
+  resolve:
+    if: ${{ contains(github.event.head_commit.message, '[release-apk]') || contains(github.event.head_commit.message, '[release-windows]') }}
+    runs-on: ubuntu-latest
+    outputs:
+      ref: ${{ steps.pick.outputs.ref }}
+      version: ${{ steps.pick.outputs.version }}
+      build: ${{ steps.pick.outputs.build }}
+    steps:
+      - name: Pick release and code
+        id: pick
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          set -euo pipefail
+          pubspec_at() { gh api "repos/${GH_REPO}/contents/pubspec.yaml?ref=$1" --jq .content | base64 -d | grep -m1 '^version:' | awk '{print $2}'; }
+          if [[ "$MESSAGE" == *"[release-apk]"* ]]; then
+            # Same numbering as silo-preview-apk.yml: every earlier preview of
+            # this major.minor counts, except a release already made from
+            # this commit (the APK build may publish first).
+            ref="$GITHUB_SHA"
+            pub="$(pubspec_at "$ref")"
+            name="${pub%%+*}"; build="${pub#*+}"; major_minor="${name%.*}"; patch="${name##*.}"
+            count="$(gh release list --limit 1000 --json tagName \
+              --jq "[.[] | select(.tagName | startswith(\"silo-preview-${major_minor}.\"))] | length")"
+            if gh release view "silo-preview-${major_minor}.$((patch + count))" --json targetCommitish \
+                --jq .targetCommitish 2>/dev/null | grep -qx "$GITHUB_SHA"; then
+              count=$((count - 1))
+            fi
+            n=$((count + 1))
+          else
+            tag="$(gh release list --limit 1000 --json tagName,createdAt \
+              --jq '[.[] | select(.tagName | test("^silo-preview-[0-9]+\\.[0-9]+\\.[0-9]+$"))] | sort_by(.createdAt) | last | .tagName')"
+            [[ -n "$tag" && "$tag" != "null" ]] || { echo "::error::No numbered Silo preview release to attach to."; exit 1; }
+            ref="$(gh release view "$tag" --json targetCommitish --jq .targetCommitish)"
+            pub="$(pubspec_at "$ref")"
+            name="${pub%%+*}"; build="${pub#*+}"; major_minor="${name%.*}"; patch="${name##*.}"
+            n=$(( ${tag##*.} - patch ))
+          fi
+          version="${major_minor}.$((patch + n))"
+          {
+            echo "ref=${ref}"
+            echo "version=${version}"
+            echo "build=$((build + n))"
+          } >> "$GITHUB_OUTPUT"
+          echo "Windows build of ${ref} as ${version} (build $((build + n)))"
+
+  build:
+    needs: resolve
+    name: Build Windows (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - arch: x64
+            runner: windows-latest
+            flutter_setup: action
+            native_cache_path: build/windows/x64/_deps
+          - arch: arm64
+            runner: windows-11-arm
+            flutter_setup: git
+            native_cache_path: build/windows/arm64/_deps
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.resolve.outputs.ref }}
+          persist-credentials: false
+
+      - name: Cache Windows native dependencies
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ${{ matrix.native_cache_path }}
+          key: silo-preview-windows-native-${{ matrix.arch }}-${{ hashFiles('windows/CMakeLists.txt', 'mpv-build.lock.json') }}
+
+      - name: Setup Flutter
+        if: matrix.flutter_setup == 'action'
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          channel: "stable"
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Set up Flutter from its pinned commit
+        if: matrix.flutter_setup == 'git'
+        uses: ./.github/actions/setup-flutter-git
+
+      - name: Install dependencies
+        shell: pwsh
+        run: flutter pub get --enforce-lockfile --no-example
+
+      - name: Install patched Flutter engine (DComp)
+        shell: pwsh
+        run: |
+          flutter precache --windows
+          .\windows\tool\install-patched-engine.ps1
+
+      - name: Build Windows ${{ matrix.arch }}
+        shell: pwsh
+        run: >
+          flutter build windows --release
+          --build-name=${{ needs.resolve.outputs.version }}
+          --build-number=${{ needs.resolve.outputs.build }}
+          --dart-define=GIT_COMMIT=${{ needs.resolve.outputs.ref }}
+          --dart-define=SENTRY_ENVIRONMENT=silo-preview
+
+      - name: Verify Windows bundle contents
+        shell: pwsh
+        run: |
+          $bundleDir = "build/windows/${{ matrix.arch }}/runner/Release"
+          $bundlePath = (Resolve-Path -LiteralPath $bundleDir).Path
+          $found = @(Get-ChildItem -LiteralPath $bundlePath -File -Recurse |
+            ForEach-Object { $_.FullName.Substring($bundlePath.Length + 1).Replace('\', '/') })
+          $required = @("plezy.exe", "flutter_windows.dll", "sqlite3.dll", "libmpv-2.dll", "data/app.so",
+            "data/icudtl.dat", "data/flutter_assets/NativeAssetsManifest.json", "msvcp140.dll", "vcruntime140.dll",
+            "data/flutter_assets/assets/silo_icon.svg")
+          $missing = @($required | Where-Object { $found -notcontains $_ })
+          if ($missing.Count -gt 0) { throw "Windows bundle is missing: $($missing -join ', ')" }
+
+      - name: Upload ${{ matrix.arch }} build
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: windows-${{ matrix.arch }}-build
+          path: build/windows/${{ matrix.arch }}/runner/Release/
+
+  package:
+    needs: [resolve, build]
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.resolve.outputs.ref }}
+          persist-credentials: false
+
+      - name: Download x64 build
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: windows-x64-build
+          path: build-x64
+
+      - name: Download arm64 build
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: windows-arm64-build
+          path: build-arm64
+
+      - name: Build installer and portables
+        shell: pwsh
+        run: .\windows\build-installer.ps1 -X64BuildDir "build-x64" -Arm64BuildDir "build-arm64" -Version "${{ needs.resolve.outputs.version }}"
+
+      - name: Name and checksum the files
+        shell: pwsh
+        run: |
+          $v = "${{ needs.resolve.outputs.version }}"
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Move-Item plezy-windows-installer.exe "dist/plezy-silo-$v-windows-installer.exe"
+          Move-Item plezy-windows-x64-portable.7z "dist/plezy-silo-$v-windows-x64-portable.7z"
+          Move-Item plezy-windows-arm64-portable.7z "dist/plezy-silo-$v-windows-arm64-portable.7z"
+          Push-Location dist
+          Get-ChildItem -File | ForEach-Object {
+            "$((Get-FileHash $_.Name -Algorithm SHA256).Hash.ToLower())  $($_.Name)"
+          } | Set-Content -Encoding ascii "SHA256SUMS-windows.txt"
+          Pop-Location
+
+      # A [release-apk] build attaches to the release the Android build
+      # publishes; wait for it (that build usually finishes first).
+      - name: Attach to the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          tag="silo-preview-${{ needs.resolve.outputs.version }}"
+          for _ in $(seq 1 60); do
+            gh release view "$tag" > /dev/null 2>&1 && break
+            echo "Waiting for release $tag..."; sleep 30
+          done
+          gh release view "$tag" > /dev/null
+          gh release upload "$tag" dist/* --clobber
+          echo "Attached Windows build to $tag"
