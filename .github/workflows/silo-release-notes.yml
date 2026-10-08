@@ -32,25 +32,32 @@ jobs:
         with:
           persist-credentials: false
 
-      # Older previews were tagged silo-preview-<version>-<sha>, which GitHub
-      # sorts by the sha's letters. Move them to <version>-<UTC time>.<sha>
-      # (the time of the release's commit) so the page lists newest first.
-      # The old tags are left in place.
-      - name: Re-tag older previews chronologically
+      # Previews are numbered by bumping the patch of pubspec's version: the
+      # Nth preview of 2.22.0 is 2.22.N, tagged silo-preview-2.22.N so GitHub
+      # lists the newest first. Releases still under an older tag scheme are
+      # moved to their number (by creation order, the same count the preview
+      # build uses). Old tags are left in place; built APKs are unchanged.
+      - name: Number older previews
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          gh release list --limit 100 --json tagName,createdAt \
-            --jq '.[] | select(.tagName | test("^silo-preview-[0-9.]+-[0-9a-f]{7}$")) | "\(.tagName) \(.createdAt)"' |
-          while read -r old created; do
-            version="${old#silo-preview-}"; version="${version%-*}"
-            sha="${old##*-}"
-            new="silo-preview-${version}-$(date -u -d "$created" +%Y%m%d%H%M).${sha}"
-            gh release edit "$old" --tag "$new"
-            echo "Moved release $old to $new"
-          done
+          name="$(grep -m1 '^version:' pubspec.yaml | awk '{print $2}' | cut -d+ -f1)"
+          major_minor="${name%.*}"; patch="${name##*.}"
+          gh release list --limit 1000 --json tagName,createdAt \
+            --jq "[.[] | select(.tagName | startswith(\"silo-preview-${major_minor}.\"))] | sort_by(.createdAt) | .[].tagName" |
+          { n=0; while read -r tag; do
+            n=$((n + 1))
+            version="${major_minor}.$((patch + n))"
+            [[ "$tag" == "silo-preview-${version}" ]] && continue
+            if [[ "$tag" =~ ^silo-preview-[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "::warning::$tag is numbered but expected silo-preview-${version}; left alone."
+              continue
+            fi
+            gh release edit "$tag" --tag "silo-preview-${version}" --title "Plezy ${version} with Silo"
+            echo "Moved release $tag to silo-preview-${version}"
+          done; }
 
       - name: Update release pages
         env:

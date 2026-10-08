@@ -10,10 +10,13 @@ description: Build, publish and verify Plezy's Android preview APKs (the "Plezy 
   branch **only when the head commit message contains `[release-apk]`**. The upstream
   `build.yml` cannot be used: it only runs from `main` and needs the upstream signing secrets.
 - It builds `flutter build apk --release --split-per-abi` (Flutter 3.47.1, Java 21) in about 13
-  minutes and publishes a GitHub **pre-release** tagged `silo-preview-<version>-<YYYYMMDDHHMM>.<shortsha>`
-  (the commit's UTC time; GitHub orders releases by the version in the tag, so the time keeps the
-  newest first — a bare sha sorted by its letters and put older builds on top) with
-  `plezy-silo-<version>-<sha>-{arm64-v8a,armeabi-v7a,x86_64}.apk` and `SHA256SUMS.txt`.
+  minutes and publishes a GitHub **pre-release** numbered by bumping the patch of `pubspec.yaml`'s
+  version: the Nth preview of 2.22.0 is **2.22.N** (the user's choice), tagged `silo-preview-2.22.N`,
+  titled "Plezy 2.22.N with Silo", built with `--build-name=2.22.N --build-number=<pubspec build>+N`
+  so the app shows it and it installs as an update. N counts every earlier `silo-preview-<major.minor>.*`
+  release; `silo-release-notes.yml` moves releases under older tag schemes to their number. Tags
+  are pure versions because GitHub lists releases by the version in the tag (short-sha tags sorted
+  by their letters and put older builds first). Assets: `plezy-silo-<version>-<sha>-{arm64-v8a,armeabi-v7a,x86_64}.apk` and `SHA256SUMS.txt`.
 - Signing: the repository's `ANDROID_KEYSTORE_BASE64`/`ANDROID_STORE_PASSWORD`/`ANDROID_KEY_PASSWORD`/
   `ANDROID_KEY_ALIAS` secrets when set; otherwise a keystore generated once and kept in the Actions
   cache (`silo-preview-keystore-v1`), so later previews install as updates while the cache lives.

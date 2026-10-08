@@ -103,9 +103,32 @@ jobs:
           storeFile=upload-keystore.jks
           EOF
 
+      # Each preview bumps the patch of pubspec's version by one: the Nth
+      # preview of 2.22.0 is 2.22.N (build number +N, so it installs as an
+      # update). N counts every earlier preview release of that major.minor,
+      # whatever its tag looks like, so it matches silo-release-notes.yml.
+      - name: Pick preview version
+        id: ver
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          pub="$(grep -m1 '^version:' pubspec.yaml | awk '{print $2}')"
+          name="${pub%%+*}"; build="${pub#*+}"
+          major_minor="${name%.*}"; patch="${name##*.}"
+          count="$(gh release list --limit 1000 --json tagName \
+            --jq "[.[] | select(.tagName | startswith(\"silo-preview-${major_minor}.\"))] | length")"
+          n=$((count + 1))
+          echo "version=${major_minor}.$((patch + n))" >> "$GITHUB_OUTPUT"
+          echo "build=$((build + n))" >> "$GITHUB_OUTPUT"
+          echo "Preview ${major_minor}.$((patch + n)) (build $((build + n)))"
+
       - name: Build APKs
         run: >
           flutter build apk --release --split-per-abi
+          --build-name=${{ steps.ver.outputs.version }}
+          --build-number=${{ steps.ver.outputs.build }}
           --dart-define=GIT_COMMIT=${{ github.sha }}
           --dart-define=SENTRY_ENVIRONMENT=silo-preview
 
@@ -117,17 +140,14 @@ jobs:
         id: apks
         run: |
           short_sha="${GITHUB_SHA::7}"
-          # The commit's UTC time sorts tags chronologically: GitHub orders
-          # releases by the version in the tag, so a bare short sha would
-          # sort by its letters and put older builds first.
-          stamp="$(TZ=UTC0 git log -1 --date=format-local:%Y%m%d%H%M --format=%cd)"
-          version="$(grep -m1 '^version:' pubspec.yaml | awk '{print $2}' | cut -d+ -f1)"
+          version="${{ steps.ver.outputs.version }}"
           mkdir -p dist
           for abi in arm64-v8a armeabi-v7a x86_64; do
             cp "build/app/outputs/flutter-apk/app-${abi}-release.apk" "dist/plezy-silo-${version}-${short_sha}-${abi}.apk"
           done
           (cd dist && sha256sum *.apk > SHA256SUMS.txt)
-          echo "tag=silo-preview-${version}-${stamp}.${short_sha}" >> "$GITHUB_OUTPUT"
+          # GitHub orders releases by the version in the tag: newest first.
+          echo "tag=silo-preview-${version}" >> "$GITHUB_OUTPUT"
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "short_sha=${short_sha}" >> "$GITHUB_OUTPUT"
           # Plain-language notes from the change log's "## Next preview" section.
@@ -140,7 +160,7 @@ jobs:
           files: dist/*
           draft: false
           prerelease: true
-          name: Plezy ${{ steps.apks.outputs.version }} with Silo (preview ${{ steps.apks.outputs.short_sha }})
+          name: Plezy ${{ steps.apks.outputs.version }} with Silo
           tag_name: ${{ steps.apks.outputs.tag }}
           target_commitish: ${{ github.sha }}
           body_path: release-notes.md

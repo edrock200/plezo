@@ -8,7 +8,7 @@ What changed in each Android preview, in plain language. Each `## silo-preview-â
 
 - **4K HDR and Dolby Vision:** these titles (usually 4K HEVC) now play as the original file. Before, Plezy didn't tell the server it could handle HDR itself, so the server converted them to a lower-quality, non-HDR stream, which also loaded the server heavily.
 
-## silo-preview-2.22.0-202610081539.31434b0
+## silo-preview-2.22.2
 
 **Fixes from a full code review** â€” released October 8, 2026. Installs over the previous preview as an update.
 
@@ -20,7 +20,7 @@ What changed in each Android preview, in plain language. Each `## silo-preview-â
 - **Speed:** Home rows and "play all episodes" lists load at the same time instead of one by one.
 - **Smaller fixes:** "Remove from Continue Watching" works for every card, IMDb scores show on the right scale, some versions now show their running time, and Discord status no longer sends your Silo login along with cover art.
 
-## silo-preview-2.22.0-202610080106.bd4c7c8
+## silo-preview-2.22.1
 
 **First preview: Silo support** â€” released October 8, 2026.
 

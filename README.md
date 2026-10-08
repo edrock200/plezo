@@ -245,6 +245,7 @@ Android preview APKs of this branch are published as [pre-releases](https://gith
 
 - `arm64-v8a` for most phones, tablets and Android TV boxes; `armeabi-v7a` for older or 32-bit devices such as Chromecast with Google TV; `x86_64` for emulators.
 - They use Plezy's package name with a different signing key: **uninstall a store-installed Plezy first**. Later previews install over earlier ones as updates only while they share a signing key: with the repository's `ANDROID_*` signing secrets always, otherwise only for builds of the same branch within about a week (the key lives in the GitHub Actions cache). If an update is refused, uninstall the previous preview first.
+- Previews are numbered 2.22.1, 2.22.2, 2.22.3, … (one patch step per preview of Plezy 2.22.0), and the app's About screen shows the same number. The first two previews were built before this and show 2.22.0 inside the app.
 - A push to a `ccr-*` or `silo/*` branch whose commit message contains `[release-apk]` builds and publishes a new preview (`.github/workflows/silo-preview-apk.yml`). A newer push to the same branch cancels a build still in progress, so wait for the release before pushing again.
 
 ### Changes in this fork
