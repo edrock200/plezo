@@ -32,6 +32,26 @@ jobs:
         with:
           persist-credentials: false
 
+      # Older previews were tagged silo-preview-<version>-<sha>, which GitHub
+      # sorts by the sha's letters. Move them to <version>-<UTC time>.<sha>
+      # (the time of the release's commit) so the page lists newest first.
+      # The old tags are left in place.
+      - name: Re-tag older previews chronologically
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh release list --limit 100 --json tagName,createdAt \
+            --jq '.[] | select(.tagName | test("^silo-preview-[0-9.]+-[0-9a-f]{7}$")) | "\(.tagName) \(.createdAt)"' |
+          while read -r old created; do
+            version="${old#silo-preview-}"; version="${version%-*}"
+            sha="${old##*-}"
+            new="silo-preview-${version}-$(date -u -d "$created" +%Y%m%d%H%M).${sha}"
+            gh release edit "$old" --tag "$new"
+            echo "Moved release $old to $new"
+          done
+
       - name: Update release pages
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

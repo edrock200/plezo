@@ -55,11 +55,31 @@ abstract final class SiloPlaybackCaps {
     'wmapro',
   ];
 
-  static List<String> videoCodecs() {
-    final hevc = VideoDecodeCapabilities.accepts(RankedVideoCodec.hevc);
-    final av1 = VideoDecodeCapabilities.accepts(RankedVideoCodec.av1);
-    return ['h264', if (hevc) 'hevc', if (av1) 'av1', 'vp9', 'vp8', 'mpeg4', 'mpeg2video', 'vc1'];
-  }
+  static List<String> videoCodecs() => [..._hardwareVideoCodecs(), 'vp9', 'vp8', 'mpeg4', 'mpeg2video', 'vc1'];
+
+  /// Codecs the device decodes in hardware (or that are unprobed and so
+  /// assumed), as Plezy's other backends decide them.
+  static List<String> _hardwareVideoCodecs() => [
+    'h264',
+    if (VideoDecodeCapabilities.accepts(RankedVideoCodec.hevc)) 'hevc',
+    if (VideoDecodeCapabilities.accepts(RankedVideoCodec.av1)) 'av1',
+  ];
+
+  /// HDR ranges the player decodes. mpv and ExoPlayer tone-map to the
+  /// attached display themselves.
+  static const _hdrDetails = <String, Object?>{
+    'hdr10': true,
+    'hdr10_plus': true,
+    'hlg': true,
+    'dolby_vision_profiles': <int>[],
+  };
+
+  /// The original-file player resolves HDR and Dolby Vision against the live
+  /// display after it receives the bytes, as it does when it direct-plays
+  /// from Plex or Jellyfin. Without this claim, an `unknown` display probe
+  /// makes the server refuse every HDR original (typically 4K HEVC) and
+  /// transcode it to SDR H.264 instead.
+  static const clientManagedDynamicRangeClaim = 'client_managed_dynamic_range_v1';
 
   /// Silo `quality_preference` for a Plezy preset.
   static String qualityPreference(TranscodeQualityPreset preset) {
@@ -84,7 +104,11 @@ abstract final class SiloPlaybackCaps {
     return 'unknown';
   }
 
-  static Map<String, Object?> _delivery({required List<String> containers, required List<String> video}) => {
+  static Map<String, Object?> _delivery({
+    required List<String> containers,
+    required List<String> video,
+    List<String> validatedClaims = const [],
+  }) => {
     'enabled': true,
     'supported_on_device': true,
     'containers': containers,
@@ -101,7 +125,7 @@ abstract final class SiloPlaybackCaps {
     },
     'features': const <String>[],
     'transformations': const <String>[],
-    'validated_claims': const <String>[],
+    'validated_claims': validatedClaims,
     'auth_header_refresh': false,
   };
 
@@ -111,14 +135,14 @@ abstract final class SiloPlaybackCaps {
       'video_evidence': 'declared',
       'audio_evidence': 'declared',
       'codecs_video': video,
-      'codecs_video_hardware': const <String>['h264'],
+      'codecs_video_hardware': _hardwareVideoCodecs(),
       'codecs_audio': _audioCodecs,
       'containers': _containers,
       'max_resolution': '2160p',
       // mpv tone-maps HDR to the display itself; declaring HDR keeps the
       // original stream instead of a server-side tone-mapped transcode.
       'hdr': true,
-      'hdr_details': {'hdr10': true, 'hdr10_plus': true, 'hlg': true, 'dolby_vision_profiles': const <int>[]},
+      'hdr_details': _hdrDetails,
     };
   }
 
@@ -131,10 +155,19 @@ abstract final class SiloPlaybackCaps {
       'device': {'platform': _platform()},
       'output': {
         'output_context_id': '1',
+        // A client sending `display` must send `hdr_details` too, or an older
+        // server falls back to the device-level value. Plezy does not probe
+        // the panel, so the evidence is `unknown`: native HDR output is never
+        // promised, and HDR originals ride the client-managed claim below.
+        'hdr_details': _hdrDetails,
         'display': {'hdr_evidence': 'unknown'},
       },
       'deliveries': {
-        'original_http': _delivery(containers: _containers, video: video),
+        'original_http': _delivery(
+          containers: _containers,
+          video: video,
+          validatedClaims: const [clientManagedDynamicRangeClaim],
+        ),
         'hls': {
           ..._delivery(containers: const ['m3u8', 'hls', 'ts', 'mp4', 'fmp4'], video: video),
           'features': const ['hls'],

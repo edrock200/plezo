@@ -10,7 +10,9 @@ description: Build, publish and verify Plezy's Android preview APKs (the "Plezy 
   branch **only when the head commit message contains `[release-apk]`**. The upstream
   `build.yml` cannot be used: it only runs from `main` and needs the upstream signing secrets.
 - It builds `flutter build apk --release --split-per-abi` (Flutter 3.47.1, Java 21) in about 13
-  minutes and publishes a GitHub **pre-release** tagged `silo-preview-<version>-<shortsha>` with
+  minutes and publishes a GitHub **pre-release** tagged `silo-preview-<version>-<YYYYMMDDHHMM>.<shortsha>`
+  (the commit's UTC time; GitHub orders releases by the version in the tag, so the time keeps the
+  newest first — a bare sha sorted by its letters and put older builds on top) with
   `plezy-silo-<version>-<sha>-{arm64-v8a,armeabi-v7a,x86_64}.apk` and `SHA256SUMS.txt`.
 - Signing: the repository's `ANDROID_KEYSTORE_BASE64`/`ANDROID_STORE_PASSWORD`/`ANDROID_KEY_PASSWORD`/
   `ANDROID_KEY_ALIAS` secrets when set; otherwise a keystore generated once and kept in the Actions

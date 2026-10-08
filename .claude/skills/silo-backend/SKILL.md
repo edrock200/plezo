@@ -67,7 +67,12 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
   and the `sequenced_progress_v1` feature (Silo's apps refuse playback otherwise) → keep `installation_id` (409
   `installation_changed` → refetch and retry once). `POST /playback/start` with `declared` evidence
   (mpv/ExoPlayer decode almost everything; `exact` would need per-decoder `video_decode[]`).
-  `form_factor` is `mobile` on phones *and* tablets, `tv` on TV, `desktop` otherwise. `progressive`
+  HDR: Plezy does not probe the panel, so `output.display.hdr_evidence` is `unknown`, which makes
+  the server refuse every native HDR/Dolby Vision output. `original_http` therefore carries the
+  validated claim `client_managed_dynamic_range_v1` (the player tone-maps itself, as with Plex),
+  and `output.hdr_details` is always sent with `display`. Dropping either makes 4K HDR HEVC
+  transcode to SDR H.264. `codecs_video_hardware` lists every codec `VideoDecodeCapabilities`
+  accepts. `form_factor` is `mobile` on phones *and* tablets, `tv` on TV, `desktop` otherwise. `progressive`
   is declared but disabled, as Silo's apps do. `start_position` is 0 and Plezy seeks to resume.
   Progress: `POST /playback/{sid}/progress` with a strictly increasing `sequence`; stop:
   `DELETE /playback/{sid}` with a JSON body and a `stop_id` (and stop `sequence`) minted once; a
@@ -140,6 +145,9 @@ Silo's apps). Open follow-ups: an edit screen for an existing Silo connection (a
   persisted connection got the rotated refresh token.
 - **403 `profile_verification_required`:** PIN profile without a valid `X-Profile-Token`.
 - **422 `header.x-profile-id`:** a call made with `profile: false` that needs the profile.
+- **4K HDR transcodes to H.264:** check the plan log line's `reason`; the claim and
+  `output.hdr_details` above must be present in `client_playback_context`. A preset other than
+  Original also forces a transcode.
 - **Playback refused:** read the `Silo playback plan: delivery=… reason=…` log line; a
   `terminal.message` from `outcome: adaptation_unavailable` is shown to the user verbatim.
 - **Download "needs a newer server":** the server lacks `/direct-download/links`.
