@@ -243,6 +243,7 @@ Music, audiobooks and e-books (those libraries are hidden), playlists, live TV, 
 
 Android preview APKs of this branch are published as [pre-releases](https://github.com/edrock200/plezo/releases):
 
+- **macOS:** previews also include a `.dmg` for Apple silicon and Intel Macs. It replaces an installed Plezy, is not signed by Apple (allow it once in System Settings › Privacy & Security › Open Anyway), and never updates itself to Plezy without Silo.
 - **Windows:** previews also include a Windows 10/11 installer (x64 and ARM) and portable `.7z` downloads. They replace an installed Plezy, are not code-signed (SmartScreen may warn), and never update themselves to Plezy without Silo.
 - `arm64-v8a` for most phones, tablets and Android TV boxes; `armeabi-v7a` for older or 32-bit devices such as Chromecast with Google TV; `x86_64` for emulators.
 - They use Plezy's package name with a different signing key: **uninstall a store-installed Plezy first**. Later previews install over earlier ones as updates only while they share a signing key: with the repository's `ANDROID_*` signing secrets always, otherwise only for builds of the same branch within about a week (the key lives in the GitHub Actions cache). If an update is refused, uninstall the previous preview first.

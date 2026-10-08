@@ -76,8 +76,9 @@ macOS, Windows and Linux. This fork (`edrock200/plezo`) adds Silo as a fourth ba
   Android emulator cannot run; verify APKs with `apksigner` / `aapt2` and test on a device.
 - `gh` is not available; use the GitHub MCP tools. Releases are created by the preview workflow, not
   from the session.
-- Windows: `silo-preview-windows.yml` builds with every `[release-apk]` push (or `[release-windows]`
-  to add Windows to the latest release). Never enable `ENABLE_UPDATE_CHECK` in fork builds.
+- Desktop: `silo-preview-desktop.yml` builds Windows and macOS with every `[release-apk]` push, or
+  adds them to the latest release with `[release-desktop]` / `[release-windows]` / `[release-macos]`.
+  Release markers only count in a commit's **first line**. Never enable `ENABLE_UPDATE_CHECK`.
 - Previews are versioned 2.22.N (patch +1 per preview; the workflow picks N). Never hand-pick tags.
 - Release pages show the plain-language change log in `docs/silo-preview-changelog.md`; update it
   for every preview (see the `android-preview-release` skill).

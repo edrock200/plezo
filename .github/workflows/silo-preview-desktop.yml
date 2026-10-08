@@ -1,18 +1,21 @@
-name: Silo preview Windows
-run-name: Silo preview Windows ${{ github.sha }}
+name: Silo preview desktop
+run-name: Silo preview desktop ${{ github.sha }}
 
-# Builds the Windows app (x64 and arm64) of a Silo-support branch and
-# attaches an installer and portable archives to a Silo preview release.
+# Builds the Windows app (x64 and arm64: installer and portable archives) and
+# the macOS app (universal DMG) of a Silo-support branch and attaches them to
+# a Silo preview release.
 #
 # Markers count only in the head commit's first line.
-# - A head commit with "[release-apk]" builds the same commit as the Android
-#   preview and attaches to the release that build publishes (same 2.22.N).
-# - A head commit with "[release-windows]" (and no "[release-apk]") builds the
-#   code of the latest existing preview release and attaches to it.
+# - "[release-apk]" builds both from the same commit as the Android preview
+#   and attaches to the release that build publishes (same 2.22.N).
+# - "[release-desktop]", "[release-windows]" or "[release-macos]" (without
+#   "[release-apk]") builds both, Windows only or macOS only from the code of
+#   the latest existing preview release and attaches to it.
 #
 # The update check is left off (no ENABLE_UPDATE_CHECK): it reads upstream
-# Plezy's feed and would replace this build with Plezy without Silo. The
-# installer uses Plezy's app id, so it replaces an installed Plezy.
+# Plezy's feed and would replace this build with Plezy without Silo. Both
+# apps keep Plezy's app id, so they replace an installed Plezy. Neither is
+# signed with a vendor certificate (SmartScreen / Gatekeeper warn once).
 
 on:
   push:
@@ -24,7 +27,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: silo-preview-windows-${{ github.ref }}
+  group: silo-preview-desktop-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -37,17 +40,29 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       mode: ${{ steps.marker.outputs.mode }}
+      windows: ${{ steps.marker.outputs.windows }}
+      macos: ${{ steps.marker.outputs.macos }}
     steps:
       - id: marker
         env:
-          MODE: ${{ needs.gate.outputs.mode }}
+          MESSAGE: ${{ github.event.head_commit.message }}
         run: |
           subject="${MESSAGE%%$'\n'*}"
-          mode=none
+          mode=none; windows=false; macos=false
+          if [[ "$subject" == *"[release-apk]"* || "$subject" == *"[release-desktop]"* ]]; then
+            windows=true; macos=true
+          else
+            [[ "$subject" == *"[release-windows]"* ]] && windows=true
+            [[ "$subject" == *"[release-macos]"* ]] && macos=true
+          fi
           if [[ "$subject" == *"[release-apk]"* ]]; then mode=apk
-          elif [[ "$subject" == *"[release-windows]"* ]]; then mode=windows; fi
-          echo "mode=${mode}" >> "$GITHUB_OUTPUT"
-          echo "Release marker: ${mode}"
+          elif [[ "$windows" == true || "$macos" == true ]]; then mode=latest; fi
+          {
+            echo "mode=${mode}"
+            echo "windows=${windows}"
+            echo "macos=${macos}"
+          } >> "$GITHUB_OUTPUT"
+          echo "Release marker: ${mode} (windows=${windows}, macos=${macos})"
 
   resolve:
     needs: gate
@@ -63,7 +78,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
-          MESSAGE: ${{ github.event.head_commit.message }}
+          MODE: ${{ needs.gate.outputs.mode }}
         run: |
           set -euo pipefail
           pubspec_at() { gh api "repos/${GH_REPO}/contents/pubspec.yaml?ref=$1" --jq .content | base64 -d | grep -m1 '^version:' | awk '{print $2}'; }
@@ -96,10 +111,11 @@ jobs:
             echo "version=${version}"
             echo "build=$((build + n))"
           } >> "$GITHUB_OUTPUT"
-          echo "Windows build of ${ref} as ${version} (build $((build + n)))"
+          echo "Desktop build of ${ref} as ${version} (build $((build + n)))"
 
   build:
-    needs: resolve
+    needs: [gate, resolve]
+    if: ${{ needs.gate.outputs.windows == 'true' }}
     name: Build Windows (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
     strategy:
@@ -177,7 +193,8 @@ jobs:
           path: build/windows/${{ matrix.arch }}/runner/Release/
 
   package:
-    needs: [resolve, build]
+    needs: [gate, resolve, build]
+    if: ${{ needs.gate.outputs.windows == 'true' }}
     runs-on: windows-latest
     permissions:
       contents: write
@@ -234,3 +251,83 @@ jobs:
           gh release view "$tag" > /dev/null
           gh release upload "$tag" dist/* --clobber
           echo "Attached Windows build to $tag"
+
+  macos:
+    needs: [gate, resolve]
+    if: ${{ needs.gate.outputs.macos == 'true' }}
+    name: Build macOS
+    runs-on: macos-26
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.resolve.outputs.ref }}
+          persist-credentials: false
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          channel: "stable"
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Cache CocoaPods
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: |
+            macos/Pods
+            ~/Library/Caches/CocoaPods
+            ~/.cocoapods
+          key: silo-preview-macos-pods-${{ hashFiles('**/Podfile.lock') }}
+
+      - name: Install dependencies
+        run: flutter pub get --enforce-lockfile --no-example
+
+      - name: Build macOS
+        run: >
+          flutter build macos --release
+          --build-name=${{ needs.resolve.outputs.version }}
+          --build-number=${{ needs.resolve.outputs.build }}
+          --dart-define=GIT_COMMIT=${{ needs.resolve.outputs.ref }}
+          --dart-define=SENTRY_ENVIRONMENT=silo-preview
+
+      # No Developer ID: sign the whole bundle ad hoc ("-") so every nested
+      # framework carries a consistent signature, which Apple silicon requires
+      # to run it at all. Gatekeeper still asks the user to allow it once.
+      - name: Sign ad hoc and verify
+        run: |
+          set -euo pipefail
+          app="build/macos/Build/Products/Release/Plezy.app"
+          codesign --force --deep --sign - --entitlements macos/Runner/Release.entitlements "$app"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          exe="$app/Contents/MacOS/Plezy"
+          lipo -archs "$exe"
+          version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")"
+          [[ "$version" == "${{ needs.resolve.outputs.version }}" ]] || { echo "::error::App version is $version"; exit 1; }
+          test -f "$app/Contents/Frameworks/App.framework/Resources/flutter_assets/assets/silo_icon.svg"
+
+      - name: Create DMG
+        run: |
+          set -euo pipefail
+          v="${{ needs.resolve.outputs.version }}"
+          mkdir -p dmg-staging dist
+          cp -R build/macos/Build/Products/Release/Plezy.app dmg-staging/
+          ln -s /Applications dmg-staging/Applications
+          hdiutil create -format ULMO -srcfolder dmg-staging -volname "Plezy" "dist/plezy-silo-${v}-macos.dmg"
+          (cd dist && shasum -a 256 *.dmg > SHA256SUMS-macos.txt)
+
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          tag="silo-preview-${{ needs.resolve.outputs.version }}"
+          for _ in $(seq 1 60); do
+            gh release view "$tag" > /dev/null 2>&1 && break
+            echo "Waiting for release $tag..."; sleep 30
+          done
+          gh release view "$tag" > /dev/null
+          gh release upload "$tag" dist/* --clobber
+          echo "Attached macOS build to $tag"

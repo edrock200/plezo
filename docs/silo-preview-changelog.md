@@ -6,9 +6,10 @@ What changed in each Android preview, in plain language. Each `## silo-preview-�
 
 ## silo-preview-2.22.4
 
-**Windows version** — released October 8, 2026. The app is the same as 2.22.3; this release adds Windows. The Android files install over 2.22.3 as an update.
+**Windows and macOS versions** — released October 8, 2026. The app is the same as 2.22.3; this release adds Windows and macOS. The Android files install over 2.22.3 as an update.
 
 - **Windows:** Plezy with Silo is now available for Windows 10 and 11 (x64 and ARM), as an installer or a portable download. It installs over an existing Plezy and does not update itself to Plezy without Silo.
+- **macOS:** Plezy with Silo is now available for Macs (Apple silicon and Intel) as a `.dmg`: open it and drag Plezy to Applications. It is not signed by Apple, so the first time macOS blocks it: open it once, then go to System Settings › Privacy & Security and choose Open Anyway.
 - **Windows downloads:** `windows-installer.exe` installs it (x64 or ARM is picked automatically); the `.7z` files are portable versions you unzip and run. The files are not code-signed, so Windows SmartScreen may warn the first time: choose More info, then Run anyway.
 
 ## silo-preview-2.22.3

@@ -30,19 +30,24 @@ description: Build, publish and verify Plezy's Android preview APKs (the "Plezy 
   (`AndroidManifest.xml`, `ExternalPlayerChannel.kt`, `SystemShelfArtworkProvider.AUTHORITY` and its
   tests) to follow `applicationId` first.
 
-## Windows builds
-- Workflow: `.github/workflows/silo-preview-windows.yml` (x64 on `windows-latest`, arm64 on
-  `windows-11-arm`, then Inno Setup installer + 7z portables via `windows/build-installer.ps1`).
-  About 30–45 minutes; it compiles mpv's dependencies and installs upstream's patched engine.
-- A `[release-apk]` commit also builds Windows from the same commit and attaches
-  `plezy-silo-<version>-windows-{installer.exe,x64-portable.7z,arm64-portable.7z}` and
-  `SHA256SUMS-windows.txt` to that preview's release (it waits for the Android build to publish).
-  A `[release-windows]` commit builds the code of the **latest** preview release and attaches to it.
-- Never pass `ENABLE_UPDATE_CHECK=true`: the updater reads upstream Plezy's feed and would replace
-  the Silo build with Plezy without Silo. Builds are unsigned (SmartScreen warns).
-- The installer keeps Plezy's AppId, so it replaces an installed Plezy.
-- Verify: the release lists the Windows assets and `SHA256SUMS-windows.txt`; the app itself can
-  only be tested on the user's PC.
+## Windows and macOS builds
+- Workflow: `.github/workflows/silo-preview-desktop.yml`. A `gate` job reads the release marker from
+  the commit's first line; `resolve` picks the code and version; then:
+  - Windows: x64 on `windows-latest`, arm64 on `windows-11-arm`, packaged with
+    `windows/build-installer.ps1` into `plezy-silo-<v>-windows-installer.exe` and
+    `…-windows-{x64,arm64}-portable.7z` + `SHA256SUMS-windows.txt`.
+  - macOS: universal app on `macos-26`, signed **ad hoc** (no Developer ID), checked with
+    `codesign --verify --deep --strict` and its `CFBundleShortVersionString`, packaged as
+    `plezy-silo-<v>-macos.dmg` + `SHA256SUMS-macos.txt`. Users must allow it once in
+    System Settings › Privacy & Security › Open Anyway (or `xattr -dr com.apple.quarantine`).
+    With an Apple Developer account, port upstream `build.yml`'s import/sign/notarize steps.
+- `[release-apk]` builds both from the same commit and waits for the Android release to attach.
+  `[release-desktop]`, `[release-windows]` or `[release-macos]` builds from the **latest** release's
+  commit and attaches to it.
+- Never pass `ENABLE_UPDATE_CHECK=true` (the updater reads upstream Plezy's feed). Both apps keep
+  Plezy's app id, so they replace an installed Plezy.
+- Each build takes 10–25 minutes; verify the attached files and checksums. Running the apps is the
+  user's step.
 
 ## Release notes (change log)
 - Every release page carries a plain-language change log from `docs/silo-preview-changelog.md`

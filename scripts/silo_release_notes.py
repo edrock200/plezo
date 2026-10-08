@@ -21,6 +21,12 @@ WINDOWS_INSTALL = (
     "These builds do not check for updates, so they never replace themselves with Plezy without Silo."
 )
 
+MACOS_INSTALL = (
+    "On macOS the app replaces an installed Plezy. It is not signed by Apple, so the first launch is blocked: "
+    "open it once, then go to System Settings › Privacy & Security and choose Open Anyway (or run "
+    "`xattr -dr com.apple.quarantine /Applications/Plezy.app` in Terminal). It does not update itself either."
+)
+
 # One line per paragraph or bullet: release pages render single line breaks as hard breaks.
 FOOTER = f"""
 ### Which file
@@ -33,10 +39,15 @@ FOOTER = f"""
 - `windows-installer.exe`: installs on Windows 10/11, picking x64 or ARM automatically.
 - `windows-x64-portable.7z` / `windows-arm64-portable.7z`: no install; unzip and run `plezy.exe`.
 
+**macOS** (when attached)
+- `macos.dmg`: macOS app for Apple silicon and Intel Macs; open it and drag Plezy to Applications.
+
 ### Installing
 {INSTALL}
 
 {WINDOWS_INSTALL}
+
+{MACOS_INSTALL}
 """
 
 
