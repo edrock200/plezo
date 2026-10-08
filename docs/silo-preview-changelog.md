@@ -4,9 +4,12 @@ What changed in each Android preview, in plain language. Each `## silo-preview-�
 
 ## Next preview
 
-**4K HDR plays in its original quality** — installs over the previous preview as an update.
+## silo-preview-2.22.3
+
+**4K HDR plays in its original quality** — released October 8, 2026. Installs over the previous preview as an update.
 
 - **4K HDR and Dolby Vision:** these titles (usually 4K HEVC) now play as the original file. Before, Plezy didn't tell the server it could handle HDR itself, so the server converted them to a lower-quality, non-HDR stream, which also loaded the server heavily.
+- **Version numbers:** previews are now numbered 2.22.1, 2.22.2, 2.22.3 and so on, newest first on the releases page, and Settings › About shows the same number. (2.22.1 and 2.22.2 were built before this and show 2.22.0 inside the app.)
 
 ## silo-preview-2.22.2
 
