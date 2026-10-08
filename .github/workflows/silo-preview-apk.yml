@@ -1,0 +1,145 @@
+name: Silo preview APK
+run-name: Silo preview APK ${{ github.sha }}
+
+# Builds release APKs of a Silo-support branch and publishes them as a GitHub
+# pre-release. Runs only for pushes whose head commit message contains
+# "[release-apk]", so ordinary pushes stay cheap.
+#
+# Signing: uses the ANDROID_* secrets when the repository has them (same names
+# as build.yml). Otherwise a keystore is generated once and kept in the Actions
+# cache, so later previews keep the same signature and install as updates
+# while the cache lives. These APKs use Plezy's package id, so they replace
+# (and cannot update) a Plezy installed from a store.
+
+on:
+  push:
+    branches:
+      - "ccr-**"
+      - "silo/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: silo-preview-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: "3.47.1"
+
+jobs:
+  build-android:
+    if: ${{ contains(github.event.head_commit.message, '[release-apk]') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Setup Java
+        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5
+        with:
+          distribution: "temurin"
+          java-version: "21"
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          channel: "stable"
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+
+      - name: Cache Gradle
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: silo-preview-${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+
+      - name: Restore preview keystore
+        id: keystore-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: .preview-keystore
+          key: silo-preview-keystore-v1
+
+      - name: Install dependencies
+        run: flutter pub get --enforce-lockfile --no-example
+
+      - name: Configure Android signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          if [[ -n "$KEYSTORE_BASE64" ]]; then
+            echo "$KEYSTORE_BASE64" | base64 --decode > android/app/upload-keystore.jks
+            store_password="$STORE_PASSWORD"; key_password="$KEY_PASSWORD"; key_alias="$KEY_ALIAS"
+          else
+            echo "::notice::No ANDROID_KEYSTORE_BASE64 secret; signing with the cached preview keystore."
+            if [[ ! -f .preview-keystore/preview.jks ]]; then
+              mkdir -p .preview-keystore
+              openssl rand -hex 24 > .preview-keystore/password
+              keytool -genkeypair -noprompt -keystore .preview-keystore/preview.jks -storetype JKS \
+                -alias preview -keyalg RSA -keysize 4096 -validity 36500 \
+                -storepass "$(cat .preview-keystore/password)" -keypass "$(cat .preview-keystore/password)" \
+                -dname "CN=Plezy Silo preview"
+            fi
+            cp .preview-keystore/preview.jks android/app/upload-keystore.jks
+            store_password="$(cat .preview-keystore/password)"; key_password="$store_password"; key_alias=preview
+          fi
+          cat > android/key.properties << EOF
+          storePassword=$store_password
+          keyPassword=$key_password
+          keyAlias=$key_alias
+          storeFile=upload-keystore.jks
+          EOF
+
+      - name: Build APKs
+        run: >
+          flutter build apk --release --split-per-abi
+          --dart-define=GIT_COMMIT=${{ github.sha }}
+          --dart-define=SENTRY_ENVIRONMENT=silo-preview
+
+      - name: Clean up keystore
+        if: always()
+        run: rm -f android/app/upload-keystore.jks android/key.properties
+
+      - name: Collect APKs
+        id: apks
+        run: |
+          short_sha="${GITHUB_SHA::7}"
+          version="$(grep -m1 '^version:' pubspec.yaml | awk '{print $2}' | cut -d+ -f1)"
+          mkdir -p dist
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            cp "build/app/outputs/flutter-apk/app-${abi}-release.apk" "dist/plezy-silo-${version}-${short_sha}-${abi}.apk"
+          done
+          (cd dist && sha256sum *.apk > SHA256SUMS.txt)
+          echo "tag=silo-preview-${version}-${short_sha}" >> "$GITHUB_OUTPUT"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "short_sha=${short_sha}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish pre-release
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
+        with:
+          files: dist/*
+          draft: false
+          prerelease: true
+          name: Plezy ${{ steps.apks.outputs.version }} with Silo (preview ${{ steps.apks.outputs.short_sha }})
+          tag_name: ${{ steps.apks.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          body: |
+            Preview build of Plezy with Silo server support, from `${{ github.ref_name }}` at ${{ github.sha }}.
+
+            **Which APK**
+            - `arm64-v8a`: most phones, tablets and Android TV devices (Shield, recent Fire TV, Google TV boxes).
+            - `armeabi-v7a`: older or 32-bit devices, including Chromecast with Google TV and many TV sticks.
+            - `x86_64`: emulators and x86 devices.
+
+            This build uses Plezy's package id but not the store signing key: uninstall a store-installed Plezy before installing it. Later previews from this repository install over it as updates.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
