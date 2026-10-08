@@ -175,7 +175,7 @@ abstract final class SiloMappers {
           if (score == null || score <= 0) continue;
           switch (source) {
             case 'imdb':
-              out.add(MediaRatingSource(source: 'imdb', value: score));
+              out.add(MediaRatingSource(source: 'imdb', value: score > 10 ? score / 10 : score));
             case 'tmdb':
               out.add(MediaRatingSource(source: 'tmdb', value: score > 10 ? score / 10 : score));
             case 'rt_critic' || 'rotten_tomatoes' || 'rottentomatoes':
@@ -301,7 +301,7 @@ abstract final class SiloMappers {
           id: fileId,
           container: _string(json['container']),
           sizeBytes: flexibleInt(json['file_size']),
-          durationMs: _secondsToMs(json['duration']),
+          durationMs: _secondsToMs(json['duration'] ?? json['duration_seconds']),
           accessible: json['unreadable'] == true ? false : null,
           streams: _streams(json),
         ),
@@ -610,7 +610,7 @@ abstract final class SiloMappers {
       subtitleTracks: subs,
       chapters: MediaChapter.backfillEndOffsets(
         chapters(version['chapters'], ctx),
-        runtimeMs: version['duration'] is num ? ((version['duration'] as num) * 1000).round() : null,
+        runtimeMs: _secondsToMs(version['duration'] ?? version['duration_seconds']),
       ),
       mediaSourceId: version['file_id']?.toString(),
       mediaIndex: mediaIndex,

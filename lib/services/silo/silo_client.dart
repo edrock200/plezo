@@ -3,7 +3,6 @@ import 'dart:collection';
 
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:http/http.dart' as http;
-import 'package:package_info_plus/package_info_plus.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../connection/connection.dart';
@@ -278,12 +277,17 @@ class SiloClient
   // Cursor paging
   // ---------------------------------------------------------------------------
 
-  /// Query signature → (offset → cursor that starts there). Bounded LRU.
-  final LinkedHashMap<String, Map<int, String>> _cursors = LinkedHashMap();
+  /// (query signature, page size) → cursors. Silo binds cursors to the page
+  /// size, so each size keeps its own. Bounded LRU.
+  final LinkedHashMap<String, _SiloCursorState> _cursors = LinkedHashMap();
   static const _maxCursorQueries = 64;
 
-  /// Fetch [limit] rows at [offset] of a cursor-paginated `GET` [path].
+  /// Fetch [limit] rows at [offset] of the cursor-paginated `GET /api/v2/catalog`.
   /// [params] must be identical for every page of one listing.
+  ///
+  /// An adjacent page reuses the previous page's `next_cursor`; any other
+  /// offset jumps there with the listing's `window_cursor` and `seek`, so
+  /// distant pages never walk the pages before them.
   Future<({List<Map<String, dynamic>> items, int? total, bool hasMore})> _pageAt(
     String path,
     Map<String, dynamic> params, {
@@ -291,49 +295,77 @@ class SiloClient
     required int limit,
     AbortController? abort,
   }) async {
+    final pageLimit = limit.clamp(1, 200);
     final signature =
-        '$path?${encodeQueryParameters(Map.fromEntries(params.entries.toList()..sort((a, b) => a.key.compareTo(b.key))))}';
-    final cursors = _cursors.remove(signature) ?? {0: ''};
-    _cursors[signature] = cursors;
+        '$path?${encodeQueryParameters(Map.fromEntries(params.entries.toList()..sort((a, b) => a.key.compareTo(b.key))))}'
+        '#$pageLimit';
+    try {
+      return await _pageAtOnce(path, params, signature, offset: offset, limit: pageLimit, abort: abort);
+    } on MediaServerHttpException catch (e) {
+      // The listing changed under its cursors (or a search window expired):
+      // restart the query once.
+      if (e.statusCode != 400 || siloProblemCode(e.responseData) != 'invalid_cursor') rethrow;
+      _cursors.remove(signature);
+      return _pageAtOnce(path, params, signature, offset: offset, limit: pageLimit, abort: abort);
+    }
+  }
+
+  Future<({List<Map<String, dynamic>> items, int? total, bool hasMore})> _pageAtOnce(
+    String path,
+    Map<String, dynamic> params,
+    String signature, {
+    required int offset,
+    required int limit,
+    AbortController? abort,
+  }) async {
+    final state = _cursors.remove(signature) ?? _SiloCursorState();
+    _cursors[signature] = state;
     while (_cursors.length > _maxCursorQueries) {
       _cursors.remove(_cursors.keys.first);
     }
 
-    Future<({List<Map<String, dynamic>> items, int? total, bool hasMore, String? next})> fetch(
-      String cursor,
-      int pageLimit,
-    ) async {
-      final query = {...params, 'limit': pageLimit.clamp(1, 200), if (cursor.isNotEmpty) 'cursor': cursor};
+    Future<({List<Map<String, dynamic>> items, int? total, bool hasMore})> fetch(
+      int start, {
+      String? cursor,
+      int? seek,
+    }) async {
+      abort?.throwIfAborted();
+      final query = {...params, 'limit': limit, 'cursor': ?cursor, 'seek': ?seek};
       final response = await _api.send('GET', path, query: query, abort: abort);
       final data = response.data is Map<String, dynamic> ? response.data as Map<String, dynamic> : null;
       final page = data?['page'];
       final hasMore = page is Map && page['has_more'] == true;
       final next = page is Map ? page['next_cursor'] as String? : null;
-      return (items: _itemsOf(data), total: (data?['total'] as num?)?.toInt(), hasMore: hasMore, next: next);
+      final window = data?['window_cursor'] as String?;
+      if (window != null && window.isNotEmpty) state.window = window;
+      final items = _itemsOf(data);
+      if (hasMore && next != null && next.isNotEmpty) state.next[start + items.length] = next;
+      return (items: items, total: (data?['total'] as num?)?.toInt(), hasMore: hasMore);
     }
 
-    // Walk forward from the nearest known offset.
-    if (!cursors.containsKey(offset)) {
-      var start = cursors.keys.where((k) => k <= offset).fold<int>(0, (a, b) => b > a ? b : a);
-      while (start < offset) {
-        abort?.throwIfAborted();
-        final page = await fetch(cursors[start]!, (offset - start).clamp(1, 200));
-        if (page.items.isEmpty || !page.hasMore || page.next == null || page.next!.isEmpty) {
-          return (
-            items: const <Map<String, dynamic>>[],
-            total: page.total ?? start + page.items.length,
-            hasMore: false,
-          );
-        }
-        start += page.items.length;
-        cursors[start] = page.next!;
+    if (offset <= 0) return fetch(0);
+    if (state.next[offset] case final cursor?) return fetch(offset, cursor: cursor);
+    if (state.window == null) {
+      final first = await fetch(0);
+      if (!first.hasMore) {
+        return (items: const <Map<String, dynamic>>[], total: first.total ?? first.items.length, hasMore: false);
       }
+      if (state.next[offset] case final cursor?) return fetch(offset, cursor: cursor);
     }
-    final page = await fetch(cursors[offset]!, limit);
-    if (page.hasMore && page.next != null && page.next!.isNotEmpty) {
-      cursors[offset + page.items.length] = page.next!;
+    if (state.window case final window?) return fetch(offset, cursor: window, seek: offset);
+
+    // No window cursor (older server): walk forward page by page.
+    var start = state.next.keys.where((k) => k < offset).fold<int>(0, (a, b) => b > a ? b : a);
+    while (true) {
+      final cursor = state.next[start];
+      if (cursor == null) return (items: const <Map<String, dynamic>>[], total: null, hasMore: false);
+      final page = await fetch(start, cursor: cursor);
+      if (start + page.items.length > offset || !page.hasMore || page.items.isEmpty) {
+        final skip = (offset - start).clamp(0, page.items.length);
+        return (items: page.items.sublist(skip), total: page.total, hasMore: page.hasMore);
+      }
+      start += page.items.length;
     }
-    return (items: page.items, total: page.total, hasMore: page.hasMore);
   }
 
   LibraryPage<MediaItem> _libraryPage(
@@ -536,6 +568,9 @@ class SiloClient
   /// lists so a season's episodes can be fetched by series and number.
   final Map<String, ({String seriesId, int seasonNumber})> _seasonRefs = {};
 
+  /// Synthetic season id → the real season content id it stands for.
+  final Map<String, String> _syntheticSeasonIds = {};
+
   static const _collectionPrefix = 'silo-collection:';
 
   @override
@@ -558,6 +593,11 @@ class SiloClient
       return item;
     } on MediaServerHttpException catch (e) {
       if (e.statusCode == 404) return null;
+      // Offline: a downloaded item's metadata is pinned in the item cache.
+      if (e.isTransient) {
+        final cached = await _siloCache?.getMetadata(ServerId(cacheServerId), id);
+        if (cached != null) return cached;
+      }
       rethrow;
     }
   }
@@ -566,6 +606,7 @@ class SiloClient
     final seasons = await _fetchSeasons(seriesId);
     for (final season in seasons) {
       if (season.index == seasonNumber) {
+        if (season.id != id) _syntheticSeasonIds[id] = season.id;
         final item = season.copyWith(id: id);
         await _cacheItem(item);
         return item;
@@ -698,13 +739,11 @@ class SiloClient
       case MediaKind.show:
         final seasons = await _fetchSeasons(parentId);
         final ordered = [...seasons.where((s) => (s.index ?? 0) > 0), ...seasons.where((s) => (s.index ?? 0) == 0)];
-        final episodes = <MediaItem>[];
-        for (final season in ordered) {
-          final number = season.index;
-          if (number == null) continue;
-          episodes.addAll(await _fetchEpisodes(parentId, number, seasonId: season.id));
-        }
-        return episodes;
+        final perSeason = await Future.wait([
+          for (final season in ordered)
+            if (season.index case final number?) _fetchEpisodes(parentId, number, seasonId: season.id),
+        ]);
+        return [for (final episodes in perSeason) ...episodes];
       default:
         return const [];
     }
@@ -723,11 +762,11 @@ class SiloClient
   @override
   Future<List<MediaItem>?> fetchClientSideEpisodeQueue(String seriesId) async {
     final seasons = await _fetchSeasons(seriesId);
-    final episodes = <MediaItem>[];
-    for (final season in seasons.where((s) => (s.index ?? 0) > 0)) {
-      episodes.addAll(await _fetchEpisodes(seriesId, season.index!, seasonId: season.id));
-    }
-    return episodes;
+    final perSeason = await Future.wait([
+      for (final season in seasons.where((s) => (s.index ?? 0) > 0))
+        _fetchEpisodes(seriesId, season.index!, seasonId: season.id),
+    ]);
+    return [for (final episodes in perSeason) ...episodes];
   }
 
   @override
@@ -799,7 +838,7 @@ class SiloClient
     final response = await _api.send(
       'GET',
       '/api/v2/catalog/people',
-      query: {'q': text, 'limit': limit, 'media_scope': 'video'},
+      query: {'q': text, 'limit': limit.clamp(1, 100), 'media_scope': 'video'},
       abort: abort,
     );
     final data = response.data is Map<String, dynamic> ? response.data as Map<String, dynamic> : null;
@@ -825,10 +864,18 @@ class SiloClient
 
   static const _playbackSectionTypes = {'continue_watching', 'next_up'};
 
-  Future<List<Map<String, dynamic>>> _homeSections({AbortController? abort}) async {
-    final data = await _cachedGet('/api/v2/home/sections', query: {'image_size': _imageSize}, abort: abort);
-    return _itemsOf(data, 'sections');
-  }
+  Future<List<Map<String, dynamic>>>? _homeSectionsInFlight;
+
+  /// Home sections; concurrent callers (continue watching and the hubs load
+  /// together) share one request.
+  Future<List<Map<String, dynamic>>> _homeSections() => _homeSectionsInFlight ??= () async {
+    try {
+      final data = await _cachedGet('/api/v2/home/sections', query: {'image_size': _imageSize});
+      return _itemsOf(data, 'sections');
+    } finally {
+      _homeSectionsInFlight = null;
+    }
+  }();
 
   /// Sections may arrive without inline items while `total_count > 0`.
   Future<List<Map<String, dynamic>>> _sectionItems(Map<String, dynamic> section, String itemsPath) async {
@@ -881,11 +928,11 @@ class SiloClient
   @override
   Future<List<MediaItem>> fetchContinueWatching({int? count = 20, Set<String> excludedLibraryIds = const {}}) async {
     final sections = await _homeSections();
-    final items = <MediaItem>[];
-    for (final section in sections.where((s) => s['section_type'] == 'continue_watching')) {
-      final rows = await _sectionItems(section, '/api/v2/home/sections/${_seg(section['id'].toString())}/items');
-      items.addAll(SiloMappers.items(rows, _ctx));
-    }
+    final perSection = await Future.wait([
+      for (final section in sections.where((s) => s['section_type'] == 'continue_watching'))
+        _sectionItems(section, '/api/v2/home/sections/${_seg(section['id'].toString())}/items'),
+    ]);
+    final items = [for (final rows in perSection) ...SiloMappers.items(rows, _ctx)];
     final visible = items.where((item) => item.libraryId == null || !excludedLibraryIds.contains(item.libraryId));
     return count == null ? visible.toList() : visible.take(count).toList();
   }
@@ -903,16 +950,16 @@ class SiloClient
       diagnostics?.recordFailure(e);
       return const [];
     }
-    final hubs = <MediaHub>[];
-    for (final section in sections) {
-      final sectionId = section['id']?.toString();
-      if (sectionId == null) continue;
-      if (!includePlaybackHubs && _playbackSectionTypes.contains(section['section_type'])) continue;
-      final rows = await _sectionItems(section, '/api/v2/home/sections/${_seg(sectionId)}/items');
-      final hub = _hub(id: 'home:$sectionId', section: section, rows: rows, limit: limit);
-      if (hub.items.isNotEmpty) hubs.add(hub);
-    }
-    return hubs;
+    final hubs = await Future.wait([
+      for (final section in sections)
+        if (section['id']?.toString() case final sectionId?)
+          if (includePlaybackHubs || !_playbackSectionTypes.contains(section['section_type']))
+            _sectionItems(
+              section,
+              '/api/v2/home/sections/${_seg(sectionId)}/items',
+            ).then((rows) => _hub(id: 'home:$sectionId', section: section, rows: rows, limit: limit)),
+    ]);
+    return hubs.where((hub) => hub.items.isNotEmpty).toList();
   }
 
   @override
@@ -1047,20 +1094,24 @@ class SiloClient
 
   @override
   Future<void> markWatched(MediaItem item) async {
-    await _api.send('POST', '/api/v2/watched/${_seg(_writeId(item))}');
+    await _api.send('POST', '/api/v2/watched/${_seg(await _writeId(item))}');
   }
 
   @override
   Future<void> markUnwatched(MediaItem item) async {
-    await _api.send('DELETE', '/api/v2/watched/${_seg(_writeId(item))}');
+    await _api.send('DELETE', '/api/v2/watched/${_seg(await _writeId(item))}');
   }
 
-  /// Silo writes take real content ids; a synthetic season id has none, so
-  /// its writes go to the series. (Only episode cards produce one, and the
-  /// season screens use real ids.)
-  String _writeId(MediaItem item) {
+  /// Silo writes take real content ids. A synthetic season id (from an
+  /// episode card) is resolved to its season's content id; writing to the
+  /// series instead would change every season.
+  Future<String> _writeId(MediaItem item) async {
     final synthetic = SiloMappers.parseSyntheticSeasonId(item.id);
-    return synthetic?.seriesId ?? item.id;
+    if (synthetic == null) return item.id;
+    if (_syntheticSeasonIds[item.id] case final real?) return real;
+    await _fetchSeason(synthetic.seriesId, synthetic.seasonNumber, id: item.id);
+    if (_syntheticSeasonIds[item.id] case final real?) return real;
+    throw UnsupportedError('Silo season ${synthetic.seasonNumber} of ${synthetic.seriesId} has no content id');
   }
 
   @override
@@ -1071,11 +1122,17 @@ class SiloClient
       await _api.send('PUT', '/api/v2/home/dismissals/next_up/${_seg(item.id)}', body: {'series_id': ?seriesId});
       return;
     }
-    final updatedAt = raw?['progress_updated_at']?.toString();
+    var updatedAt = raw?['progress_updated_at']?.toString();
+    if (updatedAt == null || updatedAt.isEmpty) {
+      // Required by the server; cards from other surfaces may lack it.
+      final detail = await _api.getJson('/api/v2/catalog/items/${_seg(item.id)}');
+      updatedAt = detail['progress_updated_at']?.toString();
+      if (updatedAt == null || updatedAt.isEmpty) return;
+    }
     await _api.send(
       'PUT',
       '/api/v2/home/dismissals/continue_watching/${_seg(item.id)}',
-      body: {'progress_updated_at': ?updatedAt},
+      body: {'progress_updated_at': updatedAt},
     );
   }
 
@@ -1083,7 +1140,7 @@ class SiloClient
   /// clears the rating.
   @override
   Future<void> rate(MediaItem item, double rating) async {
-    final path = '/api/v2/ratings/${_seg(_writeId(item))}';
+    final path = '/api/v2/ratings/${_seg(await _writeId(item))}';
     if (rating <= 0) {
       final response = await _api.request('DELETE', path);
       if (response.statusCode != 404) throwIfHttpError(response);
@@ -1094,7 +1151,7 @@ class SiloClient
 
   @override
   Future<void> setFavorite(MediaItem item, bool isFavorite) async {
-    await _api.send(isFavorite ? 'PUT' : 'DELETE', '/api/v2/favorites/${_seg(_writeId(item))}');
+    await _api.send(isFavorite ? 'PUT' : 'DELETE', '/api/v2/favorites/${_seg(await _writeId(item))}');
   }
 
   // ---------------------------------------------------------------------------
@@ -1395,4 +1452,13 @@ class _SiloNoLiveTv implements LiveTvSupport {
 
   @override
   Future<void> setFavoriteChannels(List<FavoriteChannel> channels, {void Function()? checkCurrent}) async {}
+}
+
+/// Cursors of one catalog query at one page size.
+class _SiloCursorState {
+  /// Seed for `seek` jumps; carries the query scope.
+  String? window;
+
+  /// Offset → `next_cursor` that starts there.
+  final Map<int, String> next = {};
 }

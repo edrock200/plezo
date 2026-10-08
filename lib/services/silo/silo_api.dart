@@ -256,13 +256,11 @@ class SiloApi {
     }
     if (auth) await _refreshIfExpiring();
     var response = await _send(method, path, query, body, auth, profile, timeout, abort);
+    // (A missing profile PIN token is a 403, not a 401.)
     if (auth && response.statusCode == 401 && _tokens != null) {
-      final code = siloProblemCode(response.data);
-      if (code != 'profile_verification_required') {
-        final refreshed = await refreshTokens();
-        if (refreshed != null) {
-          response = await _send(method, path, query, body, auth, profile, timeout, abort);
-        }
+      final refreshed = await refreshTokens();
+      if (refreshed != null) {
+        response = await _send(method, path, query, body, auth, profile, timeout, abort);
       }
     }
     return response;
@@ -420,9 +418,13 @@ class SiloApi {
     return future;
   }
 
+  String? _refusedRefreshToken;
+
   Future<SiloTokens?> _doRefresh() async {
     final current = _tokens;
     if (current == null || current.refreshToken.isEmpty) return null;
+    // A refused token stays refused; don't resend it on every request.
+    if (current.refreshToken == _refusedRefreshToken) return null;
     try {
       final response = await _http.post(
         '/api/v2/auth/refresh',
@@ -442,6 +444,7 @@ class SiloApi {
       }
       if (response.statusCode == 401 || response.statusCode == 400 || response.statusCode == 403) {
         appLogger.w('Silo: refresh refused (${siloProblemCode(response.data) ?? response.statusCode}); signed out');
+        _refusedRefreshToken = current.refreshToken;
         onSessionExpired?.call();
       }
       return null;

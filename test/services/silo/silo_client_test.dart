@@ -19,6 +19,7 @@ import 'package:plezy/services/plex_api_cache.dart';
 import 'package:plezy/services/silo/silo_api.dart';
 import 'package:plezy/services/silo/silo_api_cache.dart';
 import 'package:plezy/services/silo/silo_client.dart';
+import 'package:plezy/services/silo/silo_mappers.dart';
 
 const _headers = SiloDeviceHeaders(
   deviceId: 'dev-1',
@@ -85,16 +86,22 @@ void main() {
     expect(request.headers['Accept'], 'application/json');
   });
 
-  test('offset pages walk Silo cursors forward and reuse them', () async {
+  test('distant pages seek with the window cursor; adjacent pages reuse next_cursor', () async {
     final c = client((request) async {
-      final cursor = request.url.queryParameters['cursor'] ?? '0';
-      final limit = int.parse(request.url.queryParameters['limit']!);
-      final start = int.parse(cursor);
+      final q = request.url.queryParameters;
+      final limit = int.parse(q['limit']!);
+      final cursor = q['cursor'];
+      final start = q['seek'] != null
+          ? (cursor == 'win-$limit' ? int.parse(q['seek']!) : throw StateError('seek without window'))
+          : cursor == null
+          ? 0
+          : int.parse(cursor.split(':').last);
       final end = (start + limit).clamp(0, 10);
       return _json({
         'items': [for (var i = start; i < end; i++) _movie(i)],
-        'page': {'has_more': end < 10, 'next_cursor': '$end'},
+        'page': {'has_more': end < 10, 'next_cursor': 'n$limit:$end'},
         'total': 10,
+        'window_cursor': 'win-$limit',
       });
     });
 
@@ -102,14 +109,48 @@ void main() {
     expect(page.items.map((i) => i.id), ['movie:m4', 'movie:m5']);
     expect(page.totalCount, 10);
     expect(page.offset, 4);
-    // One walk from the start to reach offset 4, then the page itself.
-    expect(requests.map((r) => r.url.queryParameters['cursor']), [null, '4']);
-    expect(requests.first.url.queryParameters['limit'], '4');
+    // The first page (same page size) yields the window cursor, then one seek.
+    expect(requests.map((r) => r.url.queryParameters['cursor']), [null, 'win-2']);
+    expect(requests.map((r) => r.url.queryParameters['seek']), [null, '4']);
+    expect(requests.map((r) => r.url.queryParameters['limit']), ['2', '2']);
     expect(requests.first.url.queryParameters['library_id'], '3');
 
     requests.clear();
     await c.fetchLibraryPagedContent('3', query: const LibraryQuery(offset: 6, limit: 2));
-    expect(requests.map((r) => r.url.queryParameters['cursor']), ['6']);
+    expect(requests.map((r) => r.url.queryParameters['cursor']), ['n2:6']);
+    expect(requests.single.url.queryParameters.containsKey('seek'), isFalse);
+
+    requests.clear();
+    await c.fetchLibraryPagedContent('3', query: const LibraryQuery(offset: 2, limit: 2));
+    expect(requests.map((r) => r.url.queryParameters['cursor']), ['n2:2']);
+
+    // Another page size never reuses the first size's cursors.
+    requests.clear();
+    await c.fetchLibraryPagedContent('3', query: const LibraryQuery(offset: 6, limit: 3));
+    expect(requests.map((r) => r.url.queryParameters['cursor']), [null, 'win-3']);
+    expect(requests.map((r) => r.url.queryParameters['limit']), ['3', '3']);
+  });
+
+  test('an invalid_cursor restarts the listing once', () async {
+    var stale = true;
+    final c = client((request) async {
+      final q = request.url.queryParameters;
+      if (q['cursor'] == 'old' && stale) {
+        stale = false;
+        return _problem(400, 'invalid_cursor');
+      }
+      final start = int.tryParse(q['seek'] ?? '') ?? 0;
+      return _json({
+        'items': [_movie(start)],
+        'page': {'has_more': true, 'next_cursor': 'n'},
+        'window_cursor': requests.length < 2 ? 'old' : 'new',
+      });
+    });
+    await c.fetchLibraryPagedContent('3', query: const LibraryQuery(offset: 0, limit: 1));
+    requests.clear();
+    final page = await c.fetchLibraryPagedContent('3', query: const LibraryQuery(offset: 5, limit: 1));
+    expect(page.items.map((i) => i.id), ['movie:m5']);
+    expect(requests.map((r) => r.url.queryParameters['cursor']), ['old', null, 'new']);
   });
 
   test('sort, type and prefix map onto catalog parameters', () async {
@@ -164,6 +205,33 @@ void main() {
       return _problem(401, 'invalid_token');
     });
     expect(await c.checkHealth(), HealthStatus.authError);
+  });
+
+  test('a refused refresh token is not sent again', () async {
+    final c = client((request) async {
+      if (request.url.path.endsWith('/auth/refresh')) return _problem(401, 'session_expired');
+      return _problem(401, 'invalid_token');
+    });
+    expect(await c.checkHealth(), HealthStatus.authError);
+    expect(await c.checkHealth(), HealthStatus.authError);
+    expect(requests.where((r) => r.url.path.endsWith('/auth/refresh')), hasLength(1));
+  });
+
+  test('watch-state writes on a synthetic season go to the real season, never the series', () async {
+    final c = client((request) async {
+      final path = Uri.decodeComponent(request.url.path);
+      if (path.endsWith('/catalog/series/series:s1/seasons')) {
+        return _json({
+          'items': [
+            {'content_id': 'season:s1-2', 'season_number': 2, 'title': 'Season 2'},
+          ],
+        });
+      }
+      return http.Response('', 204);
+    });
+    final season = (await c.fetchItem(SiloMappers.syntheticSeasonId('series:s1', 2)))!;
+    await c.markWatched(season);
+    expect(Uri.decodeComponent(requests.last.url.path), endsWith('/api/v2/watched/season:s1-2'));
   });
 
   test('home sections become hubs; playback rows can be left out', () async {
@@ -390,6 +458,7 @@ void main() {
           'allowed': true,
           'installation_id': 'inst-1',
           'protocol_versions': [3],
+          'features': ['sequenced_progress_v1'],
         });
       }
       if (path.endsWith('/playback/start')) {

@@ -92,7 +92,12 @@ class SiloDeviceCode {
   final String userCode;
   final String verificationUri;
   final String? verificationUriComplete;
+
+  /// When the code expires on this device's clock (from `expires_in`).
   final DateTime expiresAt;
+
+  /// The server's absolute `expires_at` for the same moment, if it sent one.
+  final DateTime? serverExpiresAt;
   final Duration interval;
 
   const SiloDeviceCode({
@@ -101,8 +106,18 @@ class SiloDeviceCode {
     required this.verificationUri,
     required this.expiresAt,
     required this.interval,
+    this.serverExpiresAt,
     this.verificationUriComplete,
   });
+
+  /// A later server `expires_at` translated to this device's clock: the
+  /// extension past [serverExpiresAt], applied to [expiresAt]. Null when
+  /// either server time is missing.
+  DateTime? localExpiryFor(DateTime? serverTime) {
+    final base = serverExpiresAt;
+    if (serverTime == null || base == null) return null;
+    return expiresAt.add(serverTime.difference(base));
+  }
 
   /// `48217730` → `4821 7730`, as Silo's own TV apps display it.
   String get displayCode {
@@ -376,8 +391,10 @@ class SiloAuthService {
         userCode: data['user_code'] as String,
         verificationUri: (data['verification_uri'] as String?) ?? '${server.baseUrl}/activate',
         verificationUriComplete: complete is String && complete.isNotEmpty ? complete : null,
-        expiresAt:
-            DateTime.tryParse(data['expires_at']?.toString() ?? '') ?? DateTime.now().add(Duration(seconds: expiresIn)),
+        // Local clock from `expires_in`, so a skewed device clock cannot
+        // expire the code before it is shown.
+        expiresAt: DateTime.now().add(Duration(seconds: expiresIn)),
+        serverExpiresAt: DateTime.tryParse(data['expires_at']?.toString() ?? ''),
         interval: Duration(seconds: interval.clamp(1, 30)),
       );
     } finally {

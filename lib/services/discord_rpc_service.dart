@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:dart_discord_presence/dart_discord_presence.dart';
 import 'package:flutter/foundation.dart';
 
+import '../media/media_backend.dart';
 import '../media/media_item.dart';
 import '../media/media_kind.dart';
 import '../media/media_server_client.dart';
@@ -353,7 +354,9 @@ class DiscordRPCService {
 
       final imageBytes = await httpClient.getBytes(
         imageUrl,
-        headers: client.streamHeaders,
+        // Silo image URLs authorise themselves (signed, or presigned on
+        // another host), so the account token is never sent with them.
+        headers: client.backend == MediaBackend.silo ? null : client.streamHeaders,
         timeout: const Duration(seconds: 10),
       );
       if (imageBytes.isEmpty) return null;

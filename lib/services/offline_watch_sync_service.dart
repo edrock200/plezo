@@ -78,8 +78,8 @@ class OfflineWatchSyncService extends ChangeNotifier with DisposableChangeNotifi
     if (client is PlexClient && client.serverPrefs.isNotEmpty) {
       return client.watchedThreshold;
     }
-    if (client != null && client.backend.usesMediaBrowserApi) {
-      // MediaBrowser clients expose the fixed threshold that mirrors their
+    if (client != null && client is! PlexClient) {
+      // Non-Plex clients expose the fixed threshold that mirrors their
       // wire-protocol behaviour.
       return client.watchedThreshold;
     }

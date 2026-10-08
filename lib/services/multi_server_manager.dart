@@ -1013,7 +1013,21 @@ class MultiServerManager {
   /// one of them is bound as the active client for the server id. An
   /// unchanged re-add reuses the live client; a changed one (new tokens,
   /// URL, PIN token) replaces it.
-  Future<bool> addSiloConnection(SiloConnection connection) async {
+  Future<bool> addSiloConnection(SiloConnection connection) {
+    // Serialize per connection: two overlapping adds would each build a
+    // client from the same refresh token, and Silo rotates it on first use,
+    // so one of them would end up holding a dead token.
+    final previous = _siloAddsInFlight[connection.id] ?? Future<bool>.value(false);
+    final next = previous.catchError((_) => false).then((_) => _addSiloConnection(connection));
+    _siloAddsInFlight[connection.id] = next;
+    return next.whenComplete(() {
+      if (identical(_siloAddsInFlight[connection.id], next)) _siloAddsInFlight.remove(connection.id);
+    });
+  }
+
+  final Map<String, Future<bool>> _siloAddsInFlight = {};
+
+  Future<bool> _addSiloConnection(SiloConnection connection) async {
     try {
       final existing = _jellyfinByCompoundId[connection.id];
       if (existing is SiloClient &&

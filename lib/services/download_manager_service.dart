@@ -571,6 +571,10 @@ class DownloadManagerService {
   }
 
   Future<String?> _profileScopeIdForBackend(MediaBackend backend, ServerId serverId, String activeProfileId) async {
+    if (backend == MediaBackend.silo) {
+      // A Silo cache is keyed by the connection id (`server/user/profile`).
+      return await _siloProfileScopeId(serverId, activeProfileId) ?? activeClientScopeIdForServer(serverId);
+    }
     if (backend.usesMediaBrowserApi) {
       final persisted = await JellyfinCacheResolver(_database).findProfileScopeId(serverId, activeProfileId);
       return persisted ?? activeClientScopeIdForServer(serverId);
@@ -693,6 +697,32 @@ class DownloadManagerService {
     }
   }
 
+  /// The Silo connection [profileId] has bound for [serverId], preferring
+  /// the default binding, then the most recently used: its id is the Silo
+  /// cache namespace.
+  Future<String?> _siloProfileScopeId(ServerId serverId, String profileId) async {
+    final bindings = await (_database.select(
+      _database.profileConnections,
+    )..where((t) => t.profileId.equals(profileId))).get();
+    bindings.sort((a, b) {
+      if (a.isDefault != b.isDefault) return a.isDefault ? -1 : 1;
+      final used = (b.lastUsedAt ?? 0).compareTo(a.lastUsedAt ?? 0);
+      return used != 0 ? used : a.connectionId.compareTo(b.connectionId);
+    });
+    final prefix = '$serverId/';
+    final siloIds = {
+      for (final row in await _siloConnectionRows())
+        if (row.id.startsWith(prefix)) row.id,
+    };
+    for (final binding in bindings) {
+      if (siloIds.contains(binding.connectionId)) return binding.connectionId;
+    }
+    return null;
+  }
+
+  Future<List<ConnectionRow>> _siloConnectionRows() =>
+      (_database.select(_database.connections)..where((t) => t.kind.equals(MediaBackend.silo.id))).get();
+
   /// Resolve which backend the cache row for [serverId] uses. Reads the
   /// `Connections` table directly so the lookup works even when the server
   /// is currently offline (the connection persists across launches).
@@ -704,6 +734,10 @@ class DownloadManagerService {
     // Prefer a live client — `MediaServerClient.backend` is in memory.
     final live = _getClient(serverId);
     if (live != null) return live.backend;
+    // Silo connection ids are `server/user/profile`; the MediaBrowser
+    // resolver below only knows Jellyfin and Emby rows.
+    final siloPrefix = '$serverId/';
+    if ((await _siloConnectionRows()).any((row) => row.id.startsWith(siloPrefix))) return MediaBackend.silo;
     final row = await JellyfinCacheResolver(_database).findConnection(serverId);
     if (row == null) return null;
     // Keep the persisted discriminator intact even though both MediaBrowser

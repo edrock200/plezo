@@ -15,7 +15,9 @@ description: Build, publish and verify Plezy's Android preview APKs (the "Plezy 
 - Signing: the repository's `ANDROID_KEYSTORE_BASE64`/`ANDROID_STORE_PASSWORD`/`ANDROID_KEY_PASSWORD`/
   `ANDROID_KEY_ALIAS` secrets when set; otherwise a keystore generated once and kept in the Actions
   cache (`silo-preview-keystore-v1`), so later previews install as updates while the cache lives.
-  Caches are branch-scoped: a new branch generates a new key. Without `key.properties` a release
+  Caches are branch-scoped and evicted after 7 days unused: a new branch, or a gap of a week,
+  generates a new key and the next preview will not install over the last one. Recommend that the
+  user add the `ANDROID_*` secrets for a stable key; never promise updates without them. Without `key.properties` a release
   build would be **unsigned** and uninstallable — never remove the signing step.
 - Package id stays `com.edde746.plezy`: previews replace (and cannot update) a store-installed
   Plezy. Making them install side by side would need the hard-coded provider authorities

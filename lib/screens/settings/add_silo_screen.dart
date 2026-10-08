@@ -175,8 +175,12 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
   Future<void> _startDeviceLogin() async {
     final server = _server;
     if (server == null) return;
+    if (busy) return;
     final attempt = ++_deviceAttempt;
     setErrorText(null);
+    // Busy until the code is on screen, so a password sign-in cannot start
+    // alongside it (the same guard Jellyfin's Quick Connect uses).
+    setBusy(true);
     try {
       final auth = await _authService();
       var code = await auth.startDeviceLogin(server);
@@ -189,11 +193,15 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
         _deviceCodeOpened = false;
         _step = _Step.deviceCode;
       });
+      setBusy(false);
       requestFocusAfterFrame(_cancelCodeFocus);
 
       var deadline = code.expiresAt;
       var delay = Duration.zero;
       var backoff = code.interval;
+      // A request that keeps vanishing (a proxy mangling the poll, a server
+      // answering an unknown status) must not spin start/poll forever.
+      var remints = 0;
       while (mounted && attempt == _deviceAttempt) {
         await Future<void>.delayed(delay);
         if (!mounted || attempt != _deviceAttempt) return;
@@ -216,7 +224,11 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
         if (!mounted || attempt != _deviceAttempt) return;
         switch (result.status) {
           case SiloDevicePollStatus.pending:
-            if (result.expiresAt != null && result.expiresAt!.isAfter(deadline)) deadline = result.expiresAt!;
+            // Approver lookups can extend the request; apply the extension the
+            // server reports relative to its own clock, so clock skew between
+            // this device and the server cannot expire the code early.
+            final extended = code.localExpiryFor(result.expiresAt);
+            if (extended != null && extended.isAfter(deadline)) deadline = extended;
             if (result.opened != _deviceCodeOpened) setState(() => _deviceCodeOpened = result.opened);
             delay = result.pollAfter ?? code.interval;
           case SiloDevicePollStatus.approved:
@@ -226,9 +238,16 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
               errorMapper: (e) => t.addServer.siloDeviceCodeFailed(error: e.toString()),
             );
             if (signIn != null && mounted) await _onSignedIn(signIn);
+            // Still on the code panel means a later step failed (account,
+            // profiles, saving): leave the panel so the error and the form show.
+            if (mounted && _step == _Step.deviceCode) _deviceFailed(errorText ?? t.addServer.siloDeviceCodeExpired);
             return;
           case SiloDevicePollStatus.gone:
             // The request vanished (consumed, denied, expired): mint a new code.
+            if (++remints > 3) {
+              _deviceFailed(t.addServer.siloDeviceCodeExpired);
+              return;
+            }
             code = await auth.startDeviceLogin(server);
             if (!mounted || attempt != _deviceAttempt) return;
             deadline = code.expiresAt;
@@ -236,12 +255,14 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
               _deviceCode = code;
               _deviceCodeOpened = false;
             });
-            delay = Duration.zero;
+            delay = code.interval;
         }
       }
     } catch (e, st) {
       appLogger.w('Silo device sign-in failed', error: e, stackTrace: st);
       if (mounted && attempt == _deviceAttempt) _deviceFailed(t.addServer.siloDeviceCodeFailed(error: e.toString()));
+    } finally {
+      if (mounted && _step != _Step.deviceCode) setBusy(false);
     }
   }
 
@@ -252,6 +273,15 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
       _step = _Step.signIn;
     });
     setErrorText(message);
+    _focusSignInStep();
+  }
+
+  void _focusSignInStep() {
+    final server = _server;
+    if (server == null) return;
+    requestFocusAfterFrame(
+      server.deviceLoginAvailable ? _codeFocus : (server.passwordLoginAvailable ? _usernameFocus : _changeServerFocus),
+    );
   }
 
   void _cancelDeviceLogin() {
@@ -282,6 +312,7 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
     if (profiles.isEmpty) {
       setState(() => _step = _Step.signIn);
       setErrorText(t.addServer.siloNoProfiles);
+      _focusSignInStep();
       return;
     }
     _signIn = signIn;
@@ -313,7 +344,11 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
         if (pin == null || !mounted) return;
         final token = await runAsync<String?>(
           () async => (await _authService()).verifyPin(signIn, profile, pin),
-          errorMapper: (e) => e is MediaServerAuthException ? (e.display ?? e.message) : t.profiles.failedToVerifyPin,
+          errorMapper: (e) => switch (e) {
+            MediaServerAuthException(statusCode: 429) => t.addServer.siloTooManyPinAttempts,
+            MediaServerAuthException(:final display?) => display,
+            _ => t.profiles.failedToVerifyPin,
+          },
         );
         if (!mounted) return;
         if (token != null) {
@@ -708,8 +743,18 @@ class _SiloProfileTile extends StatelessWidget {
                 children: [
                   CircleAvatar(
                     radius: 20,
-                    backgroundImage: avatar == null ? null : NetworkImage(avatar),
-                    child: avatar == null ? Text(initial) : null,
+                    child: avatar == null
+                        ? Text(initial)
+                        : ClipOval(
+                            child: Image.network(
+                              avatar,
+                              width: 40,
+                              height: 40,
+                              fit: BoxFit.cover,
+                              // An expired or refused avatar URL falls back to the initial.
+                              errorBuilder: (_, _, _) => Center(child: Text(initial)),
+                            ),
+                          ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(child: Text(profile.name, style: theme.textTheme.titleSmall)),

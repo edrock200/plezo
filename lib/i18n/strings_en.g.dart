@@ -5801,6 +5801,9 @@ class Translations$addServer$en {
 
 	/// en: 'This server does not allow password sign-in. Use a code instead.'
 	String get siloPasswordLoginDisabled => 'This server does not allow password sign-in. Use a code instead.';
+
+	/// en: 'Too many PIN attempts. Wait a moment and try again.'
+	String get siloTooManyPinAttempts => 'Too many PIN attempts. Wait a moment and try again.';
 }
 
 // Path: common.ratingSource
@@ -9554,6 +9557,7 @@ extension on Translations {
 			'addServer.siloChooseProfileSubtitle' => 'Pick the Silo profile to use on this device.',
 			'addServer.siloNoProfiles' => 'This account has no Silo profiles.',
 			'addServer.siloPasswordLoginDisabled' => 'This server does not allow password sign-in. Use a code instead.',
+			'addServer.siloTooManyPinAttempts' => 'Too many PIN attempts. Wait a moment and try again.',
 			_ => null,
 		};
 	}

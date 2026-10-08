@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../media/media_backend.dart';
 import '../media/catalog_item_ref.dart';
 import '../media/ids.dart';
 
@@ -349,7 +350,8 @@ class _HubDetailScreenState extends State<HubDetailScreen>
 
       _applySort();
       if (!usesCustomLoader && !_usesPaginatedLoader && client != null && loadedCount < totalCount) {
-        _replaceContinuationItems = !client.backend.usesMediaBrowserApi;
+        // Only Plex returns a whole hub in one call; other backends page it.
+        _replaceContinuationItems = client.backend == MediaBackend.plex;
         if (_replaceContinuationItems) {
           _continuation.setContinuation(startIndex: 0, totalCount: 1);
         } else {

@@ -232,7 +232,7 @@ Music, audiobooks and e-books (those libraries are hidden), playlists, live TV, 
 Android preview APKs of this branch are published as [pre-releases](https://github.com/edrock200/plezo/releases):
 
 - `arm64-v8a` for most phones, tablets and Android TV boxes; `armeabi-v7a` for older or 32-bit devices such as Chromecast with Google TV; `x86_64` for emulators.
-- They use Plezy's package name with a different signing key: **uninstall a store-installed Plezy first**. Later previews install over earlier ones as updates.
+- They use Plezy's package name with a different signing key: **uninstall a store-installed Plezy first**. Later previews install over earlier ones as updates only while they share a signing key: with the repository's `ANDROID_*` signing secrets always, otherwise only for builds of the same branch within about a week (the key lives in the GitHub Actions cache). If an update is refused, uninstall the previous preview first.
 - A push to a `ccr-*` or `silo/*` branch whose commit message contains `[release-apk]` builds and publishes a new preview (`.github/workflows/silo-preview-apk.yml`).
 
 ## Building from Source

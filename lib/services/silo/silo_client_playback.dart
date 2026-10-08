@@ -13,6 +13,11 @@ class _SiloPlaybackSession {
 
   /// Minted once and reused on retries so a repeated stop is idempotent.
   final String stopId = const Uuid().v4();
+
+  /// The stop's progress sequence, also fixed on its first attempt.
+  int? stopSequence;
+  int stopAttempts = 0;
+  Future<void>? stopping;
   bool stopped = false;
 }
 
@@ -34,12 +39,17 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
     if (cached != null && !refresh) return cached;
     final data = await _api.getJson('/api/v2/playback/capabilities');
     final protocols = data['protocol_versions'];
+    final features = data['features'];
     final installation = data['installation_id']?.toString() ?? '';
     final ok =
         data['state'] == 'available' &&
         data['allowed'] != false &&
         protocols is List &&
         protocols.contains(3) &&
+        // Progress and stop carry sequences; Silo's own apps refuse playback
+        // on a server without this feature too.
+        features is List &&
+        features.contains('sequenced_progress_v1') &&
         installation.isNotEmpty;
     if (!ok) {
       throw PlaybackException(t.messages.playbackNotAllowedBody, reason: PlaybackFailureReason.playbackNotAllowed);
@@ -64,20 +74,17 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
     );
   }
 
-  Future<String> _appVersion() async {
-    try {
-      final pkg = await PackageInfo.fromPlatform();
-      if (pkg.version.isNotEmpty) return pkg.version;
-    } catch (_) {}
-    return '1.0';
-  }
-
   /// Stop any session this client still holds for [itemId] — a reload for a
   /// new track or quality replaces it with a fresh one.
   Future<void> _stopStaleSessions(String itemId) async {
     final stale = _sessions.values.where((s) => s.itemId == itemId && !s.stopped).toList();
     for (final session in stale) {
-      await _stopSession(session, position: null, isPaused: true);
+      try {
+        await _stopSession(session, position: null, isPaused: true);
+      } catch (e) {
+        // Kept for the next attempt; the new session must not wait on it.
+        appLogger.d('SiloClient: stale session stop failed', error: e.runtimeType);
+      }
     }
   }
 
@@ -87,7 +94,7 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
     int? audioIndex,
     bool originalOnly = false,
   }) async {
-    final appVersion = await _appVersion();
+    final appVersion = _api.device.clientVersion;
     final formFactor = _api.device.formFactor.playbackFormFactor;
     final metered = await _isMetered();
     Map<String, Object?> body(String installationId) => {
@@ -556,28 +563,39 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
     throwIfHttpError(response);
   }
 
-  Future<void> _stopSession(_SiloPlaybackSession session, {required Duration? position, required bool isPaused}) async {
-    if (session.stopped) return;
-    session.stopped = true;
-    try {
-      final response = await _api.request(
-        'DELETE',
-        '/api/v2/playback/${Uri.encodeComponent(session.sessionId)}',
-        body: {
-          'installation_id': session.installationId,
-          'stop_id': session.stopId,
-          if (position != null) ...{
-            'sequence': ++session.sequence,
-            'position': _seconds(position),
-            'is_paused': isPaused,
+  /// Stops [session]. A failed stop keeps the session (same `stop_id`) so a
+  /// later reload of the item retries it, up to [_maxStopAttempts] times.
+  Future<void> _stopSession(_SiloPlaybackSession session, {required Duration? position, required bool isPaused}) {
+    if (session.stopped) return Future.value();
+    return session.stopping ??= () async {
+      try {
+        if (position != null) session.stopSequence ??= ++session.sequence;
+        final response = await _api.request(
+          'DELETE',
+          '/api/v2/playback/${Uri.encodeComponent(session.sessionId)}',
+          body: {
+            'installation_id': session.installationId,
+            'stop_id': session.stopId,
+            if (position != null) ...{
+              'sequence': session.stopSequence,
+              'position': _seconds(position),
+              'is_paused': isPaused,
+            },
           },
-        },
-      );
-      if (response.statusCode != 404 && response.statusCode != 410) throwIfHttpError(response);
-    } finally {
-      _sessions.remove(session.sessionId);
-    }
+        );
+        if (response.statusCode != 404 && response.statusCode != 410) throwIfHttpError(response);
+        session.stopped = true;
+      } finally {
+        if (session.stopped || ++session.stopAttempts >= _maxStopAttempts) {
+          session.stopped = true;
+          _sessions.remove(session.sessionId);
+        }
+        session.stopping = null;
+      }
+    }();
   }
+
+  static const _maxStopAttempts = 3;
 
   @override
   Future<void> reportPlaybackStarted({

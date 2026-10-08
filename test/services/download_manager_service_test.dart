@@ -8,6 +8,7 @@ import 'package:background_downloader/background_downloader.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:plezy/services/silo/silo_api_cache.dart';
 import 'package:path/path.dart' as p;
 import 'package:http/http.dart' as http;
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
@@ -515,6 +516,71 @@ void main() {
       expect(all.items.values.single.title, 'Cached for user-b');
       expect(all.scopesByServer, {'jf-machine': 'jf-machine/user-b'});
       expect(item?.title, 'Cached for user-b');
+    });
+
+    test('cold Silo hydration resolves the profile\'s Silo connection as the cache scope', () async {
+      final db = AppDatabase.forTesting(NativeDatabase.memory());
+      PlexApiCache.initialize(db);
+      JellyfinApiCache.initialize(db);
+      SiloApiCache.initialize(db);
+      addTearDown(db.close);
+
+      // One Silo account, two Silo profiles, each bound to a different Plezy profile.
+      for (final siloProfile in ['p-owner', 'p-kids']) {
+        final plezyProfile = siloProfile == 'p-owner' ? 'profile-a' : 'profile-b';
+        final connectionId = 'silo-srv/1/$siloProfile';
+        await db
+            .into(db.connections)
+            .insert(
+              ConnectionsCompanion.insert(
+                id: connectionId,
+                kind: 'silo',
+                displayName: siloProfile,
+                configJson: jsonEncode({'serverId': 'silo-srv', 'userId': '1', 'profileId': siloProfile}),
+                createdAt: 0,
+              ),
+            );
+        await db
+            .into(db.profileConnections)
+            .insert(
+              ProfileConnectionsCompanion.insert(
+                profileId: plezyProfile,
+                connectionId: connectionId,
+                userIdentifier: '1',
+              ),
+            );
+        await SiloApiCache.instance.putItem(
+          ServerId(connectionId),
+          MediaItem.silo(id: 'movie:m1', kind: MediaKind.movie, title: 'Cached for $siloProfile', serverId: 'silo-srv'),
+        );
+        await SiloApiCache.instance.pinForOffline(ServerId(connectionId), 'movie:m1');
+      }
+      await db.insertDownload(
+        serverId: ServerId('silo-srv'),
+        clientScopeId: 'silo-srv/1/p-owner',
+        ratingKey: 'movie:m1',
+        globalKey: 'silo-srv:movie:m1',
+        type: 'movie',
+        status: DownloadStatus.completed.index,
+      );
+      await db.addDownloadOwner(profileId: 'profile-b', globalKey: 'silo-srv:movie:m1');
+      final manager = DownloadManagerService(
+        database: db,
+        storageService: DownloadStorageService.instance,
+        clientResolver: (_, {clientScopeId}) => null,
+      );
+
+      final all = await manager.getAllPinnedMetadata(activeProfileId: 'profile-b');
+      final item = await manager.lookupMetadata(
+        ServerId('silo-srv'),
+        'movie:m1',
+        preferActiveScope: true,
+        activeProfileId: 'profile-b',
+      );
+
+      expect(all.scopesByServer, {'silo-srv': 'silo-srv/1/p-kids'});
+      expect(all.items.values.single.title, 'Cached for p-kids');
+      expect(item?.title, 'Cached for p-kids');
     });
 
     test('cold Plex hydration finds a server inside its persisted account configuration', () async {

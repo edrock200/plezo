@@ -8,7 +8,8 @@ run-name: Silo preview APK ${{ github.sha }}
 # Signing: uses the ANDROID_* secrets when the repository has them (same names
 # as build.yml). Otherwise a keystore is generated once and kept in the Actions
 # cache, so later previews keep the same signature and install as updates
-# while the cache lives. These APKs use Plezy's package id, so they replace
+# while the cache lives (caches are branch-scoped and evicted after 7 days
+# unused; add the secrets for a stable key). These APKs use Plezy's package id, so they replace
 # (and cannot update) a Plezy installed from a store.
 
 on:
@@ -140,6 +141,6 @@ jobs:
             - `armeabi-v7a`: older or 32-bit devices, including Chromecast with Google TV and many TV sticks.
             - `x86_64`: emulators and x86 devices.
 
-            This build uses Plezy's package id but not the store signing key: uninstall a store-installed Plezy before installing it. Later previews from this repository install over it as updates.
+            This build uses Plezy's package id but not the store signing key: uninstall a store-installed Plezy before installing it. Later previews install over it as updates only when they are signed with the same key; if Android refuses the update, uninstall the previous preview first.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

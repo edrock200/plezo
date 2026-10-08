@@ -2346,6 +2346,7 @@
     "siloChooseProfile": "Who's watching?",
     "siloChooseProfileSubtitle": "Pick the Silo profile to use on this device.",
     "siloNoProfiles": "This account has no Silo profiles.",
-    "siloPasswordLoginDisabled": "This server does not allow password sign-in. Use a code instead."
+    "siloPasswordLoginDisabled": "This server does not allow password sign-in. Use a code instead.",
+    "siloTooManyPinAttempts": "Too many PIN attempts. Wait a moment and try again."
   }
 }

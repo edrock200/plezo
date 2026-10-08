@@ -44,31 +44,38 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
   `X-Profile-Token` from `POST /profiles/{id}/verify-pin`. A Plezy connection is one Silo profile.
   Auto-select a single profile only when it has no PIN (as Silo's apps do).
 - **Tokens:** access tokens are short-lived; refresh proactively (≤ min(60 s, lifetime/2) left) and
-  on 401 under one in-flight refresh. **Refresh tokens rotate**: persist every new pair
+  on 401 under one in-flight refresh. A refused refresh token is remembered and not sent again. **Refresh tokens rotate**: persist every new pair
   (`SiloClient.onConnectionUpdated` → `ConnectionRegistry.upsert`). `MultiServerManager` keeps the
   live client when a re-bind arrives with an older, already-rotated refresh token
   (`SiloClient.ownsRefreshToken`) — replacing it would revive a dead token.
-- **Paging:** collections are `{items, page:{has_more,next_cursor}, total}` with opaque cursors;
-  offsets are rejected. `SiloClient._pageAt` maps Plezy's offset paging onto cursors and keeps a
-  bounded per-query cursor map; keep query params identical across pages.
+- **Paging:** collections are `{items, page:{has_more,next_cursor}, total, window_cursor}` with
+  opaque cursors; offsets are rejected. Cursors are bound to the query **and the page size**.
+  `SiloClient._pageAt` keeps a bounded map per (query, page size): the adjacent page reuses
+  `next_cursor`; any other offset sends `cursor=<window_cursor>&seek=<offset>` (no walking). A 400
+  `invalid_cursor` (the listing changed, a search window expired) drops the map and restarts once.
+  Keep query params identical across pages.
 - **Ids:** opaque strings (`movie:heat-1995`); always `Uri.encodeComponent` them in paths. Episode
   cards name their season only by series + number, so they get a synthetic parent id
   `silo-season:<n>:<seriesId>` (`SiloMappers.syntheticSeasonId`); `fetchItem`/`fetchChildren`
-  resolve it. Season lists use the server's real season `content_id`.
+  resolve it. Season lists use the server's real season `content_id`. Writes (watched, rating,
+  favorite) on a synthetic season resolve it to that real id first — never to the series.
 - **Images:** URLs arrive ready-made and self-authorising (signed `exp`/`sig`, or S3 presigned).
   Resolve root-relative ones against the server **origin**, never add auth, never re-encode the query.
   `artworkStorageKey` strips the rotating signature so downloaded artwork is found again.
 - **Sort fields** unknown to the server return 422 — map only known ones (`_sortFields`).
-- **Playback (protocol v3):** `GET /playback/capabilities` → keep `installation_id` (409
+- **Playback (protocol v3):** `GET /playback/capabilities` must be `available`, list protocol 3
+  and the `sequenced_progress_v1` feature (Silo's apps refuse playback otherwise) → keep `installation_id` (409
   `installation_changed` → refetch and retry once). `POST /playback/start` with `declared` evidence
   (mpv/ExoPlayer decode almost everything; `exact` would need per-decoder `video_decode[]`).
   `form_factor` is `mobile` on phones *and* tablets, `tv` on TV, `desktop` otherwise. `progressive`
   is declared but disabled, as Silo's apps do. `start_position` is 0 and Plezy seeks to resume.
   Progress: `POST /playback/{sid}/progress` with a strictly increasing `sequence`; stop:
-  `DELETE /playback/{sid}` with a JSON body and a `stop_id` minted once.
+  `DELETE /playback/{sid}` with a JSON body and a `stop_id` (and stop `sequence`) minted once; a
+  failed stop keeps the session and is retried with the same `stop_id` on the next reload.
 - **Subtitles:** the plan's `subtitle.inventory`; for `original_http` only `source:external`
   entries become sidecars (embedded ones are in the file). Subtitle routes have no signed `st`, so
-  URLs get `token=` for players that do not forward headers.
+  their URLs carry the short-lived access token as `token=` for players that do not forward
+  headers. Such URLs live only in memory for one playback or download; never persist them.
 - **Downloads:** `POST /direct-download/links` → header-free link to the original file (Plezy's
   downloader sends no headers). The container rides in the URL fragment (`#container=mkv`), read by
   `downloadExtensionFromUrl`. External subtitle files are listed from a direct-play session opened
