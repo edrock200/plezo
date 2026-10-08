@@ -28,9 +28,14 @@ description: Build, publish and verify Plezy's Android preview APKs (the "Plezy 
 1. Make sure `flutter analyze lib test` and `scripts/run_tests.sh` pass; CI does not run tests in
    this workflow.
 2. Commit with `[release-apk]` in the message (a real change, not an empty commit) and push.
+   The workflow's concurrency group cancels an in-progress build on **any** later push to the same
+   branch (even one without `[release-apk]`, whose own job is skipped). Commit follow-up docs
+   locally and push them only after the release is published.
 3. Watch it with the GitHub MCP tools: `actions_list` (`list_workflow_runs`, branch filter) →
    `list_workflow_jobs`; on failure `get_job_logs` with `failed_only`. `gh` is not available.
-4. Confirm with `list_releases` (fields `tag_name`, `html_url`, `prerelease`).
+4. Confirm with `list_releases` (fields `tag_name`, `html_url`, `prerelease`). A background
+   `curl` loop on `releases/download/<tag>/SHA256SUMS.txt` (HTTP 200 when published) is a cheap
+   way to wait without polling the API.
 5. Verify the artifacts (below) before telling the user it is ready.
 
 ## Verifying an APK in a cloud session

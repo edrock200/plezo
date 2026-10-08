@@ -58,7 +58,10 @@ Then review the non-exhaustive ones by hand:
   `download_manager_service.dart` — branches on `usesMediaBrowserApi` or `== MediaBackend.plex`;
   decide which behaviour the new backend needs.
 - `playback_source_resolver.dart` — `client.streamHeaders` are given to the player; return the auth
-  headers media requests need.
+  headers media requests need. `discord_rpc_service.dart` also sends them when fetching artwork:
+  skip them there if the backend's image URLs are self-authorising or can be on another host.
+- `hub_detail_screen.dart` (`_replaceContinuationItems`) and other Plex-only continuation logic —
+  check `== MediaBackend.plex` guards still hold for the new backend.
 - Offline progress sync calls `reportPlaybackStarted/Stopped` **without a session id**; the client
   must persist progress in that case.
 
@@ -81,6 +84,13 @@ Then review the non-exhaustive ones by hand:
 - `ApiCache.pinForOffline` must pin everything offline playback reads; add the backend's arm to
   `CachedPlaybackMetadataService`.
 
-## 7. Verify
+## 7. Paging and concurrency
+- If the server pages with opaque cursors, map Plezy's offset paging onto them in one place and
+  respect the contract's binding rules (page size, query, sort); prefer a server-side jump (`seek`)
+  over walking pages, and restart on an invalid-cursor error.
+- Serialize "add connection" per account, share in-flight futures for reads several screens make at
+  once, and `Future.wait` independent requests.
+
+## 8. Verify
 `flutter analyze lib test`, `dart format` on changed files only, `scripts/run_tests.sh` (whole
 suite: shared switches break unrelated tests), plus backend unit tests with a `MockClient`.

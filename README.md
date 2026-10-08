@@ -213,19 +213,31 @@ This fork adds [Silo](https://github.com/Silo-Server/silo-server) as a fourth se
    - **With username and password**, when the server allows password sign-in (local accounts or LDAP-style providers).
 4. Pick a **Silo profile**, entering its PIN if it has one. Each Silo profile you add is its own connection, so add the server again to use another profile, or attach it to a different Plezy profile.
 
+### Server requirements
+
+- A Silo server with the `/api/v2` API. Playback needs playback protocol v3 with sequenced progress (`sequenced_progress_v1`), the same requirement as Silo's own apps; on an older server, titles browse but do not play.
+- Downloads need the server's direct-download links (`POST /api/v2/direct-download/links`); without them Plezy says downloads need a newer server.
+
 ### What works
 
 - **Home:** the rows your Silo server defines, including Continue Watching with next-up episodes (items can be dismissed).
-- **Libraries:** movie, TV and mixed libraries with sorting (title, date added, release date, year, rating, runtime, random), genre and age-rating filters, the A–Z bar, and the library's collections.
+- **Libraries:** movie, TV and mixed libraries, paged straight to any position (no loading every page before it), with sorting (title, date added, release date, year, rating, runtime, random), genre and age-rating filters, the A–Z bar, and the library's collections.
 - **Details:** series, seasons and episodes, cast and crew with person pages, ratings (IMDb, TMDB, Rotten Tomatoes), and More Like This.
 - **Search** for titles and people.
 - **Playback:** Plezy tells the server what the player can play and the server chooses Direct Play or a transcode (Silo playback protocol v3). Quality presets cap the bitrate; subtitles, skip intro/credits markers and chapters work; progress is saved to the server as you watch.
-- **Watched, favorites and 1–5 star ratings.**
+- **Watched, favorites and 1–5 star ratings**, on movies, series, seasons (also from an episode's season link) and episodes.
 - **Downloads** of the original file for offline playback, including external subtitle files, artwork, markers and chapters. Progress from a downloaded file syncs back when you reconnect.
 
 ### Not yet supported for Silo
 
 Music, audiobooks and e-books (those libraries are hidden), playlists, live TV, seek-preview thumbnails, metadata editing, library scans, sign-in through a browser (OIDC) or a network identity provider, and Silo's server-side download registry (downloads made by Plezy do not appear in Silo's download list). Sign-in tokens refresh automatically, but a video watched for longer than the server's access-token lifetime (usually an hour) may fail to seek near the end.
+
+### Troubleshooting
+
+- **Signed out / auth error banner:** the server refused the saved sign-in (expired or revoked session). Remove the Silo connection and add it again.
+- **"Profile verification required":** the Silo profile has a PIN; re-add it and enter the PIN.
+- **"Playback not allowed":** the server has playback disabled for this account, or predates playback protocol v3 with sequenced progress.
+- **"Downloads need a newer server":** the server has no direct-download links.
 
 ### Preview builds
 
@@ -233,7 +245,14 @@ Android preview APKs of this branch are published as [pre-releases](https://gith
 
 - `arm64-v8a` for most phones, tablets and Android TV boxes; `armeabi-v7a` for older or 32-bit devices such as Chromecast with Google TV; `x86_64` for emulators.
 - They use Plezy's package name with a different signing key: **uninstall a store-installed Plezy first**. Later previews install over earlier ones as updates only while they share a signing key: with the repository's `ANDROID_*` signing secrets always, otherwise only for builds of the same branch within about a week (the key lives in the GitHub Actions cache). If an update is refused, uninstall the previous preview first.
-- A push to a `ccr-*` or `silo/*` branch whose commit message contains `[release-apk]` builds and publishes a new preview (`.github/workflows/silo-preview-apk.yml`).
+- A push to a `ccr-*` or `silo/*` branch whose commit message contains `[release-apk]` builds and publishes a new preview (`.github/workflows/silo-preview-apk.yml`). A newer push to the same branch cancels a build still in progress, so wait for the release before pushing again.
+
+### Changes in this fork
+
+- **First preview:** Silo as a fourth backend — sign-in, profiles and PINs, browsing, search, playback protocol v3, progress, watched/favorite/rating, downloads.
+- **Phone and TV parity with Silo's apps:** tablets identify as tablets, playback reports the device's form factor and metered networks, Silo's default port `8090` is tried, LDAP-style password sign-in, downloads never carry the account token.
+- **Review fixes:** cursor paging that jumps to distant pages and recovers from changed listings; season writes from an episode's season link no longer hit the whole series; failed playback stops are retried; refused sign-ins are not retried on every request; offline details for downloaded items; faster Home and season loading; Continue Watching dismissals, IMDb scores and version runtimes fixed; Discord artwork no longer receives the account token; device-code sign-in handles expired codes, PIN lockouts and broken avatars; each Plezy profile's downloads stay with its own Silo account.
+
 
 ## Building from Source
 

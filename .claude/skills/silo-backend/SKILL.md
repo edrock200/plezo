@@ -84,6 +84,24 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
   `{media_item_id, position_ms, duration_ms, updated_at}`; a stop past `watchedThreshold` posts
   `/watched/{id}` instead.
 
+- **Dismissals:** `PUT /home/dismissals/continue_watching/{id}` requires `progress_updated_at`
+  (refetch the item detail when the card lacks it); `next_up` requires `series_id`.
+- **Limits:** `GET /catalog/people` caps `limit` at 100; catalog pages at 200.
+- **Offline:** `fetchItem` falls back to `SiloApiCache.getMetadata` (the pinned download row) on a
+  transient error; watch detail is read through the cache too.
+- **Artwork and third parties:** never pass `streamHeaders` with Silo image URLs (Discord RPC skips
+  them); presigned URLs may point at object storage on another host.
+- **Downloads scope:** a profile's Silo downloads use its own Silo connection as the cache scope
+  even on a cold start (`DownloadManagerService._siloProfileScopeId`).
+
+## Known review findings (October 2026)
+Fixed: page-size-bound cursors and `seek`; synthetic-season writes hitting the series; stop retry;
+refused refresh resent on every call; missing `sequenced_progress_v1` check; IMDb score scale;
+`duration_seconds` on versions; parallel Home/season loads; concurrent `addSiloConnection`;
+device-code expiry/remint and PIN lockout (429) messages. Declined: 4-digit PIN length (matches
+Silo's apps). Open follow-ups: an edit screen for an existing Silo connection (address, re-sign-in)
+— today the user removes and re-adds it; music/audiobook libraries; OIDC sign-in.
+
 ## Deliberate differences from Silo's apps
 - Downloads use direct links, not Silo's managed `/downloads` registry (whose file, manifest and
   artwork routes need auth headers). Plezy's downloads therefore do not show in Silo's download list.
@@ -94,7 +112,10 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
 
 ## Testing
 - Unit tests: `scripts/run_tests.sh test/services/silo` (mappers, connection/vault, client with an
-  `http/testing.dart` `MockClient`, headers/form factor). Mock-client handlers must
+  `http/testing.dart` `MockClient`, headers/form factor). Client tests cover cursor `seek`/restart,
+  synthetic-season writes, refused refresh, playback start/progress/stop, downloads and sessionless
+  progress; add one for each contract rule you change. Capability mocks must list
+  `features: ['sequenced_progress_v1']`. Mock-client handlers must
   `Uri.decodeComponent(request.url.path)` — ids are percent-encoded on the wire.
 - Tests that read caches need `AppDatabase.forTesting(NativeDatabase.memory())` +
   `SiloApiCache.initialize(db)` (and `PlexApiCache` for the fallback).
@@ -108,7 +129,8 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
   `127.0.0.1:8097`. Do **not** call `TestWidgetsFlutterBinding.ensureInitialized()` in it: that
   binding answers every real HTTP request with 400. Pass `httpClient: http.Client()` and set
   `DeviceIdentityService.debugOverride(...)`. Delete the file afterwards. The mock lacks ratings and
-  direct-download routes (404).
+  direct-download routes (404), and its capabilities may omit `sequenced_progress_v1`, which makes
+  Plezy refuse playback against it; test playback with `MockClient` handlers instead.
 - Stop the mock with `kill <pid>` from `ps -eo pid,args | grep "[m]ock_server"`, not `pkill`.
 - What cannot be verified in a cloud session: real playback, TV focus on a device, real Silo
   servers. Say so in the report.

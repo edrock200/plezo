@@ -58,6 +58,15 @@ macOS, Windows and Linux. This fork (`edrock200/plezo`) adds Silo as a fourth ba
   `flutter analyze lib test` to find them; follow the `media-backend-integration` skill.
 - Product names: "Silo" is Silo Media L.L.C.'s trademark. Refer to it only as the server Plezy
   connects to; the Silo badge (`assets/silo_icon.svg`) is our own generic glyph, not Silo's logo.
+- Branches: work on the session's `ccr-*` branch. Do not open a PR or merge into `main` unless the
+  user asks (they have declined a PR so far); say plainly that branch-only changes (README too)
+  are not visible on `main`.
+- Shared code paths: do not use "not Plex" as "MediaBrowser" (`usesMediaBrowserApi`), and do not
+  send `client.streamHeaders` to URLs that are not the server's own media (Silo artwork is
+  self-authorising and may live on another host). Check every `== MediaBackend.plex` /
+  `is! PlexClient` branch when changing backend behaviour.
+- Concurrency in clients: share one in-flight future for repeated reads (`_homeSections`,
+  token refresh, `addSiloConnection`) and fetch independent rows with `Future.wait`.
 - PRs: `CONTRIBUTING.md` requires stating which AI model(s) were used. Commit messages follow
   Conventional Commits (`feat(silo): …`, `fix(home): …`) with a plain-language body.
 
@@ -67,3 +76,13 @@ macOS, Windows and Linux. This fork (`edrock200/plezo`) adds Silo as a fourth ba
   Android emulator cannot run; verify APKs with `apksigner` / `aapt2` and test on a device.
 - `gh` is not available; use the GitHub MCP tools. Releases are created by the preview workflow, not
   from the session.
+- The preview workflow cancels an in-progress build when anything else is pushed to the same
+  branch. After a `[release-apk]` push, wait for the release before pushing docs or fixes.
+- `dart`/`flutter` live in `/opt/flutter/bin` (add it to `PATH`). Silo's server and Android repos
+  can be sparse-cloned into the scratchpad for contract checks (see the `silo-backend` skill).
+
+## Reviews
+- A full-build review (e.g. "Fable review") is done in parallel slices: Silo client core, sign-in
+  UI, app integration (server manager, downloads, offline sync), workflow/docs. Verify every finding
+  against the code and Silo's contract or Android app before fixing; record declined ones and why
+  (e.g. 4-digit PINs match Silo's apps). Report what was fixed, declined and left as follow-up.
