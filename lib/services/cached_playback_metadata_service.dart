@@ -5,6 +5,8 @@ import '../media/ids.dart';
 import '../media/media_backend.dart';
 import '../media/media_source_info.dart';
 import '../utils/app_logger.dart';
+import 'silo/silo_api_cache.dart';
+import 'silo/silo_mappers.dart';
 import '../utils/plex_cache_parser.dart';
 import 'api_cache.dart';
 import 'jellyfin_api_cache.dart';
@@ -38,8 +40,7 @@ class CachedPlaybackMetadataService {
           backend: backend,
           mediaIndex: mediaIndex,
         ),
-        // Silo items are never downloaded, so nothing is cached for offline use.
-        MediaBackend.silo => Future<MediaSourceInfo?>.value(),
+        MediaBackend.silo => _fetchSiloMediaSourceInfo(cacheServerId, itemId, mediaIndex: mediaIndex),
       };
     } catch (e) {
       appLogger.d('Cached media source info unavailable for $cacheServerId:$itemId', error: e);
@@ -72,7 +73,13 @@ class CachedPlaybackMetadataService {
           creditsPattern: creditsPattern,
           forceChapterFallback: forceChapterFallback,
         ),
-        MediaBackend.silo => Future<PlaybackExtras?>.value(),
+        MediaBackend.silo => _fetchSiloPlaybackExtras(
+          cacheServerId,
+          itemId,
+          introPattern: introPattern,
+          creditsPattern: creditsPattern,
+          forceChapterFallback: forceChapterFallback,
+        ),
       };
     } catch (e) {
       appLogger.d('Cached playback extras unavailable for $cacheServerId:$itemId', error: e);
@@ -120,6 +127,42 @@ class CachedPlaybackMetadataService {
       extras,
       metadata,
       loadMetadataJson: (ratingKey) => _plexMetadata(serverId, ratingKey),
+    );
+  }
+
+  /// A Silo download pins its watch detail; offline, chapter thumbnails keep
+  /// whatever URL they were stored with.
+  static SiloMappingContext _siloContext(String cacheServerId) =>
+      SiloMappingContext(serverId: cacheServerId, serverName: null, resolveUrl: (url) => url);
+
+  static Future<MediaSourceInfo?> _fetchSiloMediaSourceInfo(
+    String cacheServerId,
+    String itemId, {
+    required int mediaIndex,
+  }) async {
+    final watch = await SiloApiCache.instance.getWatchDetail(ServerId(cacheServerId), itemId);
+    final versions = SiloMappers.watchVersions(watch);
+    if (versions.isEmpty) return null;
+    // The file on disk is the downloaded version, whatever was played last.
+    final index = SiloMappers.selectVersionIndex(versions, watch, requestedIndex: mediaIndex);
+    return SiloMappers.sourceInfo(versions[index], videoUrl: '', mediaIndex: index, ctx: _siloContext(cacheServerId));
+  }
+
+  static Future<PlaybackExtras?> _fetchSiloPlaybackExtras(
+    String cacheServerId,
+    String itemId, {
+    String? introPattern,
+    String? creditsPattern,
+    bool forceChapterFallback = false,
+  }) async {
+    final watch = await SiloApiCache.instance.getWatchDetail(ServerId(cacheServerId), itemId);
+    if (watch == null) return null;
+    return SiloMappers.playbackExtras(
+      watch,
+      _siloContext(cacheServerId),
+      introPattern: introPattern,
+      creditsPattern: creditsPattern,
+      forceChapterFallback: forceChapterFallback,
     );
   }
 

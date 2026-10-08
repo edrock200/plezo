@@ -505,4 +505,137 @@ abstract final class SiloMappers {
     }
     return out;
   }
+
+  // ---------------------------------------------------------------------------
+  // Watch detail (`GET /api/v2/watch/{id}`)
+  // ---------------------------------------------------------------------------
+
+  static List<Map<String, dynamic>> watchVersions(Map<String, dynamic>? watch) {
+    final list = watch?['versions'];
+    return list is List ? list.whereType<Map<String, dynamic>>().toList() : const [];
+  }
+
+  /// The caller's version (by file id, signature, then index), else the
+  /// last one played, else the first.
+  static int selectVersionIndex(
+    List<Map<String, dynamic>> versions,
+    Map<String, dynamic>? watch, {
+    int? requestedIndex,
+    String? requestedFileId,
+    String? preferredSignature,
+  }) {
+    if (versions.isEmpty) return -1;
+    if (requestedFileId != null) {
+      final byId = versions.indexWhere((v) => v['file_id']?.toString() == requestedFileId);
+      if (byId >= 0) return byId;
+    }
+    if (preferredSignature != null) {
+      final mapped = versions.map(version).toList();
+      for (var i = 0; i < mapped.length; i++) {
+        if (mapped[i]?.signature == preferredSignature) return i;
+      }
+    }
+    if (requestedIndex != null && requestedIndex >= 0 && requestedIndex < versions.length) return requestedIndex;
+    final userData = watch?['user_data'];
+    final last = userData is Map ? userData['last_file_id']?.toString() : null;
+    if (last != null) {
+      final byLast = versions.indexWhere((v) => v['file_id']?.toString() == last);
+      if (byLast >= 0) return byLast;
+    }
+    return 0;
+  }
+
+  /// Audio/subtitle track ids are Silo's per-type index + 1, so no track has
+  /// id 0.
+  static int trackId(int index) => index + 1;
+
+  static MediaSourceInfo sourceInfo(
+    Map<String, dynamic> version, {
+    required String videoUrl,
+    required int mediaIndex,
+    required SiloMappingContext ctx,
+    int? selectedAudioIndex,
+    Set<int> sidecarSubtitleIndexes = const {},
+  }) {
+    final audio = <MediaAudioTrack>[];
+    final rawAudio = version['audio_tracks'];
+    if (rawAudio is List) {
+      var position = 0;
+      for (final track in rawAudio.whereType<Map>()) {
+        final index = (track['index'] as num?)?.toInt() ?? position;
+        final isDefault = track['default'] == true;
+        audio.add(
+          MediaAudioTrack(
+            id: trackId(index),
+            index: index,
+            codec: track['codec']?.toString(),
+            language: track['language']?.toString(),
+            languageCode: track['language']?.toString(),
+            title: track['title']?.toString(),
+            channels: (track['channels'] as num?)?.toInt(),
+            selected: selectedAudioIndex == null ? isDefault : selectedAudioIndex == index,
+            isDefault: isDefault,
+          ),
+        );
+        position++;
+      }
+    }
+    final subs = <MediaSubtitleTrack>[];
+    final rawSubs = version['subtitle_tracks'];
+    if (rawSubs is List) {
+      var position = 0;
+      for (final track in rawSubs.whereType<Map>()) {
+        final index = (track['index'] as num?)?.toInt() ?? position;
+        subs.add(
+          MediaSubtitleTrack(
+            id: trackId(index),
+            index: index,
+            codec: track['codec']?.toString(),
+            language: track['language']?.toString(),
+            languageCode: track['language']?.toString(),
+            title: track['title']?.toString(),
+            selected: false,
+            forced: track['forced'] == true,
+            external: track['external'] == true,
+            usesExternalDelivery: sidecarSubtitleIndexes.contains(index),
+          ),
+        );
+        position++;
+      }
+    }
+    final defaultAudio = audio.where((a) => a.isDefault).firstOrNull;
+    return MediaSourceInfo(
+      videoUrl: videoUrl,
+      audioTracks: audio,
+      subtitleTracks: subs,
+      chapters: MediaChapter.backfillEndOffsets(
+        chapters(version['chapters'], ctx),
+        runtimeMs: version['duration'] is num ? ((version['duration'] as num) * 1000).round() : null,
+      ),
+      mediaSourceId: version['file_id']?.toString(),
+      mediaIndex: mediaIndex,
+      defaultAudioStreamIndex: defaultAudio?.id,
+    );
+  }
+
+  /// Chapters and skip markers of the version [selectVersionIndex] picks
+  /// from a watch-detail payload.
+  static PlaybackExtras playbackExtras(
+    Map<String, dynamic>? watch,
+    SiloMappingContext ctx, {
+    String? introPattern,
+    String? creditsPattern,
+    bool forceChapterFallback = false,
+  }) {
+    final versions = watchVersions(watch);
+    final selected = versions.isEmpty ? null : versions[selectVersionIndex(versions, watch)];
+    final chapterList = selected == null ? <MediaChapter>[] : chapters(selected['chapters'], ctx);
+    return PlaybackExtras.withChapterFallback(
+      chapters: MediaChapter.backfillEndOffsets(chapterList),
+      markers: markers(watch, selected),
+      introPatternStr: introPattern,
+      creditsPatternStr: creditsPattern,
+      forceChapterFallback: forceChapterFallback,
+    );
+  }
 }

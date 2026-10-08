@@ -596,9 +596,7 @@ class MediaContextMenuState extends State<MediaContextMenu> {
     return [
       _MenuAction(value: 'play', icon: Symbols.play_arrow_rounded, label: t.common.play),
       _MenuAction(value: 'shuffle', icon: Symbols.shuffle_rounded, label: t.mediaMenu.shufflePlay),
-      if ((isDownloadablePlaylist || menu.isCollection) &&
-          !PlatformDetector.isAppleTV() &&
-          (menu.itemBackend?.supportsDownloads ?? true))
+      if ((isDownloadablePlaylist || menu.isCollection) && !PlatformDetector.isAppleTV())
         ..._syncDownloadMenuActions(
           hasSyncRule: Provider.of<DownloadProvider>(context, listen: false).hasSyncRule(_itemSyncRuleKey(context)),
           hasAnyDownload: false,
@@ -766,7 +764,6 @@ class MediaContextMenuState extends State<MediaContextMenu> {
     // skip entirely.
     final canDownload =
         !PlatformDetector.isAppleTV() &&
-        mediaItem.backend.supportsDownloads &&
         (mediaItem.isVideoContent || mediaKind == MediaKind.album || mediaKind == MediaKind.track);
     final downloadProvider = canDownload ? Provider.of<DownloadProvider>(context, listen: false) : null;
     return [

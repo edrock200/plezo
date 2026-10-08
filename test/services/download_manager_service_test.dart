@@ -54,6 +54,15 @@ void main() {
       expect(downloadExtensionFromUrl('https://example.com/Videos/item/stream?Container=MKV,MP4'), 'mkv');
       expect(downloadExtensionFromUrl('https://example.com/Videos/item/stream?Container=../bad'), isNull);
     });
+
+    test('falls back to a container named in the fragment', () {
+      expect(
+        downloadExtensionFromUrl('https://silo.example/api/v2/direct-download?file_id=4&token=t#container=mkv'),
+        'mkv',
+      );
+      expect(downloadExtensionFromUrl('https://silo.example/api/v2/direct-download?file_id=4#container=../x'), isNull);
+      expect(downloadExtensionFromUrl('https://silo.example/api/v2/direct-download?file_id=4#top'), isNull);
+    });
   });
 
   group('partitionNativeTasks', () {

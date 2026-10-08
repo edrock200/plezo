@@ -25,6 +25,10 @@ class SiloApiCache extends ApiCache {
 
   static const _itemPrefix = 'silo:item/';
   static String itemEndpoint(String itemId) => '$_itemPrefix$itemId';
+
+  /// Cache key of an item's watch detail (versions, tracks, chapters,
+  /// markers), which offline playback of a download reads.
+  static String watchEndpoint(String itemId) => '/api/v2/watch/${Uri.encodeComponent(itemId)}';
   static final RegExp _itemKeyPattern = RegExp(r'^[^:]+:silo:item/(.+)$');
 
   Future<void> putItem(ServerId serverId, MediaItem item) => put(serverId, itemEndpoint(item.id), item.toJson());
@@ -41,14 +45,20 @@ class SiloApiCache extends ApiCache {
   }
 
   @override
-  Future<void> pinForOffline(ServerId serverId, String itemId) => pin(serverId, itemEndpoint(itemId));
+  Future<void> pinForOffline(ServerId serverId, String itemId) async {
+    await pin(serverId, itemEndpoint(itemId));
+    await pin(serverId, watchEndpoint(itemId));
+  }
 
   @override
   Future<void> deleteForItem(ServerId serverId, String itemId) async {
-    await (database.delete(
-      database.apiCache,
-    )..where((t) => t.cacheKey.equals('$serverId:${itemEndpoint(itemId)}'))).go();
+    final keys = ['$serverId:${itemEndpoint(itemId)}', '$serverId:${watchEndpoint(itemId)}'];
+    await (database.delete(database.apiCache)..where((t) => t.cacheKey.isIn(keys))).go();
   }
+
+  /// The pinned watch detail of a downloaded item, for offline playback.
+  Future<Map<String, dynamic>?> getWatchDetail(ServerId serverId, String itemId) =>
+      get(serverId, watchEndpoint(itemId));
 
   @override
   Future<void> applyWatchState({

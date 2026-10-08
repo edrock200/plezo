@@ -53,11 +53,6 @@ enum MediaBackend {
   /// of comparing against [MediaBackend.jellyfin].
   bool get usesMediaBrowserApi => dialect != null;
 
-  /// Whether items from this backend can be downloaded for offline use.
-  /// Silo stream URLs belong to short-lived playback sessions, so this
-  /// client does not offer downloads for it.
-  bool get supportsDownloads => this != MediaBackend.silo;
-
   /// The MediaBrowser dialect this backend speaks, or `null` for Plex and Silo.
   MediaBrowserDialect? get dialect => switch (this) {
     MediaBackend.plex || MediaBackend.silo => null,

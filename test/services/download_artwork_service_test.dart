@@ -76,6 +76,23 @@ void main() {
     expect(specs.map((spec) => spec.url), everyElement(contains('api_key=secret')));
   });
 
+  test('storage keys ignore rotating Silo artwork signatures', () {
+    expect(
+      artworkStorageKey('https://silo.example/api/v2/artwork/p1?exp=100&sig=a'),
+      'https://silo.example/api/v2/artwork/p1',
+    );
+    expect(
+      artworkStorageKey('https://silo.example/api/v2/artwork/p1?exp=200&sig=b'),
+      artworkStorageKey('https://silo.example/api/v2/artwork/p1?exp=100&sig=a'),
+    );
+    expect(
+      artworkStorageKey('https://s3.example/b/p.jpg?v=3&X-Amz-Signature=x&X-Amz-Expires=60'),
+      'https://s3.example/b/p.jpg?v=3',
+    );
+    // Other backends keep their parameters.
+    expect(artworkStorageKey('https://plex.example/photo?exp=1&sig=2'), 'https://plex.example/photo?exp=1&sig=2');
+  });
+
   test('local paths normalize tokenized Jellyfin URLs', () async {
     final settings = await SettingsService.getInstance();
     final storage = DownloadStorageService.instance;

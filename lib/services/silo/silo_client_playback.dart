@@ -27,7 +27,7 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
 
   final Map<String, _SiloPlaybackSession> _sessions = {};
 
-  static String _watchPath(String id) => '/api/v2/watch/${Uri.encodeComponent(id)}';
+  static String _watchPath(String id) => SiloApiCache.watchEndpoint(id);
 
   Future<String> _ensureInstallationId({bool refresh = false}) async {
     final cached = _installationId;
@@ -61,114 +61,6 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
       parseCache: (data) => data is Map<String, dynamic> ? data : null,
       parseResponse: (response) => response.data is Map<String, dynamic> ? response.data as Map<String, dynamic> : null,
       shouldFallback: (error) => error is MediaServerHttpException && error.isTransient,
-    );
-  }
-
-  static List<Map<String, dynamic>> _versionsOf(Map<String, dynamic>? watch) {
-    final list = watch?['versions'];
-    return list is List ? list.whereType<Map<String, dynamic>>().toList() : const [];
-  }
-
-  /// The caller's version (by file id, signature, then index), else the
-  /// last one played, else the first.
-  static int _selectVersionIndex(
-    List<Map<String, dynamic>> versions,
-    Map<String, dynamic>? watch, {
-    int? requestedIndex,
-    String? requestedFileId,
-    String? preferredSignature,
-  }) {
-    if (versions.isEmpty) return -1;
-    if (requestedFileId != null) {
-      final byId = versions.indexWhere((v) => v['file_id']?.toString() == requestedFileId);
-      if (byId >= 0) return byId;
-    }
-    if (preferredSignature != null) {
-      final mapped = versions.map(SiloMappers.version).toList();
-      for (var i = 0; i < mapped.length; i++) {
-        if (mapped[i]?.signature == preferredSignature) return i;
-      }
-    }
-    if (requestedIndex != null && requestedIndex >= 0 && requestedIndex < versions.length) return requestedIndex;
-    final userData = watch?['user_data'];
-    final last = userData is Map ? userData['last_file_id']?.toString() : null;
-    if (last != null) {
-      final byLast = versions.indexWhere((v) => v['file_id']?.toString() == last);
-      if (byLast >= 0) return byLast;
-    }
-    return 0;
-  }
-
-  /// Audio/subtitle track ids are Silo's per-type index + 1, so no track has
-  /// id 0.
-  static int _trackId(int index) => index + 1;
-
-  static MediaSourceInfo _sourceInfo(
-    Map<String, dynamic> version, {
-    required String videoUrl,
-    required int mediaIndex,
-    required SiloMappingContext ctx,
-    int? selectedAudioIndex,
-    Set<int> sidecarSubtitleIndexes = const {},
-  }) {
-    final audio = <MediaAudioTrack>[];
-    final rawAudio = version['audio_tracks'];
-    if (rawAudio is List) {
-      var position = 0;
-      for (final track in rawAudio.whereType<Map>()) {
-        final index = (track['index'] as num?)?.toInt() ?? position;
-        final isDefault = track['default'] == true;
-        audio.add(
-          MediaAudioTrack(
-            id: _trackId(index),
-            index: index,
-            codec: track['codec']?.toString(),
-            language: track['language']?.toString(),
-            languageCode: track['language']?.toString(),
-            title: track['title']?.toString(),
-            channels: (track['channels'] as num?)?.toInt(),
-            selected: selectedAudioIndex == null ? isDefault : selectedAudioIndex == index,
-            isDefault: isDefault,
-          ),
-        );
-        position++;
-      }
-    }
-    final subs = <MediaSubtitleTrack>[];
-    final rawSubs = version['subtitle_tracks'];
-    if (rawSubs is List) {
-      var position = 0;
-      for (final track in rawSubs.whereType<Map>()) {
-        final index = (track['index'] as num?)?.toInt() ?? position;
-        subs.add(
-          MediaSubtitleTrack(
-            id: _trackId(index),
-            index: index,
-            codec: track['codec']?.toString(),
-            language: track['language']?.toString(),
-            languageCode: track['language']?.toString(),
-            title: track['title']?.toString(),
-            selected: false,
-            forced: track['forced'] == true,
-            external: track['external'] == true,
-            usesExternalDelivery: sidecarSubtitleIndexes.contains(index),
-          ),
-        );
-        position++;
-      }
-    }
-    final defaultAudio = audio.where((a) => a.isDefault).firstOrNull;
-    return MediaSourceInfo(
-      videoUrl: videoUrl,
-      audioTracks: audio,
-      subtitleTracks: subs,
-      chapters: MediaChapter.backfillEndOffsets(
-        SiloMappers.chapters(version['chapters'], ctx),
-        runtimeMs: version['duration'] is num ? ((version['duration'] as num) * 1000).round() : null,
-      ),
-      mediaSourceId: version['file_id']?.toString(),
-      mediaIndex: mediaIndex,
-      defaultAudioStreamIndex: defaultAudio?.id,
     );
   }
 
@@ -267,11 +159,11 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
     } catch (error, stackTrace) {
       Error.throwWithStackTrace(classifyPlaybackFailure(error), stackTrace);
     }
-    final versions = _versionsOf(watch);
+    final versions = SiloMappers.watchVersions(watch);
     if (watch == null || versions.isEmpty) {
       throw PlaybackException(t.messages.playbackNoMediaSources, reason: PlaybackFailureReason.noPlayableSource);
     }
-    final versionIndex = _selectVersionIndex(
+    final versionIndex = SiloMappers.selectVersionIndex(
       versions,
       watch,
       requestedIndex: options.selectedMediaIndex,
@@ -340,7 +232,7 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
         if (index != null) sidecarIndexes.add(index);
         sidecars.add(
           PlaybackSubtitleSidecar(
-            sourceStreamId: index == null ? null : _trackId(index),
+            sourceStreamId: index == null ? null : SiloMappers.trackId(index),
             track: SubtitleTrack.uri(
               _subtitleUrl(url),
               title: entry['label']?.toString(),
@@ -359,7 +251,7 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
         ? ((selected['audio'] as Map)['index'] as num?)?.toInt()
         : audioIndex;
     final videoUrl = _streamUrl(rawUrl);
-    final mediaInfo = _sourceInfo(
+    final mediaInfo = SiloMappers.sourceInfo(
       version,
       videoUrl: videoUrl,
       mediaIndex: versionIndex,
@@ -380,12 +272,127 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
       subtitleSidecars: sidecars,
       isTranscoding: !isOriginal,
       fallbackReason: !options.qualityPreset.isOriginal && isOriginal ? TranscodeFallbackReason.directPlayOnly : null,
-      activeAudioStreamId: selectedAudio == null ? null : _trackId(selectedAudio),
+      activeAudioStreamId: selectedAudio == null ? null : SiloMappers.trackId(selectedAudio),
       playSessionId: sessionId,
       playMethod: isOriginal ? 'DirectPlay' : (delivery.contains('transcode') ? 'Transcode' : 'DirectStream'),
       selectedMediaIndex: versionIndex,
       selectedMediaSourceId: fileId,
     );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Downloads
+  // ---------------------------------------------------------------------------
+
+  static const _bitmapSubtitleCodecs = {'pgs', 'hdmv_pgs_subtitle', 'dvd_subtitle', 'vobsub', 'dvb_subtitle'};
+
+  /// Download the original file of the chosen version.
+  ///
+  /// Plezy's downloader sends no headers, so the URL must authorise itself:
+  /// `POST /api/v2/direct-download/links` mints exactly that (a short-lived,
+  /// header-free link to the original file with Range support). A server
+  /// without the route falls back to `/api/v2/direct-download?token=`. The
+  /// URL is signed, so the container rides in the fragment, where
+  /// `downloadExtensionFromUrl` reads it and no request ever carries it.
+  ///
+  /// Embedded subtitles travel inside the original file. External subtitle
+  /// files exist only as playback-session sidecars, so when the version has
+  /// any, a direct-play session is opened just to list them; it is left to
+  /// expire on the server because the sidecars are fetched after the video.
+  /// That leg is best-effort: a failure reports
+  /// [DownloadResolution.externalSubtitlesResolved] false so the manager
+  /// retries subtitles later.
+  @override
+  Future<DownloadResolution> resolveDownload(MediaItem item, {int mediaIndex = 0, String? mediaSourceId}) async {
+    final watch = await _watchDetail(item.id, forceRefresh: true);
+    final versions = SiloMappers.watchVersions(watch);
+    if (watch == null || versions.isEmpty) return const DownloadResolution(videoUrl: null);
+    // Keep the watch detail for offline playback (markers, chapters, tracks).
+    try {
+      await cache.pin(ServerId(cacheServerId), _watchPath(item.id));
+    } catch (_) {}
+    final index = SiloMappers.selectVersionIndex(
+      versions,
+      watch,
+      requestedIndex: mediaIndex,
+      requestedFileId: mediaSourceId,
+    );
+    final version = versions[index];
+    final fileId = version['file_id']?.toString();
+    if (fileId == null || fileId.isEmpty) return const DownloadResolution(videoUrl: null);
+
+    var url = await _directDownloadUrl(fileId);
+    final container = version['container']?.toString().trim().toLowerCase();
+    if (container != null && container.isNotEmpty && !url.contains('#')) url = '$url#container=$container';
+
+    var subtitles = const <DownloadSubtitleSpec>[];
+    var subtitlesResolved = true;
+    final rawSubs = version['subtitle_tracks'];
+    final hasExternal = rawSubs is List && rawSubs.whereType<Map>().any((track) => track['external'] == true);
+    if (hasExternal) {
+      try {
+        subtitles = await _externalSubtitleSpecs(fileId);
+      } catch (e) {
+        appLogger.d('SiloClient: external subtitles for a download unavailable', error: e.runtimeType);
+        subtitlesResolved = false;
+      }
+    }
+    return DownloadResolution(
+      videoUrl: url,
+      mediaSourceId: fileId,
+      externalSubtitles: subtitles,
+      externalSubtitlesResolved: subtitlesResolved,
+    );
+  }
+
+  Future<String> _directDownloadUrl(String fileId) async {
+    final response = await _api.request('POST', '/api/v2/direct-download/links', body: {'file_id': fileId});
+    if (response.statusCode == 200 && response.data is Map) {
+      final url = (response.data as Map)['url']?.toString();
+      if (url != null && url.isNotEmpty) return _api.resolveUrl(url);
+    }
+    if (response.statusCode != 404 && response.statusCode != 405 && response.statusCode != 501) {
+      throwIfHttpError(response);
+    }
+    // Older servers: the same route authorised by the account token. This
+    // path is ours, so it goes under the base URL (with any proxy prefix).
+    final token = _api.accessToken ?? '';
+    final base = _api.baseUrl.endsWith('/') ? _api.baseUrl.substring(0, _api.baseUrl.length - 1) : _api.baseUrl;
+    return '$base/api/v2/direct-download?file_id=${Uri.encodeQueryComponent(fileId)}'
+        '&token=${Uri.encodeQueryComponent(token)}';
+  }
+
+  Future<List<DownloadSubtitleSpec>> _externalSubtitleSpecs(String fileId) async {
+    final decision = await _startPlayback(fileId: fileId, preset: TranscodeQualityPreset.original, originalOnly: true);
+    final plan = decision['playback_plan'];
+    final subtitle = plan is Map ? plan['subtitle'] : null;
+    final inventory = subtitle is Map ? subtitle['inventory'] : null;
+    if (decision['outcome'] != 'playable' || inventory is! List) return const [];
+    return [
+      for (final entry in inventory.whereType<Map>())
+        if (entry['source'] == 'external' &&
+            entry['delivery'] == 'sidecar' &&
+            (entry['url']?.toString() ?? '').isNotEmpty &&
+            !_bitmapSubtitleCodecs.contains(entry['codec']?.toString().toLowerCase()))
+          DownloadSubtitleSpec(
+            id: SiloMappers.trackId((entry['combined_index'] as num?)?.toInt() ?? 0),
+            url: _subtitleUrl(entry['url'].toString()),
+            // Sidecar URLs name the delivered format (`.vtt` for external SRT).
+            codec: _sidecarCodec(entry['url'].toString()) ?? entry['codec']?.toString(),
+            language: entry['language']?.toString(),
+            languageCode: entry['language']?.toString(),
+            forced: entry['forced'] == true,
+            displayTitle: entry['label']?.toString(),
+          ),
+    ];
+  }
+
+  static String? _sidecarCodec(String url) {
+    final path = Uri.tryParse(url)?.path ?? '';
+    final dot = path.lastIndexOf('.');
+    if (dot < 0 || dot == path.length - 1) return null;
+    final ext = path.substring(dot + 1).toLowerCase();
+    return const {'vtt': 'webvtt', 'srt': 'srt', 'ass': 'ass', 'ssa': 'ssa'}[ext];
   }
 
   /// External players cannot send headers, so the URL carries `token=`.
@@ -397,9 +404,14 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
     Duration? position,
   }) async {
     final watch = await _watchDetail(item.id, forceRefresh: true);
-    final versions = _versionsOf(watch);
+    final versions = SiloMappers.watchVersions(watch);
     if (versions.isEmpty) return null;
-    final index = _selectVersionIndex(versions, watch, requestedIndex: mediaIndex, requestedFileId: mediaSourceId);
+    final index = SiloMappers.selectVersionIndex(
+      versions,
+      watch,
+      requestedIndex: mediaIndex,
+      requestedFileId: mediaSourceId,
+    );
     final fileId = versions[index]['file_id']?.toString();
     if (fileId == null) return null;
     final decision = await _startPlayback(fileId: fileId, preset: TranscodeQualityPreset.original, originalOnly: true);
@@ -462,18 +474,13 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
     String? introPattern,
     String? creditsPattern,
     bool forceChapterFallback = false,
-  }) {
-    final versions = _versionsOf(watch);
-    final version = versions.isEmpty ? null : versions[_selectVersionIndex(versions, watch)];
-    final chapters = version == null ? <MediaChapter>[] : SiloMappers.chapters(version['chapters'], _ctx);
-    return PlaybackExtras.withChapterFallback(
-      chapters: MediaChapter.backfillEndOffsets(chapters),
-      markers: SiloMappers.markers(watch, version),
-      introPatternStr: introPattern,
-      creditsPatternStr: creditsPattern,
-      forceChapterFallback: forceChapterFallback,
-    );
-  }
+  }) => SiloMappers.playbackExtras(
+    watch,
+    _ctx,
+    introPattern: introPattern,
+    creditsPattern: creditsPattern,
+    forceChapterFallback: forceChapterFallback,
+  );
 
   @override
   Future<MediaSourceInfo?> fetchCachedMediaSourceInfo(
@@ -483,16 +490,16 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
     String? preferredVersionSignature,
   }) async {
     final watch = await cache.get(ServerId(cacheServerId), _watchPath(itemId));
-    final versions = _versionsOf(watch);
+    final versions = SiloMappers.watchVersions(watch);
     if (versions.isEmpty) return null;
-    final index = _selectVersionIndex(
+    final index = SiloMappers.selectVersionIndex(
       versions,
       watch,
       requestedIndex: mediaIndex,
       requestedFileId: mediaSourceId,
       preferredSignature: preferredVersionSignature,
     );
-    return _sourceInfo(versions[index], videoUrl: '', mediaIndex: index, ctx: _ctx);
+    return SiloMappers.sourceInfo(versions[index], videoUrl: '', mediaIndex: index, ctx: _ctx);
   }
 
   @override
@@ -590,7 +597,11 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
     int? subtitleStreamIndex,
   }) async {
     final session = playSessionId == null ? null : _sessions[playSessionId];
-    if (session == null) return;
+    if (session == null) {
+      // A downloaded file plays without a server session.
+      await _syncProgress(itemId, position: position, duration: duration);
+      return;
+    }
     await _sendProgress(session, position, isPaused);
   }
 
@@ -607,7 +618,51 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
     PlaybackReportMetadata report = const PlaybackReportMetadata.live(),
   }) async {
     final session = playSessionId == null ? null : _sessions[playSessionId];
-    if (session == null) return;
+    if (session == null) {
+      // A downloaded file, or progress queued offline: no session to stop.
+      // Past the watched threshold the item is marked played, as a session
+      // stop would have done; otherwise the resume point is written.
+      final total = duration;
+      if (total != null &&
+          total > Duration.zero &&
+          position.inMilliseconds >= total.inMilliseconds * watchedThreshold) {
+        await _api.send('POST', '/api/v2/watched/${Uri.encodeComponent(itemId)}');
+      } else {
+        await _syncProgress(itemId, position: position, duration: total);
+      }
+      return;
+    }
     await _stopSession(session, position: position, isPaused: true);
+  }
+
+  /// `POST /api/v2/sync/progress`: a resume point written without a playback
+  /// session, stamped with the event time so an offline write merges
+  /// last-write-wins.
+  Future<void> _syncProgress(String itemId, {required Duration position, Duration? duration}) async {
+    final response = await _api.send(
+      'POST',
+      '/api/v2/sync/progress',
+      body: {
+        'items': [
+          {
+            'media_item_id': itemId,
+            'position_ms': position.inMilliseconds < 0 ? 0 : position.inMilliseconds,
+            'duration_ms': duration == null || duration.isNegative ? 0 : duration.inMilliseconds,
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+          },
+        ],
+      },
+    );
+    final data = response.data;
+    final items = data is Map ? data['items'] : null;
+    final first = items is List && items.isNotEmpty ? items.first : null;
+    if (first is Map && first['status'] == 'failure') {
+      final failure = first['failure'];
+      throw MediaServerHttpException(
+        type: MediaServerHttpErrorType.unknown,
+        statusCode: failure is Map ? (failure['status'] as num?)?.toInt() : null,
+        message: 'Silo progress sync failed',
+      );
+    }
   }
 }

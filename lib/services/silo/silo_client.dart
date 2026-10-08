@@ -42,6 +42,7 @@ import '../../utils/media_server_http_client.dart';
 import '../../utils/url_utils.dart';
 import '../../utils/platform_detector.dart';
 import '../api_cache.dart';
+import '../download_artwork_helpers.dart';
 import '../playback_initialization_types.dart';
 import '../scrub_preview_source.dart';
 import 'silo_api.dart';
@@ -551,7 +552,8 @@ class SiloClient
         final number = (data['season_number'] as num?)?.toInt();
         if (seriesId != null && number != null) _seasonRefs[id] = (seriesId: seriesId, seasonNumber: number);
       }
-      unawaited(_siloCache?.putItem(ServerId(cacheServerId), item) ?? Future<void>.value());
+      // Awaited: a download pins this row right after the fetch returns.
+      await _cacheItem(item);
       return item;
     } on MediaServerHttpException catch (e) {
       if (e.statusCode == 404) return null;
@@ -562,9 +564,21 @@ class SiloClient
   Future<MediaItem?> _fetchSeason(String seriesId, int seasonNumber, {required String id}) async {
     final seasons = await _fetchSeasons(seriesId);
     for (final season in seasons) {
-      if (season.index == seasonNumber) return season.copyWith(id: id);
+      if (season.index == seasonNumber) {
+        final item = season.copyWith(id: id);
+        await _cacheItem(item);
+        return item;
+      }
     }
     return null;
+  }
+
+  Future<void> _cacheItem(MediaItem item) async {
+    try {
+      await _siloCache?.putItem(ServerId(cacheServerId), item);
+    } catch (e) {
+      appLogger.d('SiloClient: item cache write failed', error: e.runtimeType);
+    }
   }
 
   @override
@@ -1329,10 +1343,6 @@ class SiloClient
   LiveTvSupport get liveTv => const _SiloNoLiveTv();
 
   @override
-  Future<DownloadResolution> resolveDownload(MediaItem item, {int mediaIndex = 0, String? mediaSourceId}) =>
-      _unsupported('downloads');
-
-  @override
   Future<MediaItem> stampLibrary(MediaItem item) async {
     if (item.libraryId != null) return item;
     final raw = item.raw?['library_id']?.toString();
@@ -1340,8 +1350,10 @@ class SiloClient
     return (item as SiloMediaItem).copyWith(libraryId: raw, libraryTitle: _libraryTitles[raw]);
   }
 
+  /// Artwork URLs are already absolute and self-authorising;
+  /// [artworkStorageKey] drops their rotating signature for the local key.
   @override
-  List<DownloadArtworkSpec> resolveDownloadArtwork(MediaItem item) => const [];
+  List<DownloadArtworkSpec> resolveDownloadArtwork(MediaItem item) => buildArtworkSpecs(item, (path) => path);
 }
 
 /// Silo has no live TV.

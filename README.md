@@ -185,7 +185,7 @@ Older relays still accept explicit create/join, but failed recovery requires joi
 [^jf]: Jellyfin only.
 [^mb]: Jellyfin and Emby only.
 [^plex]: Plex only.
-[^silo]: Silo support covers movies and TV shows. Downloads, playlists, live TV, music and audiobooks are not available for Silo servers yet.
+[^silo]: Silo support covers movies and TV shows, including downloads of the original file. Playlists, live TV, music and audiobooks are not available for Silo servers yet.
 [^connect]: Requires connecting the service under Settings > Services.
 [^hdr]: In-app HDR toggle on Windows, macOS, iOS, tvOS, and Linux — Linux needs a colour-managed Wayland compositor. Dolby Vision on Android and Apple TV.
 [^pass]: Desktop, Android TV, and Apple TV.

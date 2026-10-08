@@ -4507,6 +4507,16 @@ String? downloadExtensionFromUrl(String url) {
       return _safeDownloadExtension(entry.value);
     }
   }
+  // A backend whose download URL is signed (no extension, query not ours to
+  // edit) names the container in the fragment, which is never sent.
+  if (uri.fragment.isNotEmpty) {
+    try {
+      final container = Uri.splitQueryString(uri.fragment)['container'];
+      if (container != null) return _safeDownloadExtension(container);
+    } catch (_) {
+      // Not a key=value fragment.
+    }
+  }
   return null;
 }
 

@@ -10,6 +10,10 @@ import 'package:plezy/media/library_query.dart';
 import 'package:plezy/media/media_item.dart';
 import 'package:plezy/media/media_kind.dart';
 import 'package:plezy/media/media_server_client.dart';
+import 'package:plezy/media/media_backend.dart';
+import 'package:plezy/media/ids.dart';
+import 'package:plezy/services/cached_playback_metadata_service.dart';
+import 'package:plezy/services/download_manager_service.dart' show downloadExtensionFromUrl;
 import 'package:plezy/services/playback_initialization_types.dart';
 import 'package:plezy/services/plex_api_cache.dart';
 import 'package:plezy/services/silo/silo_api.dart';
@@ -338,6 +342,186 @@ void main() {
       final extras = await c.fetchPlaybackExtras('movie:m1');
       expect(extras.markers.single.type, 'intro');
       expect(extras.markers.single.startTimeOffset, 10000);
+    });
+  });
+
+  group('downloads', () {
+    Map<String, dynamic> watchDetail({bool externalSubs = true}) => {
+      'content_id': 'movie:m1',
+      'type': 'movie',
+      'versions': [
+        {
+          'file_id': '42',
+          'container': 'mkv',
+          'resolution': '1080p',
+          'audio_tracks': [
+            {'index': 0, 'language': 'eng', 'codec': 'aac', 'default': true},
+          ],
+          'subtitle_tracks': [
+            {'index': 0, 'language': 'eng', 'codec': 'srt', 'external': externalSubs},
+          ],
+          'marker_segments': [
+            {'kind': 'credits', 'start_seconds': 100, 'end_seconds': 120},
+          ],
+        },
+      ],
+    };
+
+    SiloClient downloadClient({bool linksSupported = true, bool externalSubs = true}) => client((request) async {
+      final path = Uri.decodeComponent(request.url.path);
+      if (path.endsWith('/watch/movie:m1')) return _json(watchDetail(externalSubs: externalSubs));
+      if (path.endsWith('/direct-download/links')) {
+        if (!linksSupported) return _problem(404, 'not_found');
+        expect(jsonDecode(request.body), {'file_id': '42'});
+        return _json({
+          'url': '/api/v2/direct-download?file_id=42&token=dl-signed',
+          'proxy_url': '/api/v2/direct-download-proxy?file_id=42&token=dl-signed',
+          'expires_at': '2030-01-01T00:00:00Z',
+        });
+      }
+      if (path.endsWith('/playback/capabilities')) {
+        return _json({
+          'state': 'available',
+          'allowed': true,
+          'installation_id': 'inst-1',
+          'protocol_versions': [3],
+        });
+      }
+      if (path.endsWith('/playback/start')) {
+        final body = jsonDecode(request.body) as Map<String, dynamic>;
+        final deliveries = (body['client_playback_context'] as Map)['deliveries'] as Map;
+        expect(deliveries.keys, ['original_http']);
+        return _json({
+          'outcome': 'playable',
+          'session_id': 'sess-dl',
+          'playback_plan': {
+            'delivery': 'original_http',
+            'stream': {'url': '/api/v2/stream/sess-dl?st=x'},
+            'subtitle': {
+              'inventory': [
+                {
+                  'combined_index': 0,
+                  'source': 'external',
+                  'codec': 'srt',
+                  'language': 'eng',
+                  'label': 'English',
+                  'delivery': 'sidecar',
+                  'url': '/api/v2/stream/sess-dl/subtitles/0.vtt?file_id=42&external_subtitle_key=k',
+                },
+                {'combined_index': 1, 'source': 'embedded', 'codec': 'ass', 'delivery': 'sidecar', 'url': '/x/1.ass'},
+              ],
+            },
+          },
+        }, 201);
+      }
+      return _json({}, 404);
+    });
+
+    test('downloads the original file through a header-free direct link', () async {
+      final c = downloadClient();
+      final item = MediaItem.silo(id: 'movie:m1', kind: MediaKind.movie, serverId: 'srv-1');
+      final resolution = await c.resolveDownload(item);
+
+      expect(
+        resolution.videoUrl,
+        'https://silo.example.com/api/v2/direct-download?file_id=42&token=dl-signed#container=mkv',
+      );
+      expect(downloadExtensionFromUrl(resolution.videoUrl!), 'mkv');
+      expect(resolution.mediaSourceId, '42');
+      expect(resolution.externalSubtitlesResolved, isTrue);
+      final subtitle = resolution.externalSubtitles.single;
+      expect(
+        subtitle.url,
+        contains('/api/v2/stream/sess-dl/subtitles/0.vtt?file_id=42&external_subtitle_key=k&token=acc-1'),
+      );
+      expect(subtitle.codec, 'webvtt');
+      expect(subtitle.language, 'eng');
+      // The session only lists external subtitles; it is left to expire.
+      expect(requests.where((r) => r.method == 'DELETE'), isEmpty);
+    });
+
+    test('no playback session is opened when the file has no external subtitles', () async {
+      final c = downloadClient(externalSubs: false);
+      final resolution = await c.resolveDownload(MediaItem.silo(id: 'movie:m1', kind: MediaKind.movie));
+      expect(resolution.externalSubtitles, isEmpty);
+      expect(requests.where((r) => r.url.path.endsWith('/playback/start')), isEmpty);
+    });
+
+    test('falls back to the token-authorised route without direct links', () async {
+      final c = downloadClient(linksSupported: false, externalSubs: false);
+      final resolution = await c.resolveDownload(MediaItem.silo(id: 'movie:m1', kind: MediaKind.movie));
+      expect(
+        resolution.videoUrl,
+        'https://silo.example.com/base/api/v2/direct-download?file_id=42&token=acc-1#container=mkv',
+      );
+    });
+
+    test('a pinned download plays offline with its markers and tracks', () async {
+      final c = downloadClient(externalSubs: false);
+      final item = MediaItem.silo(id: 'movie:m1', kind: MediaKind.movie);
+      await c.resolveDownload(item);
+      await SiloApiCache.instance.pinForOffline(ServerId(c.cacheServerId), item.id);
+      await SiloApiCache.instance.clearVolatile();
+
+      final extras = await CachedPlaybackMetadataService.fetchPlaybackExtras(
+        backend: MediaBackend.silo,
+        cacheServerId: c.cacheServerId,
+        itemId: item.id,
+      );
+      expect(extras!.markers.single.type, 'credits');
+      final info = await CachedPlaybackMetadataService.fetchMediaSourceInfo(
+        backend: MediaBackend.silo,
+        cacheServerId: c.cacheServerId,
+        itemId: item.id,
+      );
+      expect(info!.mediaSourceId, '42');
+      expect(info.audioTracks.single.languageCode, 'eng');
+    });
+  });
+
+  group('progress without a playback session', () {
+    late List<Map<String, dynamic>> syncBodies;
+
+    SiloClient progressClient() {
+      syncBodies = [];
+      return client((request) async {
+        if (request.url.path.endsWith('/sync/progress')) {
+          syncBodies.add(jsonDecode(request.body) as Map<String, dynamic>);
+          return _json({
+            'items': [
+              {'index': 0, 'media_item_id': 'movie:m1', 'status': 'success'},
+            ],
+            'summary': {'total': 1, 'succeeded': 1, 'failed': 0},
+          });
+        }
+        return http.Response('', 204);
+      });
+    }
+
+    test('a downloaded file writes its resume point', () async {
+      final c = progressClient();
+      await c.reportPlaybackStopped(
+        itemId: 'movie:m1',
+        position: const Duration(minutes: 10),
+        duration: const Duration(hours: 2),
+      );
+      final item = (syncBodies.single['items'] as List).single as Map;
+      expect(item['media_item_id'], 'movie:m1');
+      expect(item['position_ms'], 600000);
+      expect(item['duration_ms'], 7200000);
+      expect(item['updated_at'], isNotNull);
+    });
+
+    test('stopping past the watched threshold marks the item played', () async {
+      final c = progressClient();
+      await c.reportPlaybackStopped(
+        itemId: 'movie:m1',
+        position: const Duration(minutes: 115),
+        duration: const Duration(hours: 2),
+      );
+      expect(syncBodies, isEmpty);
+      expect(Uri.decodeComponent(requests.single.url.path), endsWith('/api/v2/watched/movie:m1'));
+      expect(requests.single.method, 'POST');
     });
   });
 }
