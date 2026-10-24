@@ -597,4 +597,180 @@ void main() {
       expect(requests.single.method, 'POST');
     });
   });
+
+  group('extras and remote trailers', () {
+    final detail = {
+      'content_id': 'movie:m1',
+      'type': 'movie',
+      'title': 'Heat',
+      'extras': [
+        {
+          'content_id': 'extra:1',
+          'kind': 'trailer',
+          'title': 'Official Trailer',
+          'duration_seconds': 150,
+          'file_id': 501,
+          'still_url': '/api/v2/images/extra-1.jpg?exp=1&sig=a',
+        },
+        {'content_id': 'extra:2', 'kind': 'behind_the_scenes', 'file_id': 502},
+        {'content_id': 'extra:1', 'kind': 'trailer', 'file_id': 501},
+        {'kind': 'featurette'},
+      ],
+      'videos': [
+        {'kind': 'trailer', 'site': 'YouTube', 'site_key': 'yt-1', 'name': 'Trailer 1', 'is_official': true},
+        {'kind': 'teaser', 'site': 'Vimeo', 'site_key': 'vm-1'},
+        {'kind': 'teaser', 'site': 'youtube', 'site_key': ' '},
+        {'kind': 'clip', 'site': 'youtube', 'site_key': 'yt-2', 'language': 'en'},
+        {'kind': 'trailer', 'site': 'YouTube', 'site_key': 'yt-1'},
+      ],
+    };
+
+    test('extras and YouTube videos come from the detail document fetchItem read', () async {
+      final c = client((request) async {
+        final path = Uri.decodeComponent(request.url.path);
+        if (path.endsWith('/catalog/items/movie:m1')) return _json(detail);
+        return _json({}, 404);
+      });
+
+      await c.fetchItem('movie:m1');
+      final extras = await c.fetchExtras('movie:m1');
+      final remote = await c.fetchRemoteTrailers('movie:m1');
+      expect(requests, hasLength(1), reason: 'extras reuse the detail row instead of fetching it again');
+
+      expect(extras.map((e) => e.id), ['extra:1', 'extra:2']);
+      final trailer = extras.first;
+      expect(trailer.backend, MediaBackend.silo);
+      expect(trailer.kind, MediaKind.clip);
+      expect(trailer.title, 'Official Trailer');
+      expect(trailer.durationMs, 150000);
+      expect(trailer.thumbPath, 'https://silo.example.com/api/v2/images/extra-1.jpg?exp=1&sig=a');
+      expect(trailer.serverId, 'srv-1');
+      expect(SiloMappers.isExtra(trailer), isTrue);
+      expect(SiloMappers.extraFileId(trailer), '501');
+      expect(SiloMappers.extraKind(trailer), 'trailer');
+      // No title: the kind's label.
+      expect(extras[1].title, 'Behind the Scenes');
+      expect(extras[1].thumbPath, isNull);
+
+      expect(remote.map((v) => v.key), ['yt-1', 'yt-2']);
+      expect(remote.first.isOfficial, isTrue);
+      expect(remote.first.name, 'Trailer 1');
+      expect(remote.last.kind, 'clip');
+      expect(remote.last.language, 'en');
+    });
+
+    test('a cold call fetches the detail once for both lists', () async {
+      final c = client((request) async => _json(detail));
+      final (extras, remote) = await (c.fetchExtras('movie:m1'), c.fetchRemoteTrailers('movie:m1')).wait;
+      expect(extras, hasLength(2));
+      expect(remote, hasLength(2));
+      expect(requests, hasLength(1));
+    });
+
+    test('items without a detail document or extras have none', () async {
+      final c = client((request) async {
+        final path = Uri.decodeComponent(request.url.path);
+        if (path.endsWith('/catalog/items/movie:none')) return _json({'content_id': 'movie:none', 'type': 'movie'});
+        return _problem(404, 'not_found');
+      });
+      expect(await c.fetchExtras('silo-season:1:series:s1'), isEmpty);
+      expect(await c.fetchRemoteTrailers('silo-collection:3'), isEmpty);
+      expect(requests, isEmpty);
+      expect(await c.fetchExtras('movie:gone'), isEmpty);
+      expect(await c.fetchExtras('movie:none'), isEmpty);
+      expect(await c.fetchRemoteTrailers('movie:none'), isEmpty);
+    });
+
+    Future<http.Response> extraPlayback(
+      http.Request request, {
+      required Map<String, dynamic> Function(Map<String, dynamic> body) onStart,
+      http.Response? watch,
+    }) async {
+      final path = Uri.decodeComponent(request.url.path);
+      if (path.endsWith('/watch/extra:1')) return watch ?? _problem(404, 'not_found');
+      if (path.endsWith('/playback/capabilities')) {
+        return _json({
+          'state': 'available',
+          'allowed': true,
+          'installation_id': 'inst-1',
+          'protocol_versions': [3],
+          'features': ['sequenced_progress_v1'],
+        });
+      }
+      if (path.endsWith('/playback/start')) {
+        return _json(onStart(jsonDecode(request.body) as Map<String, dynamic>), 201);
+      }
+      return _json({}, 404);
+    }
+
+    Map<String, dynamic> playable(Map<String, dynamic> _) => {
+      'outcome': 'playable',
+      'session_id': 'sess-x',
+      'playback_plan': {
+        'delivery': 'original_http',
+        'stream': {'url': '/api/v2/stream/sess-x?st=sig'},
+      },
+    };
+
+    MediaItem extraItem() => SiloMappers.extras(
+      detail,
+      const SiloMappingContext(serverId: 'srv-1', serverName: null, resolveUrl: _same),
+    ).first;
+
+    test('an extra without watch detail plays its own file', () async {
+      Map<String, dynamic>? startBody;
+      final c = client(
+        (request) => extraPlayback(
+          request,
+          onStart: (body) {
+            startBody = body;
+            return playable(body);
+          },
+        ),
+      );
+      final result = await c.getPlaybackInitialization(
+        PlaybackInitializationOptions(metadata: extraItem(), selectedMediaIndex: 0),
+      );
+      expect(startBody!['file_id'], '501');
+      expect(result.playSessionId, 'sess-x');
+      expect(result.selectedMediaSourceId, '501');
+    });
+
+    test('an extra with watch detail picks its file among the versions', () async {
+      Map<String, dynamic>? startBody;
+      final c = client(
+        (request) => extraPlayback(
+          request,
+          watch: _json({
+            'content_id': 'extra:1',
+            'user_data': {'last_file_id': '777'},
+            'versions': [
+              {'file_id': '777'},
+              {'file_id': '501'},
+            ],
+          }),
+          onStart: (body) {
+            startBody = body;
+            return playable(body);
+          },
+        ),
+      );
+      final result = await c.getPlaybackInitialization(
+        PlaybackInitializationOptions(metadata: extraItem(), selectedMediaIndex: 0),
+      );
+      expect(startBody!['file_id'], '501');
+      expect(result.selectedMediaIndex, 1);
+    });
+
+    test('a missing watch detail still fails playback for ordinary items', () async {
+      final c = client((request) => extraPlayback(request, onStart: playable));
+      final movie = MediaItem.silo(id: 'extra:1', kind: MediaKind.movie, serverId: 'srv-1');
+      await expectLater(
+        c.getPlaybackInitialization(PlaybackInitializationOptions(metadata: movie, selectedMediaIndex: 0)),
+        throwsA(isA<PlaybackException>()),
+      );
+    });
+  });
 }
+
+String _same(String url) => url;

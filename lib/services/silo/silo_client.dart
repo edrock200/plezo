@@ -29,6 +29,7 @@ import '../../media/media_server_client.dart';
 import '../../media/media_sort.dart';
 import '../../media/media_source_info.dart';
 import '../../media/playback_report_metadata.dart';
+import '../../media/remote_trailer.dart';
 import '../../media/server_capabilities.dart';
 import '../../models/livetv_channel.dart';
 import '../../models/livetv_program.dart';
@@ -65,7 +66,7 @@ part 'silo_client_playback.dart';
 /// forward when asked for one it has not seen.
 class SiloClient
     with MediaServerCacheMixin, _SiloPlaybackMethods
-    implements MediaServerClient, ScopedMediaServerClient, GracefullyCloseable {
+    implements MediaServerClient, ScopedMediaServerClient, GracefullyCloseable, RemoteTrailerClient {
   SiloClient._({required this._connection, required this._api});
 
   /// Build a client for [connection]. Network I/O stays lazy.
@@ -573,13 +574,55 @@ class SiloClient
 
   static const _collectionPrefix = 'silo-collection:';
 
+  /// `GET /catalog/items/{id}` rows of recently opened items. The detail
+  /// screen reads extras and remote trailers right after loading the item;
+  /// both live in the same document, so they reuse it instead of fetching it
+  /// again. Bounded LRU; [fetchItem] always refreshes its row.
+  final LinkedHashMap<String, ({DateTime fetchedAt, Map<String, dynamic> data})> _detailRows = LinkedHashMap();
+  final Map<String, Future<Map<String, dynamic>?>> _detailFetches = {};
+  static const _maxDetailRows = 16;
+  static const _detailRowFreshness = Duration(minutes: 10);
+
+  /// Fetch an item's detail document, sharing one in-flight request per id.
+  Future<Map<String, dynamic>?> _itemDetail(String id) {
+    final pending = _detailFetches[id];
+    if (pending != null) return pending;
+    final future = _cachedGet('/api/v2/catalog/items/${_seg(id)}', query: {'image_size': 'large'}).then((data) {
+      _detailRows.remove(id);
+      if (data != null) {
+        _detailRows[id] = (fetchedAt: DateTime.now(), data: data);
+        while (_detailRows.length > _maxDetailRows) {
+          _detailRows.remove(_detailRows.keys.first);
+        }
+      }
+      return data;
+    });
+    _detailFetches[id] = future;
+    return future.whenComplete(() => _detailFetches.remove(id));
+  }
+
+  /// The detail document for extras: the row [fetchItem] just read when it
+  /// is recent, else a fetch. Null for ids that have no detail document
+  /// (synthetic seasons, collections) and for missing items.
+  Future<Map<String, dynamic>?> _recentItemDetail(String id) async {
+    if (SiloMappers.parseSyntheticSeasonId(id) != null || id.startsWith(_collectionPrefix)) return null;
+    final row = _detailRows[id];
+    if (row != null && DateTime.now().difference(row.fetchedAt) < _detailRowFreshness) return row.data;
+    try {
+      return await _itemDetail(id);
+    } on MediaServerHttpException catch (e) {
+      if (e.statusCode == 404) return null;
+      rethrow;
+    }
+  }
+
   @override
   Future<MediaItem?> fetchItem(String id) async {
     final synthetic = SiloMappers.parseSyntheticSeasonId(id);
     if (synthetic != null) return _fetchSeason(synthetic.seriesId, synthetic.seasonNumber, id: id);
     if (id.startsWith(_collectionPrefix)) return _collectionItem(id);
     try {
-      final data = await _cachedGet('/api/v2/catalog/items/${_seg(id)}', query: {'image_size': 'large'});
+      final data = await _itemDetail(id);
       if (data == null) return null;
       final item = SiloMappers.item(data, _ctx);
       if (item == null) return null;
@@ -1024,8 +1067,16 @@ class SiloClient
     }
   }
 
+  /// Local extras (trailers, featurettes, …) from the item detail's
+  /// `extras[]`. They play through the normal playback flow with their own
+  /// `content_id` and `file_id`, as in Silo's apps.
   @override
-  Future<List<MediaItem>> fetchExtras(String id) async => const [];
+  Future<List<MediaItem>> fetchExtras(String id) async => SiloMappers.extras(await _recentItemDetail(id), _ctx);
+
+  /// YouTube videos from the item detail's `videos[]`.
+  @override
+  Future<List<RemoteTrailer>> fetchRemoteTrailers(String id) async =>
+      SiloMappers.remoteTrailers(await _recentItemDetail(id));
 
   /// `GET /catalog?source=section` parameters for a hub id built by
   /// [fetchGlobalHubs] / [fetchLibraryHubs].

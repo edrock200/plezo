@@ -56,6 +56,8 @@
         <domain includeSubdomains="true">api.github.com</domain>
         <!-- TMDB artwork (lib/services/catalog/seerr_catalog_source.dart:163). -->
         <domain includeSubdomains="true">image.tmdb.org</domain>
+        <!-- YouTube trailer stills, i.ytimg.com (lib/media/remote_trailer.dart). -->
+        <domain includeSubdomains="true">ytimg.com</domain>
         <trust-anchors>
             <certificates src="system" />
         </trust-anchors>

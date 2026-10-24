@@ -113,6 +113,9 @@ extension _MediaDetailActionButtons on _MediaDetailScreenState {
     }
 
     final primaryTrailer = _getPrimaryTrailer();
+    // No local trailer: a server-listed YouTube trailer opens in YouTube's
+    // player (or app) instead. On TV this is the only way to reach it.
+    final remoteTrailer = primaryTrailer == null && !widget.isOffline ? primaryRemoteTrailer(_remoteTrailers) : null;
 
     final isKeyboardMode = InputModeTracker.isKeyboardMode(context);
     final colorScheme = Theme.of(context).colorScheme;
@@ -163,10 +166,12 @@ extension _MediaDetailActionButtons on _MediaDetailScreenState {
 
     // Plays the resolved trailer. Shared by the row's trailer button and the
     // ⋮ menu item so the trailer stays reachable when the row hides its button.
-    final VoidCallback? onPlayTrailer = primaryTrailer == null
-        ? null
-        : () =>
-              unawaited(navigateToVideoPlayer(context, metadata: primaryTrailer, isLaunchCurrent: () => _canUseDetail));
+    final VoidCallback? onPlayTrailer = primaryTrailer != null
+        ? () =>
+              unawaited(navigateToVideoPlayer(context, metadata: primaryTrailer, isLaunchCurrent: () => _canUseDetail))
+        : remoteTrailer != null
+        ? () => unawaited(openYoutubeTrailer(context, remoteTrailer))
+        : null;
 
     final gap = isTv ? 8.0 * tvScale : 12.0;
 
@@ -262,7 +267,7 @@ extension _MediaDetailActionButtons on _MediaDetailScreenState {
           )
         : null;
 
-    final trailerAction = primaryTrailer == null
+    final trailerAction = onPlayTrailer == null
         ? null
         : FocusableAction(
             debugLabel: 'detail_trailer',

@@ -34,6 +34,10 @@ import '../utils/plex_season_display.dart';
 import '../media/media_item.dart';
 import '../media/episode_collection.dart';
 import '../media/media_item_types.dart';
+import '../media/remote_trailer.dart';
+import '../services/silo/silo_mappers.dart';
+import '../utils/youtube_trailer_launcher.dart';
+import '../widgets/remote_trailer_card.dart';
 import '../media/media_kind.dart';
 import '../media/media_source_info.dart';
 import '../media/media_rating.dart';
@@ -368,6 +372,15 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
 
   bool get _canUseDetail => mounted && !_isDeleted;
   List<MediaItem>? _extras;
+
+  /// Remote (YouTube) videos the server lists for the item; shown after the
+  /// local extras in the non-TV row and opened by the Trailer button when
+  /// there is no local trailer. Never playable media items.
+  List<RemoteTrailer> _remoteTrailers = const [];
+
+  /// The "Trailers & Extras" row: local extras, then remote videos.
+  List<ExtrasRailEntry> get _extrasRail => buildExtrasRail(_extras ?? const [], _remoteTrailers);
+  bool get _hasExtrasRow => _extrasRail.isNotEmpty;
   List<MediaHub> _relatedHubs = [];
   List<GlobalKey<HubSectionState>> _relatedHubKeys = [];
   bool _hasLoadedExtras = false;
@@ -2242,10 +2255,20 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
 
   /// Load extras (trailers, featurettes, behind-the-scenes, etc.).
   Future<void> _loadExtras() {
-    return _loadSupplementalSection<List<MediaItem>>(
+    return _loadSupplementalSection<(List<MediaItem>, List<RemoteTrailer>)>(
       resolveClient: () => getServerBoundMediaClient(context),
-      fetch: (client) => client.fetchExtras(_metadata.id),
-      apply: (extras) {
+      fetch: (client) async {
+        final id = _metadata.id;
+        final (extras, remote) = await (
+          client.fetchExtras(id),
+          // Remote trailers are optional decoration: never lose the local
+          // extras to a failure here.
+          remoteTrailersOf(client, id).catchError((Object _) => const <RemoteTrailer>[]),
+        ).wait;
+        return (extras, remote);
+      },
+      apply: (result) {
+        final (extras, remote) = result;
         // Preserve serverId for each extra (needed for multi-server setups).
         _extras = extras
             .map(
@@ -2255,6 +2278,7 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
               ),
             )
             .toList();
+        _remoteTrailers = remote;
       },
       markLoaded: () => _hasLoadedExtras = true,
     );
@@ -2320,7 +2344,7 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
   void _focusSectionAboveInfoRows() {
     if (_relatedHubs.isNotEmpty) {
       _relatedHubKeys.last.currentState?.requestFocusFromMemory();
-    } else if (_extras != null && _extras!.isNotEmpty) {
+    } else if (_hasExtrasRow) {
       _extrasFocusNode.requestFocus();
       _scrollSectionIntoView(_extrasSectionKey);
     } else {
@@ -2472,7 +2496,7 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
       return;
     }
 
-    if (_extras != null && _extras!.isNotEmpty) {
+    if (_hasExtrasRow) {
       _extrasFocusNode.requestFocus();
       _scrollSectionIntoView(_extrasSectionKey);
       return;
@@ -2665,8 +2689,8 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
       return KeyEventResult.handled;
     }
 
-    final extras = _extras;
-    if (extras == null || extras.isEmpty) {
+    final rail = _extrasRail;
+    if (rail.isEmpty) {
       _extrasSelectLongPress.reset();
       return KeyEventResult.ignored;
     }
@@ -2675,12 +2699,11 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
       event,
       isOwnerActive: () => mounted,
       onShortPress: () {
-        if (_focusedExtraIndex < extras.length) {
-          navigateToVideoPlayer(context, metadata: extras[_focusedExtraIndex], isLaunchCurrent: () => _canUseDetail);
-        }
+        if (_focusedExtraIndex < rail.length) _activateExtrasRailEntry(rail[_focusedExtraIndex]);
       },
       onLongPress: () {
-        if (_focusedExtraIndex < _extraCardKeys.length) {
+        // Remote videos have no context menu (nothing to mark or download).
+        if (_focusedExtraIndex < rail.length && rail[_focusedExtraIndex] is LocalExtraEntry) {
           _extraCardKeys[_focusedExtraIndex]?.currentState?.showContextMenu();
         }
       },
@@ -2706,7 +2729,7 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
 
     // RIGHT: next extra
     if (key.isRightKey) {
-      if (_focusedExtraIndex < _extras!.length - 1) {
+      if (_focusedExtraIndex < rail.length - 1) {
         _focusedExtraIndex++;
         _focusedExtraIndexNotifier.value = _focusedExtraIndex;
         scrollListToIndex(
@@ -2737,6 +2760,16 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
     return KeyEventResult.ignored;
   }
 
+  /// Play a local extra in Plezy's player, or open a remote video in YouTube.
+  void _activateExtrasRailEntry(ExtrasRailEntry entry) {
+    switch (entry) {
+      case LocalExtraEntry(:final item):
+        unawaited(navigateToVideoPlayer(context, metadata: item, isLaunchCurrent: () => _canUseDetail));
+      case RemoteTrailerEntry(:final trailer):
+        unawaited(openYoutubeTrailer(context, trailer));
+    }
+  }
+
   void _handleExtrasFocusChange() {
     if (!_extrasFocusNode.hasFocus) _resetExtrasLongPressState();
   }
@@ -2758,7 +2791,7 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
 
   /// Focus the first visible section below cast.
   void _focusSectionBelowCast() {
-    if (_extras != null && _extras!.isNotEmpty) {
+    if (_hasExtrasRow) {
       _extrasFocusNode.requestFocus();
       _scrollSectionIntoView(_extrasSectionKey);
     } else if (_relatedHubs.isNotEmpty) {
@@ -2774,7 +2807,7 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
       hubIndex: hubIndex,
       isUp: isUp,
       onTopBoundary: () {
-        if (_extras != null && _extras!.isNotEmpty) {
+        if (_hasExtrasRow) {
           _extrasFocusNode.requestFocus();
           _scrollSectionIntoView(_extrasSectionKey);
         } else {
@@ -3563,7 +3596,7 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
                               ],
 
                               // Trailers & Extras Section
-                              if (!widget.isOffline && _extras != null && _extras!.isNotEmpty) ...[
+                              if (!widget.isOffline && _hasExtrasRow) ...[
                                 Text(key: _extrasSectionKey, t.discover.extras, style: sectionTitleStyle),
                                 const SizedBox(height: 12),
                                 _buildExtrasSection(),
@@ -4344,6 +4377,8 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
         MediaHub(id: _tvDetailActorsHubId, title: t.discover.cast, type: 'person', items: actors, size: actors.length),
       );
     }
+    // Local extras only: the TV rail holds playable MediaItems, so remote
+    // (YouTube) trailers are reached through the Trailer button there.
     if (_extras != null && _extras!.isNotEmpty) {
       hubs.add(
         MediaHub(
@@ -4863,6 +4898,7 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
     if (extra case PlexMediaItem(:final subtype?)) {
       return subtype.toLowerCase() == 'trailer';
     }
+    if (extra is SiloMediaItem) return SiloMappers.extraKind(extra)?.toLowerCase() == 'trailer';
     final raw = extra.raw;
     final extraType = raw?['ExtraType'] as String?;
     final type = raw?['Type'] as String?;
@@ -4910,6 +4946,7 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
         listenable: Listenable.merge([_extrasFocusNode, _focusedExtraIndexNotifier]),
         builder: (context, _) {
           final hasFocus = _extrasFocusNode.hasFocus;
+          final rail = _extrasRail;
 
           return SizedBox(
             height: containerHeight,
@@ -4922,27 +4959,32 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
                 scrollDirection: Axis.horizontal,
                 clipBehavior: Clip.none,
                 padding: const EdgeInsets.symmetric(vertical: 5),
-                itemCount: _extras!.length,
+                itemCount: rail.length,
                 itemBuilder: (context, index) {
-                  final extra = _extras![index];
+                  final entry = rail[index];
                   final isFocused = hasFocus && index == _focusedExtraIndex;
-                  final cardKey = _extraCardKeys.putIfAbsent(index, () => GlobalKey<MediaCardState>());
 
                   return Padding(
                     padding: const EdgeInsets.only(right: 4),
                     child: FocusBuilders.buildLockedFocusWrapper(
                       context: context,
                       isFocused: isFocused,
-                      onTap: () =>
-                          navigateToVideoPlayer(context, metadata: extra, isLaunchCurrent: () => _canUseDetail),
+                      onTap: () => _activateExtrasRailEntry(entry),
                       delegateFocusBorder: true,
-                      child: MediaCard(
-                        key: cardKey,
-                        item: extra,
-                        width: cardWidth,
-                        height: posterHeight,
-                        viewModeOverride: ViewMode.grid,
-                      ),
+                      child: switch (entry) {
+                        LocalExtraEntry(:final item) => MediaCard(
+                          key: _extraCardKeys.putIfAbsent(index, () => GlobalKey<MediaCardState>()),
+                          item: item,
+                          width: cardWidth,
+                          height: posterHeight,
+                          viewModeOverride: ViewMode.grid,
+                        ),
+                        RemoteTrailerEntry(:final trailer) => RemoteTrailerCard(
+                          trailer: trailer,
+                          width: cardWidth,
+                          posterHeight: posterHeight,
+                        ),
+                      },
                     ),
                   );
                 },

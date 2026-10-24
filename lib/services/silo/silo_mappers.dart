@@ -8,6 +8,7 @@ import '../../media/media_role.dart';
 import '../../media/media_source_info.dart';
 import '../../media/media_stream.dart';
 import '../../media/media_version.dart';
+import '../../media/remote_trailer.dart';
 import '../../utils/json_utils.dart';
 
 /// Everything a mapping needs from the client: who the items belong to and
@@ -451,6 +452,78 @@ abstract final class SiloMappers {
       .map((json) => item(json, ctx, libraryId: libraryId, libraryTitle: libraryTitle))
       .nonNulls
       .toList();
+
+  // ---------------------------------------------------------------------------
+  // Extras and remote trailers (item detail `extras[]` / `videos[]`)
+  // ---------------------------------------------------------------------------
+
+  /// Raw key that marks a [MediaItem] mapped from an item's `extras[]`.
+  static const extraMarkerKey = 'plezy_silo_extra';
+
+  /// Whether [item] is a local extra mapped by [extras].
+  static bool isExtra(MediaItem item) => item.backend == MediaBackend.silo && item.raw?[extraMarkerKey] == true;
+
+  /// The file an extra plays: Silo's apps start an extra's playback with
+  /// its `content_id` and this `file_id`.
+  static String? extraFileId(MediaItem item) => isExtra(item) ? _string(item.raw?['file_id']) : null;
+
+  /// The extra's `kind` (`trailer`, `featurette`, …); null for other items.
+  static String? extraKind(MediaItem item) => isExtra(item) ? _string(item.raw?['kind']) : null;
+
+  /// Local extras files of an item detail, in server order, as playable
+  /// clips. Rows without a `content_id` are skipped; a repeated id keeps
+  /// its first row.
+  static List<MediaItem> extras(Map<String, dynamic>? detail, SiloMappingContext ctx) {
+    final list = detail?['extras'];
+    if (list is! List) return const [];
+    final seen = <String>{};
+    final out = <MediaItem>[];
+    for (final json in list.whereType<Map<String, dynamic>>()) {
+      final id = _string(json['content_id']);
+      if (id == null || !seen.add(id)) continue;
+      final kind = _string(json['kind']) ?? 'extra';
+      out.add(
+        MediaItem.silo(
+          id: id,
+          kind: MediaKind.clip,
+          title: _string(json['title']) ?? extraKindLabel(kind),
+          thumbPath: _url(json['still_url'], ctx),
+          durationMs: _secondsToMs(json['duration_seconds']),
+          serverId: ctx.serverId,
+          serverName: ctx.serverName,
+          raw: {...json, extraMarkerKey: true},
+        ),
+      );
+    }
+    return out;
+  }
+
+  /// Remote videos of an item detail that Plezy can open: YouTube only (the
+  /// one site Silo's apps open), with a non-blank key, de-duplicated, in
+  /// server order.
+  static List<RemoteTrailer> remoteTrailers(Map<String, dynamic>? detail) {
+    final list = detail?['videos'];
+    if (list is! List) return const [];
+    final seen = <String>{};
+    final out = <RemoteTrailer>[];
+    for (final json in list.whereType<Map<String, dynamic>>()) {
+      final site = _string(json['site']);
+      final key = _string(json['site_key']);
+      if (site == null || key == null || site.toLowerCase() != 'youtube') continue;
+      if (!seen.add(key)) continue;
+      out.add(
+        RemoteTrailer(
+          site: site,
+          key: key,
+          kind: _string(json['kind']) ?? 'trailer',
+          name: _string(json['name']),
+          isOfficial: json['is_official'] == true,
+          language: _string(json['language']),
+        ),
+      );
+    }
+    return out;
+  }
 
   /// Chapters of a detail or watch version, in milliseconds.
   static List<MediaChapter> chapters(Object? list, SiloMappingContext ctx) {

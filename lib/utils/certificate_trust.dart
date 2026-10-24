@@ -43,6 +43,7 @@ abstract final class CertificateTrust {
     'jsdelivr.net',
     'api.github.com',
     'image.tmdb.org',
+    'ytimg.com',
   };
 
   static SecurityContext? _userAuthorities;

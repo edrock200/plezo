@@ -16,6 +16,7 @@ const _expectedDomains = <String>{
   'jsdelivr.net',
   'api.github.com',
   'image.tmdb.org',
+  'ytimg.com',
 };
 const _fixedEndpointSourcePaths = <String>[
   'lib/services/plex_auth_service.dart',
@@ -33,6 +34,7 @@ const _fixedEndpointSourcePaths = <String>[
   'lib/services/update_service.dart',
   'lib/watch_together/services/watch_together_relay_endpoint.dart',
   'lib/main.dart',
+  'lib/media/remote_trailer.dart',
 ];
 
 void main() {

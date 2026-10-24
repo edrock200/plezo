@@ -169,24 +169,38 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
   @override
   Future<PlaybackInitializationResult> getPlaybackInitialization(PlaybackInitializationOptions options) async {
     final metadata = options.metadata;
-    final Map<String, dynamic>? watch;
+    // An extra names its file in the item detail; Silo's apps start it with
+    // that `file_id`, so it also stands in for watch detail the server may
+    // not give for an extra.
+    final extraFileId = SiloMappers.extraFileId(metadata);
+    Map<String, dynamic>? watch;
     try {
       // Refresh the access token before handing it to the player: the
       // stream URL and its headers are fixed for the session.
       await _api.refreshTokensIfHalfSpent();
       watch = await _watchDetail(metadata.id, forceRefresh: true);
     } catch (error, stackTrace) {
-      Error.throwWithStackTrace(classifyPlaybackFailure(error), stackTrace);
+      final missing = error is MediaServerHttpException && (error.statusCode == 404 || error.statusCode == 422);
+      if (extraFileId == null || !missing) {
+        Error.throwWithStackTrace(classifyPlaybackFailure(error), stackTrace);
+      }
+      appLogger.d('SiloClient: no watch detail for extra, playing its file', error: error.runtimeType);
     }
-    final versions = SiloMappers.watchVersions(watch);
-    if (watch == null || versions.isEmpty) {
+    var versions = SiloMappers.watchVersions(watch);
+    if (versions.isEmpty && extraFileId != null) {
+      final durationMs = metadata.durationMs;
+      versions = [
+        {'file_id': extraFileId, if (durationMs != null) 'duration_seconds': durationMs / 1000},
+      ];
+    }
+    if (versions.isEmpty) {
       throw PlaybackException(t.messages.playbackNoMediaSources, reason: PlaybackFailureReason.noPlayableSource);
     }
     final versionIndex = SiloMappers.selectVersionIndex(
       versions,
       watch,
       requestedIndex: options.selectedMediaIndex,
-      requestedFileId: options.selectedMediaSourceId,
+      requestedFileId: options.selectedMediaSourceId ?? extraFileId,
       preferredSignature: options.preferredVersionSignature,
     );
     final version = versions[versionIndex];

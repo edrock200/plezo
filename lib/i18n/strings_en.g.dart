@@ -3073,6 +3073,20 @@ class Translations$discover$en {
 	/// en: 'Trailers & Extras'
 	String get extras => 'Trailers & Extras';
 
+	late final Translations$discover$extraKinds$en extraKinds = Translations$discover$extraKinds$en.internal(_root);
+
+	/// en: 'YouTube'
+	String get youtube => 'YouTube';
+
+	/// en: 'No app is available to open this trailer'
+	String get youtubeTrailerOpenFailed => 'No app is available to open this trailer';
+
+	/// en: 'This video can't play here. Opening it in YouTube…'
+	String get youtubeTrailerPlaybackFailed => 'This video can\'t play here. Opening it in YouTube…';
+
+	/// en: 'Open in YouTube'
+	String get openInYoutube => 'Open in YouTube';
+
 	/// en: 'Studio'
 	String get studio => 'Studio';
 
@@ -6151,6 +6165,36 @@ class Translations$accountPreferences$mediaReviewsOptions$en {
 	String get nobody => 'Hidden';
 }
 
+// Path: discover.extraKinds
+class Translations$discover$extraKinds$en {
+	Translations$discover$extraKinds$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Trailer'
+	String get trailer => 'Trailer';
+
+	/// en: 'Teaser'
+	String get teaser => 'Teaser';
+
+	/// en: 'Featurette'
+	String get featurette => 'Featurette';
+
+	/// en: 'Behind the Scenes'
+	String get behindTheScenes => 'Behind the Scenes';
+
+	/// en: 'Deleted Scene'
+	String get deletedScene => 'Deleted Scene';
+
+	/// en: 'Interview'
+	String get interview => 'Interview';
+
+	/// en: 'Extra'
+	String get extra => 'Extra';
+}
+
 // Path: libraries.tabs
 class Translations$libraries$tabs$en {
 	Translations$libraries$tabs$en.internal(this._root);
@@ -8417,6 +8461,17 @@ extension on Translations {
 			'discover.overview' => 'Overview',
 			'discover.cast' => 'Cast',
 			'discover.extras' => 'Trailers & Extras',
+			'discover.extraKinds.trailer' => 'Trailer',
+			'discover.extraKinds.teaser' => 'Teaser',
+			'discover.extraKinds.featurette' => 'Featurette',
+			'discover.extraKinds.behindTheScenes' => 'Behind the Scenes',
+			'discover.extraKinds.deletedScene' => 'Deleted Scene',
+			'discover.extraKinds.interview' => 'Interview',
+			'discover.extraKinds.extra' => 'Extra',
+			'discover.youtube' => 'YouTube',
+			'discover.youtubeTrailerOpenFailed' => 'No app is available to open this trailer',
+			'discover.youtubeTrailerPlaybackFailed' => 'This video can\'t play here. Opening it in YouTube…',
+			'discover.openInYoutube' => 'Open in YouTube',
 			'discover.studio' => 'Studio',
 			'discover.rating' => 'Rating',
 			'discover.director' => 'Director',
@@ -8431,6 +8486,8 @@ extension on Translations {
 			'errors.connectionTimeout' => ({required Object context}) => 'Connection timeout while loading ${context}',
 			'errors.connectionFailed' => 'Unable to connect to media server',
 			'errors.unableToLoad' => ({required Object context}) => 'Unable to load ${context}. Please try again.',
+			_ => null,
+		} ?? switch (path) {
 			'errors.noClientAvailable' => 'No client available',
 			'errors.pleaseEnterToken' => 'Please enter a token',
 			'errors.invalidToken' => 'Invalid token',
@@ -8442,8 +8499,6 @@ extension on Translations {
 			'errors.reasonUnreachable' => 'the server could not be reached',
 			'errors.reasonRefused' => 'the server refused the request',
 			'errors.reasonNotFound' => 'the item is no longer on the server',
-			_ => null,
-		} ?? switch (path) {
 			'errors.reasonServerError' => 'the server reported an error',
 			'errors.reasonCancelled' => 'the request was cancelled',
 			'errors.reasonUnexpected' => 'an unexpected error occurred',
@@ -8945,6 +9000,8 @@ extension on Translations {
 			'watchTogether.anyoneControls' => 'Anyone controls',
 			'watchTogether.participants' => 'Participants',
 			'watchTogether.host' => 'Host',
+			_ => null,
+		} ?? switch (path) {
 			'watchTogether.hostBadge' => 'HOST',
 			'watchTogether.youAreHost' => 'You are the host',
 			'watchTogether.makeHost' => 'Make host',
@@ -8956,8 +9013,6 @@ extension on Translations {
 			'watchTogether.hostTransferFailed' => ({required Object name}) => 'Couldn\'t make ${name} the host',
 			'watchTogether.watchingWithOthers' => 'Watching with others',
 			'watchTogether.endSession' => 'End Session',
-			_ => null,
-		} ?? switch (path) {
 			'watchTogether.leaveSession' => 'Leave Session',
 			'watchTogether.endSessionQuestion' => 'End Session?',
 			'watchTogether.leaveSessionQuestion' => 'Leave Session?',
@@ -9459,6 +9514,8 @@ extension on Translations {
 			'services.integrations' => 'Integrations',
 			'services.notConnected' => 'Not connected',
 			'services.connectedAs' => ({required Object username}) => 'Connected as @${username}',
+			_ => null,
+		} ?? switch (path) {
 			'services.scrobble' => 'Track progress automatically',
 			'services.scrobbleDescription' => 'Update your list when you finish an episode or movie.',
 			'services.disconnectConfirm' => ({required Object service}) => 'Disconnect ${service}?',
@@ -9470,8 +9527,6 @@ extension on Translations {
 			'services.names.seerr' => 'Seerr',
 			'services.names.mdblist' => 'MDBList',
 			'services.simklReconnect.title' => 'Reconnect Simkl',
-			_ => null,
-		} ?? switch (path) {
 			'services.simklReconnect.subtitle' => 'Simkl is retiring the sign-in method this connection uses. Reconnecting opens simkl.com to approve Plezy — Plezy never sees your password. Your watch history stays on Simkl.',
 			'services.deviceCode.title' => ({required Object service}) => 'Activate Plezy on ${service}',
 			'services.deviceCode.instructions' => 'Scan the QR code, or visit the address below and enter this code:',

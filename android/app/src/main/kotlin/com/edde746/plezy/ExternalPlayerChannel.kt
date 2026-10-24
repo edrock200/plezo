@@ -118,6 +118,10 @@ internal class ExternalPlayerChannel(private val activity: Activity) {
 
   @Suppress("UNCHECKED_CAST")
   private fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
+    if (call.method == "openViewIntents") {
+      openViewIntents(call, result)
+      return
+    }
     if (call.method != "openVideo") {
       result.notImplemented()
       return
@@ -167,6 +171,36 @@ internal class ExternalPlayerChannel(private val activity: Activity) {
       pendingResult = null
       result.error("LAUNCH_FAILED", error.message ?: error.javaClass.simpleName, null)
     }
+  }
+
+  /**
+   * Starts the first `ACTION_VIEW` intent an installed app accepts, in the
+   * order given: `targets` is a list of `{url, package?}`. Used to hand a
+   * YouTube trailer to the YouTube app (the TV app first on Android TV, as
+   * Silo's apps do). Answers true when one started, false when none did.
+   */
+  private fun openViewIntents(call: MethodCall, result: MethodChannel.Result) {
+    val targets = call.argument<List<Any?>>("targets")
+      ?.mapNotNull { target ->
+        val map = target as? Map<*, *> ?: return@mapNotNull null
+        val url = (map["url"] as? String)?.trim()?.takeIf(String::isNotEmpty) ?: return@mapNotNull null
+        url to (map["package"] as? String)?.trim()?.takeIf(String::isNotEmpty)
+      }
+      ?: emptyList()
+    for ((url, packageName) in targets) {
+      try {
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+        if (packageName != null) intent.setPackage(packageName)
+        activity.startActivity(intent)
+        result.success(true)
+        return
+      } catch (_: ActivityNotFoundException) {
+        // Try the next target.
+      } catch (_: SecurityException) {
+        // Try the next target.
+      }
+    }
+    result.success(false)
   }
 
   internal data class Source(val uri: Uri, val grantRead: Boolean, val fileName: String?)
