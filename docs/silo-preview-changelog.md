@@ -4,6 +4,11 @@ What changed in each Android preview, in plain language. Each `## silo-preview-�
 
 ## Next preview
 
+**Trailers and extras for Silo** — installs over the previous preview as an update.
+
+- **Trailers & extras:** movies and shows on a Silo server now show their trailers and extras (featurettes, behind the scenes and so on). They play in Plezy, and the Trailer button works for Silo titles.
+- **YouTube trailers:** trailers that Silo lists from YouTube appear after the server's own. On phones, tablets and Macs they play inside Plezy in YouTube's own player; if a video doesn't allow that, Plezy opens it in the YouTube app or browser. Android TV opens them in the YouTube app (from the Trailer button), and Windows and Linux open them in your browser.
+
 ## silo-preview-2.22.4
 
 **Windows and macOS versions** — released October 8, 2026. The app is the same as 2.22.3; this release adds Windows and macOS. The Android files install over 2.22.3 as an update.
