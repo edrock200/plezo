@@ -32,6 +32,8 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
 | `lib/services/silo/silo_mappers.dart` | Pure JSON → `MediaItem`/`MediaVersion`/chapters/markers; watch-detail helpers shared with offline playback |
 | `lib/services/silo/silo_api_cache.dart` | `SiloApiCache`: serialized items (`silo:item/<id>`) and pinned watch detail for downloads |
 | `lib/screens/settings/add_silo_screen.dart` | Add-server UI: address → code or password → Silo profile (+PIN) → persist and bind |
+| `lib/media/remote_trailer.dart` | `RemoteTrailer` (YouTube video, never a `MediaItem`), `RemoteTrailerClient`, `buildExtrasRail` (port of Silo's `trailerRailEntries`) |
+| `lib/utils/youtube_trailer_launcher.dart`, `lib/screens/youtube_trailer_screen.dart` | Opening a YouTube trailer per platform; the in-app IFrame player route |
 | `lib/connection/connection.dart` | `SiloConnection` (id `serverId/userId/profileId`) |
 | `lib/services/cached_playback_metadata_service.dart` | Offline markers/tracks for downloaded Silo items |
 
@@ -91,6 +93,29 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
 
 - **Dismissals:** `PUT /home/dismissals/continue_watching/{id}` requires `progress_updated_at`
   (refetch the item detail when the card lacks it); `next_up` requires `series_id`.
+- **Trailers & extras:** both come from the item detail (`GET /catalog/items/{id}`), which
+  `fetchItem` keeps for 10 min (`_detailRows`, in-flight shared) so `fetchExtras` /
+  `fetchRemoteTrailers` add no request. `extras[]` (local files: `content_id`, `kind`, `title`,
+  `duration_seconds`, `file_id`, newer servers `still_url`/`still_thumbhash`) become
+  `MediaKind.clip` items with raw marker `plezy_silo_extra` (`SiloMappers.isExtra/extraFileId/
+  extraKind`); the Trailer button picks `kind == "trailer"`. Silo's apps play an extra with its
+  `content_id` + `file_id` through normal playback (progress included), so Plezy does too:
+  `getPlaybackInitialization` selects the extra's `file_id` and, if `/watch/{id}` answers 404/422
+  for it, starts that file directly. Extras are clips, so the menu offers no download.
+  `videos[]` (`kind`, `site`, `site_key`, `name`, `is_official`, `language`): YouTube only
+  (`site` case-insensitive, non-blank `site_key`), de-duplicated, in server order, as
+  `RemoteTrailer`s; the row is local extras first, then YouTube (`buildExtrasRail`). Stills come
+  from `i.ytimg.com/vi/<key>/hqdefault.jpg` (`ytimg.com` is a pinned system-CA domain in
+  `network_security_config.xml` / `CertificateTrust`).
+- **Opening YouTube** (`youtubeTrailerRouteFor`): Android phones/tablets, iOS and macOS play in
+  YouTube's unmodified IFrame player (`youtube_player_iframe` → webview_flutter) with
+  privacy-enhanced host and `origin` `https://www.youtube-nocookie.com` (a missing origin/referrer
+  gives errors 152/153); any player error (101/150 embedding disabled, …) hands off to the app or
+  browser. Android TV (and Automotive) hand off like Silo's TV app through
+  `com.plezy/external_player` `openViewIntents`: `com.google.android.youtube.tv` with the watch
+  page, then `vnd.youtube:<id>`, then the watch page. Windows/Linux open the browser (no web view
+  there; never build a `YoutubePlayerController` on them). tvOS opens `youtube://watch/<id>`
+  through the Runner's `openUrl`. Never extract streams (youtube_explode etc.): YouTube's terms.
 - **Limits:** `GET /catalog/people` caps `limit` at 100; catalog pages at 200.
 - **Offline:** `fetchItem` falls back to `SiloApiCache.getMetadata` (the pinned download row) on a
   transient error; watch detail is read through the cache too.
@@ -112,14 +137,20 @@ Silo's apps). Open follow-ups: an edit screen for an existing Silo connection (a
   artwork routes need auth headers). Plezy's downloads therefore do not show in Silo's download list.
 - No OIDC/browser or network-identity ("Continue as") sign-in, no cleartext-HTTP consent prompt —
   Plezy's other backends have none either. Phones may also start a device code.
+- YouTube trailers: Silo's apps always hand them to the YouTube app; Plezy plays them in YouTube's
+  embedded player on phones, tablets and macOS (falling back to the app), hands off only on TV.
+  The TV detail rail holds playable `MediaItem`s only, so on TV a YouTube trailer is reached
+  through the Trailer button (first YouTube `trailer`, else `teaser`, when there is no local
+  trailer); the phone/desktop row shows every YouTube video after the local extras.
 - Music, audiobooks and e-books are not mapped (`SiloMappers.item` returns null; those libraries
   are hidden). Silo's own TV app keeps music minimal; the v2 contract has no album/track types.
 
 ## Testing
 - Unit tests: `scripts/run_tests.sh test/services/silo` (mappers, connection/vault, client with an
   `http/testing.dart` `MockClient`, headers/form factor). Client tests cover cursor `seek`/restart,
-  synthetic-season writes, refused refresh, playback start/progress/stop, downloads and sessionless
-  progress; add one for each contract rule you change. Capability mocks must list
+  synthetic-season writes, refused refresh, playback start/progress/stop, downloads, sessionless
+  progress and extras/remote trailers (plus `test/media/remote_trailer_test.dart` and
+  `test/utils/youtube_trailer_launcher_test.dart`); add one for each contract rule you change. Capability mocks must list
   `features: ['sequenced_progress_v1']`. Mock-client handlers must
   `Uri.decodeComponent(request.url.path)` — ids are percent-encoded on the wire.
 - Tests that read caches need `AppDatabase.forTesting(NativeDatabase.memory())` +
