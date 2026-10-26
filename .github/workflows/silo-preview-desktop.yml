@@ -81,7 +81,13 @@ jobs:
           MODE: ${{ needs.gate.outputs.mode }}
         run: |
           set -euo pipefail
-          pubspec_at() { gh api "repos/${GH_REPO}/contents/pubspec.yaml?ref=$1" --jq .content | base64 -d | grep -m1 '^version:' | awk '{print $2}'; }
+          # Decode the whole file before searching it: stopping early (grep -m1) can kill base64 with
+          # SIGPIPE, which pipefail turns into a failed step.
+          pubspec_at() {
+            local content
+            content="$(gh api "repos/${GH_REPO}/contents/pubspec.yaml?ref=$1" --jq .content | base64 -d)"
+            awk '/^version:/ && !found { print $2; found = 1 }' <<< "$content"
+          }
           if [[ "$MODE" == apk ]]; then
             # Same numbering as silo-preview-apk.yml: every earlier preview of
             # this major.minor counts, except a release already made from
