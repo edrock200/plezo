@@ -49,6 +49,15 @@ description: Build, publish and verify Plezy's Android preview APKs (the "Plezy 
 - Each build takes 10–25 minutes; verify the attached files and checksums. Running the apps is the
   user's step.
 
+## Lessons from past previews
+- **2.22.5:** the cached preview keystore had been evicted (no build for 18 days), so the APK got
+  a new signing key and cannot update 2.22.4. Before announcing a preview, compare
+  `apksigner verify --print-certs` with the previous release; if the SHA-256 differs, say in the
+  notes that Android users must uninstall first. Only the `ANDROID_*` secrets prevent this.
+- **2.22.5:** in a `set -euo pipefail` step, `curl/gh … | base64 -d | grep -m1 …` fails at
+  random with "base64: Broken pipe" (grep exits early, base64 gets SIGPIPE). Decode into a
+  variable first, then search it.
+
 ## Release notes (change log)
 - Every release page carries a plain-language change log from `docs/silo-preview-changelog.md`
   (written for users, not developers: what they will notice, no class names or API routes).

@@ -79,6 +79,9 @@ macOS, Windows and Linux. This fork (`edrock200/plezo`) adds Silo as a fourth ba
 - Desktop: `silo-preview-desktop.yml` builds Windows and macOS with every `[release-apk]` push, or
   adds them to the latest release with `[release-desktop]` / `[release-windows]` / `[release-macos]`.
   Release markers only count in a commit's **first line**. Never enable `ENABLE_UPDATE_CHECK`.
+- Android preview signing: without the `ANDROID_*` secrets the key lives in the Actions cache and
+  is lost after 7 days without a build (it was, for 2.22.5). Always compare the new APK's signer
+  with the last release and warn in the notes when users must uninstall first.
 - Previews are versioned 2.22.N (patch +1 per preview; the workflow picks N). Never hand-pick tags.
 - Release pages show the plain-language change log in `docs/silo-preview-changelog.md`; update it
   for every preview (see the `android-preview-release` skill).
