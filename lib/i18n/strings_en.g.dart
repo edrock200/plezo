@@ -6126,12 +6126,6 @@ class Translations$addServer$en {
 	/// en: 'Code opened. Finish signing in on your other device.'
 	String get siloDeviceCodeOpened => 'Code opened. Finish signing in on your other device.';
 
-	/// en: 'The sign-in code expired. Try again.'
-	String get siloDeviceCodeExpired => 'The sign-in code expired. Try again.';
-
-	/// en: 'Sign-in with a code failed: ${error}'
-	String siloDeviceCodeFailed({required Object error}) => 'Sign-in with a code failed: ${error}';
-
 	/// en: 'This Silo server is too old. Update it to a release that provides API v2.'
 	String get siloServerTooOld => 'This Silo server is too old. Update it to a release that provides API v2.';
 
@@ -6147,11 +6141,80 @@ class Translations$addServer$en {
 	/// en: 'This account has no Silo profiles.'
 	String get siloNoProfiles => 'This account has no Silo profiles.';
 
-	/// en: 'This server does not allow password sign-in. Use a code instead.'
-	String get siloPasswordLoginDisabled => 'This server does not allow password sign-in. Use a code instead.';
-
 	/// en: 'Too many PIN attempts. Wait a moment and try again.'
 	String get siloTooManyPinAttempts => 'Too many PIN attempts. Wait a moment and try again.';
+
+	/// en: 'Wrong PIN. Try again.'
+	String get siloWrongPin => 'Wrong PIN. Try again.';
+
+	/// en: 'Couldn't check the PIN. Check your connection and try again.'
+	String get siloPinNetworkError => 'Couldn\'t check the PIN. Check your connection and try again.';
+
+	/// en: 'This server offers no sign-in method this app can use. Check the server's sign-in settings.'
+	String get siloNoSignInMethod => 'This server offers no sign-in method this app can use. Check the server\'s sign-in settings.';
+
+	/// en: 'This Silo server uses API version ${version}, which this app does not support yet.'
+	String siloApiVersionUnsupported({required Object version}) => 'This Silo server uses API version ${version}, which this app does not support yet.';
+
+	/// en: 'The server sent an answer this app could not read. Try again.'
+	String get siloUnreadableAnswer => 'The server sent an answer this app could not read. Try again.';
+
+	/// en: 'Getting a sign-in code…'
+	String get siloDeviceGettingCode => 'Getting a sign-in code…';
+
+	/// en: 'Waiting for approval'
+	String get siloDeviceWaiting => 'Waiting for approval';
+
+	/// en: 'New code. Waiting for approval.'
+	String get siloDeviceNewCode => 'New code. Waiting for approval.';
+
+	/// en: 'Signing in…'
+	String get siloDeviceSigningIn => 'Signing in…';
+
+	/// en: 'Sign-in was declined on the other device.'
+	String get siloDeviceDenied => 'Sign-in was declined on the other device.';
+
+	/// en: 'Sign-in paused.'
+	String get siloDevicePaused => 'Sign-in paused.';
+
+	/// en: 'Can't reach ${server}. Check this device's connection.'
+	String siloDeviceUnreachable({required Object server}) => 'Can\'t reach ${server}. Check this device\'s connection.';
+
+	/// en: 'Too many sign-in attempts. Trying again shortly.'
+	String get siloDeviceTooManyRequests => 'Too many sign-in attempts. Trying again shortly.';
+
+	/// en: 'Couldn't get a sign-in code.'
+	String get siloDeviceFailed => 'Couldn\'t get a sign-in code.';
+
+	/// en: 'This server needs an update before this device can sign in.'
+	String get siloDeviceUpdateRequired => 'This server needs an update before this device can sign in.';
+
+	/// en: 'This server only supports password sign-in.'
+	String get siloDevicePasswordOnly => 'This server only supports password sign-in.';
+
+	/// en: 'Couldn't finish signing in on this device.'
+	String get siloDeviceCouldntFinish => 'Couldn\'t finish signing in on this device.';
+
+	/// en: 'Show a new code'
+	String get siloShowNewCode => 'Show a new code';
+
+	/// en: 'Try again'
+	String get siloTryAgain => 'Try again';
+
+	/// en: 'Change server'
+	String get siloChangeServer => 'Change server';
+
+	/// en: 'Sign-in code: ${code}'
+	String siloCodeSemantics({required Object code}) => 'Sign-in code: ${code}';
+
+	/// en: 'Sign-in QR code. Or go to ${url} and enter ${code}.'
+	String siloQrSemantics({required Object url, required Object code}) => 'Sign-in QR code. Or go to ${url} and enter ${code}.';
+
+	/// en: 'PIN protected'
+	String get siloProfilePinProtected => 'PIN protected';
+
+	/// en: 'Kids profile'
+	String get siloProfileKids => 'Kids profile';
 }
 
 // Path: deepLinks
@@ -10509,15 +10572,36 @@ extension on Translations {
 			'addServer.siloSignInWithCode' => 'Sign in with a code',
 			'addServer.siloDeviceCodeInstructions' => ({required Object url}) => 'On your phone or computer, open ${url} and enter this code.',
 			'addServer.siloDeviceCodeOpened' => 'Code opened. Finish signing in on your other device.',
-			'addServer.siloDeviceCodeExpired' => 'The sign-in code expired. Try again.',
-			'addServer.siloDeviceCodeFailed' => ({required Object error}) => 'Sign-in with a code failed: ${error}',
 			'addServer.siloServerTooOld' => 'This Silo server is too old. Update it to a release that provides API v2.',
 			'addServer.siloNotASiloServer' => 'No Silo server answered at this address.',
 			'addServer.siloChooseProfile' => 'Who\'s watching?',
 			'addServer.siloChooseProfileSubtitle' => 'Pick the Silo profile to use on this device.',
 			'addServer.siloNoProfiles' => 'This account has no Silo profiles.',
-			'addServer.siloPasswordLoginDisabled' => 'This server does not allow password sign-in. Use a code instead.',
 			'addServer.siloTooManyPinAttempts' => 'Too many PIN attempts. Wait a moment and try again.',
+			'addServer.siloWrongPin' => 'Wrong PIN. Try again.',
+			'addServer.siloPinNetworkError' => 'Couldn\'t check the PIN. Check your connection and try again.',
+			'addServer.siloNoSignInMethod' => 'This server offers no sign-in method this app can use. Check the server\'s sign-in settings.',
+			'addServer.siloApiVersionUnsupported' => ({required Object version}) => 'This Silo server uses API version ${version}, which this app does not support yet.',
+			'addServer.siloUnreadableAnswer' => 'The server sent an answer this app could not read. Try again.',
+			'addServer.siloDeviceGettingCode' => 'Getting a sign-in code…',
+			'addServer.siloDeviceWaiting' => 'Waiting for approval',
+			'addServer.siloDeviceNewCode' => 'New code. Waiting for approval.',
+			'addServer.siloDeviceSigningIn' => 'Signing in…',
+			'addServer.siloDeviceDenied' => 'Sign-in was declined on the other device.',
+			'addServer.siloDevicePaused' => 'Sign-in paused.',
+			'addServer.siloDeviceUnreachable' => ({required Object server}) => 'Can\'t reach ${server}. Check this device\'s connection.',
+			'addServer.siloDeviceTooManyRequests' => 'Too many sign-in attempts. Trying again shortly.',
+			'addServer.siloDeviceFailed' => 'Couldn\'t get a sign-in code.',
+			'addServer.siloDeviceUpdateRequired' => 'This server needs an update before this device can sign in.',
+			'addServer.siloDevicePasswordOnly' => 'This server only supports password sign-in.',
+			'addServer.siloDeviceCouldntFinish' => 'Couldn\'t finish signing in on this device.',
+			'addServer.siloShowNewCode' => 'Show a new code',
+			'addServer.siloTryAgain' => 'Try again',
+			'addServer.siloChangeServer' => 'Change server',
+			'addServer.siloCodeSemantics' => ({required Object code}) => 'Sign-in code: ${code}',
+			'addServer.siloQrSemantics' => ({required Object url, required Object code}) => 'Sign-in QR code. Or go to ${url} and enter ${code}.',
+			'addServer.siloProfilePinProtected' => 'PIN protected',
+			'addServer.siloProfileKids' => 'Kids profile',
 			'deepLinks.invalid' => 'This Plezy link isn\'t valid.',
 			'deepLinks.profileNotFound' => ({required Object profile}) => 'No profile matches "${profile}".',
 			'deepLinks.serverUnavailable' => 'Couldn\'t reach the server for this link.',

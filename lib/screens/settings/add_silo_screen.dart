@@ -7,6 +7,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../connection/connection.dart';
+import '../../connection/connection_registry.dart';
 import '../../exceptions/media_server_exceptions.dart';
 import '../../focus/card_focus_scope.dart';
 import '../../focus/focusable_button.dart';
@@ -19,6 +20,7 @@ import '../../profiles/active_profile_provider.dart';
 import '../../profiles/profile.dart';
 import '../../profiles/profile_connection.dart';
 import '../../services/silo/silo_auth_service.dart';
+import '../../services/silo/silo_device_sign_in.dart';
 import '../../services/storage_service.dart';
 import '../../theme/mono_tokens.dart';
 import '../../utils/app_logger.dart';
@@ -45,13 +47,38 @@ const _silo = 'Silo';
 class AddSiloScreen extends StatefulWidget {
   final Profile? targetProfile;
 
-  const AddSiloScreen({super.key, this.targetProfile});
+  /// Test seam: the sign-in service to use instead of one built from storage.
+  @visibleForTesting
+  final SiloAuthService? authService;
+
+  /// Test seam: device-code timings.
+  @visibleForTesting
+  final SiloDeviceSignInConfig deviceSignInConfig;
+
+  const AddSiloScreen({
+    super.key,
+    this.targetProfile,
+    this.authService,
+    this.deviceSignInConfig = const SiloDeviceSignInConfig(),
+  });
 
   @override
   State<AddSiloScreen> createState() => _AddSiloScreenState();
 }
 
 enum _Step { address, signIn, deviceCode, profile }
+
+/// The message for a failed `verify-pin`, shown in the PIN dialog. A wrong PIN
+/// is not an error (the service returns null); this covers rate limiting, a
+/// refusal with the server's problem detail, and transport failures.
+@visibleForTesting
+String siloPinErrorMessage(Object error) => switch (error) {
+  SiloSignInException(failure: SiloSignInFailure.pinRateLimited) => t.addServer.siloTooManyPinAttempts,
+  SiloSignInException(failure: SiloSignInFailure.pinRefused, :final detail?) => detail,
+  SiloSignInException() => t.profiles.failedToVerifyPin,
+  MediaServerHttpException(statusCode: final status?) when status >= 500 => t.profiles.failedToVerifyPin,
+  _ => t.addServer.siloPinNetworkError,
+};
 
 class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin, ControllerDisposerMixin {
   late final _urlController = createTextEditingController();
@@ -64,21 +91,33 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
   final _passwordFocus = FocusNode(debugLabel: 'AddSilo:Password');
   final _signInFocus = FocusNode(debugLabel: 'AddSilo:SignIn');
   final _codeFocus = FocusNode(debugLabel: 'AddSilo:Code');
+  final _codeActionFocus = FocusNode(debugLabel: 'AddSilo:CodeAction');
   final _cancelCodeFocus = FocusNode(debugLabel: 'AddSilo:CancelCode');
+  final _profileChangeServerFocus = FocusNode(debugLabel: 'AddSilo:ProfileChangeServer');
   final _formKey = GlobalKey<FormState>();
 
   _Step _step = _Step.address;
   SiloAuthService? _auth;
   SiloServerInfo? _server;
-  SiloDeviceCode? _deviceCode;
-  bool _deviceCodeOpened = false;
-  int _deviceAttempt = 0;
+  SiloDeviceSignIn? _deviceFlow;
+  SiloDeviceSignInState? _deviceState;
+
+  /// An approval arrived and the account and profiles are being read: the
+  /// code is spent, so the panel offers no cancel.
+  bool _completingApproval = false;
+
+  /// A signed-in session not yet saved as a connection. Logged out when the
+  /// person leaves or changes server, so no unused session stays live.
   SiloSignIn? _signIn;
+
+  /// The session was handed to persistence: never log it out from here.
+  bool _handedOff = false;
   List<SiloProfile> _profiles = const [];
 
   @override
   void dispose() {
-    _cancelDeviceLogin();
+    _disposeDeviceFlow();
+    _discardSignIn();
     for (final node in [
       _urlFocus,
       _findServerFocus,
@@ -87,7 +126,9 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
       _passwordFocus,
       _signInFocus,
       _codeFocus,
+      _codeActionFocus,
       _cancelCodeFocus,
+      _profileChangeServerFocus,
     ]) {
       node.dispose();
     }
@@ -95,19 +136,33 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
   }
 
   Future<SiloAuthService> _authService() async {
-    final existing = _auth;
-    if (existing != null) return existing;
+    final existing = _auth ?? widget.authService;
+    if (existing != null) return _auth = existing;
     final storage = await StorageService.getInstance();
     final deviceId = await storage.getOrCreateClientIdentifier();
-    return _auth = SiloAuthService(deviceId: deviceId);
+    return _auth ??= SiloAuthService(deviceId: deviceId);
   }
 
-  String _errorFor(Object e) {
-    if (e is SiloServerUnsupportedException) return t.addServer.siloServerTooOld;
-    if (e is MediaServerAuthException) return e.display ?? e.message;
-    if (e is MediaServerUrlException) return t.addServer.enterMediaBrowserUrlError(product: _silo);
-    if (e is MediaServerHttpException && e.statusCode != null) return t.addServer.siloNotASiloServer;
-    return t.addServer.couldNotReachServer(error: e.toString());
+  String _errorFor(Object e) => switch (e) {
+    SiloServerUnsupportedException(apiMajor: final version?) => t.addServer.siloApiVersionUnsupported(
+      version: version.toString(),
+    ),
+    SiloServerUnsupportedException() => t.addServer.siloServerTooOld,
+    SiloSignInException(failure: SiloSignInFailure.notSiloServer) => t.addServer.siloNotASiloServer,
+    SiloSignInException(failure: SiloSignInFailure.missingAccount) => t.addServer.siloDeviceCouldntFinish,
+    SiloSignInException() => t.addServer.siloUnreadableAnswer,
+    MediaServerAuthException() => e.display ?? e.message,
+    MediaServerUrlException() => t.addServer.enterMediaBrowserUrlError(product: _silo),
+    MediaServerHttpException(statusCode: _?) => t.addServer.siloNotASiloServer,
+    _ => t.addServer.couldNotReachServer(error: e.toString()),
+  };
+
+  /// Log out a signed-in session that will not be saved.
+  void _discardSignIn() {
+    final signIn = _signIn;
+    _signIn = null;
+    final auth = _auth;
+    if (signIn != null && !_handedOff && auth != null) unawaited(auth.logout(signIn.server, signIn.tokens));
   }
 
   // ---------------------------------------------------------------------------
@@ -133,16 +188,17 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
     if (server.deviceLoginAvailable && (PlatformDetector.isTV() || !server.passwordLoginAvailable)) {
       await _startDeviceLogin();
     } else {
-      requestFocusAfterFrame(server.passwordLoginAvailable ? _usernameFocus : _codeFocus);
+      _focusSignInStep(preferPassword: true);
     }
   }
 
   void _changeServer() {
-    _cancelDeviceLogin();
+    _disposeDeviceFlow();
+    _discardSignIn();
     setState(() {
       _server = null;
-      _signIn = null;
       _profiles = const [];
+      _completingApproval = false;
       _step = _Step.address;
     });
     setErrorText(null);
@@ -165,6 +221,7 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
       ),
       errorMapper: (e) {
         if (e is MediaServerAuthException) return e.display ?? t.addServer.invalidCredentials;
+        if (e is SiloSignInException) return _errorFor(e);
         appLogger.e('Add Silo sign-in failed', error: e);
         return t.addServer.signInFailed(error: e.toString());
       },
@@ -174,129 +231,118 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
 
   Future<void> _startDeviceLogin() async {
     final server = _server;
-    if (server == null) return;
-    if (busy) return;
-    final attempt = ++_deviceAttempt;
+    if (server == null || busy) return;
     setErrorText(null);
-    // Busy until the code is on screen, so a password sign-in cannot start
-    // alongside it (the same guard Jellyfin's Quick Connect uses).
-    setBusy(true);
-    try {
-      final auth = await _authService();
-      var code = await auth.startDeviceLogin(server);
-      if (!mounted || attempt != _deviceAttempt) {
-        unawaited(auth.cancelDeviceLogin(server, code));
-        return;
-      }
-      setState(() {
-        _deviceCode = code;
-        _deviceCodeOpened = false;
-        _step = _Step.deviceCode;
-      });
-      setBusy(false);
-      requestFocusAfterFrame(_cancelCodeFocus);
+    final auth = await _authService();
+    if (!mounted || !identical(server, _server)) return;
+    _disposeDeviceFlow();
+    final flow = SiloDeviceSignIn(auth: auth, server: server, config: widget.deviceSignInConfig);
+    _deviceFlow = flow;
+    flow.state.addListener(() => _onDeviceState(flow));
+    setState(() {
+      _deviceState = flow.state.value;
+      _completingApproval = false;
+      _step = _Step.deviceCode;
+    });
+    requestFocusAfterFrame(_cancelCodeFocus);
+    unawaited(flow.start());
+  }
 
-      var deadline = code.expiresAt;
-      var delay = Duration.zero;
-      var backoff = code.interval;
-      // A request that keeps vanishing (a proxy mangling the poll, a server
-      // answering an unknown status) must not spin start/poll forever.
-      var remints = 0;
-      while (mounted && attempt == _deviceAttempt) {
-        await Future<void>.delayed(delay);
-        if (!mounted || attempt != _deviceAttempt) return;
-        if (DateTime.now().isAfter(deadline)) {
-          unawaited(auth.cancelDeviceLogin(server, code));
-          _deviceFailed(t.addServer.siloDeviceCodeExpired);
-          return;
-        }
-        final SiloDevicePollResult result;
-        try {
-          result = await auth.pollDeviceLogin(server, code);
-          backoff = code.interval;
-        } on MediaServerHttpException catch (e) {
-          // Network errors, 5xx and 429 back off up to 30 s.
-          appLogger.d('Silo device poll failed; backing off', error: e.runtimeType);
-          backoff = Duration(seconds: (backoff.inSeconds * 2).clamp(1, 30));
-          delay = backoff;
-          continue;
-        }
-        if (!mounted || attempt != _deviceAttempt) return;
-        switch (result.status) {
-          case SiloDevicePollStatus.pending:
-            // Approver lookups can extend the request; apply the extension the
-            // server reports relative to its own clock, so clock skew between
-            // this device and the server cannot expire the code early.
-            final extended = code.localExpiryFor(result.expiresAt);
-            if (extended != null && extended.isAfter(deadline)) deadline = extended;
-            if (result.opened != _deviceCodeOpened) setState(() => _deviceCodeOpened = result.opened);
-            delay = result.pollAfter ?? code.interval;
-          case SiloDevicePollStatus.approved:
-            _deviceAttempt++;
-            final signIn = await runAsync<SiloSignIn>(
-              () => auth.completeDeviceLogin(server, result),
-              errorMapper: (e) => t.addServer.siloDeviceCodeFailed(error: e.toString()),
-            );
-            if (signIn != null && mounted) await _onSignedIn(signIn);
-            // Still on the code panel means a later step failed (account,
-            // profiles, saving): leave the panel so the error and the form show.
-            if (mounted && _step == _Step.deviceCode) _deviceFailed(errorText ?? t.addServer.siloDeviceCodeExpired);
-            return;
-          case SiloDevicePollStatus.gone:
-            // The request vanished (consumed, denied, expired): mint a new code.
-            if (++remints > 3) {
-              _deviceFailed(t.addServer.siloDeviceCodeExpired);
-              return;
-            }
-            code = await auth.startDeviceLogin(server);
-            if (!mounted || attempt != _deviceAttempt) return;
-            deadline = code.expiresAt;
-            setState(() {
-              _deviceCode = code;
-              _deviceCodeOpened = false;
-            });
-            delay = code.interval;
-        }
-      }
-    } catch (e, st) {
-      appLogger.w('Silo device sign-in failed', error: e, stackTrace: st);
-      if (mounted && attempt == _deviceAttempt) _deviceFailed(t.addServer.siloDeviceCodeFailed(error: e.toString()));
-    } finally {
-      if (mounted && _step != _Step.deviceCode) setBusy(false);
+  /// "Show a new code" / "Try again" on the code panel.
+  void _restartDeviceLogin() {
+    final flow = _deviceFlow;
+    if (flow == null || _completingApproval) return;
+    setErrorText(null);
+    unawaited(flow.start());
+    requestFocusAfterFrame(_cancelCodeFocus);
+  }
+
+  void _onDeviceState(SiloDeviceSignIn flow) {
+    if (!mounted || !identical(flow, _deviceFlow)) return;
+    final state = flow.state.value;
+    final previous = _deviceState?.status;
+    setState(() => _deviceState = state);
+    if (state.status == previous) return;
+    final approval = state.approval;
+    if (state.status == SiloDeviceSignInStatus.approved && approval != null) {
+      unawaited(_completeApproval(flow, approval));
+      return;
     }
+    // A settled state's action ("Show a new code", "Try again") takes focus,
+    // as on Silo's TV; when the action goes away under focus, Cancel takes it.
+    final action = _deviceAction(state.status);
+    if (state.status.isSettled && action != null) {
+      requestFocusAfterFrame(_codeActionFocus);
+    } else if (action == null && _codeActionFocus.hasFocus) {
+      requestFocusAfterFrame(_cancelCodeFocus);
+    }
+  }
+
+  Future<void> _completeApproval(SiloDeviceSignIn flow, SiloDevicePollResult approval) async {
+    setState(() => _completingApproval = true);
+    final auth = flow.auth;
+    final server = flow.server;
+    final SiloSignIn signIn;
+    try {
+      signIn = await auth.completeDeviceLogin(server, approval);
+    } catch (e, st) {
+      appLogger.w('Silo device sign-in could not finish', error: e, stackTrace: st);
+      final tokens = approval.tokens;
+      if (tokens != null) unawaited(auth.logout(server, tokens));
+      if (mounted && identical(flow, _deviceFlow)) _deviceFailed(t.addServer.siloDeviceCouldntFinish);
+      return;
+    }
+    if (!mounted || !identical(flow, _deviceFlow)) {
+      // Left or changed server meanwhile: the session is nobody's.
+      unawaited(auth.logout(server, signIn.tokens));
+      return;
+    }
+    await _onSignedIn(signIn);
+    // Still on the code panel means a later step failed (profiles, saving):
+    // leave the panel so the error and the form show.
+    if (mounted && _step == _Step.deviceCode) _deviceFailed(errorText ?? t.addServer.siloDeviceCouldntFinish);
   }
 
   void _deviceFailed(String message) {
     if (!mounted) return;
+    _disposeDeviceFlow();
     setState(() {
-      _deviceCode = null;
+      _completingApproval = false;
       _step = _Step.signIn;
     });
     setErrorText(message);
     _focusSignInStep();
   }
 
-  void _focusSignInStep() {
+  void _focusSignInStep({bool preferPassword = false}) {
     final server = _server;
     if (server == null) return;
-    requestFocusAfterFrame(
-      server.deviceLoginAvailable ? _codeFocus : (server.passwordLoginAvailable ? _usernameFocus : _changeServerFocus),
-    );
+    final FocusNode target;
+    if (preferPassword && server.passwordLoginAvailable) {
+      target = _usernameFocus;
+    } else if (server.deviceLoginAvailable) {
+      target = _codeFocus;
+    } else {
+      target = server.passwordLoginAvailable ? _usernameFocus : _changeServerFocus;
+    }
+    requestFocusAfterFrame(target);
   }
 
-  void _cancelDeviceLogin() {
-    _deviceAttempt++;
-    final server = _server;
-    final code = _deviceCode;
-    final auth = _auth;
-    _deviceCode = null;
-    if (server != null && code != null && auth != null) unawaited(auth.cancelDeviceLogin(server, code));
+  /// Stop the device-code flow; a code still live on the server is withdrawn.
+  /// An approved code is already spent and is left alone.
+  void _disposeDeviceFlow() {
+    final flow = _deviceFlow;
+    _deviceFlow = null;
+    _deviceState = null;
+    flow?.dispose();
   }
 
   void _onCancelDeviceCode() {
-    _cancelDeviceLogin();
+    if (_completingApproval) return;
+    _disposeDeviceFlow();
     setState(() => _step = _Step.signIn);
-    requestFocusAfterFrame(_server?.passwordLoginAvailable == true ? _usernameFocus : _codeFocus);
+    setErrorText(null);
+    _focusSignInStep(preferPassword: true);
   }
 
   // ---------------------------------------------------------------------------
@@ -304,32 +350,52 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
   // ---------------------------------------------------------------------------
 
   Future<void> _onSignedIn(SiloSignIn signIn) async {
+    if (!identical(_signIn, signIn)) _discardSignIn();
+    _signIn = signIn;
     final profiles = await runAsync<List<SiloProfile>>(
       () async => (await _authService()).fetchProfiles(signIn),
-      errorMapper: (e) => t.addServer.signInFailed(error: e.toString()),
+      errorMapper: (e) => e is SiloSignInException ? _errorFor(e) : t.addServer.signInFailed(error: e.toString()),
     );
-    if (profiles == null || !mounted) return;
-    if (profiles.isEmpty) {
-      setState(() => _step = _Step.signIn);
-      setErrorText(t.addServer.siloNoProfiles);
+    if (!mounted) return;
+    if (profiles == null || profiles.isEmpty) {
+      // Nothing to pick: this session will not be used.
+      _discardSignIn();
+      _disposeDeviceFlow();
+      setState(() {
+        _completingApproval = false;
+        _step = _Step.signIn;
+      });
+      if (profiles != null) setErrorText(t.addServer.siloNoProfiles);
       _focusSignInStep();
       return;
     }
-    _signIn = signIn;
-    // An approval bound to a profile, or a lone unlocked profile, needs no picker.
+    // An approval bound to a profile, or a lone unlocked profile, needs no
+    // picker. A bound profile that has a PIN but came without its token
+    // opens straight at its PIN.
     final preset = profiles.where((p) => p.id == signIn.presetProfileId).firstOrNull;
-    if (preset != null && signIn.presetProfileToken != null) {
-      await _finish(preset, profileToken: signIn.presetProfileToken);
+    SiloProfile? autoPick;
+    if (preset != null && (signIn.presetProfileToken != null || !preset.hasPin)) {
+      autoPick = preset;
+    } else if (preset == null && profiles.length == 1 && !profiles.single.hasPin) {
+      autoPick = profiles.single;
+    }
+    if (autoPick != null &&
+        await _finish(autoPick, profileToken: identical(autoPick, preset) ? signIn.presetProfileToken : null)) {
       return;
     }
-    if (profiles.length == 1 && !profiles.single.hasPin) {
-      await _finish(profiles.single);
-      return;
-    }
+    if (!mounted) return;
+    // The picker, also when saving an automatic pick failed (its error shows).
+    _disposeDeviceFlow();
     setState(() {
       _profiles = profiles;
+      _completingApproval = false;
       _step = _Step.profile;
     });
+    if (preset != null && preset.hasPin && autoPick == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _step == _Step.profile) unawaited(_pickProfile(preset));
+      });
+    }
   }
 
   Future<void> _pickProfile(SiloProfile profile) async {
@@ -342,21 +408,23 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
       while (true) {
         final pin = await showPinEntryDialog(context, profile.name, errorMessage: error);
         if (pin == null || !mounted) return;
-        final token = await runAsync<String?>(
-          () async => (await _authService()).verifyPin(signIn, profile, pin),
-          errorMapper: (e) => switch (e) {
-            MediaServerAuthException(statusCode: 429) => t.addServer.siloTooManyPinAttempts,
-            MediaServerAuthException(:final display?) => display,
-            _ => t.profiles.failedToVerifyPin,
-          },
-        );
-        if (!mounted) return;
+        setErrorText(null);
+        setBusy(true);
+        String? token;
+        try {
+          token = await (await _authService()).verifyPin(signIn, profile, pin);
+          error = token == null ? t.addServer.siloWrongPin : null;
+        } catch (e) {
+          appLogger.d('Silo PIN check failed', error: e.runtimeType);
+          error = siloPinErrorMessage(e);
+        } finally {
+          setBusy(false);
+        }
+        if (!mounted || !identical(signIn, _signIn)) return;
         if (token != null) {
           profileToken = token;
           break;
         }
-        if (errorText != null) return;
-        error = t.profiles.incorrectPinTryAgain;
       }
     }
     await _finish(profile, profileToken: profileToken);
@@ -366,25 +434,29 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
   // Step 4: persist and bind
   // ---------------------------------------------------------------------------
 
-  Future<void> _finish(SiloProfile profile, {String? profileToken}) async {
+  /// Save the connection for [profile] and leave. False when saving failed
+  /// (the error is shown) or the screen went away.
+  Future<bool> _finish(SiloProfile profile, {String? profileToken}) async {
     final signIn = _signIn;
     final auth = _auth;
-    if (signIn == null || auth == null) return;
+    if (signIn == null || auth == null) return false;
     final connection = auth.buildConnection(signIn, profile, profileToken: profileToken);
+    var saved = false;
     await runAsync<void>(
-      () => _persistAndExit(connection),
+      () async => saved = await _persistAndExit(connection),
       errorMapper: (e) {
         appLogger.e('Add Silo failed', error: e);
         return t.addServer.signInFailed(error: e.toString());
       },
     );
+    return saved;
   }
 
-  Future<void> _persistAndExit(SiloConnection connection) async {
-    if (!mounted) return;
+  Future<bool> _persistAndExit(SiloConnection connection) async {
+    if (!mounted) return false;
     final activeProvider = context.read<ActiveProfileProvider>();
     await activeProvider.initialize();
-    if (!mounted) return;
+    if (!mounted) return false;
     final targetProfile = widget.targetProfile;
     var boundProfile = targetProfile ?? activeProvider.active;
     // Same first-run rules as a Jellyfin connection: with no target and no
@@ -395,11 +467,11 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
         context,
         rootNavigator: true,
       ).push<bool>(MaterialPageRoute(builder: (_) => const ProfileSwitchScreen(requireSelection: true)));
-      if (!mounted) return;
+      if (!mounted) return false;
       boundProfile = activeProvider.active;
       if (boundProfile == null) {
         setErrorText(t.messages.noProfilesAvailable);
-        return;
+        return false;
       }
     }
 
@@ -418,29 +490,41 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
     final bindProfile = boundProfile;
     if (bindProfile == null) {
       setErrorText(t.messages.noProfilesAvailable);
-      return;
+      return false;
     }
 
-    await persistAndBindConnection(
-      context: context,
-      connection: connection,
-      bindToProfile: ProfileConnection(
-        profileId: bindProfile.id,
-        connectionId: connection.id,
-        userToken: connection.accessToken,
-        userIdentifier: connection.userId,
-        tokenAcquiredAt: DateTime.now(),
-      ),
-      firstRunProfile: firstRunProfile,
-    );
+    // From here the session belongs to the saved connection: leaving must
+    // not log it out.
+    _handedOff = true;
+    final registry = context.read<ConnectionRegistry>();
+    try {
+      await persistAndBindConnection(
+        context: context,
+        connection: connection,
+        bindToProfile: ProfileConnection(
+          profileId: bindProfile.id,
+          connectionId: connection.id,
+          userToken: connection.accessToken,
+          userIdentifier: connection.userId,
+          tokenAcquiredAt: DateTime.now(),
+        ),
+        firstRunProfile: firstRunProfile,
+      );
+    } catch (_) {
+      // The save is one transaction: when it did not commit, the session is
+      // still ours to log out on leaving.
+      _handedOff = await registry.get(connection.id).catchError((_) => null) != null;
+      rethrow;
+    }
 
     final boundToActive = bindProfile.id == activeProvider.activeId;
-    if (!mounted) return;
+    if (!mounted) return true;
     if (boundToActive) {
       await context.read<ActiveProfileBinder>().rebindIfActive(bindProfile.id);
     }
-    if (!mounted) return;
+    if (!mounted) return true;
     Navigator.of(context).pop(true);
+    return true;
   }
 
   // ---------------------------------------------------------------------------
@@ -453,12 +537,24 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
     return FocusedScrollScaffold(
       title: Text(t.addServer.addMediaBrowserTitle(product: _silo)),
       slivers: [
-        if (_step == _Step.deviceCode && _deviceCode != null)
-          SliverFillRemaining(
-            hasScrollBody: false,
-            child: Padding(
-              padding: .fromLTRB(24, 24, 24, 24 + MediaQuery.paddingOf(context).bottom),
-              child: Center(child: _buildDeviceCodePanel(theme, _deviceCode!)),
+        if (_step == _Step.deviceCode && _deviceState != null)
+          // Centred in the space left, scrolling when taller (a 540-high TV
+          // with a status and two buttons). Real layout, not the intrinsic
+          // sizes SliverFillRemaining needs (the QR view cannot give them).
+          SliverLayoutBuilder(
+            builder: (context, constraints) => SliverToBoxAdapter(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: (constraints.viewportMainAxisExtent - constraints.precedingScrollExtent).clamp(
+                    0,
+                    double.infinity,
+                  ),
+                ),
+                child: Padding(
+                  padding: .fromLTRB(24, 24, 24, 24 + MediaQuery.paddingOf(context).bottom),
+                  child: Center(child: _buildDeviceCodePanel(theme, _deviceState!)),
+                ),
+              ),
             ),
           )
         else
@@ -487,6 +583,9 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
           focusNode: _urlFocus,
           tvTextInputPresentation: TvTextInputPresentation.platform,
           autofocus: true,
+          // Open the tvOS keyboard only when the field is selected, not as
+          // the screen appears (as on the Jellyfin and Seerr screens).
+          tvTextInputAutoOpenBehavior: deferredUrlFieldAutoOpen,
           keyboardType: TextInputType.url,
           autocorrect: false,
           enableSuggestions: false,
@@ -574,7 +673,7 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
           ),
         ] else if (!server.deviceLoginAvailable) ...[
           const SizedBox(height: 16),
-          Text(t.addServer.siloPasswordLoginDisabled, style: theme.textTheme.bodyMedium),
+          Text(t.addServer.siloNoSignInMethod, style: theme.textTheme.bodyMedium),
         ],
       ],
       ...buildInlineError(theme),
@@ -618,60 +717,95 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
     );
   }
 
-  Widget _buildDeviceCodePanel(ThemeData theme, SiloDeviceCode code) {
+  /// The action a settled or struggling code panel offers, as on Silo's TV.
+  String? _deviceAction(SiloDeviceSignInStatus status) => switch (status) {
+    SiloDeviceSignInStatus.denied || SiloDeviceSignInStatus.paused => t.addServer.siloShowNewCode,
+    SiloDeviceSignInStatus.failed ||
+    SiloDeviceSignInStatus.unreachable ||
+    SiloDeviceSignInStatus.tooManyRequests => t.addServer.siloTryAgain,
+    _ => null,
+  };
+
+  String _deviceStatusText(SiloDeviceSignInStatus status) {
+    final server = _server;
+    final host = server == null ? _silo : (Uri.tryParse(server.baseUrl)?.host ?? server.serverName);
+    return switch (status) {
+      SiloDeviceSignInStatus.gettingCode => t.addServer.siloDeviceGettingCode,
+      SiloDeviceSignInStatus.waiting => t.addServer.siloDeviceWaiting,
+      SiloDeviceSignInStatus.opened => t.addServer.siloDeviceCodeOpened,
+      SiloDeviceSignInStatus.newCode => t.addServer.siloDeviceNewCode,
+      SiloDeviceSignInStatus.unreachable => t.addServer.siloDeviceUnreachable(server: host),
+      SiloDeviceSignInStatus.tooManyRequests => t.addServer.siloDeviceTooManyRequests,
+      SiloDeviceSignInStatus.approved => t.addServer.siloDeviceSigningIn,
+      SiloDeviceSignInStatus.denied => t.addServer.siloDeviceDenied,
+      SiloDeviceSignInStatus.paused => t.addServer.siloDevicePaused,
+      SiloDeviceSignInStatus.noDeviceSignIn => t.addServer.siloDevicePasswordOnly,
+      SiloDeviceSignInStatus.updateRequired => t.addServer.siloDeviceUpdateRequired,
+      SiloDeviceSignInStatus.failed => t.addServer.siloDeviceFailed,
+    };
+  }
+
+  Widget _buildDeviceCodePanel(ThemeData theme, SiloDeviceSignInState state) {
     final muted = theme.colorScheme.onSurface.withValues(alpha: 0.7);
-    final verificationUri = code.verificationUri;
-    final displayUri = verificationUri.replaceFirst(RegExp(r'^https?://'), '');
-    final qrData = code.verificationUriComplete ?? verificationUri;
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 460),
-      child: Column(
-        mainAxisSize: .min,
-        children: [
-          Text(
-            t.addServer.siloDeviceCodeInstructions(url: displayUri),
-            textAlign: TextAlign.center,
-            style: theme.textTheme.bodyLarge?.copyWith(color: muted),
-          ),
-          const SizedBox(height: 24),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Padding(
-              padding: const EdgeInsets.only(left: 8),
-              child: Text(
-                code.displayCode,
-                style: theme.textTheme.displayMedium?.copyWith(
-                  fontFamily: 'monospace',
-                  fontWeight: .bold,
-                  letterSpacing: 8,
+    final approving = _completingApproval || state.status == SiloDeviceSignInStatus.approved;
+    final status = approving ? SiloDeviceSignInStatus.approved : state.status;
+    final code = approving ? null : state.code;
+    final working = !status.isSettled || approving;
+    final problem = switch (status) {
+      SiloDeviceSignInStatus.unreachable ||
+      SiloDeviceSignInStatus.tooManyRequests ||
+      SiloDeviceSignInStatus.denied ||
+      SiloDeviceSignInStatus.noDeviceSignIn ||
+      SiloDeviceSignInStatus.updateRequired ||
+      SiloDeviceSignInStatus.failed => true,
+      _ => false,
+    };
+    final action = approving ? null : _deviceAction(status);
+    // Wide screens (TV, desktop, landscape tablets) put the QR beside the
+    // code, as Silo's TV app does, so the panel fits a 540-high TV screen.
+    final wide = code != null && MediaQuery.sizeOf(context).width >= 720;
+    final details = Column(
+      mainAxisSize: .min,
+      children: [
+        if (code != null) ..._buildCode(theme, code, muted),
+        if (code != null && !wide) ...[_buildQr(code), const SizedBox(height: 24)],
+        Row(
+          mainAxisSize: .min,
+          children: [
+            if (working) ...[const LoadingIndicatorBox(size: 16), const SizedBox(width: 10)],
+            Flexible(
+              child: Semantics(
+                liveRegion: true,
+                child: Text(
+                  _deviceStatusText(status),
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodyMedium?.copyWith(color: problem ? theme.colorScheme.error : muted),
                 ),
               ),
             ),
-          ),
+          ],
+        ),
+        if (action != null) ...[
           const SizedBox(height: 24),
-          Container(
-            padding: const EdgeInsets.all(8),
-            color: Colors.white,
-            child: QrImageView(data: qrData, size: 168, version: QrVersions.auto, backgroundColor: Colors.white),
+          FocusableButton(
+            focusNode: _codeActionFocus,
+            useBackgroundFocus: true,
+            onNavigateDown: () => _cancelCodeFocus.requestFocus(),
+            onPressed: _restartDeviceLogin,
+            child: FilledButton.icon(
+              onPressed: _restartDeviceLogin,
+              icon: const AppIcon(Symbols.refresh_rounded, fill: 1),
+              label: Text(action),
+            ),
           ),
-          const SizedBox(height: 24),
-          Row(
-            mainAxisSize: .min,
-            children: [
-              const LoadingIndicatorBox(size: 16),
-              const SizedBox(width: 10),
-              Flexible(
-                child: Text(
-                  _deviceCodeOpened ? t.addServer.siloDeviceCodeOpened : t.auth.quickConnectWaiting,
-                  style: theme.textTheme.bodyMedium?.copyWith(color: muted),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
+        ],
+        // An approved code is spent: nothing left to cancel.
+        if (!approving) ...[
+          SizedBox(height: action != null ? 12 : 24),
           FocusableButton(
             focusNode: _cancelCodeFocus,
             useBackgroundFocus: true,
+            onNavigateUp: action != null ? () => _codeActionFocus.requestFocus() : null,
             onPressed: _onCancelDeviceCode,
             child: OutlinedButton.icon(
               onPressed: _onCancelDeviceCode,
@@ -679,8 +813,75 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
               label: Text(t.auth.quickConnectCancel),
             ),
           ),
-          ...buildInlineError(theme, center: true),
         ],
+        ...buildInlineError(theme, center: true),
+      ],
+    );
+    if (!wide) return ConstrainedBox(constraints: const BoxConstraints(maxWidth: 460), child: details);
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 760),
+      child: Row(
+        mainAxisSize: .min,
+        children: [
+          _buildQr(code),
+          const SizedBox(width: 40),
+          Flexible(child: details),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _buildCode(ThemeData theme, SiloDeviceCode code, Color muted) {
+    final verificationUri = code.verificationUri;
+    final displayUri = verificationUri.replaceFirst(RegExp(r'^https?://'), '');
+    final spoken = code.spokenCode;
+    return [
+      Text(
+        t.addServer.siloDeviceCodeInstructions(url: displayUri),
+        textAlign: TextAlign.center,
+        style: theme.textTheme.bodyLarge?.copyWith(color: muted),
+      ),
+      const SizedBox(height: 24),
+      // Read digit by digit, not as one large number.
+      Semantics(
+        label: t.addServer.siloCodeSemantics(code: spoken),
+        excludeSemantics: true,
+        child: FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Padding(
+            padding: const EdgeInsets.only(left: 8),
+            child: Text(
+              code.displayCode,
+              style: theme.textTheme.displayMedium?.copyWith(
+                fontFamily: 'monospace',
+                fontWeight: .bold,
+                letterSpacing: 8,
+              ),
+            ),
+          ),
+        ),
+      ),
+      const SizedBox(height: 24),
+    ];
+  }
+
+  Widget _buildQr(SiloDeviceCode code) {
+    final displayUri = code.verificationUri.replaceFirst(RegExp(r'^https?://'), '');
+    final qrData = code.verificationUriComplete ?? code.verificationUri;
+    return Container(
+      padding: const EdgeInsets.all(8),
+      color: Colors.white,
+      // A fixed size: the QR view is a LayoutBuilder, which cannot report
+      // intrinsic sizes to an ancestor that asks for them.
+      child: SizedBox.square(
+        dimension: 168,
+        child: QrImageView(
+          data: qrData,
+          size: 168,
+          version: QrVersions.auto,
+          backgroundColor: Colors.white,
+          semanticsLabel: t.addServer.siloQrSemantics(url: displayUri, code: code.spokenCode),
+        ),
       ),
     );
   }
@@ -705,6 +906,21 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
         ),
       ],
       ...buildInlineError(theme),
+      const SizedBox(height: 16),
+      // Leaving here logs out the session that was just signed in.
+      Align(
+        alignment: AlignmentDirectional.centerStart,
+        child: FocusableButton(
+          focusNode: _profileChangeServerFocus,
+          useBackgroundFocus: true,
+          onPressed: busy ? null : _changeServer,
+          child: TextButton.icon(
+            onPressed: busy ? null : _changeServer,
+            icon: const AppIcon(Symbols.swap_horiz_rounded, fill: 1),
+            label: Text(t.addServer.siloChangeServer),
+          ),
+        ),
+      ),
     ];
   }
 }
@@ -722,7 +938,11 @@ class _SiloProfileTile extends StatelessWidget {
     final theme = Theme.of(context);
     final avatar = profile.avatarUrl;
     final initial = profile.name.isEmpty ? '?' : profile.name.characters.first.toUpperCase();
-    return FocusableWrapper(
+    final states = [
+      if (profile.hasPin) t.addServer.siloProfilePinProtected,
+      if (profile.isChild) t.addServer.siloProfileKids,
+    ];
+    final tile = FocusableWrapper(
       autofocus: autofocus,
       disableScale: true,
       delegateFocusBorder: true,
@@ -757,7 +977,21 @@ class _SiloProfileTile extends StatelessWidget {
                           ),
                   ),
                   const SizedBox(width: 12),
-                  Expanded(child: Text(profile.name, style: theme.textTheme.titleSmall)),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: .start,
+                      children: [
+                        Text(profile.name, style: theme.textTheme.titleSmall),
+                        if (profile.isChild)
+                          Text(
+                            t.addServer.siloProfileKids,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
                   if (profile.hasPin) ...[
                     const AppIcon(Symbols.lock_rounded, fill: 1, size: 20),
                     const SizedBox(width: 8),
@@ -769,6 +1003,16 @@ class _SiloProfileTile extends StatelessWidget {
           ),
         ),
       ),
+    );
+    // One spoken element: the name, then "PIN protected" / "Kids profile".
+    return Semantics(
+      button: true,
+      label: profile.name,
+      value: states.isEmpty ? null : states.join(', '),
+      enabled: onTap != null,
+      onTap: onTap,
+      excludeSemantics: true,
+      child: tile,
     );
   }
 }

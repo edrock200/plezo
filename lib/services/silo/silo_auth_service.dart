@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:clock/clock.dart';
 import 'package:http/http.dart' as http;
 
 import '../../connection/connection.dart';
@@ -96,6 +97,9 @@ class SiloDeviceCode {
   /// When the code expires on this device's clock (from `expires_in`).
   final DateTime expiresAt;
 
+  /// How long the code lives from the moment it was issued (`expires_in`).
+  final Duration lifetime;
+
   /// The server's absolute `expires_at` for the same moment, if it sent one.
   final DateTime? serverExpiresAt;
   final Duration interval;
@@ -106,18 +110,14 @@ class SiloDeviceCode {
     required this.verificationUri,
     required this.expiresAt,
     required this.interval,
+    this.lifetime = const Duration(minutes: 15),
     this.serverExpiresAt,
     this.verificationUriComplete,
   });
 
-  /// A later server `expires_at` translated to this device's clock: the
-  /// extension past [serverExpiresAt], applied to [expiresAt]. Null when
-  /// either server time is missing.
-  DateTime? localExpiryFor(DateTime? serverTime) {
-    final base = serverExpiresAt;
-    if (serverTime == null || base == null) return null;
-    return expiresAt.add(serverTime.difference(base));
-  }
+  /// The code one character per word (`4 8 2 1 7 7 3 0`), so a screen reader
+  /// reads it digit by digit rather than as a number, as Silo's TV app does.
+  String get spokenCode => userCode.replaceAll(RegExp(r'[^0-9A-Za-z]'), '').toUpperCase().split('').join(' ');
 
   /// `48217730` → `4821 7730`, as Silo's own TV apps display it.
   String get displayCode {
@@ -127,7 +127,21 @@ class SiloDeviceCode {
   }
 }
 
-enum SiloDevicePollStatus { pending, approved, gone }
+enum SiloDevicePollStatus {
+  pending,
+  approved,
+
+  /// The approver declined (`status: denied`). Final: no new code by itself.
+  denied,
+
+  /// The server no longer holds the request (`expired`, `consumed`,
+  /// `canceled`, or a 404/4xx): start a new code.
+  gone,
+
+  /// An answer retrying won't fix: `approved` without tokens, or a status
+  /// this build does not know.
+  failed,
+}
 
 class SiloDevicePollResult {
   final SiloDevicePollStatus status;
@@ -174,10 +188,45 @@ class SiloSignIn {
   });
 }
 
-/// Thrown for a Silo server that is reachable but cannot be used.
+/// Thrown for a Silo server that is reachable but cannot be used: too old for
+/// the v2 API ([apiMajor] null) or speaking another API major version.
 class SiloServerUnsupportedException implements Exception {
   final String message;
-  const SiloServerUnsupportedException(this.message);
+  final Object? apiMajor;
+  const SiloServerUnsupportedException(this.message, {this.apiMajor});
+
+  @override
+  String toString() => message;
+}
+
+/// Why a sign-in step failed, for a localized message in the UI.
+enum SiloSignInFailure {
+  /// The address answered, but not as a Silo v2 server.
+  notSiloServer,
+
+  /// The server answered a sign-in call in a shape this app cannot read.
+  malformedResponse,
+
+  /// The approval or login did not name the signed-in account.
+  missingAccount,
+
+  /// `verify-pin` answered 429: too many attempts.
+  pinRateLimited,
+
+  /// `verify-pin` refused the request (a 4xx other than 429); [SiloSignInException.detail]
+  /// carries the server's problem detail when it sent one.
+  pinRefused,
+}
+
+/// A typed sign-in failure. [message] is for logs only; the UI maps [failure]
+/// to a translated string and may show the server's [detail].
+class SiloSignInException implements Exception {
+  final SiloSignInFailure failure;
+  final String? detail;
+  final int? statusCode;
+  const SiloSignInException(this.failure, {this.detail, this.statusCode});
+
+  String get message => 'Silo sign-in failed: ${failure.name}${statusCode == null ? '' : ' (HTTP $statusCode)'}';
 
   @override
   String toString() => message;
@@ -187,11 +236,14 @@ class SiloServerUnsupportedException implements Exception {
 /// server address, password and device-code login, listing profiles and
 /// verifying a profile PIN. Uses the Silo v2 API only.
 class SiloAuthService {
-  SiloAuthService({required this.deviceId, this._clientFactory});
+  SiloAuthService({required this.deviceId, this._clientFactory, this._headers});
 
   final String deviceId;
   final http.Client Function()? _clientFactory;
   SiloDeviceHeaders? _headers;
+
+  /// Bound on best-effort calls made while leaving (cancel a code, log out).
+  static const _bestEffortTimeout = Duration(seconds: 5);
 
   Future<SiloApi> _api(String baseUrl, {SiloTokens? tokens, String? profileId, String? profileToken}) async {
     final headers = _headers ??= await SiloDeviceHeaders.resolve(deviceId);
@@ -248,14 +300,13 @@ class SiloAuthService {
       }
     }
     if (lastError is MediaServerException) throw lastError;
-    if (lastError is SiloServerUnsupportedException) throw lastError;
+    if (lastError is SiloSignInException) throw lastError;
     throw MediaServerHttpException(type: MediaServerHttpErrorType.connectionError, message: 'Server unreachable');
   }
 
   Future<SiloServerInfo> _probeOne(String baseUrl) async {
     final api = await _api(baseUrl);
     try {
-      const probeTimeout = Duration(seconds: 8);
       final info = await api.request('GET', '/api/v2/system/info', auth: false, timeout: probeTimeout);
       if (info.statusCode == 404 && info.data is String && (info.data as String).trim() == '404 page not found') {
         throw const SiloServerUnsupportedException('This Silo server is too old: update it to a release with API v2');
@@ -263,19 +314,24 @@ class SiloAuthService {
       throwIfHttpError(info);
       final data = info.data;
       if (data is! Map || data['api_major'] == null) {
-        throw MediaServerHttpException(type: MediaServerHttpErrorType.unknown, message: 'Not a Silo server');
+        throw const SiloSignInException(SiloSignInFailure.notSiloServer);
       }
       if (data['api_major'] != 2) {
-        throw SiloServerUnsupportedException('Unsupported Silo API version ${data['api_major']}');
+        throw SiloServerUnsupportedException(
+          'Unsupported Silo API version ${data['api_major']}',
+          apiMajor: data['api_major'],
+        );
       }
       final identity = await api.getJson('/api/v2/system/identity', profile: false, timeout: probeTimeout);
       final serverId = identity['server_id']?.toString() ?? '';
-      if (serverId.isEmpty) {
-        throw MediaServerHttpException(type: MediaServerHttpErrorType.unknown, message: 'Silo server has no id');
-      }
-      final name = await _serverName(api, baseUrl);
-      final deviceLogin = await _deviceLoginAvailable(api);
-      final passwordLogin = await _passwordLoginAvailable(api);
+      if (serverId.isEmpty) throw const SiloSignInException(SiloSignInFailure.notSiloServer);
+      // Independent, decorative or optional reads: in parallel, each bounded
+      // like the probe itself so a stalled route cannot hang "Find server".
+      final (name, deviceLogin, passwordLogin) = await (
+        _serverName(api, baseUrl),
+        _deviceLoginAvailable(api),
+        _passwordLoginAvailable(api),
+      ).wait;
       return SiloServerInfo(
         baseUrl: baseUrl,
         serverId: serverId,
@@ -289,9 +345,13 @@ class SiloAuthService {
     }
   }
 
+  /// Bound on each probe call, so an address that accepts the connection but
+  /// never answers fails over to the next candidate.
+  static const probeTimeout = Duration(seconds: 8);
+
   Future<String> _serverName(SiloApi api, String baseUrl) async {
     try {
-      final response = await api.request('GET', '/api/v2/theme/branding', auth: false);
+      final response = await api.request('GET', '/api/v2/theme/branding', auth: false, timeout: probeTimeout);
       final data = response.data;
       if (response.statusCode == 200 && data is Map) {
         for (final key in const ['server_name', 'name', 'app_name', 'title']) {
@@ -307,7 +367,7 @@ class SiloAuthService {
 
   Future<bool> _deviceLoginAvailable(SiloApi api) async {
     try {
-      final response = await api.request('GET', '/api/v2/auth/device/capability', auth: false);
+      final response = await api.request('GET', '/api/v2/auth/device/capability', auth: false, timeout: probeTimeout);
       final data = response.data;
       return response.statusCode == 200 && data is Map && data['state'] == 'available';
     } catch (_) {
@@ -317,7 +377,7 @@ class SiloAuthService {
 
   Future<bool> _passwordLoginAvailable(SiloApi api) async {
     try {
-      final response = await api.request('GET', '/api/v2/auth/providers', auth: false);
+      final response = await api.request('GET', '/api/v2/auth/providers', auth: false, timeout: probeTimeout);
       final data = response.data;
       if (response.statusCode == 200 && data is Map) {
         // Also honour a `credentials` provider (LDAP and the like), as Silo's
@@ -363,7 +423,7 @@ class SiloAuthService {
         );
       }
       throwIfHttpError(response);
-      throw MediaServerHttpException(type: MediaServerHttpErrorType.unknown, message: 'Malformed sign-in response');
+      throw const SiloSignInException(SiloSignInFailure.malformedResponse);
     } finally {
       api.close();
     }
@@ -381,7 +441,7 @@ class SiloAuthService {
       );
       final data = response.data;
       if (data is! Map || data['device_code'] is! String || data['user_code'] is! String) {
-        throw MediaServerHttpException(type: MediaServerHttpErrorType.unknown, message: 'Malformed device start');
+        throw const SiloSignInException(SiloSignInFailure.malformedResponse);
       }
       final interval = (data['interval'] as num?)?.toInt() ?? 5;
       final expiresIn = (data['expires_in'] as num?)?.toInt() ?? 900;
@@ -393,7 +453,8 @@ class SiloAuthService {
         verificationUriComplete: complete is String && complete.isNotEmpty ? complete : null,
         // Local clock from `expires_in`, so a skewed device clock cannot
         // expire the code before it is shown.
-        expiresAt: DateTime.now().add(Duration(seconds: expiresIn)),
+        expiresAt: clock.now().add(Duration(seconds: expiresIn)),
+        lifetime: Duration(seconds: expiresIn),
         serverExpiresAt: DateTime.tryParse(data['expires_at']?.toString() ?? ''),
         interval: Duration(seconds: interval.clamp(1, 30)),
       );
@@ -402,8 +463,10 @@ class SiloAuthService {
     }
   }
 
-  /// `POST /api/v2/auth/device/poll`. Transport failures throw so the caller
-  /// can back off; a vanished request reports [SiloDevicePollStatus.gone].
+  /// `POST /api/v2/auth/device/poll`. Transport failures, 5xx and 429 throw so
+  /// the caller can back off; a vanished request (404 or another 4xx,
+  /// `expired`/`consumed`/`canceled`) reports [SiloDevicePollStatus.gone], a
+  /// declined one [SiloDevicePollStatus.denied].
   Future<SiloDevicePollResult> pollDeviceLogin(SiloServerInfo server, SiloDeviceCode code) async {
     final api = await _api(server.baseUrl);
     try {
@@ -432,7 +495,7 @@ class SiloAuthService {
           final tokensJson = data['tokens'];
           final tokens = SiloTokens.fromJson(tokensJson);
           final account = tokensJson is Map ? SiloAccount.fromJson(tokensJson['user']) : null;
-          if (tokens == null) return const SiloDevicePollResult(status: SiloDevicePollStatus.gone);
+          if (tokens == null) return const SiloDevicePollResult(status: SiloDevicePollStatus.failed);
           final profileId = data['profile_id'];
           final profileToken = data['profile_token'];
           return SiloDevicePollResult(
@@ -442,8 +505,13 @@ class SiloAuthService {
             profileId: profileId is String && profileId.isNotEmpty ? profileId : null,
             profileToken: profileToken is String && profileToken.isNotEmpty ? profileToken : null,
           );
-        default:
+        case 'denied':
+          return const SiloDevicePollResult(status: SiloDevicePollStatus.denied);
+        case 'expired' || 'consumed' || 'canceled' || 'cancelled':
           return const SiloDevicePollResult(status: SiloDevicePollStatus.gone);
+        default:
+          appLogger.w('Silo device poll: unknown status ${data['status']}');
+          return const SiloDevicePollResult(status: SiloDevicePollStatus.failed);
       }
     } finally {
       api.close();
@@ -455,12 +523,34 @@ class SiloAuthService {
     try {
       final api = await _api(server.baseUrl);
       try {
-        await api.request('POST', '/api/v2/auth/device/cancel', auth: false, body: {'device_code': code.deviceCode});
+        await api.request(
+          'POST',
+          '/api/v2/auth/device/cancel',
+          auth: false,
+          body: {'device_code': code.deviceCode},
+          timeout: _bestEffortTimeout,
+        );
       } finally {
         api.close();
       }
     } catch (_) {
       // Leaving the screen must not fail on a cancel.
+    }
+  }
+
+  /// `POST /api/v2/auth/logout`: revoke a session that will not be kept (the
+  /// person left the screen or changed server after signing in, before a
+  /// connection was saved). Best effort and bounded.
+  Future<void> logout(SiloServerInfo server, SiloTokens tokens) async {
+    try {
+      final api = await _api(server.baseUrl, tokens: tokens);
+      try {
+        await api.request('POST', '/api/v2/auth/logout', profile: false, timeout: _bestEffortTimeout);
+      } finally {
+        api.close();
+      }
+    } catch (_) {
+      // Leaving the screen must not fail on a logout.
     }
   }
 
@@ -477,7 +567,7 @@ class SiloAuthService {
         api.close();
       }
     }
-    if (account == null) throw const MediaServerAuthException('Silo did not return the signed-in account');
+    if (account == null) throw const SiloSignInException(SiloSignInFailure.missingAccount);
     return SiloSignIn(
       server: server,
       tokens: tokens,
@@ -514,7 +604,10 @@ class SiloAuthService {
   }
 
   /// `POST /api/v2/profiles/{id}/verify-pin`. Returns the profile token, or
-  /// `null` when the PIN is wrong.
+  /// `null` when the PIN is wrong (200 without `valid: true`). Any other
+  /// refusal throws [SiloSignInException] with the server's problem detail
+  /// ([SiloSignInFailure.pinRateLimited] for 429, [SiloSignInFailure.pinRefused]
+  /// for another 4xx); 5xx and transport errors throw [MediaServerHttpException].
   Future<String?> verifyPin(SiloSignIn signIn, SiloProfile profile, String pin) async {
     final api = await _api(signIn.server.baseUrl, tokens: signIn.tokens);
     try {
@@ -524,12 +617,24 @@ class SiloAuthService {
         profile: false,
         body: {'pin': pin},
       );
-      if (response.statusCode == 429) {
-        throw MediaServerAuthException(siloProblemDetail(response.data) ?? 'Too many attempts', statusCode: 429);
+      final status = response.statusCode;
+      if (status == 429) {
+        throw SiloSignInException(
+          SiloSignInFailure.pinRateLimited,
+          detail: siloProblemDetail(response.data),
+          statusCode: status,
+        );
       }
-      if (response.statusCode >= 500) throwIfHttpError(response);
+      if (status >= 500) throwIfHttpError(response);
+      if (status < 200 || status >= 300) {
+        throw SiloSignInException(
+          SiloSignInFailure.pinRefused,
+          detail: siloProblemDetail(response.data),
+          statusCode: status,
+        );
+      }
       final data = response.data;
-      if (response.statusCode == 200 && data is Map && data['valid'] == true) {
+      if (data is Map && data['valid'] == true) {
         final token = data['profile_token'];
         if (token is String && token.isNotEmpty) return token;
       }

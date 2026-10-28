@@ -25,7 +25,8 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
 | File | Role |
 |---|---|
 | `lib/services/silo/silo_api.dart` | HTTP layer: device headers (`SiloDeviceHeaders`), `SiloFormFactor`, bearer + `X-Profile-Id`/`X-Profile-Token`, single-flight token refresh, problem+json helpers, URL resolution |
-| `lib/services/silo/silo_auth_service.dart` | Pre-connection calls: address probing, password login, device-code flow, profiles, PIN, `buildConnection` |
+| `lib/services/silo/silo_auth_service.dart` | Pre-connection calls: address probing, password login, device-code calls, logout, profiles, PIN, `buildConnection`; typed `SiloSignInException` |
+| `lib/services/silo/silo_device_sign_in.dart` | `SiloDeviceSignIn`: the device-code state machine (port of Silo's `DeviceSignInMachine`), a `ValueNotifier` the sign-in screen renders |
 | `lib/services/silo/silo_client.dart` | `SiloClient` (`MediaServerClient`): libraries, cursor paging, items/seasons/episodes, hubs, search, watch state, collections, images |
 | `lib/services/silo/silo_client_playback.dart` | `part`: playback v3 start, sidecars, progress/stop, sessionless progress, downloads, markers |
 | `lib/services/silo/silo_playback_caps.dart` | What the player declares (`client_capabilities`, `client_playback_context`) |
@@ -47,6 +48,26 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
 - **Profiles:** almost every content route needs `X-Profile-Id`; PIN-locked profiles also need
   `X-Profile-Token` from `POST /profiles/{id}/verify-pin`. A Plezy connection is one Silo profile.
   Auto-select a single profile only when it has no PIN (as Silo's apps do).
+- **Device-code sign-in** (`SiloDeviceSignIn`, Silo's TV states table): poll at once, then every
+  `poll_after`/`interval`; a pending reply's `expires_at` extends the local deadline (applied as the
+  offset from the start reply's `expires_at`, never compared across clocks). Past the deadline the code
+  is withdrawn (`/auth/device/cancel`, 5 s bound) and **renewed in place** (status "New code"); renewals
+  pause after 1 h ("Show a new code"). `status: denied` stops with "declined" + "Show a new code"
+  (never re-mint silently); `expired|consumed|canceled`/404 replace the code (3 codes lost at their
+  first poll in a row → failed). Network/5xx back off to 30 s and show "Can't reach <host>" after 30 s
+  (10 s while starting); 429 for 60 s shows "Too many sign-in attempts" — both **keep polling** and
+  keep the live code on screen. Start 404/501 → password only; 410/426 → update required. An approved
+  code is spent: never cancel it (no Cancel button after approval). Use `package:clock` (`clock.now()`)
+  so `fake_async` tests can drive it.
+- **Abandoned sessions:** a sign-in that is not saved (screen left, Change server, no profiles,
+  completion failed, approval arriving after the flow was abandoned) is revoked with
+  `POST /api/v2/auth/logout` (bearer, best effort, 5 s). The screen marks the session handed off just
+  before `persistAndBindConnection`.
+- **PIN:** `verify-pin` 200 without `valid:true` = wrong PIN ("Wrong PIN. Try again."); 429 →
+  `SiloSignInFailure.pinRateLimited`; another 4xx → `pinRefused` with the problem `detail` (shown in
+  the PIN dialog, which stays open); 5xx/transport throw `MediaServerHttpException`.
+  `siloPinErrorMessage` maps them. A device approval bound to a PIN profile without `profile_token`
+  opens that profile's PIN dialog; without a PIN it is used directly.
 - **Tokens:** access tokens are short-lived; refresh proactively (≤ min(60 s, lifetime/2) left) and
   on 401 under one in-flight refresh. A 401 for an access token another request already replaced
   is retried without refreshing again (rotating twice wastes a pair). Only a 400/401 **carrying
@@ -181,10 +202,13 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
 Fixed: page-size-bound cursors and `seek`; synthetic-season writes hitting the series; stop retry;
 refused refresh resent on every call; missing `sequenced_progress_v1` check; IMDb score scale;
 `duration_seconds` on versions; parallel Home/season loads; concurrent `addSiloConnection`;
-device-code expiry/remint and PIN lockout (429) messages. Declined: 4-digit PIN length (matches
-Silo's apps). Client slice (late October): quality `original` → `auto`, re-watch resume,
-capped-preset snackbar, refresh refusal/stale-token 401, health, markers per file, form factor
-cache, session rows, external-player sessions, persisted token lifetime. Open follow-ups: an edit screen for an existing Silo connection (address, re-sign-in)
+device-code expiry/remint and PIN lockout (429) messages; sign-in slice (2026-10-28): tvOS deferred
+URL keyboard, code renewal/denied/unreachable/429 states, no cancel after approval, logout of abandoned
+sessions, PIN problem details, typed i18n errors, probe follow-up timeouts, a11y labels (spoken code,
+QR, PIN/Kids tile state), Kids caption. Client slice (late October): quality `original` → `auto`,
+re-watch resume, capped-preset snackbar, refresh refusal/stale-token 401, health, markers per file,
+form factor cache, session rows, external-player sessions, persisted token lifetime. Declined: 4-digit
+PIN length (matches Silo's apps). Open follow-ups: an edit screen for an existing Silo connection (address, re-sign-in)
 — today the user removes and re-adds it; music/audiobook libraries; OIDC sign-in.
 
 ## Deliberate differences from Silo's apps
@@ -215,6 +239,12 @@ cache, session rows, external-player sessions, persisted token lifetime. Open fo
   are hidden). Silo's own TV app keeps music minimal; the v2 contract has no album/track types.
 
 ## Testing
+- Sign-in: `test/test_helpers/silo_auth_fake.dart` (`FakeSiloAuthServer`: scripted start/poll/PIN
+  answers, records requests) drives `test/services/silo/silo_device_sign_in_test.dart` (fake_async),
+  `silo_auth_service_test.dart` and the widget tests in `test/screens/settings/add_silo_screen_test.dart`
+  (pass `authService:`; the code panel has a perpetual spinner, so pump bounded frames, never
+  `pumpAndSettle`; unmount at the end so the flow's timers stop). Keep the panel free of intrinsic
+  sizing: `QrImageView` is a `LayoutBuilder` and asserts under `SliverFillRemaining(hasScrollBody: false)`.
 - Unit tests: `scripts/run_tests.sh test/services/silo` (mappers, connection/vault, client with an
   `http/testing.dart` `MockClient`, headers/form factor). Client tests cover cursor `seek`/restart,
   synthetic-season writes, refused refresh, playback start/progress/stop, downloads, sessionless
