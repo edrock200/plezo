@@ -226,6 +226,10 @@ class SiloApi {
     return url.startsWith('/') ? '$origin$url' : '$origin/$url';
   }
 
+  /// The bare transport, for self-authorising URLs (seek-preview sheets) that
+  /// must go out without Silo's device headers or credentials.
+  http.Client get rawHttpClient => _http.inner;
+
   void close() => _http.close();
   Future<void> closeGracefully({Duration drainTimeout = const Duration(seconds: 2)}) =>
       _http.closeGracefully(drainTimeout: drainTimeout);

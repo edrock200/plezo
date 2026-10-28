@@ -51,6 +51,7 @@ import 'silo_api.dart';
 import 'silo_api_cache.dart';
 import 'silo_mappers.dart';
 import 'silo_playback_caps.dart';
+import 'silo_trickplay.dart';
 
 part 'silo_client_playback.dart';
 

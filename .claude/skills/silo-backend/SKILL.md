@@ -30,6 +30,7 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
 | `lib/services/silo/silo_client_playback.dart` | `part`: playback v3 start, sidecars, progress/stop, sessionless progress, downloads, markers |
 | `lib/services/silo/silo_playback_caps.dart` | What the player declares (`client_capabilities`, `client_playback_context`) |
 | `lib/services/silo/silo_mappers.dart` | Pure JSON → `MediaItem`/`MediaVersion`/chapters/markers; watch-detail helpers shared with offline playback |
+| `lib/services/silo/silo_trickplay.dart` | Seek-bar previews: `SiloTrickplayManifest` (validation, time → sheet/tile), `SiloTrickplayService` (`ScrubPreviewSource`: bounded sheet cache, renewal), `load`/`fetchManifest`/`fetchSheet` |
 | `lib/services/silo/silo_api_cache.dart` | `SiloApiCache`: serialized items (`silo:item/<id>`) and pinned watch detail for downloads |
 | `lib/screens/settings/add_silo_screen.dart` | Add-server UI: address → code or password → Silo profile (+PIN) → persist and bind |
 | `lib/media/remote_trailer.dart` | `RemoteTrailer` (YouTube video, never a `MediaItem`), `RemoteTrailerClient`, `buildExtrasRail` (port of Silo's `trailerRailEntries`) |
@@ -116,6 +117,20 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
   page, then `vnd.youtube:<id>`, then the watch page. Windows/Linux open the browser (no web view
   there; never build a `YoutubePlayerController` on them). tvOS opens `youtube://watch/<id>`
   through the Runner's `openUrl`. Never extract streams (youtube_explode etc.): YouTube's terms.
+- **Seek previews** (`trickplay_v1`, Silo Android #695): `createScrubPreviewSource` reads the
+  watch detail (cached) and only when the streamed version (`MediaSourceInfo.mediaSourceId` = file
+  id) has `trickplay_available: true` asks `GET /watch/{id}/trickplay?file_id=`. The manifest is
+  refused (time-only tooltip) for another file id, any size outside 1..8192, a sheet side over
+  8192, sheet indexes not exactly `0..ceil(count/(cols*rows))-1`, or a non-http(s) URL. Thumbnail
+  i covers `[i*interval, (i+1)*interval)`; past the end shows the last. Sheet URLs are signed
+  credentials: fetched with `SiloApi.rawHttpClient` and **no headers at all** (presigned storage
+  may be another host), never logged. Sheets are held in a 12 MB LRU and served to the tooltip as
+  a `SheetScrubFrame` through a private `ImageProvider` keyed by (service, layout generation,
+  sheet, attempt). URLs are renewed 60 s before `expires_at` or when a sheet answers
+  401/403/404/410 (one shared read, 30 s back-off); a renewal with another layout drops held
+  sheets, a refused one (4xx other than 429, unusable) withdraws the previews. Unlike Android, a
+  manifest that fails at open is not retried later in that playback (the player builds the seek
+  bar's thumbnail hook only for an available source). Offline playback never asks.
 - **Limits:** `GET /catalog/people` caps `limit` at 100; catalog pages at 200.
 - **Offline:** `fetchItem` falls back to `SiloApiCache.getMetadata` (the pinned download row) on a
   transient error; watch detail is read through the cache too.
@@ -142,6 +157,17 @@ Silo's apps). Open follow-ups: an edit screen for an existing Silo connection (a
   The TV detail rail holds playable `MediaItem`s only, so on TV a YouTube trailer is reached
   through the Trailer button (first YouTube `trailer`, else `teaser`, when there is no local
   trailer); the phone/desktop row shows every YouTube video after the local extras.
+- Administrator-revoked downloads (Silo Android #673, `revoked_removes_local`) do not apply:
+  that flag marks rows of the managed `/downloads` registry, and Plezy's direct-link downloads
+  create no registry rows, so there is nothing the server can report revoked or for Plezy to
+  `DELETE /api/v2/downloads/{id}`. Revisit if Plezy ever moves to the registry.
+- Series-wide audio/subtitle memory (Silo Android #680: `PUT|DELETE /api/v2/audio-prefs/{series_id}`
+  and `/subtitle-prefs/{series_id}` with track signatures, read back as `effective_audio_track_index`
+  / `effective_subtitle_*` on the watch and item detail) is not implemented: Plezy's
+  `TrackManager` persists per file part (Plex) or through account flags (Jellyfin), and Silo's
+  subtitle start is resolved client-side; honouring it needs a series-scoped persister in the
+  shared player plus a resolver for the signatures. Plezy saves no Silo track pick to the server.
+- Theme music (Silo Android #678) is not offered: Plezy plays no theme music for any backend.
 - Music, audiobooks and e-books are not mapped (`SiloMappers.item` returns null; those libraries
   are hidden). Silo's own TV app keeps music minimal; the v2 contract has no album/track types.
 
@@ -149,7 +175,8 @@ Silo's apps). Open follow-ups: an edit screen for an existing Silo connection (a
 - Unit tests: `scripts/run_tests.sh test/services/silo` (mappers, connection/vault, client with an
   `http/testing.dart` `MockClient`, headers/form factor). Client tests cover cursor `seek`/restart,
   synthetic-season writes, refused refresh, playback start/progress/stop, downloads, sessionless
-  progress and extras/remote trailers (plus `test/media/remote_trailer_test.dart` and
+  progress, extras/remote trailers and seek previews (`silo_trickplay_test.dart`: manifest
+  validation, tile mapping, sheet cache/renewal, header-free sheet fetch) (plus `test/media/remote_trailer_test.dart` and
   `test/utils/youtube_trailer_launcher_test.dart`); add one for each contract rule you change. Capability mocks must list
   `features: ['sequenced_progress_v1']`. Mock-client handlers must
   `Uri.decodeComponent(request.url.path)` — ids are percent-encoded on the wire.
