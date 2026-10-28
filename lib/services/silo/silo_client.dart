@@ -103,6 +103,7 @@ class SiloClient
     final client = SiloClient._(connection: connection, api: api);
     api.onTokensRefreshed = client._handleTokensRefreshed;
     api.onSessionExpired = () => client._sessionExpired = true;
+    api.onServerUnreachable = () => client.onServerUnreachable?.call();
     return client;
   }
 
@@ -135,6 +136,60 @@ class SiloClient
   /// Persists connection changes (rotated tokens, admin role). Wired by
   /// `MultiServerManager`.
   FutureOr<void> Function(SiloConnection connection)? onConnectionUpdated;
+
+  /// Take over the login session of [previous], the client this one
+  /// replaces: its current token pair (newer than a connection row read
+  /// before a rotation was persisted) and every refresh token it has held,
+  /// so a later re-bind with one of those is still recognised as this
+  /// session. Call before the first request.
+  void inheritSession(SiloClient previous) {
+    _knownRefreshTokens.addAll(previous._knownRefreshTokens);
+    final current = previous.connection;
+    if (current.refreshToken != _connection.refreshToken) adoptTokens(current);
+  }
+
+  /// Use the token pair in [rotated], which another client of this login
+  /// session obtained by refreshing (Silo refresh tokens are single-use, so
+  /// the pair this client holds is dead). Does not call [onConnectionUpdated].
+  void adoptTokens(SiloConnection rotated) {
+    LogRedactionManager.registerToken(rotated.accessToken);
+    LogRedactionManager.registerToken(rotated.refreshToken);
+    _knownRefreshTokens.add(rotated.refreshToken);
+    _sessionExpired = false;
+    _api.replaceTokens(
+      SiloTokens(
+        accessToken: rotated.accessToken,
+        refreshToken: rotated.refreshToken,
+        expiresAt: rotated.accessTokenExpiresAt,
+      ),
+    );
+    _connection = _connection.copyWith(
+      accessToken: rotated.accessToken,
+      refreshToken: rotated.refreshToken,
+      accessTokenExpiresAt: rotated.accessTokenExpiresAt,
+    );
+  }
+
+  /// Called when requests suggest the server is down or the login is gone
+  /// (see [SiloApi.onServerUnreachable]) and when [checkHealth] finds the
+  /// server offline. `MultiServerManager` confirms it with [checkHealth];
+  /// a failed probe re-arms that check, which is how an offline server is
+  /// noticed coming back (as with a MediaBrowser server's lone endpoint).
+  void Function()? onServerUnreachable;
+
+  /// Revoke this login session on the server (`POST /auth/logout`). Best
+  /// effort: used when the connection is removed, so it never throws and
+  /// gives up after [timeout].
+  Future<void> logout({Duration timeout = const Duration(seconds: 5)}) async {
+    try {
+      final response = await _api
+          .request('POST', '/api/v2/auth/logout', profile: false, timeout: timeout)
+          .timeout(timeout * 2);
+      appLogger.d('Silo: logout answered ${response.statusCode}');
+    } catch (e) {
+      appLogger.d('Silo: logout failed', error: e.runtimeType);
+    }
+  }
 
   Future<void> _handleTokensRefreshed(SiloTokens tokens) async {
     LogRedactionManager.registerToken(tokens.accessToken);
@@ -208,6 +263,12 @@ class SiloClient
   /// surfaces as [HealthStatus.authError].
   @override
   Future<HealthStatus> checkHealth() async {
+    final status = await _probeHealth();
+    if (status == HealthStatus.offline) onServerUnreachable?.call();
+    return status;
+  }
+
+  Future<HealthStatus> _probeHealth() async {
     try {
       final response = await _api.request(
         'GET',

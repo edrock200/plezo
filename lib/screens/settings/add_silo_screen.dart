@@ -504,7 +504,8 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
         bindToProfile: ProfileConnection(
           profileId: bindProfile.id,
           connectionId: connection.id,
-          userToken: connection.accessToken,
+          // The connection row holds Silo's rotating tokens; the join row keeps no copy.
+          userToken: null,
           userIdentifier: connection.userId,
           tokenAcquiredAt: DateTime.now(),
         ),

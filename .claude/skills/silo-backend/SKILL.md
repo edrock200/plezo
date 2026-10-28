@@ -79,7 +79,20 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
   (unknown lifetime counts as an hour). A refused refresh token is remembered and not sent again. **Refresh tokens rotate**: persist every new pair
   (`SiloClient.onConnectionUpdated` → `ConnectionRegistry.upsert`). `MultiServerManager` keeps the
   live client when a re-bind arrives with an older, already-rotated refresh token
-  (`SiloClient.ownsRefreshToken`) — replacing it would revive a dead token.
+  (`SiloClient.ownsRefreshToken`) — replacing it would revive a dead token. When such a re-bind
+  must rebuild the client (new address or PIN token), the replacement takes the live client's
+  current pair and known tokens (`inheritSession`), and a refresh the replaced client still had
+  in flight is handed to the replacement (`adoptTokens`) and persisted as the replacement's row.
+  A closing client rejects new requests, so only an already-sent refresh can land after a swap.
+- **Server status:** Silo has one address, so `SiloApi.onServerUnreachable` (2 consecutive
+  connection failures, or a 401 still there after a refresh attempt) and an `offline`
+  `checkHealth` go through `MultiServerManager._onJellyfinEndpointsExhausted` → the shared
+  debounce + health probe, which flips the server offline / auth error. A failed probe re-arms
+  the check, which is how the server is seen coming back (same loop as a MediaBrowser server).
+- **Removal:** `removeSiloConnection` revokes the session in the background
+  (`POST /api/v2/auth/logout`, bearer only, 5 s) with the live client, or a throwaway client
+  from the stored row; removal never waits for it. Profile join rows for Silo carry no token
+  (borrowing stores `userToken: null`); the tokens live only in the connection row.
 - **Paging:** collections are `{items, page:{has_more,next_cursor}, total, window_cursor}` with
   opaque cursors; offsets are rejected. Cursors are bound to the query **and the page size**.
   `SiloClient._pageAt` keeps a bounded map per (query, page size): the adjacent page reuses
@@ -207,7 +220,8 @@ URL keyboard, code renewal/denied/unreachable/429 states, no cancel after approv
 sessions, PIN problem details, typed i18n errors, probe follow-up timeouts, a11y labels (spoken code,
 QR, PIN/Kids tile state), Kids caption. Client slice (late October): quality `original` → `auto`,
 re-watch resume, capped-preset snackbar, refresh refusal/stale-token 401, health, markers per file,
-form factor cache, session rows, external-player sessions, persisted token lifetime. Declined: 4-digit
+form factor cache, session rows, external-player sessions, persisted token lifetime. Integration slice: servers going offline/auth-error on their own, rotated token kept on client
+replacement, logout on removal, no access token in borrowed join rows. Declined: 4-digit
 PIN length (matches Silo's apps). Open follow-ups: an edit screen for an existing Silo connection (address, re-sign-in)
 — today the user removes and re-adds it; music/audiobook libraries; OIDC sign-in.
 
@@ -245,6 +259,9 @@ PIN length (matches Silo's apps). Open follow-ups: an edit screen for an existin
   (pass `authService:`; the code panel has a perpetual spinner, so pump bounded frames, never
   `pumpAndSettle`; unmount at the end so the flow's timers stop). Keep the panel free of intrinsic
   sizing: `QrImageView` is a `LayoutBuilder` and asserts under `SliverFillRemaining(hasScrollBody: false)`.
+- Manager integration (`test/services/silo/silo_server_manager_test.dart`): `MultiServerManager(
+  siloClientFactory: ...)` injects `SiloClient.forTesting` clients over a small fake server with a
+  rotating refresh token; status tests run under `fakeAsync` (5 s debounce).
 - Unit tests: `scripts/run_tests.sh test/services/silo` (mappers, connection/vault, client with an
   `http/testing.dart` `MockClient`, headers/form factor). Client tests cover cursor `seek`/restart,
   synthetic-season writes, refused refresh, playback start/progress/stop, downloads, sessionless

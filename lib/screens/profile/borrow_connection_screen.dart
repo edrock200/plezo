@@ -362,14 +362,16 @@ class _BorrowConnectionScreenState extends State<BorrowConnectionScreen> {
   }
 
   /// A Silo connection is one account acting as one Silo profile; borrowing
-  /// it links the same connection row to the target profile.
+  /// it links the same connection row to the target profile. The join row
+  /// carries no token: Silo access tokens are short-lived and rotate in the
+  /// connection row, so a copy here would only be a stale secret nobody reads.
   Future<void> _borrowSilo(_BorrowCandidate cand) async {
     final silo = cand.connection as SiloConnection;
     await context.read<ProfileConnectionRegistry>().upsert(
       ProfileConnection(
         profileId: widget.targetProfile.id,
         connectionId: silo.id,
-        userToken: cand.pc.hasToken ? cand.pc.userToken : silo.accessToken,
+        userToken: null,
         userIdentifier: cand.pc.userIdentifier.isNotEmpty ? cand.pc.userIdentifier : silo.userId,
         tokenAcquiredAt: DateTime.now(),
       ),
