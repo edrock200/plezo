@@ -10,17 +10,31 @@ description: Build, publish and verify Plezy's Android preview APKs (the "Plezy 
   branch **only when the head commit's first line contains `[release-apk]`** (markers in the body are
   ignored since a body mentioning `[release-apk]` once published an unintended 2.22.4). The upstream
   `build.yml` cannot be used: it only runs from `main` and needs the upstream signing secrets.
-- It builds `flutter build apk --release --split-per-abi` (Flutter 3.47.1, Java 21) in about 13
-  minutes and publishes a GitHub **pre-release** numbered by bumping the patch of `pubspec.yaml`'s
-  version: the Nth preview of 2.22.0 is **2.22.N** (the user's choice), tagged `silo-preview-2.22.N`,
-  titled "Plezy 2.22.N with Silo", built with `--build-name=2.22.N --build-number=<pubspec build>+N`
-  so the app shows it and it installs as an update. N counts every earlier `silo-preview-<major.minor>.*`
-  release; `silo-release-notes.yml` moves releases under older tag schemes to their number. Tags
-  are pure versions because GitHub lists releases by the version in the tag (short-sha tags sorted
-  by their letters and put older builds first). Assets: `plezy-silo-<version>-<sha>-{arm64-v8a,armeabi-v7a,x86_64}.apk` and `SHA256SUMS.txt`.
+- It builds `flutter build apk --release --split-per-abi` (Java 21, the Flutter version upstream's
+  `build.yml` pins in `FLUTTER_VERSION`, read by `scripts/silo_flutter_version.sh`, which also
+  checks `setup-flutter-git` names the same one) in about 13 minutes and publishes a GitHub
+  **pre-release** versioned `<pubspec major.minor>.N` (the user's choice): N is one above the highest
+  existing `silo-preview-<major.minor>.*` **tag** (tags of deleted releases count, so a number is
+  never reused), at least pubspec's patch + 1. After the 2.25.0 upstream merge the first preview is
+  2.25.1. Tagged `silo-preview-<version>`, titled "Plezy <version> with Silo".
+- Build number (Android versionCode) = max(pubspec build + N, last preview's build + 1), so a
+  preview always installs as an update, even when an upstream merge moves pubspec's version (2.22.5
+  was build 157; pubspec 2.25.0+157 makes 2.25.1 build 158). Each release records its build in a
+  `silo-preview-build.txt` asset (`build=<n>`) that the next preview and the desktop builds read
+  back; releases from before that are derived from their scheme (2.22.N → 152+N). All of this is
+  `scripts/silo_preview_version.sh` (`next`, `latest`, `build-of`); test it locally with a fake
+  `gh` on `PATH`. The workflow refuses to publish if the tag already exists or this commit already
+  has a preview. `SUPPORTER_MODE` is left unset (perks off), like upstream's GitHub APK.
+- Tags are pure versions because GitHub lists releases by the version in the tag (short-sha tags
+  sorted by their letters and put older builds first). Assets: `plezy-silo-<version>-<sha>-{arm64-v8a,armeabi-v7a,x86_64}.apk`,
+  `SHA256SUMS.txt` and `silo-preview-build.txt`.
 - Signing: the repository's `ANDROID_KEYSTORE_BASE64`/`ANDROID_STORE_PASSWORD`/`ANDROID_KEY_PASSWORD`/
   `ANDROID_KEY_ALIAS` secrets when set; otherwise a keystore generated once and kept in the Actions
-  cache (`silo-preview-keystore-v1`), so later previews install as updates while the cache lives.
+  cache, so later previews install as updates while the cache lives. With a
+  `PREVIEW_KEYSTORE_PASSPHRASE` secret the cached keystore and password are encrypted
+  (`openssl enc -aes-256-cbc -pbkdf2`, cache key `silo-preview-keystore-enc-v1`); a plaintext key
+  cached earlier (`silo-preview-keystore-v1`) is restored as a fallback, keeps signing, and is saved
+  encrypted under the new key. Without the secret the key stays plaintext and the job warns.
   Caches are branch-scoped and evicted after 7 days unused: a new branch, or a gap of a week,
   generates a new key and the next preview will not install over the last one. Recommend that the
   user add the `ANDROID_*` secrets for a stable key; never promise updates without them. Without `key.properties` a release
@@ -33,17 +47,21 @@ description: Build, publish and verify Plezy's Android preview APKs (the "Plezy 
 ## Windows and macOS builds
 - Workflow: `.github/workflows/silo-preview-desktop.yml`. A `gate` job reads the release marker from
   the commit's first line; `resolve` picks the code and version; then:
-  - Windows: x64 on `windows-latest`, arm64 on `windows-11-arm`, packaged with
+  - Windows (`SUPPORTER_MODE=msstore`, as upstream): x64 on `windows-latest`, arm64 on
+    `windows-11-arm` (Flutter from `setup-flutter-git`), bundle checked like upstream's (required
+    files present; no `*.pdb`, `plezy.lib`, `plezy.exp`, `simdutf.lib`), packaged with
     `windows/build-installer.ps1` into `plezy-silo-<v>-windows-installer.exe` and
     `…-windows-{x64,arm64}-portable.7z` + `SHA256SUMS-windows.txt`.
-  - macOS: universal app on `macos-26`, signed **ad hoc** (no Developer ID), checked with
+  - macOS (`SUPPORTER_MODE=unlocked`, as upstream): universal app on `macos-26`, signed **ad hoc** (no Developer ID), checked with
     `codesign --verify --deep --strict` and its `CFBundleShortVersionString`, packaged as
     `plezy-silo-<v>-macos.dmg` + `SHA256SUMS-macos.txt`. Users must allow it once in
     System Settings › Privacy & Security › Open Anyway (or `xattr -dr com.apple.quarantine`).
     With an Apple Developer account, port upstream `build.yml`'s import/sign/notarize steps.
-- `[release-apk]` builds both from the same commit and waits for the Android release to attach.
-  `[release-desktop]`, `[release-windows]` or `[release-macos]` builds from the **latest** release's
-  commit and attaches to it.
+- `[release-apk]` builds both from the same commit with the same version and build number, and
+  waits for the Android release to attach; it stops at once if the APK run for that commit failed
+  or was cancelled, and checks the release's commit and recorded build before uploading.
+  `[release-desktop]`, `[release-windows]` or `[release-macos]` builds from the commit of the
+  highest-versioned preview release and attaches to it.
 - Never pass `ENABLE_UPDATE_CHECK=true` (the updater reads upstream Plezy's feed). Both apps keep
   Plezy's app id, so they replace an installed Plezy.
 - Each build takes 10–25 minutes; verify the attached files and checksums. Running the apps is the
@@ -57,6 +75,9 @@ description: Build, publish and verify Plezy's Android preview APKs (the "Plezy 
 - **2.22.5:** in a `set -euo pipefail` step, `curl/gh … | base64 -d | grep -m1 …` fails at
   random with "base64: Broken pipe" (grep exits early, base64 gets SIGPIPE). Decode into a
   variable first, then search it.
+- **2.25.0 merge:** numbering by "count of releases + 1" reused a deleted release's tag, and
+  "pubspec build + N" would have restarted below the last preview's build after an upstream merge.
+  Number from the highest existing tag and keep the build above the last recorded one.
 
 ## Release notes (change log)
 - Every release page carries a plain-language change log from `docs/silo-preview-changelog.md`
@@ -79,7 +100,8 @@ description: Build, publish and verify Plezy's Android preview APKs (the "Plezy 
    branch (even one without `[release-apk]`, whose own job is skipped). Commit follow-up docs
    locally and push them only after the release is published.
 3. Watch it with the GitHub MCP tools: `actions_list` (`list_workflow_runs`, branch filter) →
-   `list_workflow_jobs`; on failure `get_job_logs` with `failed_only`. `gh` is not available.
+   `list_workflow_jobs`; on failure `get_job_logs` with `failed_only`. `gh` is installed but has no
+   valid token, so it cannot be used.
 4. Confirm with `list_releases` (fields `tag_name`, `html_url`, `prerelease`). A background
    `curl` loop on `releases/download/<tag>/SHA256SUMS.txt` (HTTP 200 when published) is a cheap
    way to wait without polling the API.

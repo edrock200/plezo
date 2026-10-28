@@ -12,8 +12,21 @@ run-name: Silo preview APK ${{ github.sha }}
 # as build.yml). Otherwise a keystore is generated once and kept in the Actions
 # cache, so later previews keep the same signature and install as updates
 # while the cache lives (caches are branch-scoped and evicted after 7 days
-# unused; add the secrets for a stable key). These APKs use Plezy's package id, so they replace
-# (and cannot update) a Plezy installed from a store.
+# unused; add the secrets for a stable key). With a PREVIEW_KEYSTORE_PASSPHRASE
+# secret the cached keystore and its password are encrypted with it
+# (openssl aes-256-cbc, pbkdf2); a plaintext key cached before the secret
+# existed is still used and moved to the encrypted cache entry. These APKs use
+# Plezy's package id, so they replace (and cannot update) a Plezy installed
+# from a store.
+#
+# Versions: <pubspec major.minor>.N, where N is one above the highest existing
+# silo-preview-<major.minor>.* tag; the build number is above every earlier
+# preview's (scripts/silo_preview_version.sh). Each release records its build
+# in the silo-preview-build.txt asset.
+#
+# The Flutter SDK is the one upstream's build.yml pins
+# (scripts/silo_flutter_version.sh). SUPPORTER_MODE is left unset (perks off),
+# like upstream's GitHub APK.
 
 on:
   push:
@@ -27,9 +40,6 @@ permissions:
 concurrency:
   group: silo-preview-apk-${{ github.ref }}
   cancel-in-progress: true
-
-env:
-  FLUTTER_VERSION: "3.47.1"
 
 jobs:
   # Release markers count only in the commit's first line, so a message body
@@ -45,8 +55,7 @@ jobs:
         run: |
           subject="${MESSAGE%%$'\n'*}"
           mode=none
-          if [[ "$subject" == *"[release-apk]"* ]]; then mode=apk
-          elif [[ "$subject" == *"[release-windows]"* ]]; then mode=windows; fi
+          if [[ "$subject" == *"[release-apk]"* ]]; then mode=apk; fi
           echo "mode=${mode}" >> "$GITHUB_OUTPUT"
           echo "Release marker: ${mode}"
 
@@ -61,6 +70,10 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Read the pinned Flutter version
+        id: flutter
+        run: echo "version=$(bash scripts/silo_flutter_version.sh)" >> "$GITHUB_OUTPUT"
+
       - name: Setup Java
         uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5
         with:
@@ -71,7 +84,7 @@ jobs:
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           channel: "stable"
-          flutter-version: ${{ env.FLUTTER_VERSION }}
+          flutter-version: ${{ steps.flutter.outputs.version }}
           cache: true
 
       - name: Cache Gradle
@@ -82,12 +95,25 @@ jobs:
             ~/.gradle/wrapper
           key: silo-preview-${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
 
+      - name: Check for a keystore passphrase
+        id: keystore-mode
+        env:
+          PASSPHRASE: ${{ secrets.PREVIEW_KEYSTORE_PASSPHRASE }}
+        run: |
+          if [[ -n "$PASSPHRASE" ]]; then echo "encrypted=true"; else echo "encrypted=false"; fi >> "$GITHUB_OUTPUT"
+
+      # With a passphrase the cache holds only the encrypted keystore (key
+      # silo-preview-keystore-enc-v1). The plaintext entry is the fallback so
+      # a key cached before the secret existed keeps signing; the post step
+      # then saves it, encrypted, under the new key.
       - name: Restore preview keystore
         id: keystore-cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: .preview-keystore
-          key: silo-preview-keystore-v1
+          key: ${{ steps.keystore-mode.outputs.encrypted == 'true' && 'silo-preview-keystore-enc-v1' || 'silo-preview-keystore-v1' }}
+          restore-keys: |
+            silo-preview-keystore-v1
 
       - name: Install dependencies
         run: flutter pub get --enforce-lockfile --no-example
@@ -98,22 +124,46 @@ jobs:
           STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          PASSPHRASE: ${{ secrets.PREVIEW_KEYSTORE_PASSPHRASE }}
         run: |
+          set -euo pipefail
           if [[ -n "$KEYSTORE_BASE64" ]]; then
             echo "$KEYSTORE_BASE64" | base64 --decode > android/app/upload-keystore.jks
             store_password="$STORE_PASSWORD"; key_password="$KEY_PASSWORD"; key_alias="$KEY_ALIAS"
           else
             echo "::notice::No ANDROID_KEYSTORE_BASE64 secret; signing with the cached preview keystore."
-            if [[ ! -f .preview-keystore/preview.jks ]]; then
-              mkdir -p .preview-keystore
-              openssl rand -hex 24 > .preview-keystore/password
-              keytool -genkeypair -noprompt -keystore .preview-keystore/preview.jks -storetype JKS \
+            cache=.preview-keystore
+            work="$RUNNER_TEMP/preview-keystore"
+            mkdir -p "$cache" "$work"
+            if [[ -f "$cache/preview.jks" && -f "$cache/password" ]]; then
+              # A plaintext key (cached without a passphrase): keep signing with it.
+              cp "$cache/preview.jks" "$cache/password" "$work/"
+            elif [[ -f "$cache/keystore.tar.enc" ]]; then
+              [[ -n "$PASSPHRASE" ]] || { echo "::error::The cached preview keystore is encrypted but PREVIEW_KEYSTORE_PASSPHRASE is not set."; exit 1; }
+              openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 -pass env:PASSPHRASE \
+                -in "$cache/keystore.tar.enc" | tar -x -C "$work" \
+                || { echo "::error::Could not decrypt the cached preview keystore (wrong PREVIEW_KEYSTORE_PASSPHRASE?)."; exit 1; }
+            else
+              echo "::notice::No cached preview keystore; generating a new signing key. This preview will not install over earlier ones."
+              openssl rand -hex 24 > "$work/password"
+              keytool -genkeypair -noprompt -keystore "$work/preview.jks" -storetype JKS \
                 -alias preview -keyalg RSA -keysize 4096 -validity 36500 \
-                -storepass "$(cat .preview-keystore/password)" -keypass "$(cat .preview-keystore/password)" \
+                -storepass "$(cat "$work/password")" -keypass "$(cat "$work/password")" \
                 -dname "CN=Plezy Silo preview"
             fi
-            cp .preview-keystore/preview.jks android/app/upload-keystore.jks
-            store_password="$(cat .preview-keystore/password)"; key_password="$store_password"; key_alias=preview
+            # Leave in the cache directory exactly what the cache post step should save.
+            if [[ -n "$PASSPHRASE" ]]; then
+              tar -c -C "$work" preview.jks password |
+                openssl enc -aes-256-cbc -salt -pbkdf2 -iter 600000 -pass env:PASSPHRASE -out "$cache/keystore.tar.enc.new"
+              mv "$cache/keystore.tar.enc.new" "$cache/keystore.tar.enc"
+              rm -f "$cache/preview.jks" "$cache/password"
+            else
+              cp "$work/preview.jks" "$work/password" "$cache/"
+              echo "::warning::The preview signing key is cached unencrypted and is lost after 7 days without a build. Add the ANDROID_KEYSTORE_BASE64, ANDROID_STORE_PASSWORD, ANDROID_KEY_PASSWORD and ANDROID_KEY_ALIAS secrets for a stable key (or PREVIEW_KEYSTORE_PASSPHRASE to encrypt the cached one)."
+            fi
+            cp "$work/preview.jks" android/app/upload-keystore.jks
+            store_password="$(cat "$work/password")"; key_password="$store_password"; key_alias=preview
+            rm -rf "$work"
           fi
           cat > android/key.properties << EOF
           storePassword=$store_password
@@ -122,10 +172,10 @@ jobs:
           storeFile=upload-keystore.jks
           EOF
 
-      # Each preview bumps the patch of pubspec's version by one: the Nth
-      # preview of 2.22.0 is 2.22.N (build number +N, so it installs as an
-      # update). N counts every earlier preview release of that major.minor,
-      # whatever its tag looks like, so it matches silo-release-notes.yml.
+      # The preview after the highest existing silo-preview-<major.minor>.*
+      # tag of pubspec's major.minor (<major.minor>.N), with a build number
+      # above every earlier preview's so it installs as an update even after
+      # an upstream merge resets pubspec's version.
       - name: Pick preview version
         id: ver
         env:
@@ -133,15 +183,14 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          pub="$(grep -m1 '^version:' pubspec.yaml | awk '{print $2}')"
-          name="${pub%%+*}"; build="${pub#*+}"
-          major_minor="${name%.*}"; patch="${name##*.}"
-          count="$(gh release list --limit 1000 --json tagName \
-            --jq "[.[] | select(.tagName | startswith(\"silo-preview-${major_minor}.\"))] | length")"
-          n=$((count + 1))
-          echo "version=${major_minor}.$((patch + n))" >> "$GITHUB_OUTPUT"
-          echo "build=$((build + n))" >> "$GITHUB_OUTPUT"
-          echo "Preview ${major_minor}.$((patch + n)) (build $((build + n)))"
+          pub="$(awk '/^version:/ && !found { print $2; found = 1 }' pubspec.yaml)"
+          picked="$(bash scripts/silo_preview_version.sh next "$pub" "$GITHUB_SHA")"
+          echo "$picked"
+          if grep -qx 'reused=true' <<< "$picked"; then
+            echo "::error::This commit already has a preview release; push a new commit to make another."
+            exit 1
+          fi
+          echo "$picked" >> "$GITHUB_OUTPUT"
 
       - name: Build APKs
         run: >
@@ -166,12 +215,28 @@ jobs:
           done
           (cd dist && sha256sum *.apk > SHA256SUMS.txt)
           # GitHub orders releases by the version in the tag: newest first.
-          echo "tag=silo-preview-${version}" >> "$GITHUB_OUTPUT"
+          echo "tag=${{ steps.ver.outputs.tag }}" >> "$GITHUB_OUTPUT"
+          # The build number, read back by the next preview and the desktop builds.
+          echo "build=${{ steps.ver.outputs.build }}" > dist/silo-preview-build.txt
           echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "short_sha=${short_sha}" >> "$GITHUB_OUTPUT"
           # Plain-language notes from the change log's "## Next preview" section.
           python3 scripts/silo_release_notes.py docs/silo-preview-changelog.md "Next preview" release-notes.md \
             "${GITHUB_REF_NAME}" "${GITHUB_SHA}"
+
+      # The tag must still be free: another build may have taken the number
+      # since it was picked, and the release action would add to its release.
+      - name: Check the tag is unused
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ steps.apks.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if gh api "repos/${GH_REPO}/git/ref/tags/${TAG}" > /dev/null 2>&1; then
+            echo "::error::Tag ${TAG} already exists; not publishing over it."
+            exit 1
+          fi
 
       - name: Publish pre-release
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3

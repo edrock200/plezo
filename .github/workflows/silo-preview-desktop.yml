@@ -7,7 +7,9 @@ run-name: Silo preview desktop ${{ github.sha }}
 #
 # Markers count only in the head commit's first line.
 # - "[release-apk]" builds both from the same commit as the Android preview
-#   and attaches to the release that build publishes (same 2.22.N).
+#   and attaches to the release that build publishes (same version and build
+#   number, from scripts/silo_preview_version.sh). If that build fails or is
+#   cancelled, the desktop jobs stop instead of waiting for its release.
 # - "[release-desktop]", "[release-windows]" or "[release-macos]" (without
 #   "[release-apk]") builds both, Windows only or macOS only from the code of
 #   the latest existing preview release and attaches to it.
@@ -16,6 +18,11 @@ run-name: Silo preview desktop ${{ github.sha }}
 # Plezy's feed and would replace this build with Plezy without Silo. Both
 # apps keep Plezy's app id, so they replace an installed Plezy. Neither is
 # signed with a vendor certificate (SmartScreen / Gatekeeper warn once).
+#
+# Like upstream's GitHub builds: SUPPORTER_MODE=unlocked on macOS, msstore on
+# Windows, and the Flutter SDK upstream's build.yml pins
+# (scripts/silo_flutter_version.sh; Windows arm64 uses setup-flutter-git,
+# which pins the same release).
 
 on:
   push:
@@ -29,9 +36,6 @@ permissions:
 concurrency:
   group: silo-preview-desktop-${{ github.ref }}
   cancel-in-progress: true
-
-env:
-  FLUTTER_VERSION: "3.47.1"
 
 jobs:
   # Release markers count only in the commit's first line, so a message body
@@ -72,7 +76,15 @@ jobs:
       ref: ${{ steps.pick.outputs.ref }}
       version: ${{ steps.pick.outputs.version }}
       build: ${{ steps.pick.outputs.build }}
+      flutter_version: ${{ steps.pick.outputs.flutter_version }}
     steps:
+      # The scripts come from the pushed commit; the code built may be an
+      # older release's.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts
+
       - name: Pick release and code
         id: pick
         env:
@@ -83,41 +95,36 @@ jobs:
           set -euo pipefail
           # Decode the whole file before searching it: stopping early (grep -m1) can kill base64 with
           # SIGPIPE, which pipefail turns into a failed step.
-          pubspec_at() {
-            local content
-            content="$(gh api "repos/${GH_REPO}/contents/pubspec.yaml?ref=$1" --jq .content | base64 -d)"
-            awk '/^version:/ && !found { print $2; found = 1 }' <<< "$content"
+          file_at() {
+            gh api "repos/${GH_REPO}/contents/$1?ref=$2" --jq .content | base64 -d
           }
           if [[ "$MODE" == apk ]]; then
-            # Same numbering as silo-preview-apk.yml: every earlier preview of
-            # this major.minor counts, except a release already made from
-            # this commit (the APK build may publish first).
+            # Same version and build as silo-preview-apk.yml picks for this
+            # commit (or reads back, if its release is already out).
             ref="$GITHUB_SHA"
-            pub="$(pubspec_at "$ref")"
-            name="${pub%%+*}"; build="${pub#*+}"; major_minor="${name%.*}"; patch="${name##*.}"
-            count="$(gh release list --limit 1000 --json tagName \
-              --jq "[.[] | select(.tagName | startswith(\"silo-preview-${major_minor}.\"))] | length")"
-            if gh release view "silo-preview-${major_minor}.$((patch + count))" --json targetCommitish \
-                --jq .targetCommitish 2>/dev/null | grep -qx "$GITHUB_SHA"; then
-              count=$((count - 1))
-            fi
-            n=$((count + 1))
+            pub="$(awk '/^version:/ && !found { print $2; found = 1 }' <<< "$(file_at pubspec.yaml "$ref")")"
+            picked="$(bash scripts/silo_preview_version.sh next "$pub" "$ref")"
+            version="$(sed -n 's/^version=//p' <<< "$picked")"
+            build="$(sed -n 's/^build=//p' <<< "$picked")"
           else
-            tag="$(gh release list --limit 1000 --json tagName,createdAt \
-              --jq '[.[] | select(.tagName | test("^silo-preview-[0-9]+\\.[0-9]+\\.[0-9]+$"))] | sort_by(.createdAt) | last | .tagName')"
-            [[ -n "$tag" && "$tag" != "null" ]] || { echo "::error::No numbered Silo preview release to attach to."; exit 1; }
-            ref="$(gh release view "$tag" --json targetCommitish --jq .targetCommitish)"
-            pub="$(pubspec_at "$ref")"
-            name="${pub%%+*}"; build="${pub#*+}"; major_minor="${name%.*}"; patch="${name##*.}"
-            n=$(( ${tag##*.} - patch ))
+            picked="$(bash scripts/silo_preview_version.sh latest)"
+            tag="$(sed -n 's/^tag=//p' <<< "$picked")"
+            version="$(sed -n 's/^version=//p' <<< "$picked")"
+            build="$(sed -n 's/^build=//p' <<< "$picked")"
+            ref="$(gh api "repos/${GH_REPO}/commits/${tag}" --jq .sha)"
           fi
-          version="${major_minor}.$((patch + n))"
+          # One Flutter version for every job, from the code being built.
+          work="$RUNNER_TEMP/pins"; mkdir -p "$work"
+          file_at .github/workflows/build.yml "$ref" > "$work/build.yml"
+          file_at .github/actions/setup-flutter-git/action.yml "$ref" > "$work/action.yml"
+          flutter_version="$(bash scripts/silo_flutter_version.sh "$work/build.yml" "$work/action.yml")"
           {
             echo "ref=${ref}"
             echo "version=${version}"
-            echo "build=$((build + n))"
+            echo "build=${build}"
+            echo "flutter_version=${flutter_version}"
           } >> "$GITHUB_OUTPUT"
-          echo "Desktop build of ${ref} as ${version} (build $((build + n)))"
+          echo "Desktop build of ${ref} as ${version} (build ${build}, Flutter ${flutter_version})"
 
   build:
     needs: [gate, resolve]
@@ -153,7 +160,7 @@ jobs:
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           channel: "stable"
-          flutter-version: ${{ env.FLUTTER_VERSION }}
+          flutter-version: ${{ needs.resolve.outputs.flutter_version }}
           cache: true
 
       - name: Set up Flutter from its pinned commit
@@ -178,6 +185,7 @@ jobs:
           --build-number=${{ needs.resolve.outputs.build }}
           --dart-define=GIT_COMMIT=${{ needs.resolve.outputs.ref }}
           --dart-define=SENTRY_ENVIRONMENT=silo-preview
+          --dart-define=SUPPORTER_MODE=msstore
 
       - name: Verify Windows bundle contents
         shell: pwsh
@@ -191,6 +199,10 @@ jobs:
             "data/flutter_assets/assets/silo_icon.svg")
           $missing = @($required | Where-Object { $found -notcontains $_ })
           if ($missing.Count -gt 0) { throw "Windows bundle is missing: $($missing -join ', ')" }
+          # As upstream's build.yml: link by-products and PDBs (release links
+          # emit them, windows/CMakeLists.txt) must not ship in the bundle.
+          $forbidden = @($found | Where-Object { $_ -in @("plezy.lib", "plezy.exp", "simdutf.lib") -or $_ -like '*.pdb' })
+          if ($forbidden.Count -gt 0) { throw "Windows bundle contains build by-products: $($forbidden -join ', ')" }
 
       - name: Upload ${{ matrix.arch }} build
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -204,6 +216,7 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: write
+      actions: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -247,16 +260,41 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
+          TAG: silo-preview-${{ needs.resolve.outputs.version }}
+          BUILD: ${{ needs.resolve.outputs.build }}
+          REF: ${{ needs.resolve.outputs.ref }}
+          WHAT: Windows
+          MODE: ${{ needs.gate.outputs.mode }}
         run: |
           set -euo pipefail
-          tag="silo-preview-${{ needs.resolve.outputs.version }}"
-          for _ in $(seq 1 60); do
-            gh release view "$tag" > /dev/null 2>&1 && break
-            echo "Waiting for release $tag..."; sleep 30
+          # Wait for the release. In [release-apk] mode, stop as soon as the
+          # APK run for this commit failed or was cancelled, and give up
+          # shortly after it succeeded without publishing this tag.
+          after_success=0
+          for _ in $(seq 1 90); do
+            gh release view "$TAG" > /dev/null 2>&1 && break
+            if [[ "$MODE" == apk ]]; then
+              run="$(gh run list --workflow silo-preview-apk.yml --commit "$REF" --event push \
+                --json databaseId,status,conclusion --jq 'sort_by(.databaseId) | last | "\(.status) \(.conclusion)"')"
+              case "$run" in
+                "completed success")
+                  after_success=$((after_success + 1))
+                  (( after_success <= 4 )) || { echo "::error::The APK build succeeded but no release $TAG appeared."; exit 1; } ;;
+                completed\ *)
+                  echo "::error::The APK build for this commit ended with '${run#completed }'; nothing to attach to."; exit 1 ;;
+              esac
+            fi
+            echo "Waiting for release $TAG..."; sleep 30
           done
-          gh release view "$tag" > /dev/null
-          gh release upload "$tag" dist/* --clobber
-          echo "Attached Windows build to $tag"
+          gh release view "$TAG" > /dev/null
+          # Attach only to the release of the commit and build built here.
+          tag_ref="$(gh api "repos/${GH_REPO}/commits/${TAG}" --jq .sha)"
+          [[ "$tag_ref" == "$REF" ]] || { echo "::error::$TAG is commit $tag_ref, but this build is $REF."; exit 1; }
+          if recorded="$(gh release download "$TAG" --pattern silo-preview-build.txt --output - 2> /dev/null)"; then
+            [[ "$recorded" == "build=${BUILD}" ]] || { echo "::error::$TAG records '$recorded', but this build is ${BUILD}."; exit 1; }
+          fi
+          gh release upload "$TAG" dist/* --clobber
+          echo "Attached $WHAT build to $TAG"
 
   macos:
     needs: [gate, resolve]
@@ -265,6 +303,7 @@ jobs:
     runs-on: macos-26
     permissions:
       contents: write
+      actions: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -275,7 +314,7 @@ jobs:
         uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
         with:
           channel: "stable"
-          flutter-version: ${{ env.FLUTTER_VERSION }}
+          flutter-version: ${{ needs.resolve.outputs.flutter_version }}
           cache: true
 
       - name: Cache CocoaPods
@@ -297,6 +336,7 @@ jobs:
           --build-number=${{ needs.resolve.outputs.build }}
           --dart-define=GIT_COMMIT=${{ needs.resolve.outputs.ref }}
           --dart-define=SENTRY_ENVIRONMENT=silo-preview
+          --dart-define=SUPPORTER_MODE=unlocked
 
       # No Developer ID: sign the whole bundle ad hoc ("-") so every nested
       # framework carries a consistent signature, which Apple silicon requires
@@ -323,17 +363,45 @@ jobs:
           hdiutil create -format ULMO -srcfolder dmg-staging -volname "Plezy" "dist/plezy-silo-${v}-macos.dmg"
           (cd dist && shasum -a 256 *.dmg > SHA256SUMS-macos.txt)
 
+      # A [release-apk] build attaches to the release the Android build
+      # publishes; wait for it (that build usually finishes first).
       - name: Attach to the release
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
+          TAG: silo-preview-${{ needs.resolve.outputs.version }}
+          BUILD: ${{ needs.resolve.outputs.build }}
+          REF: ${{ needs.resolve.outputs.ref }}
+          WHAT: macOS
+          MODE: ${{ needs.gate.outputs.mode }}
         run: |
           set -euo pipefail
-          tag="silo-preview-${{ needs.resolve.outputs.version }}"
-          for _ in $(seq 1 60); do
-            gh release view "$tag" > /dev/null 2>&1 && break
-            echo "Waiting for release $tag..."; sleep 30
+          # Wait for the release. In [release-apk] mode, stop as soon as the
+          # APK run for this commit failed or was cancelled, and give up
+          # shortly after it succeeded without publishing this tag.
+          after_success=0
+          for _ in $(seq 1 90); do
+            gh release view "$TAG" > /dev/null 2>&1 && break
+            if [[ "$MODE" == apk ]]; then
+              run="$(gh run list --workflow silo-preview-apk.yml --commit "$REF" --event push \
+                --json databaseId,status,conclusion --jq 'sort_by(.databaseId) | last | "\(.status) \(.conclusion)"')"
+              case "$run" in
+                "completed success")
+                  after_success=$((after_success + 1))
+                  (( after_success <= 4 )) || { echo "::error::The APK build succeeded but no release $TAG appeared."; exit 1; } ;;
+                completed\ *)
+                  echo "::error::The APK build for this commit ended with '${run#completed }'; nothing to attach to."; exit 1 ;;
+              esac
+            fi
+            echo "Waiting for release $TAG..."; sleep 30
           done
-          gh release view "$tag" > /dev/null
-          gh release upload "$tag" dist/* --clobber
-          echo "Attached macOS build to $tag"
+          gh release view "$TAG" > /dev/null
+          # Attach only to the release of the commit and build built here.
+          tag_ref="$(gh api "repos/${GH_REPO}/commits/${TAG}" --jq .sha)"
+          [[ "$tag_ref" == "$REF" ]] || { echo "::error::$TAG is commit $tag_ref, but this build is $REF."; exit 1; }
+          if recorded="$(gh release download "$TAG" --pattern silo-preview-build.txt --output - 2> /dev/null)"; then
+            [[ "$recorded" == "build=${BUILD}" ]] || { echo "::error::$TAG records '$recorded', but this build is ${BUILD}."; exit 1; }
+          fi
+          gh release upload "$TAG" dist/* --clobber
+          echo "Attached $WHAT build to $TAG"

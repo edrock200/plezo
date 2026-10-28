@@ -15,7 +15,9 @@ macOS, Windows and Linux. This fork (`edrock200/plezo`) adds Silo as a fourth ba
   Android preview APKs.
 
 ## Commands
-- Toolchain: Flutter **3.47.x** (CI pins 3.47.1; Dart 3.13). `flutter pub get --enforce-lockfile`.
+- Toolchain: Flutter **3.47.x** (Dart 3.13). The pin is `FLUTTER_VERSION` in `.github/workflows/build.yml`
+  (currently 3.47.1, kept equal to `.github/actions/setup-flutter-git`); the Silo preview workflows read it
+  from there (`scripts/silo_flutter_version.sh`). `flutter pub get --enforce-lockfile`.
 - Analyze: `flutter analyze lib test` — must report no issues (infos count too).
 - Format: `dart format <changed files>` (page width 120 comes from `analysis_options.yaml`).
   Never run `dart format` over all of `lib/`: it rewrites generated `*.g.dart` / `*.freezed.dart`
@@ -74,15 +76,19 @@ macOS, Windows and Linux. This fork (`edrock200/plezo`) adds Silo as a fourth ba
 - The Android SDK is not preinstalled. `dl.google.com` must be allowed in the environment's network
   settings to install it (see the `android-preview-release` skill). There is no `/dev/kvm`, so an
   Android emulator cannot run; verify APKs with `apksigner` / `aapt2` and test on a device.
-- `gh` is not available; use the GitHub MCP tools. Releases are created by the preview workflow, not
+- `gh` is installed but has no valid token; use the GitHub MCP tools. Releases are created by the preview workflow, not
   from the session.
 - Desktop: `silo-preview-desktop.yml` builds Windows and macOS with every `[release-apk]` push, or
   adds them to the latest release with `[release-desktop]` / `[release-windows]` / `[release-macos]`.
   Release markers only count in a commit's **first line**. Never enable `ENABLE_UPDATE_CHECK`.
 - Android preview signing: without the `ANDROID_*` secrets the key lives in the Actions cache and
-  is lost after 7 days without a build (it was, for 2.22.5). Always compare the new APK's signer
+  is lost after 7 days without a build (it was, for 2.22.5); a `PREVIEW_KEYSTORE_PASSPHRASE` secret
+  encrypts that cached key. Always compare the new APK's signer
   with the last release and warn in the notes when users must uninstall first.
-- Previews are versioned 2.22.N (patch +1 per preview; the workflow picks N). Never hand-pick tags.
+- Previews are versioned `<pubspec major.minor>.N` (e.g. 2.25.1 after the 2.25.0 merge; N is one above
+  the highest existing tag of that major.minor) with a build number above every earlier preview's,
+  recorded in each release's `silo-preview-build.txt` (`scripts/silo_preview_version.sh`). Never
+  hand-pick tags.
 - Release pages show the plain-language change log in `docs/silo-preview-changelog.md`; update it
   for every preview (see the `android-preview-release` skill).
 - The preview workflow cancels an in-progress build when anything else is pushed to the same
