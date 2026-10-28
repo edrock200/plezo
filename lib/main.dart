@@ -1207,6 +1207,7 @@ FutureOr<SentryEvent?> _beforeSend(SentryEvent event, Hint _) {
 /// them here loads nothing until a reader runs.
 void _registerAppLicenses() {
   _registerShaderLicenses();
+  _registerSiloBrandNotice();
   // iOS covers iPhone, iPad, and Apple TV; mpv-build links SpatialAudioBridge
   // into libmpv there and not on macOS.
   if (Platform.isIOS) _registerSpatialAudioLicenses();
@@ -1218,6 +1219,15 @@ void _registerSpatialAudioLicenses() {
   LicenseRegistry.addLicense(() async* {
     final notices = await rootBundle.loadString('assets/licenses/SpatialAudioBridge.txt');
     yield LicenseEntryWithLineBreaks(const ['SpatialAudioBridge'], notices);
+  });
+}
+
+/// Silo's brand-asset notice for the official Silo icon the Silo server badge
+/// shows (`assets/brand/silo/`), verbatim from siloserver.org's brand folder.
+void _registerSiloBrandNotice() {
+  LicenseRegistry.addLicense(() async* {
+    final notice = await rootBundle.loadString('assets/brand/silo/NOTICE.txt');
+    yield LicenseEntryWithLineBreaks(const ['Silo icon'], notice);
   });
 }
 

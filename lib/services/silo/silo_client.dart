@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:collection';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:http/http.dart' as http;
@@ -267,7 +268,10 @@ class SiloClient
 
   /// GET [path] through the cache-fallback helper, returning the JSON object.
   Future<Map<String, dynamic>?> _cachedGet(String path, {Map<String, dynamic>? query, AbortController? abort}) {
-    final cacheKey = query == null || query.isEmpty ? path : '$path?${encodeQueryParameters(query)}';
+    // `item_limit` depends on a capability read that fails offline, so it
+    // stays out of the key: an offline Home still finds the cached rows.
+    final keyQuery = query == null ? null : (Map.of(query)..remove('item_limit'));
+    final cacheKey = keyQuery == null || keyQuery.isEmpty ? path : '$path?${encodeQueryParameters(keyQuery)}';
     return fetchWithCacheFallback<Map<String, dynamic>>(
       cacheKey: cacheKey,
       networkCall: () => _api.request('GET', path, query: query, abort: abort),
@@ -957,12 +961,76 @@ class SiloClient
   /// together) share one request.
   Future<List<Map<String, dynamic>>> _homeSections() => _homeSectionsInFlight ??= () async {
     try {
-      final data = await _cachedGet('/api/v2/home/sections', query: {'image_size': _imageSize});
+      final data = await _sectionList('/api/v2/home/sections');
       return _itemsOf(data, 'sections');
     } finally {
       _homeSectionsInFlight = null;
     }
   }();
+
+  /// The most cards a Home or library row asks for; the rest are on the
+  /// row's full page ([fetchMoreHubItemsPage]).
+  static const sectionRowMaxItems = 20;
+
+  /// The `item_limit` a section list may carry given the server's
+  /// `section_item_limit_max`: null (send nothing) when it is absent or not
+  /// a positive number, since older servers answer 422 `unknown_parameter`.
+  @visibleForTesting
+  static int? sectionItemLimitParam(Object? advertisedMax) {
+    final max = advertisedMax is num && advertisedMax.isFinite ? advertisedMax.toInt() : null;
+    return max == null || max < 1 ? null : math.min(sectionRowMaxItems, max);
+  }
+
+  Future<int?>? _sectionItemLimit;
+  bool _sectionItemLimitRejected = false;
+
+  /// `item_limit` for this server's section lists, read once from
+  /// `GET /home/capabilities` (shared by concurrent callers). A failed or
+  /// slow read counts as unsupported for the client's life, as does a
+  /// server that rejected the parameter.
+  Future<int?> _sectionItemLimitFor() {
+    if (_sectionItemLimitRejected || isOfflineMode) return Future.value(null);
+    return _sectionItemLimit ??= () async {
+      try {
+        final caps = await _api
+            .getJson('/api/v2/home/capabilities', timeout: _capabilityReadTimeout)
+            .timeout(_capabilityReadTimeout);
+        return sectionItemLimitParam(caps['section_item_limit_max']);
+      } catch (e) {
+        appLogger.d('SiloClient: home capabilities unavailable; rows carry no item_limit', error: e.runtimeType);
+        return null;
+      }
+    }();
+  }
+
+  static const _capabilityReadTimeout = Duration(seconds: 3);
+
+  /// Whether [error] is v2's 422 `validation_failed` naming `query.<name>`
+  /// as an `unknown_parameter`.
+  static bool _rejectsQueryParameter(Object error, String name) {
+    if (error is! MediaServerHttpException || error.statusCode != 422) return false;
+    final data = error.responseData;
+    if (data is! Map) return false;
+    final code = siloProblemCode(data) ?? data['code']?.toString();
+    if (code != null && code != 'validation_failed') return false;
+    final errors = data['errors'];
+    return errors is List &&
+        errors.whereType<Map>().any((e) => e['location'] == 'query.$name' && e['code'] == 'unknown_parameter');
+  }
+
+  /// A Home or library section list, with `item_limit` when the server
+  /// advertises it. A server that still rejects it is read again once
+  /// without it and is not sent it again.
+  Future<Map<String, dynamic>?> _sectionList(String path) async {
+    final limit = await _sectionItemLimitFor();
+    try {
+      return await _cachedGet(path, query: {'image_size': _imageSize, 'item_limit': ?limit});
+    } catch (e) {
+      if (limit == null || !_rejectsQueryParameter(e, 'item_limit')) rethrow;
+      _sectionItemLimitRejected = true;
+      return _cachedGet(path, query: {'image_size': _imageSize});
+    }
+  }
 
   /// Sections may arrive without inline items while `total_count > 0`.
   Future<List<Map<String, dynamic>>> _sectionItems(Map<String, dynamic> section, String itemsPath) async {
@@ -998,6 +1066,9 @@ class SiloClient
       libraryTitle: _libraryTitles[libraryId],
     );
     final total = (section['total_count'] as num?)?.toInt() ?? rows.length;
+    // Every row with cards opens its full page, as in Silo's apps: rows are
+    // capped (`item_limit`) and Home drops titles another row already shows,
+    // so a row can look complete while its page holds more.
     return MediaHub(
       id: id,
       identifier: section['section_type']?.toString() ?? section['id']?.toString(),
@@ -1005,7 +1076,7 @@ class SiloClient
       type: _hubType(items),
       items: items,
       size: total,
-      more: total > items.length,
+      more: items.isNotEmpty,
       libraryId: libraryId,
       serverId: serverId,
       serverName: serverName,
@@ -1061,7 +1132,7 @@ class SiloClient
     _libraryTitles[libraryId] = libraryName;
     final Map<String, dynamic>? data;
     try {
-      data = await _cachedGet('/api/v2/library/${_seg(libraryId)}/sections', query: {'image_size': _imageSize});
+      data = await _sectionList('/api/v2/library/${_seg(libraryId)}/sections');
     } catch (e) {
       diagnostics?.recordFailure(e);
       return const [];

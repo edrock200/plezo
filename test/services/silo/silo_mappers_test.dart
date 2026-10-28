@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plezy/media/media_item.dart';
+import 'package:plezy/media/media_item_types.dart';
 import 'package:plezy/media/media_kind.dart';
 import 'package:plezy/services/silo/silo_mappers.dart';
 
@@ -68,6 +69,73 @@ void main() {
     expect(item.thumbPath, 'https://cdn/still.jpg');
     expect(item.viewCount, 1);
     expect(SiloMappers.parseSyntheticSeasonId(item.parentId!), (seriesId: 'series:orbital', seasonNumber: 1));
+  });
+
+  group('episode parent artwork (series_*/season_poster_url)', () {
+    Map<String, dynamic> episode(Map<String, dynamic> extra) => {
+      'content_id': 'episode:orbital-s01e03',
+      'type': 'episode',
+      'series_id': 'series:orbital',
+      'season_number': 1,
+      'episode_number': 3,
+      'still_url': 'https://cdn/still.jpg',
+      'poster_url': 'https://cdn/poster.jpg',
+      'backdrop_url': 'https://cdn/episode-backdrop.jpg',
+      'user_state': {'played': false},
+      ...extra,
+    };
+
+    test('series and season art feed the parent fields and the episode hero', () {
+      final item = SiloMappers.item(
+        episode({
+          'series_poster_url': '/api/v2/artwork/series-poster?exp=1&sig=a',
+          'series_poster_thumbhash': 'SP',
+          'series_backdrop_url': 'https://cdn/series-backdrop.jpg',
+          'series_backdrop_thumbhash': 'SB',
+          'season_poster_url': 'https://cdn/season-poster.jpg',
+          'season_poster_thumbhash': 'SN',
+        }),
+        _ctx,
+      )!;
+
+      expect(item.thumbPath, 'https://cdn/still.jpg');
+      expect(item.grandparentThumbPath, 'https://silo.example.com/api/v2/artwork/series-poster?exp=1&sig=a');
+      expect(item.parentThumbPath, 'https://cdn/season-poster.jpg');
+      expect(item.grandparentArtPath, 'https://cdn/series-backdrop.jpg');
+      expect(item.heroBackdropPaths, ['https://cdn/series-backdrop.jpg']);
+      expect(item.heroArtCandidates(containerAspectRatio: 16 / 9).first, 'https://cdn/series-backdrop.jpg');
+      // The own backdrop stays the episode's; the series art is never a still,
+      // so the spoiler-safe art is the series backdrop.
+      expect(item.artPath, 'https://cdn/episode-backdrop.jpg');
+      expect(item.spoilerSafeArt, 'https://cdn/series-backdrop.jpg');
+      expect(item.shouldHideSpoiler, isTrue);
+    });
+
+    test('the season poster falls back to the series poster', () {
+      final item = SiloMappers.item(episode({'series_poster_url': 'https://cdn/series-poster.jpg'}), _ctx)!;
+      expect(item.parentThumbPath, 'https://cdn/series-poster.jpg');
+      expect(item.grandparentThumbPath, 'https://cdn/series-poster.jpg');
+      expect(item.grandparentArtPath, 'https://cdn/episode-backdrop.jpg');
+    });
+
+    test('older servers without the fields keep poster_url and backdrop_url', () {
+      final item = SiloMappers.item(episode({'series_backdrop_url': '  '}), _ctx)!;
+      expect(item.grandparentThumbPath, 'https://cdn/poster.jpg');
+      expect(item.parentThumbPath, 'https://cdn/poster.jpg');
+      expect(item.grandparentArtPath, 'https://cdn/episode-backdrop.jpg');
+      expect(item.grandparentBackdropPaths, isNull);
+    });
+
+    test('movies ignore stray series artwork', () {
+      final item = SiloMappers.item({
+        'content_id': 'movie:heat-1995',
+        'type': 'movie',
+        'poster_url': 'https://cdn/poster.jpg',
+        'series_backdrop_url': 'https://cdn/series-backdrop.jpg',
+      }, _ctx)!;
+      expect(item.grandparentArtPath, isNull);
+      expect(item.grandparentThumbPath, isNull);
+    });
   });
 
   test('synthetic season ids survive colons in the series id', () {
