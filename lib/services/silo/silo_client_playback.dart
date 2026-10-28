@@ -503,14 +503,15 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
     );
   }
 
-  PlaybackExtras _extrasFrom(
+  Future<PlaybackExtras> _extrasFrom(
     Map<String, dynamic>? watch, {
     String? introPattern,
     String? creditsPattern,
     bool forceChapterFallback = false,
-  }) => SiloMappers.playbackExtras(
+  }) async => SiloMappers.playbackExtras(
     watch,
     _ctx,
+    classifier: await ChapterMarkerClassifier.bundled,
     introPattern: introPattern,
     creditsPattern: creditsPattern,
     forceChapterFallback: forceChapterFallback,

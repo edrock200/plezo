@@ -9,7 +9,11 @@ extension _VideoPlayerDisplayMatchingMethods on VideoPlayerScreenState {
     SettingsService settingsService,
     PlayerOutputFormat output,
   ) {
-    final fps = settingsService.read(SettingsService.matchContentFrameRate) ? output.fps : null;
+    final matchRate = settingsService.read(SettingsService.matchContentFrameRate);
+    if (matchRate && !output.hasFrameRate) {
+      appLogger.d('Display matching: no frame rate to match');
+    }
+    final fps = matchRate ? output.fps : null;
     final matchResolution = settingsService.read(SettingsService.matchContentResolution);
     if (matchResolution && !output.hasDimensions) {
       appLogger.d('Display matching: no decoded dimensions for resolution matching');
@@ -85,7 +89,6 @@ extension _VideoPlayerDisplayMatchingMethods on VideoPlayerScreenState {
           });
           return;
         }
-        appLogger.d('Display matching: No valid fps available');
       }
       _frameRate.retries = 0;
       final target = _displayTargetFor(settingsService, output);
@@ -214,13 +217,13 @@ extension _VideoPlayerDisplayMatchingMethods on VideoPlayerScreenState {
   /// finishes re-syncing before playback runs on (as the Android switch
   /// does), rather than just waiting while the video keeps playing.
   ///
-  /// The pause and resume are the screen's own, not the viewer's: a bound
-  /// Watch Together room would take them as intents, so the hold runs
-  /// detached like the first-frame display negotiation. The resume answers
-  /// to the playback generation the hold started in: an in-place reload or
-  /// source switch that ran meanwhile owns the play state it left (its own
-  /// resume, or a room startup hold on the replacement), so the resume waits
-  /// for it to settle and stands down if it opened anything.
+  /// The pause and resume are the screen's own, not the viewer's: a Watch
+  /// Together room is held off meanwhile, so it neither takes them for the
+  /// viewer's nor commands the player. The resume answers to the playback
+  /// generation the hold started in: an in-place reload or source switch that
+  /// ran meanwhile owns the play state it left (its own resume, or the room
+  /// starting the replacement), so the resume waits for it to settle and
+  /// stands down if it opened anything.
   Future<void> _holdPlaybackForDisplaySwitch(Player currentPlayer, Duration delay) async {
     if (!currentPlayer.state.playing) {
       await Future<void>.delayed(delay);
@@ -228,7 +231,7 @@ extension _VideoPlayerDisplayMatchingMethods on VideoPlayerScreenState {
     }
     final generation = _transitionGate.generation;
     bool isCurrent() => _isCurrentPlaybackGeneration(generation, currentPlayer);
-    await _withWatchTogetherDetached(() async {
+    await _withWatchTogetherHeld(() async {
       await currentPlayer.pause();
       await Future<void>.delayed(delay);
       // Wait out the transition itself, not just its generation bump: leaving

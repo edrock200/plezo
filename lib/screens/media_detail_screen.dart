@@ -70,6 +70,7 @@ import '../providers/multi_server_provider.dart';
 import '../providers/offline_watch_provider.dart';
 import '../providers/watch_state_store.dart';
 import '../services/catalog/catalog_source.dart';
+import '../services/catalog/community_ratings.dart';
 import '../services/catalog/library_watchlist_candidates.dart';
 import '../utils/app_logger.dart';
 import '../utils/formatters.dart';
@@ -396,6 +397,14 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
   bool _suppressBackAfterPop = false;
   bool _tvDetailRevealed = false;
   bool _tvDetailRevealScheduled = false;
+  // Whether the route's push fade has finished. Until it has, and until the
+  // reveal gate opens, the hidden foreground and rail are not built: every
+  // data arrival during the fade would otherwise build and lay out invisible
+  // rows mid-animation, which drops most of the fade's frames on low-end TV
+  // boxes. After the fade, hidden content builds early again, so a slow load
+  // still warms the rows' artwork before the reveal.
+  bool _tvDetailRouteSettled = false;
+  Animation<double>? _tvDetailRouteAnimation;
   bool _hasLoadedSeasons = false;
   bool _hasLoadedEpisodes = false;
   double? _tvDetailPendingRailHeight;
@@ -437,6 +446,11 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
   List<CatalogSource> _watchlistListenedSources = const [];
   final GlobalKey _watchlistButtonKey = GlobalKey();
   bool _watchlistMutationInFlight = false;
+
+  // The connected trackers' scores for this title, merged as each answers
+  // (see [_initCommunityRatings]); empty until then.
+  List<MediaRatingSource> _communityRatings = const [];
+  StreamSubscription<List<MediaRatingSource>>? _communityRatingsSubscription;
 
   // Inline season tabs
   int _selectedSeasonIndex = 0;
@@ -893,7 +907,26 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
     _loadFullMetadata();
     unawaited(_listenForPlaybackVersionChanges());
     _initWatchlistState();
+    _initCommunityRatings();
   }
+
+  /// Ask the connected trackers for this title's scores. They resolve the
+  /// title through the watchlist's cached ids, so this costs no extra
+  /// media-server request. No-ops offline and for non-movie/show kinds.
+  void _initCommunityRatings() {
+    if (widget.isOffline) return;
+    final catalogSources = Provider.of<CatalogSourcesProvider?>(context, listen: false);
+    if (catalogSources == null) return;
+    _communityRatingsSubscription = catalogSources
+        .communityRatingsForLibraryItem(_metadata, client: _getMediaClientForMetadata(context))
+        .listen((ratings) {
+          if (_canUseDetail) setState(() => _communityRatings = ratings);
+        });
+  }
+
+  /// [metadata]'s scores with the connected trackers' merged in.
+  List<MediaRatingSource> _titleRatings(MediaItem metadata) =>
+      withCommunityRatings(mediaRatingsFor(metadata), _communityRatings);
 
   /// Hook up the watchlist action's data: every watchlist-capable catalog
   /// source this item resolves in, with its per-source ids. No-ops offline
@@ -944,12 +977,44 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
     super.didChangeDependencies();
     final routeObserver = ProfileNavigationScope.of(context).routeObserver;
     final route = ModalRoute.of(context);
+    _trackTvDetailRouteSettled(route);
     if (route is! PageRoute<dynamic>) return;
     if (route == _route && routeObserver == _routeObserver) return;
     _routeObserver?.unsubscribe(this);
     _route = route;
     _routeObserver = routeObserver;
     routeObserver.subscribe(this, route);
+  }
+
+  void _trackTvDetailRouteSettled(ModalRoute<dynamic>? route) {
+    if (_tvDetailRouteSettled) return;
+    final animation = PlatformDetector.isTV() ? route?.animation : null;
+    if (identical(animation, _tvDetailRouteAnimation)) return;
+    _tvDetailRouteAnimation?.removeStatusListener(_onTvDetailRouteStatus);
+    _tvDetailRouteAnimation = null;
+    if (animation == null || animation.isCompleted) {
+      _tvDetailRouteSettled = true;
+      return;
+    }
+    _tvDetailRouteAnimation = animation..addStatusListener(_onTvDetailRouteStatus);
+  }
+
+  void _onTvDetailRouteStatus(AnimationStatus status) {
+    if (!status.isCompleted) return;
+    _tvDetailRouteAnimation?.removeStatusListener(_onTvDetailRouteStatus);
+    _tvDetailRouteAnimation = null;
+    if (!mounted) return;
+    // Already revealed: the content is built, so there is nothing to rebuild.
+    if (_tvDetailRevealed) {
+      _tvDetailRouteSettled = true;
+      return;
+    }
+    // The status flips inside the fade's last tick. Building the withheld
+    // content in that frame would hold the fade's final frame back by the
+    // whole build, so it builds in the next frame, when nothing moves.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && !_tvDetailRouteSettled) setState(() => _tvDetailRouteSettled = true);
+    });
   }
 
   @override
@@ -980,6 +1045,17 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
       _suppressBackAfterPop = false;
       return;
     }
+    _popMediaDetail();
+  }
+
+  /// Leaves via the detail's own route, and only while it is the top one. A
+  /// blind `Navigator.pop` takes whatever is topmost: a back that reaches this
+  /// screen after its route began closing pops the profile shell beneath — the
+  /// next one finds the navigator empty and throws (#2937, #2370) — and one that
+  /// reaches it under a dialog closes the dialog.
+  void _popMediaDetail() {
+    final route = _route ?? ModalRoute.of(context);
+    if (route == null || !route.isCurrent) return;
     Navigator.pop(context, _watchStateChanged);
   }
 
@@ -1065,10 +1141,12 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
   @override
   void dispose() {
     _libraryContentSubscription?.cancel();
+    unawaited(_communityRatingsSubscription?.cancel());
     for (final source in _watchlistListenedSources) {
       source.watchlistChanges.removeListener(_onWatchlistSourceChanged);
     }
     _routeObserver?.unsubscribe(this);
+    _tvDetailRouteAnimation?.removeStatusListener(_onTvDetailRouteStatus);
     _scrollController.dispose();
     _scrollOffset.dispose();
     _tvDetailFocusedEpisode.dispose();
@@ -3406,7 +3484,7 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
       // lights; route the leading through the shared desktop padding logic.
       final backButton = AppBarBackButton(
         style: BackButtonStyle.plain,
-        onPressed: () => Navigator.pop(context, _watchStateChanged),
+        onPressed: _popMediaDetail,
         focusNode: _backButtonFocusNode,
       );
       final loading = ListenableBuilder(
@@ -3448,7 +3526,7 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
     final size = MediaQuery.sizeOf(context);
     final viewPadding = MediaQuery.paddingOf(context);
     final heroChipRows =
-        _isCompactHero(size.width - viewPadding.horizontal - _heroSideInset * 2) && mediaRatingsFor(metadata).isNotEmpty
+        _isCompactHero(size.width - viewPadding.horizontal - _heroSideInset * 2) && _titleRatings(metadata).isNotEmpty
         ? 3
         : 2;
     final heroFloor = isTv
@@ -3694,7 +3772,7 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
                   child: DesktopAppBarHelper.buildAdjustedLeading(
                     AppBarBackButton(
                       style: BackButtonStyle.circular,
-                      onPressed: () => Navigator.pop(context, _watchStateChanged),
+                      onPressed: _popMediaDetail,
                       focusNode: _backButtonFocusNode,
                     ),
                     context: context,
@@ -3732,6 +3810,9 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
     final railTopPadding = 12 * detailScale;
     final foregroundBottom = (railHeight - railTopPadding) + (_tvDetailActionRailGap * detailScale);
     final spotlightLeft = (24 * detailScale).clamp(18.0, 40.0).toDouble();
+    // See _tvDetailRouteSettled. The children stay in place (only their
+    // content is withheld) so the Stack keeps its elements across the swap.
+    final buildHiddenContent = _tvDetailRevealed || _tvDetailRouteSettled;
 
     final revealContent = Stack(
       fit: StackFit.expand,
@@ -3741,11 +3822,13 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
           right: size.width * 0.40,
           top: spotlightTop,
           bottom: foregroundBottom,
-          child: ListenableBuilder(
-            listenable: _tvDetailForegroundListenable,
-            builder: (context, _) =>
-                _buildTvDetailForeground(context, metadata, hideSpoilers: hideSpoilers, scale: detailScale),
-          ),
+          child: buildHiddenContent
+              ? ListenableBuilder(
+                  listenable: _tvDetailForegroundListenable,
+                  builder: (context, _) =>
+                      _buildTvDetailForeground(context, metadata, hideSpoilers: hideSpoilers, scale: detailScale),
+                )
+              : const SizedBox.shrink(),
         ),
         // The action row's track status sits at the screen's right edge,
         // bottom-aligned with the row and outside the hero's 60% text column,
@@ -3776,13 +3859,13 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
           child: DesktopAppBarHelper.buildAdjustedLeading(
             AppBarBackButton(
               style: BackButtonStyle.circular,
-              onPressed: () => Navigator.pop(context, _watchStateChanged),
+              onPressed: _popMediaDetail,
               focusNode: _backButtonFocusNode,
             ),
             context: context,
           )!,
         ),
-        if (detailHubs.isNotEmpty)
+        if (buildHiddenContent && detailHubs.isNotEmpty)
           Positioned(
             left: 0,
             right: 0,
@@ -4049,7 +4132,9 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
   /// have shed, the genres, plus the untruncated description (#2042).
   void _openTvDetailsSheet(BuildContext context, MediaItem metadata, {required bool hideSpoilers}) {
     final focusedEpisode = _tvDetailFocusedEpisode.value;
-    final item = focusedEpisode == null ? metadata : _withProbedRatings(focusedEpisode);
+    final item = focusedEpisode == null
+        ? metadata.copyWith(ratings: _titleRatings(metadata))
+        : _withProbedRatings(focusedEpisode);
     final description = _tvDetailDescription(metadata, hideSpoilers: hideSpoilers);
     final genres = metadata.genres ?? const <String>[];
     unawaited(
@@ -4083,9 +4168,11 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
     if (lineMetadata.durationMs != null) {
       parts.add(MetadataLineText(formatDurationTextual(lineMetadata.durationMs!), dropPriority: 1));
     }
-    final ratings = focusedEpisode == null
-        ? mediaRatingsFor(metadata)
-        : mediaRatingsFor(_withProbedRatings(focusedEpisode), fallbackItem: metadata);
+    final episodeRatings = focusedEpisode == null
+        ? const <MediaRatingSource>[]
+        : mediaRatingsFor(_withProbedRatings(focusedEpisode));
+    // An episode without scores of its own shows the title's.
+    final ratings = episodeRatings.isNotEmpty ? episodeRatings : _titleRatings(metadata);
     if (ratings.isNotEmpty) parts.add(MetadataLineRatings(ratings, dropPriority: 4));
 
     return parts;
@@ -4410,14 +4497,23 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
     return _onDeckEpisode?.id;
   }
 
-  List<MediaItem> _tvDetailActorItems(MediaItem metadata) {
-    final roles = metadata.roles;
-    if (roles == null || roles.isEmpty) return const [];
+  // Cached per metadata object: the TV rail memoizes cards by item identity,
+  // so rebuilding identical cast items on every Detail build would rebuild
+  // every cast card with them.
+  (MediaItem, List<MediaItem>)? _tvDetailActorItemsCache;
 
-    return [
-      for (var i = 0; i < roles.length; i++)
-        if (roles[i].tag.trim().isNotEmpty) _tvDetailActorItem(metadata, roles[i], i),
-    ];
+  List<MediaItem> _tvDetailActorItems(MediaItem metadata) {
+    final cached = _tvDetailActorItemsCache;
+    if (cached != null && identical(cached.$1, metadata)) return cached.$2;
+    final roles = metadata.roles;
+    final items = roles == null || roles.isEmpty
+        ? const <MediaItem>[]
+        : [
+            for (var i = 0; i < roles.length; i++)
+              if (roles[i].tag.trim().isNotEmpty) _tvDetailActorItem(metadata, roles[i], i),
+          ];
+    _tvDetailActorItemsCache = (metadata, items);
+    return items;
   }
 
   MediaItem _tvDetailActorItem(MediaItem metadata, MediaRole actor, int index) {
@@ -4769,7 +4865,7 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
 
         // The compact hero moves the scores onto a row of their own (#2569);
         // a hero too short for it keeps them in the strip's pill instead.
-        final ratings = mediaRatingsFor(metadata);
+        final ratings = _titleRatings(metadata);
         final scoresRow = centered && ratings.isNotEmpty && chipsFit && roomForRow(chipHeight);
         // Fitted to a single run each: chips shed by usefulness instead of
         // wrapping onto a second run the height clip below would hide.

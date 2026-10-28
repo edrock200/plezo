@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import '../media/ids.dart';
 
+import '../media/chapter_marker_classifier.dart';
 import '../media/media_backend.dart';
 import '../media/media_source_info.dart';
 import '../utils/app_logger.dart';
@@ -117,6 +118,7 @@ class CachedPlaybackMetadataService {
     if (metadata == null) return null;
     final extras = plexPlaybackExtrasFromCacheJson(
       metadata,
+      classifier: await ChapterMarkerClassifier.bundled,
       introPattern: introPattern,
       creditsPattern: creditsPattern,
       forceChapterFallback: forceChapterFallback,
@@ -160,6 +162,7 @@ class CachedPlaybackMetadataService {
     return SiloMappers.playbackExtras(
       watch,
       _siloContext(cacheServerId),
+      classifier: await ChapterMarkerClassifier.bundled,
       introPattern: introPattern,
       creditsPattern: creditsPattern,
       forceChapterFallback: forceChapterFallback,
@@ -206,6 +209,7 @@ class CachedPlaybackMetadataService {
     return jellyfinPlaybackExtrasFromRaw(
       raw,
       itemId,
+      classifier: await ChapterMarkerClassifier.bundled,
       introPattern: introPattern,
       creditsPattern: creditsPattern,
       forceChapterFallback: forceChapterFallback,

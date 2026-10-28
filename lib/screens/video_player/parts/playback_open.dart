@@ -333,7 +333,6 @@ extension _VideoPlayerOpenMethods on VideoPlayerScreenState {
     required _FrameRateStartupPlan plan,
     required bool Function() isCurrent,
     required Future<void> Function(String reason) resumeAfterStartupGate,
-    Future<void>? watchTogetherStartupHold,
   }) async {
     // Fallback refresh-rate path. The player was opened paused;
     // setVideoFrameRate awaits the real display-change event (+ settle +
@@ -377,7 +376,6 @@ extension _VideoPlayerOpenMethods on VideoPlayerScreenState {
           plan: plan,
           isCurrent: isCurrent,
           resumeAfterRefresh: resumeAfterStartupGate,
-          watchTogetherStartupHold: watchTogetherStartupHold,
         );
       } finally {
         _frameRate.endDisplayNegotiation(plan.displayNegotiation);
@@ -392,7 +390,6 @@ extension _VideoPlayerOpenMethods on VideoPlayerScreenState {
     required _FrameRateStartupPlan plan,
     required bool Function() isCurrent,
     required Future<void> Function(String reason) resumeAfterRefresh,
-    required Future<void>? watchTogetherStartupHold,
   }) async {
     appLogger.d('Display matching: waiting for the first frame before negotiating the display');
     final startupReady = await plan._startupFrameReady;
@@ -418,10 +415,9 @@ extension _VideoPlayerOpenMethods on VideoPlayerScreenState {
     }
 
     // Everything below drives pause/play transitions the viewer did not ask
-    // for (the measurement window, the hold around the switch); a bound
-    // Watch Together room would broadcast them as intents and service remote
-    // requests against the player mid-measurement.
-    await _withWatchTogetherDetached(startupHold: watchTogetherStartupHold, () async {
+    // for (the measurement window, the hold around the switch); a Watch
+    // Together room must not command the player mid-measurement.
+    await _withWatchTogetherHeld(() async {
       try {
         if (PlatformDetector.isAppleTV()) {
           // The decoded stream's criteria already went to AVDisplayManager
@@ -487,16 +483,19 @@ extension _VideoPlayerOpenMethods on VideoPlayerScreenState {
     if (!automotivePlaybackAllowedNow()) {
       return (output: await PlayerOutputFormat.read(currentPlayer), windowStart: null);
     }
-    final step = await _stepFramesForCadence(currentPlayer);
+    final window = await _stepFramesForCadence(currentPlayer);
+    final SteppedFrames? step = window == null
+        ? null
+        : (frames: _cadenceStepFrames, advanced: window.end - window.start);
     final steppedFps = step == null
         ? null
-        : PlayerOutputFormat.steppedRate(frames: _cadenceStepFrames, advanced: step.end - step.start);
+        : PlayerOutputFormat.steppedRate(frames: step.frames, advanced: step.advanced);
     if (steppedFps != null) {
       appLogger.d(
         'Display matching: $_cadenceStepFrames stepped frames presented at ${steppedFps.toStringAsFixed(2)}fps',
       );
     }
-    return (output: await PlayerOutputFormat.read(currentPlayer, steppedFps: steppedFps), windowStart: step?.start);
+    return (output: await PlayerOutputFormat.read(currentPlayer, step: step), windowStart: window?.start);
   }
 
   /// The open outcome's first-frame signal is mpv's playback-restart, which
@@ -1170,7 +1169,6 @@ extension _VideoPlayerOpenMethods on VideoPlayerScreenState {
         watchTogetherOwnsStart: wtOwnsStart,
         wtStartupHold: wtStartupHold?.call(),
       ),
-      watchTogetherStartupHold: wtStartupHold?.call()?.future,
     );
 
     return true;

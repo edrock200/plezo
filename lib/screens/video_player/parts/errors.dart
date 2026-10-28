@@ -104,6 +104,7 @@ extension _VideoPlayerErrorMethods on VideoPlayerScreenState {
     _hasFatalPlaybackError = true;
     _progressTracker?.stopTracking();
     _abortCurrentOpen('player error: ${action.name}');
+    _detachWatchTogetherAfterFailure();
     final currentPlayer = player;
     if (currentPlayer != null) {
       unawaited(
@@ -237,12 +238,7 @@ extension _VideoPlayerErrorMethods on VideoPlayerScreenState {
     // as the deadline: a first frame or a latched error already settled this
     // open, and a superseded attempt's lines are not this open's business.
     if (_firstFrame.rendered || _hasFatalPlaybackError || !(_playbackAttempt?.isCurrent ?? false)) return;
-    final cause = openFailureCauseFromLog(
-      level: log.level,
-      prefix: log.prefix,
-      text: log.text,
-      isAndroid: Platform.isAndroid,
-    );
+    final cause = openFailureCauseFromLog(level: log.level, prefix: log.prefix, text: log.text);
     if (cause == null) return;
     appLogger.w('mpv gave up on a stream while opening — giving up on this open');
     _onPlayerError(PlayerError(log.text.trim(), cause: cause));
@@ -261,17 +257,17 @@ extension _VideoPlayerErrorMethods on VideoPlayerScreenState {
   }
 
   /// The attempt's open deadline passed: the backend started the load and
-  /// then neither loaded, failed, nor died. Its waiters are already aborted;
-  /// synthesize the error the backend never raised so the failure policy
-  /// runs (which stops the still-retrying load) and the viewer is not left
-  /// on a spinner. Same guard as the 503 watchdog: a first frame or a
-  /// latched error already settled this open.
+  /// then stopped moving without loading, failing, or dying. Its waiters are
+  /// already aborted; synthesize the error the backend never raised so the
+  /// failure policy runs (which stops the still-retrying load) and the viewer
+  /// is not left on a spinner. Same guard as the 503 watchdog: a first frame
+  /// or a latched error already settled this open.
   void _onOpenDeadlineExpired(Player currentPlayer, int generation) {
     if (!_isCurrentPlaybackGeneration(generation, currentPlayer) || _firstFrame.rendered || _hasFatalPlaybackError) {
       return;
     }
     appLogger.w(
-      'No first frame within ${VideoPlayerScreenState._openDeadline.inSeconds}s of load start — giving up on this open',
+      'No load progress for ${VideoPlayerScreenState._openDeadline.inSeconds}s before the first frame — giving up on this open',
     );
     _onPlayerError(PlayerError(t.messages.playbackFailed, cause: PlayerError.openTimedOut));
   }

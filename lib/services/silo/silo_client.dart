@@ -8,6 +8,7 @@ import 'package:uuid/uuid.dart';
 import '../../connection/connection.dart';
 import '../../exceptions/media_server_exceptions.dart';
 import '../../i18n/strings.g.dart';
+import '../../media/chapter_marker_classifier.dart';
 import '../../media/artist_discography.dart';
 import '../../media/download_resolution.dart';
 import '../../media/ids.dart';
@@ -561,6 +562,10 @@ class SiloClient
   Future<void> refreshLibraryMetadata(String libraryId) =>
       throw UnsupportedError('Silo library scans are started from the server dashboard.');
 
+  @override
+  Future<void> scanLibrary(String libraryId) =>
+      throw UnsupportedError('Silo library scans are started from the server dashboard.');
+
   // ---------------------------------------------------------------------------
   // Items
   // ---------------------------------------------------------------------------
@@ -867,6 +872,38 @@ class SiloClient
       _itemsOf(data),
       _ctx,
     ).where((item) => item.libraryId == null || !excludedLibraryIds.contains(item.libraryId)).toList();
+  }
+
+  /// `GET /api/v2/catalog/people/{id}?prefetch=true` (prefetch: read what the server has without
+  /// queueing a provider refresh). Dates are calendar days (`YYYY-MM-DD`), kept at UTC midnight.
+  @override
+  Future<MediaPersonDetails> fetchPersonDetails(String personId, {AbortController? abort}) async {
+    if (isOfflineMode) return MediaPersonDetails.empty;
+    final response = await _api.send(
+      'GET',
+      '/api/v2/catalog/people/${_seg(personId)}',
+      query: {'prefetch': 'true'},
+      abort: abort,
+    );
+    final data = response.data;
+    if (data is! Map<String, dynamic>) return MediaPersonDetails.empty;
+    String? text(String key) {
+      final v = data[key];
+      return v is String && v.trim().isNotEmpty ? v.trim() : null;
+    }
+
+    DateTime? day(String key) {
+      final v = text(key);
+      final parsed = v == null ? null : DateTime.tryParse(v.length >= 10 ? v.substring(0, 10) : v);
+      return parsed == null ? null : DateTime.utc(parsed.year, parsed.month, parsed.day);
+    }
+
+    return MediaPersonDetails(
+      biography: text('bio'),
+      birthDate: day('birth_date'),
+      deathDate: day('death_date'),
+      birthPlace: text('birthplace'),
+    );
   }
 
   @override

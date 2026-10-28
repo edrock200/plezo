@@ -1,3 +1,4 @@
+import '../../media/chapter_marker_classifier.dart';
 import '../../media/media_backend.dart';
 import '../../media/media_item.dart';
 import '../../media/media_kind.dart';
@@ -696,6 +697,7 @@ abstract final class SiloMappers {
   static PlaybackExtras playbackExtras(
     Map<String, dynamic>? watch,
     SiloMappingContext ctx, {
+    required ChapterMarkerClassifier classifier,
     String? introPattern,
     String? creditsPattern,
     bool forceChapterFallback = false,
@@ -709,6 +711,7 @@ abstract final class SiloMappers {
       introPatternStr: introPattern,
       creditsPatternStr: creditsPattern,
       forceChapterFallback: forceChapterFallback,
+      classifier: classifier,
     );
   }
 }

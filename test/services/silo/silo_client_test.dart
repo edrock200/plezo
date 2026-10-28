@@ -56,6 +56,8 @@ http.Response _problem(int status, String code) => http.Response(
 Map<String, dynamic> _movie(int i) => {'content_id': 'movie:m$i', 'type': 'movie', 'title': 'Movie $i'};
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   late List<http.Request> requests;
 
   setUp(() {

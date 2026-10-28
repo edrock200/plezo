@@ -48,8 +48,9 @@ void main() {
     List<Uri> captured, {
     Map<String, List<Map<String, dynamic>>> itemsByParent = const {},
     List<Map<String, dynamic>> views = _views,
+    JellyfinClient Function({http.Client? httpClient}) factory = testJellyfinClient,
   }) {
-    return testJellyfinClient(
+    return factory(
       httpClient: MockClient((request) async {
         captured.add(request.url);
         final path = request.url.path;
@@ -371,6 +372,117 @@ void main() {
     expect(movies.queryParameters['Fields'], contains('ChildCount'));
   });
 
+  test('each library is searched only for the types its kind can hold (#2581)', () async {
+    final captured = <Uri>[];
+    final client = makeClient(
+      captured,
+      views: const [
+        {'Id': 'lib-movies', 'Name': 'Movies', 'CollectionType': 'movies', 'Type': 'CollectionFolder'},
+        {'Id': 'lib-shows', 'Name': 'Shows', 'CollectionType': 'tvshows', 'Type': 'CollectionFolder'},
+        {'Id': 'lib-home', 'Name': 'Home Videos', 'CollectionType': 'homevideos', 'Type': 'CollectionFolder'},
+        {'Id': 'lib-mvids', 'Name': 'Music Videos', 'CollectionType': 'musicvideos', 'Type': 'CollectionFolder'},
+        {'Id': 'lib-mixed', 'Name': 'Mixed', 'Type': 'CollectionFolder'},
+      ],
+    );
+    addTearDown(client.close);
+
+    await client.searchItems('the');
+
+    // Emby takes 11–12 s on a large TV library when music types ride along on
+    // the scoped query, against ~70 ms for the types a TV library holds.
+    final typesByLibrary = {
+      for (final uri in captured.where((uri) => uri.path == '/Items'))
+        uri.queryParameters['ParentId']: uri.queryParameters['IncludeItemTypes']!.split(',').toSet(),
+    };
+    expect(typesByLibrary, {
+      'lib-movies': {'Movie'},
+      'lib-shows': {'Series', 'Episode'},
+      'lib-home': {'Video', 'MusicVideo'},
+      'lib-mvids': {'Video', 'MusicVideo'},
+      'lib-mixed': {'Movie', 'Series', 'Episode', 'MusicAlbum', 'Audio'},
+    });
+  });
+
+  test('Emby searches a movie library by media type and keeps only its movies', () async {
+    final captured = <Uri>[];
+    final client = makeClient(
+      captured,
+      factory: testEmbyClient,
+      itemsByParent: {
+        // Untyped, the mock returns every row, as Emby would for other video
+        // items a movie library can hold.
+        'lib-movies': [_hit('movie-1', 'Movie', 'The Movie'), _hit('trailer-1', 'Trailer', 'The Trailer')],
+        'lib-shows': [_hit('show-1', 'Series', 'The Show')],
+      },
+    );
+    addTearDown(client.close);
+
+    final results = await client.searchItems('the');
+
+    expect(results.map((item) => item.id), containsAll(['movie-1', 'show-1']));
+    expect(results.map((item) => item.id), isNot(contains('trailer-1')));
+    final byLibrary = {
+      for (final uri in captured.where((uri) => uri.path == '/Items' && uri.queryParameters['ParentId'] != 'lib-music'))
+        uri.queryParameters['ParentId']: uri.queryParameters,
+    };
+    // Emby takes seconds for `IncludeItemTypes=Movie` on a large movie library
+    // and milliseconds for `MediaTypes=Video`.
+    expect(byLibrary['lib-movies']!['MediaTypes'], 'Video');
+    expect(byLibrary['lib-movies']!.containsKey('IncludeItemTypes'), isFalse);
+    expect(byLibrary['lib-shows']!['IncludeItemTypes'], 'Series,Episode');
+  });
+
+  test('Jellyfin keeps the typed movie library search', () async {
+    final captured = <Uri>[];
+    final client = makeClient(captured);
+    addTearDown(client.close);
+
+    await client.searchItems('the');
+
+    final movies = captured.singleWhere(
+      (uri) => uri.path == '/Items' && uri.queryParameters['ParentId'] == 'lib-movies',
+    );
+    expect(movies.queryParameters['IncludeItemTypes'], 'Movie');
+    expect(movies.queryParameters.containsKey('MediaTypes'), isFalse);
+  });
+
+  test('home and music video libraries surface their videos', () async {
+    final captured = <Uri>[];
+    final client = makeClient(
+      captured,
+      views: const [
+        {'Id': 'lib-home', 'Name': 'Home Videos', 'CollectionType': 'homevideos', 'Type': 'CollectionFolder'},
+        {'Id': 'lib-mvids', 'Name': 'Music Videos', 'CollectionType': 'musicvideos', 'Type': 'CollectionFolder'},
+      ],
+      itemsByParent: {
+        'lib-home': [_hit('video-1', 'Video', 'The Birthday')],
+        'lib-mvids': [_hit('mv-1', 'MusicVideo', 'The Song')],
+      },
+    );
+    addTearDown(client.close);
+
+    final results = await client.searchItems('the');
+
+    expect(results.map((item) => item.id), ['video-1', 'mv-1']);
+    expect(results.map((item) => item.libraryId), ['lib-home', 'lib-mvids']);
+  });
+
+  test('a photo library is not searched', () async {
+    final captured = <Uri>[];
+    final client = makeClient(
+      captured,
+      views: const [
+        {'Id': 'lib-movies', 'Name': 'Movies', 'CollectionType': 'movies', 'Type': 'CollectionFolder'},
+        {'Id': 'lib-photos', 'Name': 'Photos', 'CollectionType': 'photos', 'Type': 'CollectionFolder'},
+      ],
+    );
+    addTearDown(client.close);
+
+    await client.searchItems('the');
+
+    expect(captured.where((uri) => uri.path == '/Items').map((uri) => uri.queryParameters['ParentId']), ['lib-movies']);
+  });
+
   test('excluded ids owned by another server do not shrink the fan-out', () async {
     final captured = <Uri>[];
     final client = makeClient(
@@ -500,7 +612,7 @@ void main() {
           final path = request.url.path;
           final params = request.url.queryParameters;
           if (path.endsWith('/Views')) return jsonResponse({'Items': peopleViews});
-          if (path == '/Persons') {
+          if (path == '/Persons' || (path == '/Items' && params['IncludeItemTypes'] == 'Person')) {
             final limit = int.tryParse(params['Limit'] ?? '');
             return jsonResponse({'Items': limit == null ? persons : persons.take(limit).toList()});
           }
@@ -522,7 +634,15 @@ void main() {
       );
     }
 
-    List<Uri> titleChecks(List<Uri> captured) => captured.where((uri) => uri.path == '/Items').toList();
+    List<Uri> titleChecks(List<Uri> captured) =>
+        captured.where((uri) => uri.path == '/Items' && uri.queryParameters.containsKey('PersonIds')).toList();
+
+    List<Uri> candidateSearches(List<Uri> captured) => captured
+        .where(
+          (uri) =>
+              uri.path == '/Persons' || (uri.path == '/Items' && uri.queryParameters['IncludeItemTypes'] == 'Person'),
+        )
+        .toList();
 
     test('ranks the name-ordered candidates before cutting them to the limit', () async {
       final captured = <Uri>[];
@@ -583,6 +703,35 @@ void main() {
       });
     }
 
+    test('Emby searches people through /Items, Jellyfin through /Persons', () async {
+      for (final (factory, expectedPath) in [(testJellyfinClient, '/Persons'), (testEmbyClient, '/Items')]) {
+        final captured = <Uri>[];
+        final client = makePeopleClient(
+          captured,
+          factory: factory,
+          persons: [personRow('p-christopher', 'Christopher Nolan')],
+          titlesByPerson: {
+            'p-christopher': {'lib-movies': 'Movie'},
+          },
+        );
+        addTearDown(client.close);
+
+        final results = await client.searchPeople('Nolan');
+
+        expect(results.map((person) => person.id), ['p-christopher']);
+        final searches = candidateSearches(captured);
+        expect(searches, hasLength(1));
+        expect(searches.single.path, expectedPath);
+        expect(searches.single.queryParameters['SearchTerm'], 'Nolan');
+        expect(searches.single.queryParameters['PersonTypes'], 'Actor,Director');
+        if (expectedPath == '/Items') {
+          // Emby's `/Persons` takes 20+ s on a large server.
+          expect(searches.single.queryParameters['Recursive'], 'true');
+          expect(captured.where((uri) => uri.path == '/Persons'), isEmpty);
+        }
+      }
+    });
+
     test('a person whose only titles sit in a hidden library is left out', () async {
       final captured = <Uri>[];
       final client = makePeopleClient(
@@ -626,7 +775,8 @@ void main() {
       final results = await client.searchPeople('Waltz', excludedLibraryIds: {'lib-movies', 'lib-shows', 'lib-anime'});
 
       expect(results, isEmpty);
-      expect(captured.where((uri) => uri.path == '/Persons' || uri.path == '/Items'), isEmpty);
+      expect(candidateSearches(captured), isEmpty);
+      expect(titleChecks(captured), isEmpty);
     });
 
     test('a thumb exists only for a person with a primary image tag', () async {

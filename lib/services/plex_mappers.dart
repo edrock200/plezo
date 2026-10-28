@@ -12,6 +12,7 @@
 // resolution and server-tagging.
 
 import 'package:json_annotation/json_annotation.dart';
+import '../media/chapter_marker_classifier.dart';
 import '../media/artist_discography.dart';
 import '../media/ids.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
@@ -1184,6 +1185,18 @@ class PlexMappers {
     );
   }
 
+  /// Map the row `discover.provider.plex.tv/library/people/{tagKey}` answers
+  /// with. An unknown person comes back as an empty container: null [json].
+  static MediaPersonDetails personDetails(Map<String, dynamic>? json) {
+    if (json == null) return MediaPersonDetails.empty;
+    return MediaPersonDetails(
+      biography: _stringOrNull(json['summary']),
+      birthDate: MediaPersonDetails.parseDate(json['bornAt']),
+      deathDate: MediaPersonDetails.parseDate(json['diedAt']),
+      birthPlace: _stringOrNull(json['birthPlace']),
+    );
+  }
+
   /// Map a parsed [PlexMediaVersionDto] into a [MediaVersion].
   static MediaVersion mediaVersion(PlexMediaVersionDto dto) {
     final parts = dto.parts.isEmpty
@@ -1417,6 +1430,7 @@ MediaSourceInfo? plexMediaSourceInfoFromCacheJson(
 
 PlaybackExtras plexPlaybackExtrasFromCacheJson(
   Map<String, dynamic>? metadataJson, {
+  required ChapterMarkerClassifier classifier,
   String? introPattern,
   String? creditsPattern,
   bool forceChapterFallback = false,
@@ -1424,6 +1438,7 @@ PlaybackExtras plexPlaybackExtrasFromCacheJson(
   return PlaybackExtras.withChapterFallback(
     chapters: plexChaptersFromCacheJson(metadataJson),
     markers: plexMarkersFromCacheJson(metadataJson),
+    classifier: classifier,
     introPatternStr: introPattern,
     creditsPatternStr: creditsPattern,
     forceChapterFallback: forceChapterFallback,

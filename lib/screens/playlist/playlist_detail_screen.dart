@@ -719,13 +719,20 @@ class _PlaylistDetailScreenState extends BaseMediaListDetailScreen<PlaylistDetai
             ],
           ),
           actions: buildFocusableAppBarActions(),
+          onBackPressed: popFromAppBar,
         ),
         ...buildStateSlivers(),
         if (items.isNotEmpty) ...[
           if (_isReadOnly)
-            // Smart playlists / Jellyfin playlists: focusable grid view
-            // (read-only, no reordering or removal)
-            buildFocusableGrid(items: items, onRefresh: updateItem, shape: _isAudioPlaylist ? CardShape.square : null)
+            // Smart playlists: focusable grid view (read-only, no reordering
+            // or removal). Activating a card plays the playlist from that
+            // entry, same as a row tap in an editable playlist.
+            buildFocusableGrid(
+              items: items,
+              onRefresh: updateItem,
+              onItemTap: _playFromItem,
+              shape: _isAudioPlaylist ? CardShape.square : null,
+            )
           else
             // Plex regular playlists: sliver reorderable list
             _buildReorderableList(),
@@ -775,7 +782,9 @@ class _PlaylistDetailScreenState extends BaseMediaListDetailScreen<PlaylistDetai
       },
       child: PrimaryScrollController(
         controller: scrollController,
-        child: Scaffold(body: scrollView),
+        // Horizontal-only SafeArea: rows clear a landscape notch or iPhone
+        // Duo's portrait sensor column.
+        child: Scaffold(body: SafeArea(top: false, bottom: false, child: scrollView)),
       ),
     );
   }
