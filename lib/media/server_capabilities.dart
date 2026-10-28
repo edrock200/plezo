@@ -161,14 +161,16 @@ class ServerCapabilities {
   /// only override this type needs. Widen the parameter list if another flag
   /// ever becomes a runtime probe.
   /// Silo (`/api/v2`): server-defined home sections, 1–5 star ratings,
-  /// favorites and Continue Watching dismissals; no live TV, folder browsing,
-  /// metadata editing or trickplay in this client yet.
+  /// favorites, Continue Watching dismissals and seek-bar previews
+  /// (`trickplay_v1` sprite sheets, per file); no live TV, folder browsing or
+  /// metadata editing in this client yet.
   static const ServerCapabilities silo = ServerCapabilities(
     videoTranscoding: true,
     richHubs: true,
     numericUserRating: true,
     userFavorites: true,
     continueWatchingRemoval: true,
+    scrubThumbnails: true,
   );
 
   ServerCapabilities copyWith({bool? videoTranscoding}) {

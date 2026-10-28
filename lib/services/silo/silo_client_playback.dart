@@ -571,7 +571,12 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
   Future<ScrubPreviewSource?> createScrubPreviewSource({
     required MediaItem item,
     required MediaSourceInfo mediaSource,
-  }) async => null;
+  }) => SiloTrickplayService.load(
+    api: _api,
+    itemId: item.id,
+    fileId: mediaSource.mediaSourceId,
+    watchDetail: () => _watchDetail(item.id),
+  );
 
   @override
   double get watchedThreshold => 0.9;
