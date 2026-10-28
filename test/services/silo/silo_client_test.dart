@@ -281,6 +281,136 @@ void main() {
     expect(query['scope'], 'home');
   });
 
+  group('section rows item_limit', () {
+    final sections = {
+      'sections': [
+        {
+          'id': 'ra-3',
+          'section_type': 'recently_added',
+          'title': 'Recently Added',
+          'total_count': 1,
+          'items': [_movie(1)],
+        },
+      ],
+    };
+
+    test('item_limit is min(20, section_item_limit_max), or nothing', () {
+      expect(SiloClient.sectionItemLimitParam(null), isNull);
+      expect(SiloClient.sectionItemLimitParam(0), isNull);
+      expect(SiloClient.sectionItemLimitParam('100'), isNull);
+      expect(SiloClient.sectionItemLimitParam(5), 5);
+      expect(SiloClient.sectionItemLimitParam(100), 20);
+    });
+
+    /// Loads Home twice and one library's rows; returns the capability
+    /// reads and the `item_limit` each section list carried.
+    Future<(int, List<String?>)> sentLimits(http.Response Function() capability) async {
+      var capabilityReads = 0;
+      final limits = <String?>[];
+      final c = client((request) async {
+        final path = request.url.path;
+        if (path.endsWith('/home/capabilities')) {
+          capabilityReads++;
+          return capability();
+        }
+        if (path.endsWith('/home/sections') || path.endsWith('/library/7/sections')) {
+          limits.add(request.url.queryParameters['item_limit']);
+          return _json(sections);
+        }
+        throw StateError('unexpected $path');
+      });
+      await Future.wait([c.fetchGlobalHubs(), c.fetchContinueWatching()]);
+      await c.fetchGlobalHubs();
+      await c.fetchLibraryHubs('7', libraryName: 'Movies');
+      return (capabilityReads, limits);
+    }
+
+    test('an advertising server is asked once and gets the capped limit', () async {
+      final (reads, limits) = await sentLimits(
+        () => _json({'revision': 'r', 'state': 'available', 'section_item_limit_max': 100}),
+      );
+      expect(reads, 1);
+      expect(limits, ['20', '20', '20']);
+    });
+
+    test('an older server without the field gets no item_limit', () async {
+      final (reads, limits) = await sentLimits(() => _json({'revision': 'r', 'state': 'available'}));
+      expect(reads, 1);
+      expect(limits, [null, null, null]);
+    });
+
+    test('a failed capability read counts as unsupported for the session', () async {
+      final (reads, limits) = await sentLimits(() => _problem(404, 'not_found'));
+      expect(reads, 1);
+      expect(limits, [null, null, null]);
+    });
+
+    test('a 422 unknown_parameter for item_limit is read again without it, once', () async {
+      var capabilityReads = 0;
+      final limits = <String?>[];
+      final c = client((request) async {
+        if (request.url.path.endsWith('/home/capabilities')) {
+          capabilityReads++;
+          return _json({'section_item_limit_max': 50});
+        }
+        final limit = request.url.queryParameters['item_limit'];
+        limits.add(limit);
+        if (limit != null) {
+          return http.Response(
+            jsonEncode({
+              'type': 'https://siloserver.org/problems/validation_failed',
+              'title': 'Validation failed',
+              'status': 422,
+              'errors': [
+                {'location': 'query.item_limit', 'code': 'unknown_parameter'},
+              ],
+            }),
+            422,
+            headers: {'content-type': 'application/problem+json'},
+          );
+        }
+        return _json(sections);
+      });
+      final hubs = await c.fetchGlobalHubs();
+      expect(hubs.single.id, 'home:ra-3');
+      await c.fetchLibraryHubs('7', libraryName: 'Movies');
+      expect(capabilityReads, 1);
+      expect(limits, ['20', null, null]);
+    });
+
+    test('other validation failures are not retried', () async {
+      var listReads = 0;
+      final c = client((request) async {
+        if (request.url.path.endsWith('/home/capabilities')) return _json({'section_item_limit_max': 50});
+        listReads++;
+        return http.Response(
+          jsonEncode({
+            'type': 'https://siloserver.org/problems/validation_failed',
+            'status': 422,
+            'errors': [
+              {'location': 'query.image_size', 'code': 'invalid_value'},
+            ],
+          }),
+          422,
+          headers: {'content-type': 'application/problem+json'},
+        );
+      });
+      final hubs = await c.fetchLibraryHubs('7', libraryName: 'Movies');
+      expect(hubs, isEmpty);
+      expect(listReads, 1);
+    });
+
+    test('every row with cards opens its full page, even when it looks complete', () async {
+      final c = client((request) async {
+        if (request.url.path.endsWith('/home/sections')) return _json(sections);
+        return _json({});
+      });
+      final hub = (await c.fetchGlobalHubs()).single;
+      expect(hub.items, hasLength(1));
+      expect(hub.more, isTrue);
+    });
+  });
+
   group('playback', () {
     late Map<String, dynamic> startBody;
     final progressBodies = <Map<String, dynamic>>[];

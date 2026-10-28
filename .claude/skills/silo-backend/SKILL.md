@@ -64,6 +64,23 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
 - **Images:** URLs arrive ready-made and self-authorising (signed `exp`/`sig`, or S3 presigned).
   Resolve root-relative ones against the server **origin**, never add auth, never re-encode the query.
   `artworkStorageKey` strips the rotating signature so downloaded artwork is found again.
+- **Episode parent artwork** (servers with `episode_parent_artwork`, Silo #711): episode cards and
+  details carry `series_poster_url`, `series_backdrop_url`, `season_poster_url` (+ ThumbHashes,
+  which Plezy does not use). `SiloMappers.item` maps them to `grandparentThumbPath`,
+  `parentThumbPath` (season, else series poster) and `grandparentArtPath`/`grandparentBackdropPaths`,
+  falling back to `poster_url`/`backdrop_url` on older servers. Episode heroes already prefer
+  inherited art (`heroBackdropPaths`), and `spoilerSafeArt` reads `grandparentArtPath`; series and
+  season art is never an episode still, so spoiler protection leaves it visible. `artPath` stays
+  the episode's own backdrop. Plezy's Up Next card deliberately shows the (blurred) episode still.
+- **Section rows (`item_limit`, Silo #688):** Home and library section lists send
+  `item_limit=min(20, section_item_limit_max)` only when `GET /home/capabilities` advertises the
+  field. The capability is read once per client (shared future, 3 s cap); a failed/slow read or a
+  missing field means "send nothing" for the client's life. A 422 `validation_failed` whose
+  `errors[]` has `{location: query.item_limit, code: unknown_parameter}` is read again once without
+  it and the parameter is never sent again. `item_limit` is kept out of the offline cache key.
+  Every row with cards has `more: true` (Silo's "Explore all"): rows are capped and Home drops
+  titles other rows show, so `total_count` cannot tell whether the page holds more. The full page
+  is `fetchMoreHubItemsPage` → `GET /catalog?source=section&section_id=&scope=home|library`.
 - **Sort fields** unknown to the server return 422 — map only known ones (`_sortFields`).
 - **Playback (protocol v3):** `GET /playback/capabilities` must be `available`, list protocol 3
   and the `sequenced_progress_v1` feature (Silo's apps refuse playback otherwise) → keep `installation_id` (409
@@ -133,6 +150,9 @@ Silo's apps). Open follow-ups: an edit screen for an existing Silo connection (a
 — today the user removes and re-adds it; music/audiobook libraries; OIDC sign-in.
 
 ## Deliberate differences from Silo's apps
+- Quality changes start a fresh `POST /playback/start` for the same `file_id` (no staged replans),
+  so the server never moves Plezy to another version mid-play; Silo #684 (adopt a cross-version
+  replan with subtitles off) does not apply. Subtitles are chosen client-side.
 - Downloads use direct links, not Silo's managed `/downloads` registry (whose file, manifest and
   artwork routes need auth headers). Plezy's downloads therefore do not show in Silo's download list.
 - No OIDC/browser or network-identity ("Continue as") sign-in, no cleartext-HTTP consent prompt —
