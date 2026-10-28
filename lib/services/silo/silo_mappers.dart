@@ -342,6 +342,13 @@ abstract final class SiloMappers {
     final still = _url(json['still_url'], ctx);
     final backdrop = _url(json['backdrop_url'], ctx);
     final logo = _url(json['logo_url'], ctx);
+    // Servers with `episode_parent_artwork` put the series' and season's own
+    // artwork on episode cards and details. It is never an episode still, so
+    // heroes and spoiler-protected surfaces can show it; older servers omit
+    // these fields and keep `poster_url`/`backdrop_url`.
+    final seriesPoster = _url(json['series_poster_url'], ctx);
+    final seriesBackdrop = _url(json['series_backdrop_url'], ctx);
+    final seasonPoster = _url(json['season_poster_url'], ctx);
 
     final episodeCount = flexibleInt(json['episode_count']);
     final unplayed = flexibleInt(userData?['unplayed_count']);
@@ -360,6 +367,7 @@ abstract final class SiloMappers {
     String? parentThumbPath;
     String? grandparentThumbPath;
     String? grandparentArtPath;
+    List<String>? grandparentBackdropPaths;
 
     switch (kind) {
       case MediaKind.episode:
@@ -373,9 +381,10 @@ abstract final class SiloMappers {
         }
         parentTitle = seasonNumber == null ? null : (seasonNumber == 0 ? 'Specials' : 'Season $seasonNumber');
         thumbPath = still ?? poster;
-        grandparentThumbPath = poster;
-        parentThumbPath = poster;
-        grandparentArtPath = backdrop;
+        grandparentThumbPath = seriesPoster ?? poster;
+        parentThumbPath = seasonPoster ?? seriesPoster ?? poster;
+        grandparentArtPath = seriesBackdrop ?? backdrop;
+        if (seriesBackdrop != null) grandparentBackdropPaths = [seriesBackdrop];
       case MediaKind.season:
         index = seasonNumber;
         parentId = seriesId;
@@ -412,6 +421,7 @@ abstract final class SiloMappers {
       grandparentTitle: grandparentTitle,
       grandparentThumbPath: grandparentThumbPath,
       grandparentArtPath: grandparentArtPath,
+      grandparentBackdropPaths: grandparentBackdropPaths,
       thumbPath: thumbPath,
       artPath: backdrop,
       backdropPaths: backdrop == null ? null : [backdrop],
