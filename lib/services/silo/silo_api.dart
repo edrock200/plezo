@@ -203,12 +203,25 @@ class SiloApi {
   /// the user has to sign in again.
   void Function()? onSessionExpired;
 
+  /// Called when the server looks unreachable or the login unusable: after
+  /// [unreachableAfterFailures] consecutive connection failures, or when a
+  /// 401 is still the answer after a refresh attempt. The owner confirms
+  /// with a health probe before showing the server offline or signed out.
+  void Function()? onServerUnreachable;
+
+  static const unreachableAfterFailures = 2;
+  int _consecutiveTransportFailures = 0;
+
   Future<SiloTokens?>? _refreshInFlight;
 
   String get baseUrl => _http.baseUrl;
   set baseUrl(String value) => _http.baseUrl = value;
 
   SiloTokens? get tokens => _tokens;
+
+  /// Replace the token pair, for a pair another client of the same login
+  /// session rotated to (the old refresh token is dead for this one too).
+  void replaceTokens(SiloTokens value) => _tokens = value;
   String? get accessToken => _tokens?.accessToken;
 
   /// `scheme://host[:port]` of the base URL. Root-relative artwork and stream
@@ -255,15 +268,44 @@ class SiloApi {
       throw ArgumentError.value(path, 'path', 'Silo requests must target /api/v2/');
     }
     if (auth) await _refreshIfExpiring();
-    var response = await _send(method, path, query, body, auth, profile, timeout, abort);
+    var response = await _sendTracked(method, path, query, body, auth, profile, timeout, abort);
     // (A missing profile PIN token is a 403, not a 401.)
     if (auth && response.statusCode == 401 && _tokens != null) {
       final refreshed = await refreshTokens();
       if (refreshed != null) {
-        response = await _send(method, path, query, body, auth, profile, timeout, abort);
+        response = await _sendTracked(method, path, query, body, auth, profile, timeout, abort);
       }
+      if (response.statusCode == 401) onServerUnreachable?.call();
     }
     return response;
+  }
+
+  /// [_send], counting consecutive connection failures for
+  /// [onServerUnreachable]. A slow answer (receive timeout) or a cancelled
+  /// request says nothing about reachability and is not counted.
+  Future<MediaServerResponse> _sendTracked(
+    String method,
+    String path,
+    Map<String, dynamic>? query,
+    Object? body,
+    bool auth,
+    bool profile,
+    Duration? timeout,
+    AbortController? abort,
+  ) async {
+    try {
+      final response = await _send(method, path, query, body, auth, profile, timeout, abort);
+      _consecutiveTransportFailures = 0;
+      return response;
+    } on MediaServerHttpException catch (e) {
+      if (e.type == MediaServerHttpErrorType.connectionError || e.type == MediaServerHttpErrorType.connectionTimeout) {
+        if (++_consecutiveTransportFailures >= unreachableAfterFailures) {
+          _consecutiveTransportFailures = 0;
+          onServerUnreachable?.call();
+        }
+      }
+      rethrow;
+    }
   }
 
   /// [request], throwing [MediaServerHttpException] on any status >= 400.

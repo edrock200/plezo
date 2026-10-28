@@ -62,13 +62,25 @@ class MultiServerManager {
     PlexClientFactory plexClientFactory = PlexClient.create,
     Stream<List<ConnectivityResult>> Function()? connectivityChanges,
     Duration connectivityDebounceDuration = const Duration(seconds: 2),
-  }) : this._(plexClientFactory, connectivityChanges ?? _defaultConnectivityChanges, connectivityDebounceDuration);
+    Future<SiloClient> Function(SiloConnection connection) siloClientFactory = SiloClient.create,
+  }) : this._(
+         plexClientFactory,
+         connectivityChanges ?? _defaultConnectivityChanges,
+         connectivityDebounceDuration,
+         siloClientFactory,
+       );
 
-  MultiServerManager._(this._plexClientFactory, this._connectivityChanges, this._connectivityDebounceDuration);
+  MultiServerManager._(
+    this._plexClientFactory,
+    this._connectivityChanges,
+    this._connectivityDebounceDuration,
+    this._siloClientFactory,
+  );
 
   static Stream<List<ConnectivityResult>> _defaultConnectivityChanges() => ConnectivityProbe.changes;
 
   final PlexClientFactory _plexClientFactory;
+  final Future<SiloClient> Function(SiloConnection connection) _siloClientFactory;
   final Stream<List<ConnectivityResult>> Function() _connectivityChanges;
   final Duration _connectivityDebounceDuration;
   FutureOr<void> Function(JellyfinConnection connection)? onJellyfinConnectionUpdated;
@@ -1066,18 +1078,17 @@ class MultiServerManager {
           existing.ownsRefreshToken(connection.refreshToken)) {
         return await _reuseConnectionClient(existing, connectionId: connection.id, machineId: connection.serverId);
       }
-      final client = await SiloClient.create(connection);
-      client.onConnectionUpdated = (updated) async {
-        if (_jellyfinByCompoundId[updated.id] != client) return;
-        try {
-          await onSiloConnectionUpdated?.call(updated);
-        } catch (e, st) {
-          appLogger.w('Failed to persist Silo connection update', error: e, stackTrace: st);
-        }
-        _emitStatus();
-      };
+      final client = await _siloClientFactory(connection);
+      // A changed connection (address, PIN token) of the same login session:
+      // the row may predate a rotation the live client made, so take its
+      // current tokens rather than reviving a dead refresh token.
+      final previous = _jellyfinByCompoundId[connection.id];
+      if (previous is SiloClient && previous.ownsRefreshToken(connection.refreshToken)) {
+        client.inheritSession(previous);
+      }
       final compoundId = connection.id;
       final machineId = connection.serverId;
+      _wireSiloClient(client, compoundId: compoundId, machineId: machineId);
       final oldClient = _jellyfinByCompoundId[compoundId];
       if (oldClient != null) unawaited(_closeClientGracefully(oldClient));
       _jellyfinByCompoundId[compoundId] = client;
@@ -1095,6 +1106,38 @@ class MultiServerManager {
       appLogger.e('Failed to add Silo server ${connection.serverName}', error: e, stackTrace: stackTrace);
       return false;
     }
+  }
+
+  void _wireSiloClient(SiloClient client, {required String compoundId, required String machineId}) {
+    client.onConnectionUpdated = (updated) async {
+      var toPersist = updated;
+      final live = _jellyfinByCompoundId[updated.id];
+      if (live != client) {
+        // A replaced client still draining can rotate the refresh token of
+        // the login session it shares with its replacement; the pair the
+        // replacement holds is then dead. Hand the new pair over and persist it.
+        if (live is! SiloClient ||
+            live.connection.refreshToken == updated.refreshToken ||
+            !client.ownsRefreshToken(live.connection.refreshToken)) {
+          return;
+        }
+        live.adoptTokens(updated);
+        toPersist = live.connection;
+      }
+      try {
+        await onSiloConnectionUpdated?.call(toPersist);
+      } catch (e, st) {
+        appLogger.w('Failed to persist Silo connection update', error: e, stackTrace: st);
+      }
+      _emitStatus();
+    };
+    // Silo has one address, so repeated connection failures (or a 401 a
+    // refresh did not cure) take the same verify-then-flip path as a
+    // MediaBrowser server whose endpoints are exhausted.
+    client.onServerUnreachable = () {
+      if (_jellyfinByCompoundId[compoundId] != client) return;
+      _onJellyfinEndpointsExhausted(machineId, compoundId);
+    };
   }
 
   /// Whether the live Silo client for [live] can serve [incoming] as is: the
@@ -1127,14 +1170,33 @@ class MultiServerManager {
   }
 
   /// Tear down a specific Silo connection's client. If it was the active one
-  /// for its server, the server slot is cleared.
+  /// for its server, the server slot is cleared. The login session is also
+  /// revoked on the server (best effort, in the background), as Silo's apps
+  /// do on sign-out; removal never waits for it.
   void removeSiloConnection(SiloConnection connection) {
     final client = _jellyfinByCompoundId.remove(connection.id);
     _jellyfinHealthByCompoundId.remove(connection.id);
-    if (client != null) unawaited(_closeClientGracefully(client));
+    unawaited(_logOutAndCloseSilo(client, connection));
     if (_isActiveJellyfin(connection.serverId, connection.id)) {
       _forgetServer(connection.serverId);
       _emitStatus();
+    }
+  }
+
+  /// The live client holds the newest tokens; without one (pruned at start-up
+  /// before any bind) a throwaway client uses the stored pair.
+  Future<void> _logOutAndCloseSilo(MediaServerClient? client, SiloConnection connection) async {
+    try {
+      final silo = client is SiloClient ? client : await _siloClientFactory(connection);
+      try {
+        await silo.logout();
+      } finally {
+        if (!identical(silo, client)) await _closeClientGracefully(silo);
+      }
+    } catch (e) {
+      appLogger.d('Silo: logout on removal failed', error: e.runtimeType);
+    } finally {
+      if (client != null) await _closeClientGracefully(client);
     }
   }
 

@@ -2300,12 +2300,13 @@ class _SetupScreenState extends State<SetupScreen> with MountedSetStateMixin {
     }
 
     final plexCount = allConnections.whereType<PlexAccountConnection>().fold<int>(0, (n, c) => n + c.servers.length);
-    final mediaBrowserCount =
-        allConnections.whereType<JellyfinConnection>().length + allConnections.whereType<SiloConnection>().length;
+    final mediaBrowserCount = allConnections.whereType<JellyfinConnection>().length;
+    final siloCount = allConnections.whereType<SiloConnection>().length;
     unawaited(
       Sentry.addBreadcrumb(
         Breadcrumb(
-          message: 'Handing off to MainScreen with $plexCount Plex + $mediaBrowserCount MediaBrowser server(s)',
+          message:
+              'Handing off to MainScreen with $plexCount Plex + $mediaBrowserCount MediaBrowser + $siloCount Silo server(s)',
           category: 'setup',
         ),
       ),

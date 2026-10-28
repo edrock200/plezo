@@ -49,7 +49,20 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
   on 401 under one in-flight refresh. A refused refresh token is remembered and not sent again. **Refresh tokens rotate**: persist every new pair
   (`SiloClient.onConnectionUpdated` → `ConnectionRegistry.upsert`). `MultiServerManager` keeps the
   live client when a re-bind arrives with an older, already-rotated refresh token
-  (`SiloClient.ownsRefreshToken`) — replacing it would revive a dead token.
+  (`SiloClient.ownsRefreshToken`) — replacing it would revive a dead token. When such a re-bind
+  must rebuild the client (new address or PIN token), the replacement takes the live client's
+  current pair and known tokens (`inheritSession`), and a refresh the replaced client still had
+  in flight is handed to the replacement (`adoptTokens`) and persisted as the replacement's row.
+  A closing client rejects new requests, so only an already-sent refresh can land after a swap.
+- **Server status:** Silo has one address, so `SiloApi.onServerUnreachable` (2 consecutive
+  connection failures, or a 401 still there after a refresh attempt) and an `offline`
+  `checkHealth` go through `MultiServerManager._onJellyfinEndpointsExhausted` → the shared
+  debounce + health probe, which flips the server offline / auth error. A failed probe re-arms
+  the check, which is how the server is seen coming back (same loop as a MediaBrowser server).
+- **Removal:** `removeSiloConnection` revokes the session in the background
+  (`POST /api/v2/auth/logout`, bearer only, 5 s) with the live client, or a throwaway client
+  from the stored row; removal never waits for it. Profile join rows for Silo carry no token
+  (borrowing stores `userToken: null`); the tokens live only in the connection row.
 - **Paging:** collections are `{items, page:{has_more,next_cursor}, total, window_cursor}` with
   opaque cursors; offsets are rejected. Cursors are bound to the query **and the page size**.
   `SiloClient._pageAt` keeps a bounded map per (query, page size): the adjacent page reuses
@@ -128,7 +141,9 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
 Fixed: page-size-bound cursors and `seek`; synthetic-season writes hitting the series; stop retry;
 refused refresh resent on every call; missing `sequenced_progress_v1` check; IMDb score scale;
 `duration_seconds` on versions; parallel Home/season loads; concurrent `addSiloConnection`;
-device-code expiry/remint and PIN lockout (429) messages. Declined: 4-digit PIN length (matches
+device-code expiry/remint and PIN lockout (429) messages; servers never going offline/auth-error
+on their own; rotated token lost on client replacement; no logout on removal; access token copied
+into borrowed join rows. Declined: 4-digit PIN length (matches
 Silo's apps). Open follow-ups: an edit screen for an existing Silo connection (address, re-sign-in)
 — today the user removes and re-adds it; music/audiobook libraries; OIDC sign-in.
 
@@ -146,6 +161,9 @@ Silo's apps). Open follow-ups: an edit screen for an existing Silo connection (a
   are hidden). Silo's own TV app keeps music minimal; the v2 contract has no album/track types.
 
 ## Testing
+- Manager integration (`test/services/silo/silo_server_manager_test.dart`): `MultiServerManager(
+  siloClientFactory: ...)` injects `SiloClient.forTesting` clients over a small fake server with a
+  rotating refresh token; status tests run under `fakeAsync` (5 s debounce).
 - Unit tests: `scripts/run_tests.sh test/services/silo` (mappers, connection/vault, client with an
   `http/testing.dart` `MockClient`, headers/form factor). Client tests cover cursor `seek`/restart,
   synthetic-season writes, refused refresh, playback start/progress/stop, downloads, sessionless
