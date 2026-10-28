@@ -4,6 +4,30 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+**Plezy 2.25 and a full review of Silo support** — released October 28, 2026. Installs over 2.22.5 as an update. Previews are now numbered after the Plezy version they're built on, so this one is 2.25.1.
+
+- **Plezy 2.25:** everything upstream Plezy added since 2.22, including `plezy://` links that open a title or switch profile, automatic intro and credits detection from chapters, Explore as a startup section, person pages with biography and dates, and many player and platform fixes.
+- **Silo, watching:**
+  - Movies and episodes you watch again now resume where you stopped.
+  - The seek bar shows picture previews while you scrub, when your Silo server has made them.
+  - Original quality no longer stops older Silo servers from converting a file your device can't play, and the false "transcode unavailable" message on lower quality settings is gone.
+  - Skip-intro markers match the version you're playing, and external players (VLC, mpv) get a direct link.
+- **Silo, browsing:**
+  - Episodes show the show's own poster and background, even with spoiler protection on (recent Silo servers).
+  - Every Silo row on Home and in libraries has "See all", and rows load faster on servers that support shorter rows.
+  - Silo servers are shown with Silo's official icon.
+- **Silo, staying signed in:**
+  - A temporary server, proxy or network problem no longer signs you out of Silo; only a really expired login asks you to sign in again.
+  - A Silo server that stops answering now shows as offline and comes back by itself.
+  - Changing a Silo server's address or profile PIN no longer risks signing you out.
+  - Removing a Silo server from Plezy also signs that device out on the server, and sharing a server with another Plezy profile no longer copies its login.
+- **Silo sign-in:**
+  - Signing in with a code behaves like Silo's TV app: an expired code is replaced on its own, a declined code says so and offers "Show a new code", and the screen says when the server can't be reached.
+  - Leaving sign-in before picking a profile signs that session out on the server, and the profile step has "Change server".
+  - A refused PIN shows the server's reason, Kids profiles are labelled, and screen readers read the sign-in code digit by digit.
+  - On Apple TV the keyboard no longer covers the server address screen, and the code screen fits small TVs with the QR code beside the code.
+- **Windows and macOS:** the Supporter themes and app icons are available, as in upstream Plezy's own downloads.
+
 ## silo-preview-2.22.5
 
 **Trailers and extras for Silo** — released October 26, 2026.
