@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:plezy/models/transcode_quality_preset.dart';
 import 'package:plezy/services/silo/silo_playback_caps.dart';
 
 void main() {
@@ -25,5 +26,28 @@ void main() {
     expect(caps['codecs_video'], containsAll(['h264', 'hevc']));
     expect(caps['codecs_video_hardware'], containsAll(['h264', 'hevc']));
     expect(caps['max_resolution'], '2160p');
+  });
+
+  test('quality preference never asks for the original, as Silo\'s apps', () {
+    expect(SiloPlaybackCaps.qualityPreference(TranscodeQualityPreset.original), 'auto');
+    expect(SiloPlaybackCaps.qualityPreference(TranscodeQualityPreset.p1080_8mbps), '1080p');
+    expect(SiloPlaybackCaps.qualityPreference(TranscodeQualityPreset.p720_4mbps), '720p');
+    expect(SiloPlaybackCaps.qualityPreference(TranscodeQualityPreset.p480_1_5mbps), 'auto');
+  });
+
+  test('an original answer to a capped preset is a refusal only when the source exceeds it', () {
+    const preset = TranscodeQualityPreset.p720_4mbps;
+    // Fits the preset: the original is the right answer.
+    expect(SiloPlaybackCaps.refusedCappedPreset(preset, {'height': 720, 'bitrate_kbps': 3000}), isFalse);
+    // Unknown size: nothing to tell the user.
+    expect(SiloPlaybackCaps.refusedCappedPreset(preset, {'media_file_id': '1'}), isFalse);
+    expect(SiloPlaybackCaps.refusedCappedPreset(preset, null), isFalse);
+    // Larger than the preset, yet played unchanged.
+    expect(SiloPlaybackCaps.refusedCappedPreset(preset, {'height': 2160, 'bitrate_kbps': 3000}), isTrue);
+    expect(SiloPlaybackCaps.refusedCappedPreset(preset, {'height': 720, 'bitrate_kbps': 9000}), isTrue);
+    expect(
+      SiloPlaybackCaps.refusedCappedPreset(TranscodeQualityPreset.original, {'height': 2160, 'bitrate_kbps': 90000}),
+      isFalse,
+    );
   });
 }

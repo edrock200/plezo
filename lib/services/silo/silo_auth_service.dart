@@ -553,6 +553,7 @@ class SiloAuthService {
       accessToken: signIn.tokens.accessToken,
       refreshToken: signIn.tokens.refreshToken,
       accessTokenExpiresAt: signIn.tokens.expiresAt,
+      accessTokenLifetimeSeconds: signIn.tokens.lifetimeSeconds,
       deviceId: signIn.deviceId,
       profileId: profile.id,
       profileName: profile.name.isEmpty ? signIn.account.username : profile.name,

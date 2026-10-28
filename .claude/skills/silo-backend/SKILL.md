@@ -41,12 +41,20 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
 - **Headers:** every request sends `Accept: application/json` and `X-Silo-Device-Id/-Name/-Platform`,
   `X-Silo-Client` (`Plezy`), `-Client-Version`, `-Client-Family`. Family is a closed set
   (`tv|mobile|tablet|desktop|web`) and selects `profile_client` settings rows, so tablets must say
-  `tablet` (600 dp shortest side, decided once per process). Platform is `android-tv` on Android TV.
+  `tablet` (600 dp shortest side, decided once per process; a read before the view has a size is
+  used but not cached). Platform is `android-tv` on Android TV.
 - **Profiles:** almost every content route needs `X-Profile-Id`; PIN-locked profiles also need
   `X-Profile-Token` from `POST /profiles/{id}/verify-pin`. A Plezy connection is one Silo profile.
   Auto-select a single profile only when it has no PIN (as Silo's apps do).
 - **Tokens:** access tokens are short-lived; refresh proactively (≤ min(60 s, lifetime/2) left) and
-  on 401 under one in-flight refresh. A refused refresh token is remembered and not sent again. **Refresh tokens rotate**: persist every new pair
+  on 401 under one in-flight refresh. A 401 for an access token another request already replaced
+  is retried without refreshing again (rotating twice wastes a pair). Only a 400/401 **carrying
+  Silo's problem body** refuses a refresh (`SiloApi.isRefreshRefusal`) and signs out; a 403, a
+  proxy's HTML 401, a 5xx or a timeout keeps the session and the next 401 tries again.
+  `checkHealth` reports `authError` only after such a refusal, otherwise `offline`. The token
+  lifetime (`expires_in`) is persisted as `SiloConnection.accessTokenLifetimeSeconds`, so
+  `refreshTokensIfHalfSpent` (run before each play) does not rotate on every play after a restart
+  (unknown lifetime counts as an hour). A refused refresh token is remembered and not sent again. **Refresh tokens rotate**: persist every new pair
   (`SiloClient.onConnectionUpdated` → `ConnectionRegistry.upsert`). `MultiServerManager` keeps the
   live client when a re-bind arrives with an older, already-rotated refresh token
   (`SiloClient.ownsRefreshToken`) — replacing it would revive a dead token.
@@ -76,6 +84,19 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
   transcode to SDR H.264. `codecs_video_hardware` lists every codec `VideoDecodeCapabilities`
   accepts. `form_factor` is `mobile` on phones *and* tablets, `tv` on TV, `desktop` otherwise. `progressive`
   is declared but disabled, as Silo's apps do. `start_position` is 0 and Plezy seeks to resume.
+  `quality_preference` is never `original` (Silo Android #613; older servers read it as "never
+  convert"): the Original preset sends `auto`, presets send `720p`/`1080p`/`2160p` or `auto` plus
+  `bandwidth_cap_kbps`. An `original_http` answer to a capped preset is legitimate when the source
+  fits it; the "transcode unavailable" fallback is reported only when `playback_plan.source`
+  (`height`, `bitrate_kbps`) exceeds the preset (`SiloPlaybackCaps.refusedCappedPreset`).
+  Markers: `GET /watch/{id}?file_id=<playing file>` (the server fills that version's on-demand
+  markers; cached per file) and `playbackExtras` picks that version. A progress 404/410 drops the
+  session row (later reports go through `/sync/progress`).
+- **Resume points:** `SiloMappers.resumeOffsetMs` ports the TV app's `resumePositionSeconds`:
+  none at ≤ 30 s or ≥ duration − 5 s; a played item keeps its position (re-watch stopped midway).
+- **External players** get a `/direct-download/links` URL (header-free, Range, no session). Only a
+  server without those links (or a 403) falls back to an untracked original-file session with
+  `token=`, left to expire: an external player never reports to it.
   Progress: `POST /playback/{sid}/progress` with a strictly increasing `sequence`; stop:
   `DELETE /playback/{sid}` with a JSON body and a `stop_id` (and stop `sequence`) minted once; a
   failed stop keeps the session and is retried with the same `stop_id` on the next reload.
@@ -129,7 +150,9 @@ Fixed: page-size-bound cursors and `seek`; synthetic-season writes hitting the s
 refused refresh resent on every call; missing `sequenced_progress_v1` check; IMDb score scale;
 `duration_seconds` on versions; parallel Home/season loads; concurrent `addSiloConnection`;
 device-code expiry/remint and PIN lockout (429) messages. Declined: 4-digit PIN length (matches
-Silo's apps). Open follow-ups: an edit screen for an existing Silo connection (address, re-sign-in)
+Silo's apps). Client slice (late October): quality `original` → `auto`, re-watch resume,
+capped-preset snackbar, refresh refusal/stale-token 401, health, markers per file, form factor
+cache, session rows, external-player sessions, persisted token lifetime. Open follow-ups: an edit screen for an existing Silo connection (address, re-sign-in)
 — today the user removes and re-adds it; music/audiobook libraries; OIDC sign-in.
 
 ## Deliberate differences from Silo's apps

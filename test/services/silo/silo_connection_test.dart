@@ -15,6 +15,7 @@ SiloConnection _connection({String? profileToken}) => SiloConnection(
   accessToken: 'acc-1',
   refreshToken: 'ref-1',
   accessTokenExpiresAt: DateTime.fromMillisecondsSinceEpoch(1800000000000),
+  accessTokenLifetimeSeconds: 900,
   deviceId: 'dev-1',
   profileId: 'p-kids',
   profileName: 'Kids',
@@ -49,6 +50,7 @@ void main() {
     );
     expect(restored.toConfigJson(), original.toConfigJson());
     expect(restored.accessTokenExpiresAt, original.accessTokenExpiresAt);
+    expect(restored.accessTokenLifetimeSeconds, 900);
     expect(restored.profileToken, 'ptok');
   });
 

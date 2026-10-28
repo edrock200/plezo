@@ -32,7 +32,16 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
 
   final Map<String, _SiloPlaybackSession> _sessions = {};
 
+  /// Item id → the file its latest playback started, so the player's
+  /// markers come from the version being played.
+  final Map<String, String> _playingFileIds = {};
+
   static String _watchPath(String id) => SiloApiCache.watchEndpoint(id);
+
+  /// Cache key of the watch detail fetched for one file. The plain path stays
+  /// the key of the file-less detail that downloads pin.
+  static String _watchFileKey(String id, String fileId) =>
+      '${_watchPath(id)}?file_id=${Uri.encodeQueryComponent(fileId)}';
 
   Future<String> _ensureInstallationId({bool refresh = false}) async {
     final cached = _installationId;
@@ -59,15 +68,19 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
 
   /// Watch detail for [itemId], through the cache so markers and versions
   /// stay readable offline.
-  Future<Map<String, dynamic>?> _watchDetail(String itemId, {bool forceRefresh = false}) async {
+  ///
+  /// With [fileId], `?file_id=` names the version being played, for which
+  /// the server fills its on-demand markers; that answer is cached per file.
+  Future<Map<String, dynamic>?> _watchDetail(String itemId, {bool forceRefresh = false, String? fileId}) async {
     final path = _watchPath(itemId);
+    final cacheKey = fileId == null ? path : _watchFileKey(itemId, fileId);
     if (!forceRefresh) {
-      final fresh = await cache.getIfFresh(ServerId(cacheServerId), path, maxAge: playbackMetadataCacheFreshness);
+      final fresh = await cache.getIfFresh(ServerId(cacheServerId), cacheKey, maxAge: playbackMetadataCacheFreshness);
       if (fresh != null) return fresh;
     }
     return fetchWithCacheFallback<Map<String, dynamic>>(
-      cacheKey: path,
-      networkCall: () => _api.request('GET', path),
+      cacheKey: cacheKey,
+      networkCall: () => _api.request('GET', path, query: fileId == null ? null : {'file_id': fileId}),
       parseCache: (data) => data is Map<String, dynamic> ? data : null,
       parseResponse: (response) => response.data is Map<String, dynamic> ? response.data as Map<String, dynamic> : null,
       shouldFallback: (error) => error is MediaServerHttpException && error.isTransient,
@@ -241,6 +254,7 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
     }
     final delivery = plan['delivery']?.toString() ?? 'original_http';
     final isOriginal = delivery == 'original_http';
+    _playingFileIds[metadata.id] = fileId;
     _sessions[sessionId] = _SiloPlaybackSession(
       sessionId: sessionId,
       installationId: decision['_installation_id'].toString(),
@@ -304,7 +318,9 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
       mediaInfo: mediaInfo,
       subtitleSidecars: sidecars,
       isTranscoding: !isOriginal,
-      fallbackReason: !options.qualityPreset.isOriginal && isOriginal ? TranscodeFallbackReason.directPlayOnly : null,
+      fallbackReason: isOriginal && SiloPlaybackCaps.refusedCappedPreset(options.qualityPreset, plan['source'])
+          ? TranscodeFallbackReason.directPlayOnly
+          : null,
       activeAudioStreamId: selectedAudio == null ? null : SiloMappers.trackId(selectedAudio),
       playSessionId: sessionId,
       playMethod: isOriginal ? 'DirectPlay' : (delivery.contains('transcode') ? 'Transcode' : 'DirectStream'),
@@ -429,7 +445,12 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
     return const {'vtt': 'webvtt', 'srt': 'srt', 'ass': 'ass', 'ssa': 'ssa'}[ext];
   }
 
-  /// External players cannot send headers, so the URL carries `token=`.
+  /// External players cannot send headers. A direct-download link authorises
+  /// itself, supports Range and opens no playback session, which an external
+  /// player could never report to or stop. Servers without those links (or a
+  /// profile they refuse) fall back to an original-file session with
+  /// `token=`; that session is not tracked here, since nothing reports on it,
+  /// and the server expires it.
   @override
   Future<ExternalPlaybackTarget?> resolveExternalPlayback(
     MediaItem item, {
@@ -448,19 +469,19 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
     );
     final fileId = versions[index]['file_id']?.toString();
     if (fileId == null) return null;
+    try {
+      return ExternalPlaybackTarget(url: await _directDownloadUrl(fileId));
+    } on UnsupportedError {
+      appLogger.d('SiloClient: no direct-download links; external player gets a session stream');
+    } on MediaServerHttpException catch (e) {
+      if (e.statusCode != 403) rethrow;
+      appLogger.d('SiloClient: direct-download link refused; external player gets a session stream');
+    }
     final decision = await _startPlayback(fileId: fileId, preset: TranscodeQualityPreset.original, originalOnly: true);
     final plan = decision['playback_plan'];
     final stream = plan is Map ? plan['stream'] : null;
     final url = stream is Map ? stream['url']?.toString() : null;
     if (url == null || url.isEmpty) return null;
-    final sessionId = decision['session_id']?.toString();
-    if (sessionId != null) {
-      _sessions[sessionId] = _SiloPlaybackSession(
-        sessionId: sessionId,
-        installationId: decision['_installation_id'].toString(),
-        itemId: item.id,
-      );
-    }
     return ExternalPlaybackTarget(url: _subtitleUrl(url));
   }
 
@@ -472,14 +493,16 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
     bool forceChapterFallback = false,
     bool forceRefresh = false,
   }) async {
+    final fileId = _playingFileIds[itemId];
     Map<String, dynamic>? watch;
     try {
-      watch = await _watchDetail(itemId, forceRefresh: forceRefresh);
+      watch = await _watchDetail(itemId, forceRefresh: forceRefresh, fileId: fileId);
     } catch (e) {
       appLogger.d('SiloClient: watch detail unavailable for markers', error: e.runtimeType);
     }
     return _extrasFrom(
       watch,
+      fileId: fileId,
       introPattern: introPattern,
       creditsPattern: creditsPattern,
       forceChapterFallback: forceChapterFallback,
@@ -493,10 +516,15 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
     String? creditsPattern,
     bool forceChapterFallback = false,
   }) async {
-    final watch = await cache.get(ServerId(cacheServerId), _watchPath(itemId));
+    final fileId = _playingFileIds[itemId];
+    final scope = ServerId(cacheServerId);
+    final watch =
+        (fileId == null ? null : await cache.get(scope, _watchFileKey(itemId, fileId))) ??
+        await cache.get(scope, _watchPath(itemId));
     if (watch == null) return null;
     return _extrasFrom(
       watch,
+      fileId: fileId,
       introPattern: introPattern,
       creditsPattern: creditsPattern,
       forceChapterFallback: forceChapterFallback,
@@ -505,12 +533,14 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
 
   Future<PlaybackExtras> _extrasFrom(
     Map<String, dynamic>? watch, {
+    String? fileId,
     String? introPattern,
     String? creditsPattern,
     bool forceChapterFallback = false,
   }) async => SiloMappers.playbackExtras(
     watch,
     _ctx,
+    fileId: fileId,
     classifier: await ChapterMarkerClassifier.bundled,
     introPattern: introPattern,
     creditsPattern: creditsPattern,
@@ -573,6 +603,7 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
     if (response.statusCode == 404 || response.statusCode == 410) {
       // The server ended or forgot the session; nothing more to report.
       session.stopped = true;
+      _sessions.remove(session.sessionId);
       return;
     }
     throwIfHttpError(response);
