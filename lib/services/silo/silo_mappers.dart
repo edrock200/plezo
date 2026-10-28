@@ -317,6 +317,17 @@ abstract final class SiloMappers {
     return raw.whereType<Map<String, dynamic>>().map(version).nonNulls.toList();
   }
 
+  /// The resume point of a stored position, as Silo's TV app decides it
+  /// (`resumePositionSeconds`): nothing in the first 30 s or the last 5 s.
+  /// A played item keeps its position, so a re-watch stopped midway resumes.
+  /// Unlike the TV app an unknown duration does not drop the position.
+  static int? resumeOffsetMs(double? positionSeconds, int? durationMs) {
+    if (positionSeconds == null || positionSeconds <= 30) return null;
+    final positionMs = (positionSeconds * 1000).round();
+    if (durationMs != null && durationMs > 0 && positionMs >= durationMs - 5000) return null;
+    return positionMs;
+  }
+
   /// Map a Silo card or detail object. Returns `null` for rows without an
   /// id or of a type Plezy cannot show (audio and reading media).
   static MediaItem? item(Map<String, dynamic> json, SiloMappingContext ctx, {String? libraryId, String? libraryTitle}) {
@@ -417,7 +428,7 @@ abstract final class SiloMappers {
       backdropPaths: backdrop == null ? null : [backdrop],
       clearLogoPath: logo,
       durationMs: durationMs,
-      viewOffsetMs: positionSeconds == null || positionSeconds <= 0 || played ? null : (positionSeconds * 1000).round(),
+      viewOffsetMs: resumeOffsetMs(positionSeconds, durationMs),
       viewCount: played ? (flexibleInt(userData?['watched_count']) ?? 1) : 0,
       lastViewedAt: _epochSeconds(json['progress_updated_at']) ?? _epochSeconds(userData?['last_played_at']),
       leafCount: kind == MediaKind.show || kind == MediaKind.season ? episodeCount : null,
@@ -693,17 +704,18 @@ abstract final class SiloMappers {
   }
 
   /// Chapters and skip markers of the version [selectVersionIndex] picks
-  /// from a watch-detail payload.
+  /// from a watch-detail payload: [fileId] (the file being played) when set.
   static PlaybackExtras playbackExtras(
     Map<String, dynamic>? watch,
     SiloMappingContext ctx, {
     required ChapterMarkerClassifier classifier,
+    String? fileId,
     String? introPattern,
     String? creditsPattern,
     bool forceChapterFallback = false,
   }) {
     final versions = watchVersions(watch);
-    final selected = versions.isEmpty ? null : versions[selectVersionIndex(versions, watch)];
+    final selected = versions.isEmpty ? null : versions[selectVersionIndex(versions, watch, requestedFileId: fileId)];
     final chapterList = selected == null ? <MediaChapter>[] : chapters(selected['chapters'], ctx);
     return PlaybackExtras.withChapterFallback(
       chapters: MediaChapter.backfillEndOffsets(chapterList),

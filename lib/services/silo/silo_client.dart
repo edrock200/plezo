@@ -92,6 +92,7 @@ class SiloClient
         accessToken: connection.accessToken,
         refreshToken: connection.refreshToken,
         expiresAt: connection.accessTokenExpiresAt,
+        lifetimeSeconds: connection.accessTokenLifetimeSeconds,
       ),
       profileId: connection.profileId,
       profileToken: connection.profileToken,
@@ -142,6 +143,7 @@ class SiloClient
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
       accessTokenExpiresAt: tokens.expiresAt,
+      accessTokenLifetimeSeconds: tokens.lifetimeSeconds,
     );
     await onConnectionUpdated?.call(_connection);
   }
@@ -227,11 +229,16 @@ class SiloClient
         }
         return HealthStatus.online;
       }
-      if (response.statusCode == 401 || _sessionExpired) return HealthStatus.authError;
+      // Only a refused refresh means the user must sign in again. A 401
+      // whose refresh failed for a passing reason (no network, a 5xx, a
+      // proxy page) reads as offline and is retried by the next check.
+      if (_sessionExpired || (response.statusCode == 401 && (_api.tokens?.refreshToken ?? '').isEmpty)) {
+        return HealthStatus.authError;
+      }
       if (response.statusCode == 403) return HealthStatus.accessDenied;
       return HealthStatus.offline;
     } on MediaServerHttpException catch (e) {
-      if (e.statusCode == 401) return HealthStatus.authError;
+      if (_sessionExpired) return HealthStatus.authError;
       if (e.statusCode == 403) return HealthStatus.accessDenied;
       return HealthStatus.offline;
     } catch (_) {

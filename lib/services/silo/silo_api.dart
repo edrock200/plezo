@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 
@@ -99,17 +100,34 @@ enum SiloFormFactor {
 
   static SiloFormFactor? _cached;
 
-  static SiloFormFactor of(DeviceIdentity identity) => _cached ??= _detect(identity);
-
-  static SiloFormFactor _detect(DeviceIdentity identity) {
-    if (identity.isTv) return SiloFormFactor.tv;
-    final platform = identity.platform.toLowerCase();
-    if (platform != 'android' && platform != 'ios') return SiloFormFactor.desktop;
-    final view = ui.PlatformDispatcher.instance.views.firstOrNull;
-    if (view == null || view.devicePixelRatio <= 0) return SiloFormFactor.mobile;
-    final logical = view.physicalSize / view.devicePixelRatio;
-    return logical.shortestSide >= 600 ? SiloFormFactor.tablet : SiloFormFactor.mobile;
+  static SiloFormFactor of(DeviceIdentity identity) {
+    final cached = _cached;
+    if (cached != null) return cached;
+    final (factor, settled) = _detect(identity);
+    // A phone/tablet read before the first frame has no view size yet; that
+    // guess is used once but not kept, so a tablet is not stuck on `mobile`.
+    if (settled) _cached = factor;
+    return factor;
   }
+
+  /// The form factor and whether it is final (not a guess made before the
+  /// view had a size).
+  static (SiloFormFactor, bool) _detect(DeviceIdentity identity) {
+    if (identity.isTv) return (SiloFormFactor.tv, true);
+    final platform = identity.platform.toLowerCase();
+    if (platform != 'android' && platform != 'ios') return (SiloFormFactor.desktop, true);
+    final view = ui.PlatformDispatcher.instance.views.firstOrNull;
+    if (view == null || view.devicePixelRatio <= 0 || view.physicalSize.isEmpty) return (SiloFormFactor.mobile, false);
+    return (classify(view.physicalSize / view.devicePixelRatio), true);
+  }
+
+  /// Phone or tablet by Silo's 600 dp shortest-side rule.
+  @visibleForTesting
+  static SiloFormFactor classify(ui.Size logicalSize) =>
+      logicalSize.shortestSide >= 600 ? SiloFormFactor.tablet : SiloFormFactor.mobile;
+
+  @visibleForTesting
+  static void resetCacheForTesting() => _cached = null;
 }
 
 /// A token pair as `/auth/login`, `/auth/refresh` and the device-code poll
@@ -255,10 +273,15 @@ class SiloApi {
       throw ArgumentError.value(path, 'path', 'Silo requests must target /api/v2/');
     }
     if (auth) await _refreshIfExpiring();
+    final usedToken = _tokens?.accessToken;
     var response = await _send(method, path, query, body, auth, profile, timeout, abort);
     // (A missing profile PIN token is a 403, not a 401.)
     if (auth && response.statusCode == 401 && _tokens != null) {
-      final refreshed = await refreshTokens();
+      // Another request may already have refreshed while this one was in
+      // flight: then its 401 is for the old token and a plain retry is
+      // enough. Refreshing again would rotate the pair for nothing.
+      final current = _tokens?.accessToken;
+      final refreshed = current != usedToken ? _tokens : await refreshTokens();
       if (refreshed != null) {
         response = await _send(method, path, query, body, auth, profile, timeout, abort);
       }
@@ -420,6 +443,14 @@ class SiloApi {
 
   String? _refusedRefreshToken;
 
+  /// Whether a refresh answer means the login session is gone: only a 400
+  /// or 401 carrying Silo's problem body (`invalid_token`,
+  /// `session_expired`, ...). Anything else, such as a 403 from a firewall,
+  /// a reverse proxy's HTML 401 or a 5xx, says nothing about the token.
+  @visibleForTesting
+  static bool isRefreshRefusal(int? statusCode, Object? data) =>
+      (statusCode == 400 || statusCode == 401) && siloProblemCode(data) != null;
+
   Future<SiloTokens?> _doRefresh() async {
     final current = _tokens;
     if (current == null || current.refreshToken.isEmpty) return null;
@@ -442,10 +473,14 @@ class SiloApi {
         }
         return next;
       }
-      if (response.statusCode == 401 || response.statusCode == 400 || response.statusCode == 403) {
-        appLogger.w('Silo: refresh refused (${siloProblemCode(response.data) ?? response.statusCode}); signed out');
+      if (isRefreshRefusal(response.statusCode, response.data)) {
+        appLogger.w('Silo: refresh refused (${siloProblemCode(response.data)}); signed out');
         _refusedRefreshToken = current.refreshToken;
         onSessionExpired?.call();
+      } else {
+        // A 403, a proxy's HTML 401, a 5xx: the server did not judge the
+        // refresh token, so the session is kept and the next 401 retries.
+        appLogger.w('Silo: token refresh failed (HTTP ${response.statusCode}); keeping the session');
       }
       return null;
     } on MediaServerHttpException catch (e) {

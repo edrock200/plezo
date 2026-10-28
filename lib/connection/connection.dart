@@ -412,6 +412,11 @@ class SiloConnection extends Connection {
   /// When [accessToken] expires, or `null` when unknown.
   final DateTime? accessTokenExpiresAt;
 
+  /// Seconds [accessToken] was valid for when issued (`expires_in`), or
+  /// `null` when unknown. Kept so the "half spent" refresh before playback
+  /// still knows the lifetime after a restart.
+  final int? accessTokenLifetimeSeconds;
+
   /// Per-install device id sent as `X-Silo-Device-Id`.
   final String deviceId;
 
@@ -441,6 +446,7 @@ class SiloConnection extends Connection {
     required this.profileId,
     required this.profileName,
     this.accessTokenExpiresAt,
+    this.accessTokenLifetimeSeconds,
     this.isAdministrator = false,
     this.profileAvatarUrl,
     this.profileToken,
@@ -477,6 +483,7 @@ class SiloConnection extends Connection {
     String? accessToken,
     String? refreshToken,
     DateTime? accessTokenExpiresAt,
+    int? accessTokenLifetimeSeconds,
     String? profileName,
     String? profileAvatarUrl,
     String? profileToken,
@@ -495,6 +502,7 @@ class SiloConnection extends Connection {
       accessToken: accessToken ?? this.accessToken,
       refreshToken: refreshToken ?? this.refreshToken,
       accessTokenExpiresAt: accessTokenExpiresAt ?? this.accessTokenExpiresAt,
+      accessTokenLifetimeSeconds: accessTokenLifetimeSeconds ?? this.accessTokenLifetimeSeconds,
       deviceId: deviceId,
       profileId: profileId,
       profileName: profileName ?? this.profileName,
@@ -518,6 +526,7 @@ class SiloConnection extends Connection {
       'accessToken': accessToken,
       'refreshToken': refreshToken,
       'accessTokenExpiresAt': accessTokenExpiresAt?.millisecondsSinceEpoch,
+      'accessTokenLifetimeSeconds': accessTokenLifetimeSeconds,
       'deviceId': deviceId,
       'profileId': profileId,
       'profileName': profileName,
@@ -546,6 +555,7 @@ class SiloConnection extends Connection {
       accessToken: json['accessToken'] as String? ?? '',
       refreshToken: json['refreshToken'] as String? ?? '',
       accessTokenExpiresAt: expiresAtMs == null ? null : DateTime.fromMillisecondsSinceEpoch(expiresAtMs),
+      accessTokenLifetimeSeconds: flexibleInt(json['accessTokenLifetimeSeconds']),
       deviceId: json['deviceId'] as String? ?? '',
       profileId: json['profileId'] as String? ?? '',
       profileName: json['profileName'] as String? ?? '',

@@ -148,4 +148,23 @@ void main() {
     }, null);
     expect(fromDetail.single.startTimeOffset, 5000);
   });
+
+  test('resume points follow Silo\'s TV app thresholds and survive a re-watch', () {
+    expect(SiloMappers.resumeOffsetMs(null, 600000), isNull);
+    expect(SiloMappers.resumeOffsetMs(30, 600000), isNull);
+    expect(SiloMappers.resumeOffsetMs(31, 600000), 31000);
+    expect(SiloMappers.resumeOffsetMs(596, 600000), isNull);
+    expect(SiloMappers.resumeOffsetMs(594, 600000), 594000);
+    expect(SiloMappers.resumeOffsetMs(120, null), 120000);
+
+    final item = SiloMappers.item({
+      'content_id': 'movie:m1',
+      'type': 'movie',
+      'title': 'Seen before',
+      'duration_seconds': 6000,
+      'user_data': {'played': true, 'position_seconds': 1500, 'watched_count': 2},
+    }, _ctx)!;
+    expect(item.viewCount, 2);
+    expect(item.viewOffsetMs, 1500000);
+  });
 }

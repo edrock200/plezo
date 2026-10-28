@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:drift/native.dart';
@@ -12,6 +13,7 @@ import 'package:plezy/media/media_kind.dart';
 import 'package:plezy/media/media_server_client.dart';
 import 'package:plezy/media/media_backend.dart';
 import 'package:plezy/media/ids.dart';
+import 'package:plezy/models/transcode_quality_preset.dart';
 import 'package:plezy/services/cached_playback_metadata_service.dart';
 import 'package:plezy/services/download_manager_service.dart' show downloadExtensionFromUrl;
 import 'package:plezy/services/playback_initialization_types.dart';
@@ -209,6 +211,52 @@ void main() {
     expect(await c.checkHealth(), HealthStatus.authError);
   });
 
+  test('a refresh failing without Silo\'s refusal keeps the session', () async {
+    for (final failure in [
+      _problem(403, 'forbidden'),
+      http.Response('<html>Sign in to the proxy</html>', 401, headers: {'content-type': 'text/html'}),
+      http.Response('bad gateway', 502),
+    ]) {
+      requests.clear();
+      var expired = false;
+      final c = client((request) async {
+        if (request.url.path.endsWith('/auth/refresh')) return failure;
+        return _problem(401, 'invalid_token');
+      });
+      c.onConnectionUpdated = (_) => expired = true;
+      expect(await c.checkHealth(), HealthStatus.offline);
+      // Tried again next time: the refresh token was not written off.
+      expect(await c.checkHealth(), HealthStatus.offline);
+      expect(requests.where((r) => r.url.path.endsWith('/auth/refresh')), hasLength(2));
+      expect(expired, isFalse);
+    }
+  });
+
+  test('a 401 for a token another request already replaced retries without refreshing again', () async {
+    final gate = Completer<void>();
+    var refreshes = 0;
+    final c = client((request) async {
+      final path = request.url.path;
+      if (path.endsWith('/auth/refresh')) {
+        refreshes++;
+        return _json({'access_token': 'acc-2', 'refresh_token': 'ref-$refreshes', 'expires_in': 3600});
+      }
+      if (request.headers['Authorization'] == 'Bearer acc-1') {
+        if (path.endsWith('/user/libraries')) await gate.future;
+        return _problem(401, 'invalid_token');
+      }
+      if (path.endsWith('/account/me')) return _json({'role': 'user'});
+      return _json({'items': []});
+    });
+    final libraries = c.fetchLibraries();
+    await Future<void>.delayed(Duration.zero);
+    expect(await c.checkHealth(), HealthStatus.online);
+    gate.complete();
+    await libraries;
+    expect(refreshes, 1);
+    expect(requests.last.headers['Authorization'], 'Bearer acc-2');
+  });
+
   test('a refused refresh token is not sent again', () async {
     final c = client((request) async {
       if (request.url.path.endsWith('/auth/refresh')) return _problem(401, 'session_expired');
@@ -378,7 +426,7 @@ void main() {
       expect(startBody['installation_id'], 'inst-1');
       expect(startBody['profile_id'], 'p-owner');
       expect(startBody['protocol_version'], 3);
-      expect(startBody['quality_preference'], 'original');
+      expect(startBody['quality_preference'], 'auto');
       expect((startBody['client_capabilities'] as Map)['video_evidence'], 'declared');
       final context = startBody['client_playback_context'] as Map;
       expect(context['form_factor'], 'desktop');
@@ -414,9 +462,129 @@ void main() {
       expect(stopBody!['position'], 31.0);
       expect(stopBody!['stop_id'], isNotEmpty);
 
+      requests.clear();
       final extras = await c.fetchPlaybackExtras('movie:m1');
       expect(extras.markers.single.type, 'intro');
       expect(extras.markers.single.startTimeOffset, 10000);
+      // Markers are read for the file being played.
+      expect(requests.single.url.queryParameters['file_id'], '43');
+    });
+
+    test('a session the server ended stops taking session progress', () async {
+      final c = client((request) async {
+        final path = Uri.decodeComponent(request.url.path);
+        if (path.endsWith('/watch/movie:m1')) {
+          return _json({
+            'content_id': 'movie:m1',
+            'versions': [
+              {'file_id': '42'},
+            ],
+          });
+        }
+        if (path.endsWith('/playback/capabilities')) {
+          return _json({
+            'state': 'available',
+            'installation_id': 'inst-1',
+            'protocol_versions': [3],
+            'features': ['sequenced_progress_v1'],
+          });
+        }
+        if (path.endsWith('/playback/start')) {
+          return _json({
+            'outcome': 'playable',
+            'session_id': 'sess-9',
+            'playback_plan': {
+              'delivery': 'original_http',
+              'stream': {'url': '/api/v2/stream/sess-9?st=sig'},
+            },
+          }, 201);
+        }
+        if (path.endsWith('/playback/sess-9/progress')) return _problem(410, 'playback_session_ended');
+        if (path.endsWith('/sync/progress')) return _json({'items': []});
+        return _json({}, 404);
+      });
+      final metadata = MediaItem.silo(id: 'movie:m1', kind: MediaKind.movie, serverId: 'srv-1');
+      await c.getPlaybackInitialization(PlaybackInitializationOptions(metadata: metadata, selectedMediaIndex: 0));
+      await c.reportPlaybackStarted(itemId: 'movie:m1', position: Duration.zero, playSessionId: 'sess-9');
+      requests.clear();
+      await c.reportPlaybackProgress(
+        itemId: 'movie:m1',
+        position: const Duration(minutes: 5),
+        duration: const Duration(hours: 1),
+        playSessionId: 'sess-9',
+      );
+      // The session row is gone: the resume point is written without it.
+      expect(requests.single.url.path, endsWith('/sync/progress'));
+    });
+
+    test('a capped preset reports a fallback only when the server left a larger source unchanged', () async {
+      Map<String, dynamic>? source;
+      final c = client((request) async {
+        final path = Uri.decodeComponent(request.url.path);
+        if (path.endsWith('/watch/movie:m1')) {
+          return _json({
+            'content_id': 'movie:m1',
+            'versions': [
+              {'file_id': '42'},
+            ],
+          });
+        }
+        if (path.endsWith('/playback/capabilities')) {
+          return _json({
+            'state': 'available',
+            'installation_id': 'inst-1',
+            'protocol_versions': [3],
+            'features': ['sequenced_progress_v1'],
+          });
+        }
+        if (path.endsWith('/playback/start')) {
+          return _json({
+            'outcome': 'playable',
+            'session_id': 'sess-${requests.length}',
+            'playback_plan': {
+              'delivery': 'original_http',
+              'stream': {'url': '/api/v2/stream/s?st=sig'},
+              'source': ?source,
+            },
+          }, 201);
+        }
+        return _json({}, 404);
+      });
+      final metadata = MediaItem.silo(id: 'movie:m1', kind: MediaKind.movie, serverId: 'srv-1');
+      Future<TranscodeFallbackReason?> play() async => (await c.getPlaybackInitialization(
+        PlaybackInitializationOptions(
+          metadata: metadata,
+          selectedMediaIndex: 0,
+          qualityPreset: TranscodeQualityPreset.p720_4mbps,
+        ),
+      )).fallbackReason;
+
+      source = {'media_file_id': '42', 'height': 720, 'bitrate_kbps': 2500};
+      expect(await play(), isNull);
+      source = {'media_file_id': '42', 'height': 2160, 'bitrate_kbps': 40000};
+      expect(await play(), TranscodeFallbackReason.directPlayOnly);
+    });
+
+    test('an external player gets a direct link and no playback session', () async {
+      final c = client((request) async {
+        final path = Uri.decodeComponent(request.url.path);
+        if (path.endsWith('/watch/movie:m1')) {
+          return _json({
+            'content_id': 'movie:m1',
+            'versions': [
+              {'file_id': '42'},
+            ],
+          });
+        }
+        if (path.endsWith('/direct-download/links')) {
+          return _json({'url': '/api/v2/direct-download?file_id=42&dl=tok'});
+        }
+        return _json({}, 404);
+      });
+      final metadata = MediaItem.silo(id: 'movie:m1', kind: MediaKind.movie, serverId: 'srv-1');
+      final target = await c.resolveExternalPlayback(metadata);
+      expect(target!.url, 'https://silo.example.com/api/v2/direct-download?file_id=42&dl=tok');
+      expect(requests.where((r) => r.url.path.contains('/playback/')), isEmpty);
     });
   });
 

@@ -82,13 +82,36 @@ abstract final class SiloPlaybackCaps {
   static const clientManagedDynamicRangeClaim = 'client_managed_dynamic_range_v1';
 
   /// Silo `quality_preference` for a Plezy preset.
+  ///
+  /// Never `original` for video: Silo's apps no longer send it (Silo
+  /// Android #613) and older servers read it as "never convert", which
+  /// refuses a file the device cannot play instead of transcoding it. Auto
+  /// plays the source whenever the device and connection can, so Plezy's
+  /// Original preset is `auto`. A preset's bitrate goes in
+  /// `bandwidth_cap_kbps`; heights Silo has no label for are `auto`.
   static String qualityPreference(TranscodeQualityPreset preset) {
-    if (preset.isOriginal) return 'original';
+    if (preset.isOriginal) return 'auto';
     return switch (preset.resolutionHeight) {
+      2160 => '2160p',
       1080 => '1080p',
       720 => '720p',
       _ => 'auto',
     };
+  }
+
+  /// Whether an `original_http` answer to [preset] means the server did not
+  /// adapt a file that exceeds it (transcoding off or unavailable), which is
+  /// worth telling the user. A source that already fits the preset, or whose
+  /// size the plan does not report, plays as the original legitimately.
+  static bool refusedCappedPreset(TranscodeQualityPreset preset, Object? source) {
+    if (preset.isOriginal || source is! Map) return false;
+    final bitrate = (source['bitrate_kbps'] as num?)?.toInt();
+    final height = (source['height'] as num?)?.toInt();
+    final capKbps = preset.videoBitrateKbps;
+    final capHeight = preset.resolutionHeight;
+    final overBitrate = bitrate != null && bitrate > 0 && capKbps != null && bitrate > capKbps;
+    final overHeight = height != null && height > 0 && capHeight != null && height > capHeight;
+    return overBitrate || overHeight;
   }
 
   static String _platform() {
