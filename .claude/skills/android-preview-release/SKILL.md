@@ -104,7 +104,7 @@ Download the release assets from `https://github.com/<owner>/<repo>/releases/dow
   signature is expected) and `--print-certs` for the signer.
 - `build-tools/35.0.0/aapt2 dump badging <apk>` → package, `leanback-launchable-activity` (Android
   TV launcher entry) and `native-code`.
-- Feature presence: `unzip -l` for assets (e.g. `assets/flutter_assets/assets/silo_icon.svg`) and
+- Feature presence: `unzip -l` for assets (e.g. `assets/flutter_assets/assets/brand/silo/silo-project-icon.png`) and
   `unzip -p <apk> lib/arm64-v8a/libapp.so | strings | grep <route>` for compiled Dart code.
 There is no `/dev/kvm`, so an emulator cannot run; on-device testing is the user's step — say so.
 

@@ -57,7 +57,12 @@ macOS, Windows and Linux. This fork (`edrock200/plezo`) adds Silo as a fourth ba
   `lib/` **and** `test/` (`test/test_helpers/media_items.dart`, catalog tests). Run
   `flutter analyze lib test` to find them; follow the `media-backend-integration` skill.
 - Product names: "Silo" is Silo Media L.L.C.'s trademark. Refer to it only as the server Plezy
-  connects to; the Silo badge (`assets/silo_icon.svg`) is our own generic glyph, not Silo's logo.
+  connects to. Silo's trademark policy (TRADEMARK.md, Oct 2026) lets a project that works with Silo
+  show the official, **unmodified** Silo logo/icon to name Silo as a server type: the Silo badge
+  (`BackendBadge`, "Connect to Silo" card) shows `assets/brand/silo/silo-project-icon.png`, copied
+  byte-for-byte from siloserver.org `public/brand/`, with its `NOTICE.txt` beside it (also on the
+  licenses page). Never tint, recolour, crop or redraw it, and never use it as Plezy's own logo or
+  app icon.
 - Branches: work on the session's `ccr-*` branch. Do not open a PR or merge into `main` unless the
   user asks (they have declined a PR so far); say plainly that branch-only changes (README too)
   are not visible on `main`.

@@ -1,0 +1,22 @@
+SILO BRAND ASSETS — NOTICE
+==========================
+
+Copyright (c) 2026 Silo Media L.L.C. All rights reserved.
+
+The Silo logo, wordmark, and app icons are trademarks of Silo Media L.L.C.
+They are not licensed under the GNU Affero General Public License that covers
+the website source code, nor under any other open-source license.
+
+Referential and editorial uses are permitted without asking: you may show the
+logo or icon in a project that works with Silo, to refer to Silo, or when
+writing about Silo. You may include these unmodified files in that project's
+source code and builds. Do not alter them or use them as your project's own
+logo or app icon.
+Forks and modified redistributions of Silo must remove or replace the Silo
+brand assets.
+Publishing a Silo-branded app, merchandise, or other commercial use requires
+written permission from Silo Media L.L.C.
+
+Usage guide: https://siloserver.org/brand
+Full policy: https://github.com/Silo-Server/siloserver.org/blob/main/TRADEMARK.md
+Contact:     trademark@siloserver.org or https://discord.gg/siloserver
