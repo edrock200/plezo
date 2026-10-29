@@ -27,8 +27,8 @@ def release(repo: str, tag: str) -> dict:
 # Fire TV "Downloader" app codes (aftv.news short links). They point at the rolling
 # silo-android-latest release, whose fixed-name APKs every preview replaces, so they never change.
 DOWNLOADER_CODES = [
-    ("32-bit, every Fire TV", "7329550", "armeabi-v7a"),
-    ("64-bit", "4196538", "arm64-v8a"),
+    ("Fire TV and Android TV sticks; 32-bit, also runs on 64-bit", "7329550", "armeabi-v7a"),
+    ("Android phones, tablets and newer Android TV / Fire TV; 64-bit", "4196538", "arm64-v8a"),
 ]
 LATEST = "https://github.com/{repo}/releases/download/silo-android-latest/plezy-silo-{abi}.apk"
 
@@ -36,7 +36,7 @@ LATEST = "https://github.com/{repo}/releases/download/silo-android-latest/plezy-
 def downloader(repo: str) -> str:
     rows = [f"`{code}` · [aftv.news/{code}](http://aftv.news/{code}) · [{abi} APK]({LATEST.format(repo=repo, abi=abi)}) ({label})"
             for label, code, abi in DOWNLOADER_CODES]
-    return "**Fire TV Downloader codes** (always the newest preview):\n" + "\n".join(rows)
+    return "**Android & Fire TV — Downloader app codes** (always the newest preview):\n" + "\n".join(rows)
 
 
 def downloads(assets: list) -> str:
