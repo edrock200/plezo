@@ -49,17 +49,17 @@ Direct links (they always fetch the newest preview):
 Windows and macOS downloads are on each numbered release.
 EOF
 
-# The links never depend on the tag's commit, so the release is created once (through the
-# release API, at the preview's commit) and afterwards only its files and notes change. Moving
-# the tag with the refs API is refused to the workflow token (HTTP 403) whenever the target
-# commit's workflow files differ from the default branch's.
+# The links never depend on the tag's commit, so the release is created once and afterwards only
+# its files and notes change. It is tagged at the workflow run's own commit (GITHUB_SHA): the
+# workflow token is refused (HTTP 403) when it tags a commit whose workflow files differ from
+# the run's, which the preview's commit can.
 if gh release view "$LATEST_TAG" > /dev/null 2>&1; then
   echo "Updating the ${LATEST_TAG} release…"
   gh release edit "$LATEST_TAG" --title "Plezy with Silo — latest Android preview (${version})" \
     --notes-file "$work/notes.md" --prerelease
 else
   echo "Creating the ${LATEST_TAG} release…"
-  gh release create "$LATEST_TAG" --target "$commit" --prerelease \
+  gh release create "$LATEST_TAG" --target "${GITHUB_SHA:-$commit}" --prerelease \
     --title "Plezy with Silo — latest Android preview (${version})" --notes-file "$work/notes.md"
 fi
 echo "Uploading the fixed-name APKs…"
