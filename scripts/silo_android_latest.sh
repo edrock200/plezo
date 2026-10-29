@@ -19,11 +19,13 @@ ABIS=(arm64-v8a armeabi-v7a x86_64)
 
 src="${1:?usage: silo_android_latest.sh <preview tag>}"
 version="${src#silo-preview-}"
+echo "Reading ${src}…"
 commit="$(gh release view "$src" --json targetCommitish --jq .targetCommitish)"
 [[ "$commit" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::${src} has no commit target (${commit})"; exit 1; }
 
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
+echo "Downloading its APKs…"
 gh release download "$src" --pattern '*.apk' --dir "$work/src"
 mkdir -p "$work/out"
 for abi in "${ABIS[@]}"; do
@@ -47,6 +49,7 @@ Direct links (they always fetch the newest preview):
 Windows and macOS downloads are on each numbered release.
 EOF
 
+echo "Pointing ${LATEST_TAG} at ${commit::7}…"
 # Point the tag at the preview's commit (create it the first time).
 if gh api "repos/${GH_REPO}/git/ref/tags/${LATEST_TAG}" > /dev/null 2>&1; then
   gh api -X PATCH "repos/${GH_REPO}/git/refs/tags/${LATEST_TAG}" -f sha="$commit" -F force=true > /dev/null
@@ -54,6 +57,7 @@ else
   gh api -X POST "repos/${GH_REPO}/git/refs" -f ref="refs/tags/${LATEST_TAG}" -f sha="$commit" > /dev/null
 fi
 
+echo "Updating the ${LATEST_TAG} release…"
 if gh release view "$LATEST_TAG" > /dev/null 2>&1; then
   gh release edit "$LATEST_TAG" --title "Plezy with Silo — latest Android preview (${version})" \
     --notes-file "$work/notes.md" --prerelease
@@ -61,5 +65,6 @@ else
   gh release create "$LATEST_TAG" --verify-tag --prerelease \
     --title "Plezy with Silo — latest Android preview (${version})" --notes-file "$work/notes.md"
 fi
+echo "Uploading the fixed-name APKs…"
 gh release upload "$LATEST_TAG" "$work/out/"* --clobber
 echo "Latest Android links now serve ${version} (${commit::7})."
