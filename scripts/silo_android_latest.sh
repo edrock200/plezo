@@ -6,8 +6,8 @@
 #
 #   silo_android_latest.sh <preview tag>     e.g. silo-preview-2.25.1
 #
-# The release's tag is moved to the preview's commit, the three APKs are replaced in place
-# (same asset names), and its notes name the version and link the preview's own release.
+# The three APKs are replaced in place (same asset names), and the release's notes name the
+# version and link the preview's own release.
 # GitHub's /releases/latest/download/ link cannot do this: it skips pre-releases, which every
 # Silo preview is. The tag does not match silo-preview-*, so preview numbering ignores it.
 # Needs GH_REPO and GH_TOKEN (gh CLI) with contents: write.
@@ -49,20 +49,17 @@ Direct links (they always fetch the newest preview):
 Windows and macOS downloads are on each numbered release.
 EOF
 
-echo "Pointing ${LATEST_TAG} at ${commit::7}…"
-# Point the tag at the preview's commit (create it the first time).
-if gh api "repos/${GH_REPO}/git/ref/tags/${LATEST_TAG}" > /dev/null 2>&1; then
-  gh api -X PATCH "repos/${GH_REPO}/git/refs/tags/${LATEST_TAG}" -f sha="$commit" -F force=true > /dev/null
-else
-  gh api -X POST "repos/${GH_REPO}/git/refs" -f ref="refs/tags/${LATEST_TAG}" -f sha="$commit" > /dev/null
-fi
-
-echo "Updating the ${LATEST_TAG} release…"
+# The links never depend on the tag's commit, so the release is created once (through the
+# release API, at the preview's commit) and afterwards only its files and notes change. Moving
+# the tag with the refs API is refused to the workflow token (HTTP 403) whenever the target
+# commit's workflow files differ from the default branch's.
 if gh release view "$LATEST_TAG" > /dev/null 2>&1; then
+  echo "Updating the ${LATEST_TAG} release…"
   gh release edit "$LATEST_TAG" --title "Plezy with Silo — latest Android preview (${version})" \
     --notes-file "$work/notes.md" --prerelease
 else
-  gh release create "$LATEST_TAG" --verify-tag --prerelease \
+  echo "Creating the ${LATEST_TAG} release…"
+  gh release create "$LATEST_TAG" --target "$commit" --prerelease \
     --title "Plezy with Silo — latest Android preview (${version})" --notes-file "$work/notes.md"
 fi
 echo "Uploading the fixed-name APKs…"
