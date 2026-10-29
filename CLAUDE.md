@@ -96,6 +96,13 @@ macOS, Windows and Linux. This fork (`edrock200/plezo`) adds Silo as a fourth ba
   hand-pick tags.
 - Release pages show the plain-language change log in `docs/silo-preview-changelog.md`; update it
   for every preview (see the `android-preview-release` skill).
+- Fixed Android links (the user's Fire TV Downloader codes point at them): every `[release-apk]` build
+  also copies its APKs to the rolling `silo-android-latest` release as `plezy-silo-<abi>.apk`
+  (`scripts/silo_android_latest.sh`), so
+  `https://github.com/edrock200/plezo/releases/download/silo-android-latest/plezy-silo-armeabi-v7a.apk`
+  (and `-arm64-v8a`, `-x86_64`) always serve the newest preview. Never rename those assets or that
+  tag. `[release-android-latest]` in a first line re-points them at the newest numbered preview
+  without a build.
 - **Every preview is announced on Discord** (the user's standing request, like Siku's releases): once
   the Android, Windows and macOS files are all attached, run
   `DISCORD_WEBHOOK_URL=<url> python3 scripts/silo_announce_discord.py silo-preview-<version>`. It posts

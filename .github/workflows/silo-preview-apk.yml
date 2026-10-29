@@ -56,6 +56,7 @@ jobs:
           subject="${MESSAGE%%$'\n'*}"
           mode=none
           if [[ "$subject" == *"[release-apk]"* ]]; then mode=apk; fi
+          if [[ "$mode" == none && "$subject" == *"[release-android-latest]"* ]]; then mode=latest; fi
           echo "mode=${mode}" >> "$GITHUB_OUTPUT"
           echo "Release marker: ${mode}"
 
@@ -250,3 +251,33 @@ jobs:
           body_path: release-notes.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Fixed-name copies for links that must not change (Fire TV Downloader codes):
+      # releases/download/silo-android-latest/plezy-silo-<abi>.apk always serves this preview.
+      - name: Refresh the latest Android links
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: bash scripts/silo_android_latest.sh "${{ steps.apks.outputs.tag }}"
+
+  # "[release-android-latest]" in a commit's first line re-points the fixed-name links at the
+  # newest numbered preview without building anything.
+  refresh-latest:
+    needs: gate
+    if: ${{ needs.gate.outputs.mode == 'latest' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Refresh the latest Android links
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          tag="$(bash scripts/silo_preview_version.sh latest | sed -n 's/^tag=//p')"
+          [[ -n "$tag" ]] || { echo "::error::No numbered preview release found."; exit 1; }
+          bash scripts/silo_android_latest.sh "$tag"
