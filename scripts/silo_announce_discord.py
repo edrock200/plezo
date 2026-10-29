@@ -24,6 +24,21 @@ def release(repo: str, tag: str) -> dict:
         return json.load(resp)
 
 
+# Fire TV "Downloader" app codes (aftv.news short links). They point at the rolling
+# silo-android-latest release, whose fixed-name APKs every preview replaces, so they never change.
+DOWNLOADER_CODES = [
+    ("32-bit, every Fire TV", "7329550", "armeabi-v7a"),
+    ("64-bit", "4196538", "arm64-v8a"),
+]
+LATEST = "https://github.com/{repo}/releases/download/silo-android-latest/plezy-silo-{abi}.apk"
+
+
+def downloader(repo: str) -> str:
+    rows = [f"`{code}` · [aftv.news/{code}](http://aftv.news/{code}) · [{abi} APK]({LATEST.format(repo=repo, abi=abi)}) ({label})"
+            for label, code, abi in DOWNLOADER_CODES]
+    return "**Fire TV Downloader codes** (always the newest preview):\n" + "\n".join(rows)
+
+
 def downloads(assets: list) -> str:
     groups = {"Android": [], "Windows": [], "macOS": []}
     for a in assets:
@@ -51,7 +66,7 @@ def main() -> int:
     version = tag.removeprefix("silo-preview-")
     notes = (rel.get("body") or "").strip() or "See the release page for what changed."
     page = rel.get("html_url") or f"https://github.com/{repo}/releases/tag/{tag}"
-    links = f"\n\n{downloads(rel.get('assets') or [])}\n[Release page]({page})"
+    links = f"\n\n{downloads(rel.get('assets') or [])}\n{downloader(repo)}\n[Release page]({page})"
     room = 4000 - len(links)
     if len(notes) > room:
         notes = notes[: room - 40].rsplit("\n", 1)[0] + "\n… (full notes on the release page)"

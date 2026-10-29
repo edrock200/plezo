@@ -226,6 +226,18 @@ On iOS, use the Open URLs action in Shortcuts.
 
 This fork adds [Silo](https://github.com/Silo-Server/silo-server) as a fourth server type, next to Plex, Jellyfin and Emby, on phones, tablets, desktop and TV. Plezy talks to Silo only through its `/api/v2` API, the same surface Silo's Android and Android TV apps use.
 
+### Getting the Android preview
+
+The newest Android preview is always at the same links, so they can be typed into a TV:
+
+| Device | Fire TV Downloader code | Direct link |
+| --- | --- | --- |
+| Every Fire TV, most Android TV sticks (32-bit) | **7329550** ([aftv.news/7329550](http://aftv.news/7329550)) | [plezy-silo-armeabi-v7a.apk](https://github.com/edrock200/plezo/releases/download/silo-android-latest/plezy-silo-armeabi-v7a.apk) |
+| 64-bit phones, tablets and newer TV devices | **4196538** ([aftv.news/4196538](http://aftv.news/4196538)) | [plezy-silo-arm64-v8a.apk](https://github.com/edrock200/plezo/releases/download/silo-android-latest/plezy-silo-arm64-v8a.apk) |
+| Emulators and x86 devices | | [plezy-silo-x86_64.apk](https://github.com/edrock200/plezo/releases/download/silo-android-latest/plezy-silo-x86_64.apk) |
+
+Windows and macOS builds are on each numbered `silo-preview-*` release.
+
 ### Connecting
 
 1. Choose **Add connection › Connect to Silo** (or **Connect to Silo** on the first-run sign-in screen).

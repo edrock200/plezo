@@ -102,7 +102,9 @@ macOS, Windows and Linux. This fork (`edrock200/plezo`) adds Silo as a fourth ba
   `https://github.com/edrock200/plezo/releases/download/silo-android-latest/plezy-silo-armeabi-v7a.apk`
   (and `-arm64-v8a`, `-x86_64`) always serve the newest preview. Never rename those assets or that
   tag. `[release-android-latest]` in a first line re-points them at the newest numbered preview
-  without a build.
+  without a build. The user's Downloader codes: **7329550** (armeabi-v7a) and **4196538** (arm64-v8a);
+  they are in `DOWNLOADER_CODES` (`scripts/silo_announce_discord.py`), the README and the rolling
+  release's notes, and **every Discord announcement must include them** (the script does).
 - **Every preview is announced on Discord** (the user's standing request, like Siku's releases): once
   the Android, Windows and macOS files are all attached, run
   `DISCORD_WEBHOOK_URL=<url> python3 scripts/silo_announce_discord.py silo-preview-<version>`. It posts

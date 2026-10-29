@@ -46,6 +46,8 @@ Direct links (they always fetch the newest preview):
 - ${base}/plezy-silo-arm64-v8a.apk — 64-bit phones, tablets and newer Android TV / Fire TV devices
 - ${base}/plezy-silo-x86_64.apk — emulators and x86 devices
 
+Fire TV **Downloader** app codes (they open these links): **7329550** (32-bit, every Fire TV; http://aftv.news/7329550) and **4196538** (64-bit; http://aftv.news/4196538).
+
 Windows and macOS downloads are on each numbered release.
 EOF
 
