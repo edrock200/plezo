@@ -157,7 +157,13 @@ extension _VideoPlayerReloadMethods on VideoPlayerScreenState {
         : newSubtitleChoice.isOff
         ? const SubtitlePreference.off()
         : SubtitlePreference.trackOrNull(
-            PlaybackSubtitleResolver.preferredTrackForSource(_currentMediaInfo, newSubtitleChoice.sourceStreamId!),
+            PlaybackSubtitleResolver.preferredTrackForSource(_currentMediaInfo, newSubtitleChoice.sourceStreamId!) ??
+                // A subtitle Silo just stored (a provider download or an AI
+                // result) is listed only by the reload itself; its id is
+                // stable, so the reload is asked for that source id.
+                (_currentMetadata.backend == MediaBackend.silo
+                    ? SubtitleTrack(id: 'source:${newSubtitleChoice.sourceStreamId}')
+                    : null),
           );
     final effectiveMediaSourceId = newMediaIndex != null
         ? PlaybackSession.mediaSourceIdForIndex(_availableVersions, effectiveMediaIndex) ?? _requestedMediaSourceId

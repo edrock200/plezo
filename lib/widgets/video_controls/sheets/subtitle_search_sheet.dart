@@ -23,7 +23,8 @@ import 'base_video_control_sheet.dart';
 import '../../loading_indicator_box.dart';
 import '../models/track_controls_state.dart';
 
-@visibleForTesting
+/// The subtitle search language: the saved choice, else the system language,
+/// else English. Also the Silo sheets' default.
 String resolveSubtitleSearchLanguageCode({String? savedLanguageCode, required Locale systemLocale}) {
   return LanguageCodes.getIso6391Code(savedLanguageCode ?? '') ??
       LanguageCodes.getIso6391Code(systemLocale.languageCode) ??
@@ -228,7 +229,7 @@ class _SubtitleSearchSheetState extends State<SubtitleSearchSheet> with Controll
   @override
   Widget build(BuildContext context) {
     if (_showLanguagePicker) {
-      return _LanguagePickerView(
+      return SubtitleLanguagePickerView(
         currentCode: _languageCode,
         onSelected: _onLanguageSelected,
         onBack: _hideLanguagePickerView,
@@ -380,18 +381,30 @@ class _SubtitleSearchSheetState extends State<SubtitleSearchSheet> with Controll
   }
 }
 
-class _LanguagePickerView extends StatefulWidget {
+/// A filterable language list, also used by the Silo subtitle sheets.
+class SubtitleLanguagePickerView extends StatefulWidget {
   final String currentCode;
   final void Function(String code, String name) onSelected;
   final VoidCallback onBack;
 
-  const _LanguagePickerView({required this.currentCode, required this.onSelected, required this.onBack});
+  /// The languages offered; every known language when null.
+  final List<({String code, String name})>? languages;
+  final String? title;
+
+  const SubtitleLanguagePickerView({
+    super.key,
+    required this.currentCode,
+    required this.onSelected,
+    required this.onBack,
+    this.languages,
+    this.title,
+  });
 
   @override
-  State<_LanguagePickerView> createState() => _LanguagePickerViewState();
+  State<SubtitleLanguagePickerView> createState() => _LanguagePickerViewState();
 }
 
-class _LanguagePickerViewState extends State<_LanguagePickerView> with ControllerDisposerMixin {
+class _LanguagePickerViewState extends State<SubtitleLanguagePickerView> with ControllerDisposerMixin {
   late final _filterController = createTextEditingController();
   final _filterFocusNode = FocusNode(debugLabel: 'SubtitleLanguage_filter');
   final _firstLanguageFocusNode = FocusNode(debugLabel: 'SubtitleLanguage_firstResult');
@@ -401,7 +414,7 @@ class _LanguagePickerViewState extends State<_LanguagePickerView> with Controlle
   @override
   void initState() {
     super.initState();
-    _allLanguages = LanguageCodes.getAllLanguages();
+    _allLanguages = widget.languages ?? LanguageCodes.getAllLanguages();
     _filteredLanguages = _allLanguages;
   }
 
@@ -443,7 +456,7 @@ class _LanguagePickerViewState extends State<_LanguagePickerView> with Controlle
   @override
   Widget build(BuildContext context) {
     return BaseVideoControlSheet(
-      title: t.videoControls.language,
+      title: widget.title ?? t.videoControls.language,
       icon: Symbols.language_rounded,
       onBack: widget.onBack,
       // Fills the height cap for the same reason as the search body: the filter

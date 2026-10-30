@@ -651,6 +651,7 @@ abstract final class SiloMappers {
     required SiloMappingContext ctx,
     int? selectedAudioIndex,
     Set<int> sidecarSubtitleIndexes = const {},
+    List<MediaSubtitleTrack> extraSubtitleTracks = const [],
   }) {
     final audio = <MediaAudioTrack>[];
     final rawAudio = version['audio_tracks'];
@@ -698,6 +699,9 @@ abstract final class SiloMappers {
         position++;
       }
     }
+    // Subtitles stored on the server for this file (provider downloads, AI
+    // results) come from the playback inventory, after the file's own.
+    subs.addAll(extraSubtitleTracks);
     final defaultAudio = audio.where((a) => a.isDefault).firstOrNull;
     return MediaSourceInfo(
       videoUrl: videoUrl,

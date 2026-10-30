@@ -32,6 +32,8 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
 | `lib/services/silo/silo_playback_caps.dart` | What the player declares (`client_capabilities`, `client_playback_context`) |
 | `lib/services/silo/silo_mappers.dart` | Pure JSON → `MediaItem`/`MediaVersion`/chapters/markers; watch-detail helpers shared with offline playback |
 | `lib/services/silo/silo_trickplay.dart` | Seek-bar previews: `SiloTrickplayManifest` (validation, time → sheet/tile), `SiloTrickplayService` (`ScrubPreviewSource`: bounded sheet cache, renewal), `load`/`fetchManifest`/`fetchSheet` |
+| `lib/services/silo/silo_subtitles.dart`, `silo_client_subtitles.dart` | Subtitle search/download and AI subtitles: models, `SiloSubtitleRules` (stored-track ids, translatable tracks, transcribe kind), the client calls (`part`) |
+| `lib/widgets/video_controls/silo/` | The player's Silo subtitle rows and sheets (`SiloSubtitleFooterTiles`, `SiloSubtitleSearchSheet`, `SiloAiSubtitleSheet`) and `SiloAiSubtitleController` (one per client + item: form, job, polling) |
 | `lib/services/silo/silo_api_cache.dart` | `SiloApiCache`: serialized items (`silo:item/<id>`) and pinned watch detail for downloads |
 | `lib/screens/settings/add_silo_screen.dart` | Add-server UI: address → code or password → Silo profile (+PIN) → persist and bind |
 | `lib/media/remote_trailer.dart` | `RemoteTrailer` (YouTube video, never a `MediaItem`), `RemoteTrailerClient`, `buildExtrasRail` (port of Silo's `trailerRailEntries`) |
@@ -156,6 +158,22 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
   entries become sidecars (embedded ones are in the file). Subtitle routes have no signed `st`, so
   their URLs carry the short-lived access token as `token=` for players that do not forward
   headers. Such URLs live only in memory for one playback or download; never persist them.
+- **Stored subtitles** (provider downloads and AI results) are inventory rows with `source: "downloaded"` and
+  `sync_key: "stored-<id>"` (the sidecar URL also carries `downloaded_subtitle_id=<id>`); they are not in the watch
+  detail's `subtitle_tracks`. They become sidecars on every delivery (direct play too) and get their own
+  `MediaSubtitleTrack` with id `SiloSubtitleRules.storedTrackIdBase + <id>`, stable across reloads (a session's
+  `combined_index` is not).
+- **Subtitle search / download:** `POST /subtitles/search {media_file_id, languages}` → `{results, warnings}`;
+  `POST /subtitles/download` (provider, subtitle_id, language, release_name, score, hearing_impaired) → `{subtitle}`
+  stored on the server. No capability probe: "no providers" arrives as an error or a warning.
+- **AI subtitles** (`/subtitles/ai/status|quota|translate|jobs/{id}|jobs/{id}/cancel`): status gates the row
+  (`enabled` = translate, `transcribe_enabled` = transcribe; transcription without translation stays in the spoken
+  language and sends no target). `translate` reads a subtitle `combined_index` (embedded non-bitmap, external or stored
+  SRT/VTT); the transcribe kinds read an audio `index` (`transcribe` when the audio is already in the target). The
+  request names `session_id` (Silo Android #726: a foreground job from the playhead); a 404 is resent once without it.
+  Plezy polls every 2 s (transport errors keep polling, 404 = gone) and ignores live cues. Applying a stored result:
+  `onPlaybackSourceChanged(newSubtitleChoice: source(storedTrackId))` reloads (a fresh `/playback/start` lists it);
+  `playback_reload.dart` asks the reload for that `source:<id>` even though the current track list lacks it (Silo only).
 - **Downloads:** `POST /direct-download/links` → header-free link to the original file (Plezy's
   downloader sends no headers). The container rides in the URL fragment (`#container=mkv`), read by
   `downloadExtensionFromUrl`. External subtitle files are listed from a direct-play session opened

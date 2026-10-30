@@ -9,6 +9,7 @@ import '../../../services/playback_initialization_types.dart';
 import '../../../services/playback_subtitle_resolver.dart';
 import '../../../services/shader_service.dart';
 import '../helpers/track_filter_helper.dart';
+import 'silo_subtitle_tools.dart';
 
 enum SubtitleDownloadApplyOutcome { applied, timedOut, busy, superseded, unavailable, failed }
 
@@ -84,6 +85,10 @@ class TrackControlsState {
   /// this is false.
   final bool subtitleSearchSupported;
 
+  /// Silo's own subtitle search and "Translate with AI", for an online Silo
+  /// item; null otherwise.
+  final SiloSubtitleTools? siloSubtitles;
+
   const TrackControlsState({
     this.availableVersions = const [],
     this.selectedMediaIndex = 0,
@@ -138,6 +143,7 @@ class TrackControlsState {
     this.mediaTitle,
     this.onSubtitleDownloaded,
     this.subtitleSearchSupported = true,
+    this.siloSubtitles,
   });
 
   /// Transcoded subtitle choices must be negotiated with the server and
@@ -186,6 +192,7 @@ class TrackControlsState {
     return canUseSourceSubtitles ||
         directPlaySourceSidecars.isNotEmpty ||
         TrackFilterHelper.hasTracks<SubtitleTrack>(playerSubtitles) ||
-        canSearchSubtitles;
+        canSearchSubtitles ||
+        siloSubtitles != null;
   }
 }

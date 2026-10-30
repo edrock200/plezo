@@ -260,6 +260,7 @@ Windows and macOS builds are on each numbered `silo-preview-*` release.
 - **Search** for titles and people.
 - **Playback:** Plezy tells the server what the player can play and the server chooses Direct Play or a transcode (Silo playback protocol v3). Quality presets cap the bitrate; subtitles, skip intro/credits markers and chapters work; progress is saved to the server as you watch.
 - **Watched, favorites and 1–5 star ratings**, on movies, series, seasons (also from an episode's season link) and episodes.
+- **Subtitle search and "Translate with AI"** in the player's subtitle menu: the server searches its subtitle providers or makes AI subtitles (from a subtitle or an audio track) and stores them, and Plezy switches to the result. Subtitles stored on the server are listed with the file's own.
 - **Downloads** of the original file for offline playback, including external subtitle files, artwork, markers and chapters. Progress from a downloaded file syncs back when you reconnect.
 
 ### Not yet supported for Silo

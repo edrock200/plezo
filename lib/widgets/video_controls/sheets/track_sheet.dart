@@ -17,6 +17,7 @@ import 'subtitle_search_sheet.dart';
 import '../models/track_controls_state.dart';
 import '../helpers/track_filter_helper.dart';
 import '../helpers/track_selection_helper.dart';
+import '../silo/silo_subtitle_footer.dart';
 
 /// Combined bottom sheet for selecting audio and subtitle tracks side-by-side.
 class TrackSheet extends StatelessWidget {
@@ -491,6 +492,10 @@ class _SubtitleColumn extends StatelessWidget {
 }
 
 List<Widget> _buildSubtitleSearchFooter(BuildContext context, TrackControlsState state) {
+  final silo = state.siloSubtitles;
+  if (silo != null) {
+    return [Divider(height: 1, color: Theme.of(context).dividerColor), SiloSubtitleFooterTiles(tools: silo)];
+  }
   if (!state.canSearchSubtitles) return const [];
 
   return [

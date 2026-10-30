@@ -2,11 +2,25 @@ part of 'silo_client.dart';
 
 /// One live Silo playback session (`POST /api/v2/playback/start`).
 class _SiloPlaybackSession {
-  _SiloPlaybackSession({required this.sessionId, required this.installationId, required this.itemId});
+  _SiloPlaybackSession({
+    required this.sessionId,
+    required this.installationId,
+    required this.itemId,
+    this.fileId,
+    this.subtitleInventory = const [],
+    this.audioTracks = const [],
+    this.selectedAudioIndex,
+  });
 
   final String sessionId;
   final String installationId;
   final String itemId;
+
+  /// The playing file and the tracks the player's AI subtitle sheet offers.
+  final String? fileId;
+  final List<Map<dynamic, dynamic>> subtitleInventory;
+  final List<Map<dynamic, dynamic>> audioTracks;
+  final int? selectedAudioIndex;
 
   /// Strictly increasing per session; the server rejects lower values.
   int sequence = 0;
@@ -254,32 +268,67 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
     }
     final delivery = plan['delivery']?.toString() ?? 'original_http';
     final isOriginal = delivery == 'original_http';
+    final subtitle = plan['subtitle'];
+    final inventory = subtitle is Map ? subtitle['inventory'] : null;
+    final selected = plan['selected_tracks'];
+    final selectedAudio = selected is Map && selected['audio'] is Map
+        ? ((selected['audio'] as Map)['index'] as num?)?.toInt()
+        : audioIndex;
     _playingFileIds[metadata.id] = fileId;
     _sessions[sessionId] = _SiloPlaybackSession(
       sessionId: sessionId,
       installationId: decision['_installation_id'].toString(),
       itemId: metadata.id,
+      fileId: fileId,
+      subtitleInventory: inventory is List ? inventory.whereType<Map>().toList() : const [],
+      audioTracks: version['audio_tracks'] is List
+          ? (version['audio_tracks'] as List).whereType<Map>().toList()
+          : const [],
+      selectedAudioIndex: selectedAudio,
     );
 
     // Sidecars: the original file already carries its embedded subtitles,
-    // so only external files are added there. A remux or transcode carries
-    // none, so every text track the server can deliver is added.
+    // so only external files and subtitles stored on the server (provider
+    // downloads, AI results: source "downloaded") are added there. A remux or
+    // transcode carries none, so every text track the server can deliver is
+    // added.
     final sidecars = <PlaybackSubtitleSidecar>[];
     final sidecarIndexes = <int>{};
-    final subtitle = plan['subtitle'];
-    final inventory = subtitle is Map ? subtitle['inventory'] : null;
+    final storedTracks = <MediaSubtitleTrack>[];
     if (inventory is List) {
       for (final entry in inventory.whereType<Map>()) {
         final url = entry['url']?.toString();
         if (entry['delivery'] != 'sidecar' || url == null || url.isEmpty) continue;
         final codec = entry['codec']?.toString().toLowerCase();
-        if (codec == 'pgs' || codec == 'hdmv_pgs_subtitle' || codec == 'dvd_subtitle' || codec == 'vobsub') continue;
-        if (isOriginal && entry['source'] != 'external') continue;
+        if (SiloSubtitleRules.isBitmap(codec)) continue;
+        final source = entry['source']?.toString();
+        if (isOriginal && source != 'external' && source != 'downloaded') continue;
         final index = (entry['combined_index'] as num?)?.toInt();
-        if (index != null) sidecarIndexes.add(index);
+        // A stored subtitle is not a track of the file: it gets its own row,
+        // under an id that survives the reload that first lists it.
+        final storedId = source == 'downloaded' ? SiloSubtitleRules.storedId(entry) : null;
+        final storedTrackId = storedId == null ? null : SiloSubtitleRules.storedTrackId(storedId);
+        final sourceStreamId = storedTrackId ?? (index == null ? null : SiloMappers.trackId(index));
+        if (storedTrackId != null) {
+          storedTracks.add(
+            MediaSubtitleTrack(
+              id: storedTrackId,
+              codec: codec,
+              language: entry['language']?.toString(),
+              languageCode: entry['language']?.toString(),
+              title: entry['label']?.toString(),
+              selected: false,
+              forced: entry['forced'] == true,
+              external: true,
+              usesExternalDelivery: true,
+            ),
+          );
+        } else if (index != null) {
+          sidecarIndexes.add(index);
+        }
         sidecars.add(
           PlaybackSubtitleSidecar(
-            sourceStreamId: index == null ? null : SiloMappers.trackId(index),
+            sourceStreamId: sourceStreamId,
             track: SubtitleTrack.uri(
               _subtitleUrl(url),
               title: entry['label']?.toString(),
@@ -293,10 +342,6 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
       }
     }
 
-    final selected = plan['selected_tracks'];
-    final selectedAudio = selected is Map && selected['audio'] is Map
-        ? ((selected['audio'] as Map)['index'] as num?)?.toInt()
-        : audioIndex;
     final videoUrl = _streamUrl(rawUrl);
     final mediaInfo = SiloMappers.sourceInfo(
       version,
@@ -305,6 +350,7 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
       ctx: _ctx,
       selectedAudioIndex: selectedAudio,
       sidecarSubtitleIndexes: sidecarIndexes,
+      extraSubtitleTracks: storedTracks,
     );
 
     appLogger.i(

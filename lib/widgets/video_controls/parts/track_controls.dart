@@ -217,6 +217,39 @@ extension _PlexVideoControlsTrackMethods on _PlexVideoControlsState {
       // for Jellyfin items. The check uses the registered client type for
       // this metadata's serverId.
       subtitleSearchSupported: _isPlexBackedMetadata(),
+      siloSubtitles: _siloSubtitleTools(),
+    );
+  }
+
+  /// Silo's subtitle search and "Translate with AI" for an online Silo item.
+  SiloSubtitleTools? _siloSubtitleTools() {
+    final metadata = widget.metadata;
+    final serverId = metadata.serverId;
+    if (metadata.backend != MediaBackend.silo || serverId == null || widget.isOfflinePlayback || widget.isLive) {
+      return null;
+    }
+    final MediaServerClient? client;
+    try {
+      client = context.read<MultiServerProvider>().serverManager.getClient(ServerId(serverId));
+    } catch (_) {
+      return null;
+    }
+    if (client is! SiloClient) return null;
+    final itemKey = metadata.globalKey;
+    return SiloSubtitleTools(
+      client: client,
+      itemId: metadata.id,
+      position: () => widget.player.state.position,
+      isCurrent: () => mounted && widget.metadata.globalKey == itemKey,
+      applyStored: (storedId) => _applySiloStoredSubtitle(storedId, itemKey),
+      notify: (message, {error = false}) {
+        if (!mounted) return;
+        if (error) {
+          showErrorSnackBar(context, message);
+        } else {
+          showSuccessSnackBar(context, message);
+        }
+      },
     );
   }
 

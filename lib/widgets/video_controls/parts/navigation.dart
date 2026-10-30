@@ -145,6 +145,23 @@ extension _PlexVideoControlsNavigationMethods on _PlexVideoControlsState {
     }
   }
 
+  /// Loads a subtitle Silo just stored for the playing file (a provider
+  /// download or an AI result): playback reopens at the same position, the new
+  /// session lists it, and it is selected.
+  Future<SubtitleDownloadApplyOutcome> _applySiloStoredSubtitle(String storedId, String itemKey) async {
+    if (!mounted || widget.metadata.globalKey != itemKey) return SubtitleDownloadApplyOutcome.superseded;
+    final trackId = SiloSubtitleRules.storedTrackId(storedId);
+    final switchSource = widget.onPlaybackSourceChanged;
+    if (trackId == null || switchSource == null) return SubtitleDownloadApplyOutcome.unavailable;
+    try {
+      final outcome = await switchSource(newSubtitleChoice: PlaybackSourceSubtitleChoice.source(trackId));
+      return subtitleDownloadApplyOutcomeFor(outcome);
+    } catch (e) {
+      appLogger.w('Failed to load the stored Silo subtitle', error: e);
+      return SubtitleDownloadApplyOutcome.failed;
+    }
+  }
+
   /// Request a version, quality preset, audio stream, or source subtitle reload.
   /// The owning player screen decides how to apply it so controls do not own
   /// player lifecycle/navigation policy.

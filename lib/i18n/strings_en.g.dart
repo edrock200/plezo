@@ -2523,6 +2523,8 @@ class Translations$videoControls$en {
 
 	/// en: 'Audio: ${track}'
 	String osdAudio({required Object track}) => 'Audio: ${track}';
+
+	late final Translations$videoControls$siloSubtitles$en siloSubtitles = Translations$videoControls$siloSubtitles$en.internal(_root);
 }
 
 // Path: messages
@@ -6649,6 +6651,108 @@ class Translations$videoControls$pipErrors$en {
 	String unknown({required Object error}) => 'An error occurred: ${error}';
 }
 
+// Path: videoControls.siloSubtitles
+class Translations$videoControls$siloSubtitles$en {
+	Translations$videoControls$siloSubtitles$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Translate with AI'
+	String get translateWithAi => 'Translate with AI';
+
+	/// en: 'Mode'
+	String get mode => 'Mode';
+
+	/// en: 'From subtitles'
+	String get fromSubtitles => 'From subtitles';
+
+	/// en: 'From audio'
+	String get fromAudio => 'From audio';
+
+	/// en: 'Source subtitle'
+	String get sourceSubtitle => 'Source subtitle';
+
+	/// en: 'Source audio'
+	String get sourceAudio => 'Source audio';
+
+	/// en: 'Target language'
+	String get targetLanguage => 'Target language';
+
+	/// en: 'Translate'
+	String get translate => 'Translate';
+
+	/// en: 'Transcribe'
+	String get transcribe => 'Transcribe';
+
+	/// en: 'Submitting…'
+	String get submitting => 'Submitting…';
+
+	/// en: 'Loading the new subtitles…'
+	String get applying => 'Loading the new subtitles…';
+
+	/// en: 'Translating… ${percent}%'
+	String progress({required Object percent}) => 'Translating… ${percent}%';
+
+	/// en: 'No translatable subtitle tracks, and audio transcription is not available on this server.'
+	String get unavailable => 'No translatable subtitle tracks, and audio transcription is not available on this server.';
+
+	/// en: 'Subtitles are written in the spoken language. AI translation is turned off on this server.'
+	String get spokenLanguageOnly => 'Subtitles are written in the spoken language. AI translation is turned off on this server.';
+
+	/// en: '${remaining} of ${limit} transcriptions left ${period}'
+	String quotaLeft({required Object remaining, required Object limit, required Object period}) => '${remaining} of ${limit} transcriptions left ${period}';
+
+	/// en: 'Transcription quota used up (${used} of ${limit} used ${period})'
+	String quotaExhausted({required Object used, required Object limit, required Object period}) => 'Transcription quota used up (${used} of ${limit} used ${period})';
+
+	/// en: 'today'
+	String get periodDay => 'today';
+
+	/// en: 'this week'
+	String get periodWeek => 'this week';
+
+	/// en: 'this month'
+	String get periodMonth => 'this month';
+
+	/// en: 'this ${period}'
+	String periodOther({required Object period}) => 'this ${period}';
+
+	/// en: 'The translation job is gone.'
+	String get jobGone => 'The translation job is gone.';
+
+	/// en: 'Translation failed'
+	String get failed => 'Translation failed';
+
+	/// en: 'AI subtitles failed. ${reason}'
+	String failedWithReason({required Object reason}) => 'AI subtitles failed. ${reason}';
+
+	/// en: 'Translated, but the server named no subtitle.'
+	String get noResult => 'Translated, but the server named no subtitle.';
+
+	/// en: 'AI subtitles are ready'
+	String get ready => 'AI subtitles are ready';
+
+	/// en: 'AI subtitles were saved, but they could not be selected'
+	String get readyNotApplied => 'AI subtitles were saved, but they could not be selected';
+
+	/// en: 'External'
+	String get external => 'External';
+
+	/// en: 'Downloaded'
+	String get downloaded => 'Downloaded';
+
+	/// en: 'Track ${number}'
+	String track({required Object number}) => 'Track ${number}';
+
+	/// en: 'Hearing impaired'
+	String get hearingImpaired => 'Hearing impaired';
+
+	/// en: 'Subtitle search failed'
+	String get searchFailed => 'Subtitle search failed';
+}
+
 // Path: accountPreferences.groups
 class Translations$accountPreferences$groups$en {
 	Translations$accountPreferences$groups$en.internal(this._root);
@@ -9093,6 +9197,37 @@ extension on Translations {
 			'videoControls.osdSubtitlesOff' => 'Subtitles: Off',
 			'videoControls.osdSubtitles' => ({required Object track}) => 'Subtitles: ${track}',
 			'videoControls.osdAudio' => ({required Object track}) => 'Audio: ${track}',
+			'videoControls.siloSubtitles.translateWithAi' => 'Translate with AI',
+			'videoControls.siloSubtitles.mode' => 'Mode',
+			'videoControls.siloSubtitles.fromSubtitles' => 'From subtitles',
+			'videoControls.siloSubtitles.fromAudio' => 'From audio',
+			'videoControls.siloSubtitles.sourceSubtitle' => 'Source subtitle',
+			'videoControls.siloSubtitles.sourceAudio' => 'Source audio',
+			'videoControls.siloSubtitles.targetLanguage' => 'Target language',
+			'videoControls.siloSubtitles.translate' => 'Translate',
+			'videoControls.siloSubtitles.transcribe' => 'Transcribe',
+			'videoControls.siloSubtitles.submitting' => 'Submitting…',
+			'videoControls.siloSubtitles.applying' => 'Loading the new subtitles…',
+			'videoControls.siloSubtitles.progress' => ({required Object percent}) => 'Translating… ${percent}%',
+			'videoControls.siloSubtitles.unavailable' => 'No translatable subtitle tracks, and audio transcription is not available on this server.',
+			'videoControls.siloSubtitles.spokenLanguageOnly' => 'Subtitles are written in the spoken language. AI translation is turned off on this server.',
+			'videoControls.siloSubtitles.quotaLeft' => ({required Object remaining, required Object limit, required Object period}) => '${remaining} of ${limit} transcriptions left ${period}',
+			'videoControls.siloSubtitles.quotaExhausted' => ({required Object used, required Object limit, required Object period}) => 'Transcription quota used up (${used} of ${limit} used ${period})',
+			'videoControls.siloSubtitles.periodDay' => 'today',
+			'videoControls.siloSubtitles.periodWeek' => 'this week',
+			'videoControls.siloSubtitles.periodMonth' => 'this month',
+			'videoControls.siloSubtitles.periodOther' => ({required Object period}) => 'this ${period}',
+			'videoControls.siloSubtitles.jobGone' => 'The translation job is gone.',
+			'videoControls.siloSubtitles.failed' => 'Translation failed',
+			'videoControls.siloSubtitles.failedWithReason' => ({required Object reason}) => 'AI subtitles failed. ${reason}',
+			'videoControls.siloSubtitles.noResult' => 'Translated, but the server named no subtitle.',
+			'videoControls.siloSubtitles.ready' => 'AI subtitles are ready',
+			'videoControls.siloSubtitles.readyNotApplied' => 'AI subtitles were saved, but they could not be selected',
+			'videoControls.siloSubtitles.external' => 'External',
+			'videoControls.siloSubtitles.downloaded' => 'Downloaded',
+			'videoControls.siloSubtitles.track' => ({required Object number}) => 'Track ${number}',
+			'videoControls.siloSubtitles.hearingImpaired' => 'Hearing impaired',
+			'videoControls.siloSubtitles.searchFailed' => 'Subtitle search failed',
 			'messages.markedAsWatched' => 'Marked as watched',
 			'messages.markedAsUnwatched' => 'Marked as unwatched',
 			'messages.markedAsWatchedOffline' => 'Marked as watched (will sync when online)',
@@ -9239,6 +9374,8 @@ extension on Translations {
 			'profiles.connectionsLabel' => 'Connections',
 			'profiles.add' => 'Add',
 			'profiles.deleteProfileButton' => 'Delete profile',
+			_ => null,
+		} ?? switch (path) {
 			'profiles.noConnectionsHint' => 'No connections — add one to use this profile.',
 			'profiles.noConnections' => 'No connections',
 			'profiles.plexHomeAccount' => 'Plex Home account',
@@ -9270,8 +9407,6 @@ extension on Translations {
 			'profiles.pinsDontMatch' => 'PINs don\'t match',
 			'profiles.tokenIdentityMismatch' => 'The Plex profile token resolved to an unexpected server',
 			'connections.sectionTitle' => 'Connections',
-			_ => null,
-		} ?? switch (path) {
 			'connections.addConnection' => 'Add connection',
 			'connections.addConnectionSubtitleNoProfile' => 'Sign in with Plex or connect a Jellyfin, Emby, or Silo server',
 			'connections.addConnectionSubtitleScoped' => ({required Object displayName}) => 'Add to ${displayName}: Plex, Jellyfin, Emby, Silo, or another profile connection',
@@ -9753,6 +9888,8 @@ extension on Translations {
 			'liveTv.watchLive' => 'Watch Live',
 			'liveTv.goToLive' => 'Go to Live',
 			'liveTv.record' => 'Record',
+			_ => null,
+		} ?? switch (path) {
 			'liveTv.recordEpisode' => 'Record Episode',
 			'liveTv.recordSeries' => 'Record Series',
 			'liveTv.recordOptions' => 'Record Options',
@@ -9784,8 +9921,6 @@ extension on Translations {
 			'liveTv.recordingRuleUpdated' => 'Recording rule updated',
 			'liveTv.guideReloadRequested' => 'Guide refresh requested',
 			'liveTv.guideReloadFailed' => 'Couldn\'t refresh the guide',
-			_ => null,
-		} ?? switch (path) {
 			'liveTv.rulesProcessRequested' => 'Rule re-evaluation requested',
 			'liveTv.rulesProcessFailed' => 'Couldn\'t re-evaluate recording rules',
 			'liveTv.recordShow' => 'Record show',
@@ -10267,6 +10402,8 @@ extension on Translations {
 			'performanceOverlay.tunneling' => 'Tunneling',
 			'performanceOverlay.passthrough' => 'Passthrough',
 			'performanceOverlay.aspect' => 'Aspect',
+			_ => null,
+		} ?? switch (path) {
 			'performanceOverlay.rotation' => 'Rotation',
 			'performanceOverlay.dvSource' => 'DV Source',
 			'performanceOverlay.dvPath' => 'DV Path',
@@ -10298,8 +10435,6 @@ extension on Translations {
 			'performanceOverlay.cacheUsed' => 'Cache Used',
 			'performanceOverlay.cacheLimit' => 'Cache Limit',
 			'performanceOverlay.speed' => 'Speed',
-			_ => null,
-		} ?? switch (path) {
 			'performanceOverlay.player' => 'Player',
 			'performanceOverlay.playMethod' => 'Play Method',
 			'performanceOverlay.memory' => 'Memory',
