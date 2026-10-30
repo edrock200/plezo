@@ -4,7 +4,9 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
-**Subtitle search and AI subtitles for Silo** — installs over 2.25.1 as an update.
+## silo-preview-2.25.2
+
+**Subtitle search and AI subtitles for Silo** — released October 30, 2026. Installs over 2.25.1 as an update.
 
 - **Search subtitles:** in the player's subtitle menu, "Search subtitles" now works on Silo servers. Your server looks the title up with the subtitle providers it has set up, saves the one you pick, and Plezy switches to it straight away.
 - **Translate with AI:** on Silo servers with AI subtitles turned on, the subtitle menu has "Translate with AI". Translate an existing subtitle, or make subtitles from an audio track, in the language you choose. It starts from where you are in the video, so the first lines arrive within seconds, and the new subtitles turn on by themselves when they're ready. You can close the menu and keep watching while it works; the menu shows the progress.
