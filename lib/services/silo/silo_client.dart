@@ -15,6 +15,7 @@ import '../../media/download_resolution.dart';
 import '../../media/ids.dart';
 import '../../media/library_change_event.dart';
 import '../../media/library_filter_result.dart';
+import '../../media/library_genre.dart';
 import '../../media/library_query.dart';
 import '../../media/live_tv_support.dart';
 import '../../media/lyrics.dart';
@@ -631,6 +632,27 @@ class SiloClient
     add(MediaFilterField.genre, 'genres', t.libraries.filterCategories.genre);
     add(MediaFilterField.contentRating, 'content_ratings', t.libraries.filterCategories.contentRating);
     return LibraryFilterResult(filters: filters, cachedValues: cached);
+  }
+
+  /// The library's genres for the Genres tab, from the same
+  /// `/catalog/filters` facets Browse filters by (`genres`, value + name).
+  @override
+  Future<List<LibraryGenre>> fetchLibraryGenres(String libraryId, {required MediaKind libraryKind}) async {
+    final data = await _api.getJson(
+      '/api/v2/catalog/filters',
+      query: {'library_id': libraryId, 'skip_technical': 'true'},
+    );
+    final raw = data['genres'];
+    if (raw is! List) return const [];
+    final genres = <LibraryGenre>[];
+    for (final v in raw) {
+      final value = (v is Map ? (v['value'] ?? v['name']) : v)?.toString() ?? '';
+      if (value.isEmpty) continue;
+      final title = (v is Map ? v['name']?.toString() : null) ?? value;
+      genres.add(LibraryGenre(title: title, filterValue: value));
+    }
+    genres.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+    return genres;
   }
 
   @override

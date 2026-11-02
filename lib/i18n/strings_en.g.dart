@@ -2494,6 +2494,9 @@ class Translations$videoControls$en {
 	/// en: 'Failed to download subtitle'
 	String get subtitleDownloadFailed => 'Failed to download subtitle';
 
+	/// en: 'The subtitle didn't appear in time. The download may have failed'
+	String get subtitleDownloadTimedOut => 'The subtitle didn\'t appear in time. The download may have failed';
+
 	/// en: 'Search languages...'
 	String get searchLanguages => 'Search languages...';
 
@@ -2687,6 +2690,9 @@ class Translations$messages$en {
 
 	/// en: 'Server error (HTTP 500). A bandwidth/transcoding limit likely rejected this session. Ask the owner to adjust it.'
 	String get serverLimitBody => 'Server error (HTTP 500). A bandwidth/transcoding limit likely rejected this session. Ask the owner to adjust it.';
+
+	/// en: 'Try transcoding'
+	String get serverLimitTranscode => 'Try transcoding';
 
 	/// en: 'File unavailable'
 	String get mediaUnreadableTitle => 'File unavailable';
@@ -3273,6 +3279,9 @@ class Translations$discover$en {
 	/// en: 'Continue Watching in ${library}'
 	String continueWatchingIn({required Object library}) => 'Continue Watching in ${library}';
 
+	/// en: 'Select Version'
+	String get selectVersion => 'Select Version';
+
 	/// en: 'Next Up'
 	String get nextUp => 'Next Up';
 
@@ -3529,6 +3538,9 @@ class Translations$libraries$en {
 	/// en: 'Library options'
 	String get libraryOptions => 'Library options';
 
+	/// en: 'Shuffle library'
+	String get shuffleLibrary => 'Shuffle library';
+
 	/// en: 'library content'
 	String get content => 'library content';
 
@@ -3543,6 +3555,9 @@ class Translations$libraries$en {
 
 	/// en: 'No collections in this library'
 	String get noCollections => 'No collections in this library';
+
+	/// en: 'No genres in this library'
+	String get noGenres => 'No genres in this library';
 
 	/// en: 'No folders found'
 	String get noFoldersFound => 'No folders found';
@@ -6965,6 +6980,9 @@ class Translations$libraries$tabs$en {
 	/// en: 'Collections'
 	String get collections => 'Collections';
 
+	/// en: 'Genres'
+	String get genres => 'Genres';
+
 	/// en: 'Playlists'
 	String get playlists => 'Playlists';
 }
@@ -7627,6 +7645,12 @@ class Translations$explore$detail$en {
 
 	/// en: 'Open on ${site}'
 	String openOn({required Object site}) => 'Open on ${site}';
+
+	/// en: 'Couldn't open the trailer on this device'
+	String get trailerUnavailable => 'Couldn\'t open the trailer on this device';
+
+	/// en: 'Couldn't open this link on this device'
+	String get linkUnavailable => 'Couldn\'t open this link on this device';
 
 	/// en: 'Crew'
 	String get crew => 'Crew';
@@ -9187,6 +9211,7 @@ extension on Translations {
 			'videoControls.subtitleDownloaded' => 'Subtitle downloaded',
 			'videoControls.subtitleDownloadedNotApplied' => 'Subtitle downloaded, but it could not be selected',
 			'videoControls.subtitleDownloadFailed' => 'Failed to download subtitle',
+			'videoControls.subtitleDownloadTimedOut' => 'The subtitle didn\'t appear in time. The download may have failed',
 			'videoControls.searchLanguages' => 'Search languages...',
 			'videoControls.skipIntro' => 'Skip Intro',
 			'videoControls.skipCredits' => 'Skip Credits',
@@ -9278,6 +9303,7 @@ extension on Translations {
 			'messages.switchingToCompatiblePlayer' => 'Switching to compatible player...',
 			'messages.serverLimitTitle' => 'Playback failed',
 			'messages.serverLimitBody' => 'Server error (HTTP 500). A bandwidth/transcoding limit likely rejected this session. Ask the owner to adjust it.',
+			'messages.serverLimitTranscode' => 'Try transcoding',
 			'messages.mediaUnreadableTitle' => 'File unavailable',
 			'messages.mediaUnreadableBody' => 'The server found this item but could not read its file (HTTP 404). The file was probably moved, deleted, or its storage is offline. Ask the server owner to check the file and rescan the library.',
 			'messages.serverBusyTitle' => 'Stream unavailable',
@@ -9372,10 +9398,10 @@ extension on Translations {
 			'profiles.changePin' => 'Change',
 			'profiles.removePin' => 'Remove',
 			'profiles.connectionsLabel' => 'Connections',
-			'profiles.add' => 'Add',
-			'profiles.deleteProfileButton' => 'Delete profile',
 			_ => null,
 		} ?? switch (path) {
+			'profiles.add' => 'Add',
+			'profiles.deleteProfileButton' => 'Delete profile',
 			'profiles.noConnectionsHint' => 'No connections — add one to use this profile.',
 			'profiles.noConnections' => 'No connections',
 			'profiles.plexHomeAccount' => 'Plex Home account',
@@ -9479,6 +9505,7 @@ extension on Translations {
 			'discover.addMediaToLibraries' => 'Add some media to your libraries',
 			'discover.continueWatching' => 'Continue Watching',
 			'discover.continueWatchingIn' => ({required Object library}) => 'Continue Watching in ${library}',
+			'discover.selectVersion' => 'Select Version',
 			'discover.nextUp' => 'Next Up',
 			'discover.nextUpIn' => ({required Object library}) => 'Next Up in ${library}',
 			'discover.recentlyAdded' => 'Recently Added',
@@ -9568,16 +9595,19 @@ extension on Translations {
 			'libraries.showLibrary' => 'Show library',
 			'libraries.hideLibrary' => 'Hide library',
 			'libraries.libraryOptions' => 'Library options',
+			'libraries.shuffleLibrary' => 'Shuffle library',
 			'libraries.content' => 'library content',
 			'libraries.selectLibrary' => 'Select library',
 			'libraries.filtersWithCount' => ({required Object count}) => 'Filters (${count})',
 			'libraries.noRecommendations' => 'No recommendations available',
 			'libraries.noCollections' => 'No collections in this library',
+			'libraries.noGenres' => 'No genres in this library',
 			'libraries.noFoldersFound' => 'No folders found',
 			'libraries.folders' => 'folders',
 			'libraries.tabs.recommended' => 'Recommended',
 			'libraries.tabs.browse' => 'Browse',
 			'libraries.tabs.collections' => 'Collections',
+			'libraries.tabs.genres' => 'Genres',
 			'libraries.tabs.playlists' => 'Playlists',
 			'libraries.groupings.title' => 'Grouping',
 			'libraries.groupings.all' => 'All',
@@ -9833,6 +9863,8 @@ extension on Translations {
 			'explore.detail.watchOn' => 'Watch on',
 			'explore.detail.watchTrailer' => 'Watch trailer',
 			'explore.detail.openOn' => ({required Object site}) => 'Open on ${site}',
+			'explore.detail.trailerUnavailable' => 'Couldn\'t open the trailer on this device',
+			'explore.detail.linkUnavailable' => 'Couldn\'t open this link on this device',
 			'explore.detail.crew' => 'Crew',
 			'explore.detail.ratings' => 'Ratings',
 			'explore.detail.schedule' => 'Schedule',
@@ -9880,6 +9912,8 @@ extension on Translations {
 			'liveTv.reorderFavorites' => 'Reorder Favorites',
 			'liveTv.noFavoriteChannels' => 'No favorite channels',
 			'liveTv.noFavoriteChannelsHint' => 'Show all channels, then long-press a channel to add it to your favorites.',
+			_ => null,
+		} ?? switch (path) {
 			'liveTv.showAllChannels' => 'Show All Channels',
 			'liveTv.favoritesLoadFailed' => 'Could not load favorites. Check your connection and try again.',
 			'liveTv.favoritesUpdateFailed' => 'Could not update favorites. Check your connection and try again.',
@@ -9888,8 +9922,6 @@ extension on Translations {
 			'liveTv.watchLive' => 'Watch Live',
 			'liveTv.goToLive' => 'Go to Live',
 			'liveTv.record' => 'Record',
-			_ => null,
-		} ?? switch (path) {
 			'liveTv.recordEpisode' => 'Record Episode',
 			'liveTv.recordSeries' => 'Record Series',
 			'liveTv.recordOptions' => 'Record Options',
@@ -10394,6 +10426,8 @@ extension on Translations {
 			'videoSettings.audioNormalization' => 'Normalize Loudness',
 			'videoSettings.audioNormalizationDisablesPassthrough' => 'Decodes audio to PCM; passthrough is off while this is on',
 			'performanceOverlay.color' => 'Color',
+			_ => null,
+		} ?? switch (path) {
 			'performanceOverlay.performance' => 'Performance',
 			'performanceOverlay.buffer' => 'Buffer',
 			'performanceOverlay.app' => 'App',
@@ -10402,8 +10436,6 @@ extension on Translations {
 			'performanceOverlay.tunneling' => 'Tunneling',
 			'performanceOverlay.passthrough' => 'Passthrough',
 			'performanceOverlay.aspect' => 'Aspect',
-			_ => null,
-		} ?? switch (path) {
 			'performanceOverlay.rotation' => 'Rotation',
 			'performanceOverlay.dvSource' => 'DV Source',
 			'performanceOverlay.dvPath' => 'DV Path',
