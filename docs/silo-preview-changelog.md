@@ -4,11 +4,13 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
-**Plezy with Silo is now Plezilo.**
+## silo-preview-2.25.3
+
+**Plezy with Silo is now Plezilo** — released November 3, 2026.
 
 - **New name and icon:** the app is now called Plezilo and has its own icon. Plezy's makers asked forks to use their own name, icon and services, so this fork now has its own.
 - **It installs as a new app:** Plezilo appears next to your old "Plezy with Silo" app instead of replacing it. Open Plezilo, add your servers and sign in again, check everything works, then uninstall the old "Plezy with Silo" app. Downloads and settings from the old app don't carry over.
-- **New download links:** the always-newest Android links have moved, and new Fire TV Downloader codes for them are coming soon. The old links and codes still work but stay on the last "Plezy with Silo" version.
+- **New download links and Downloader codes:** the always-newest Android links have moved. New Fire TV Downloader codes: **5985619** (32-bit, every Fire TV) and **8032572** (64-bit). The old codes still work but stay on the last "Plezy with Silo" version.
 - **Switched off for now:** Trakt, MyAnimeList, AniList, Simkl and MDBList sync, Discord status, log upload and crash reports. They used the Plezy project's own services, which other apps aren't allowed to use. Copying your logs still works.
 - **Links:** links that open the app now start with `plezilo://` instead of `plezy://`. Update any Home Assistant automations, shortcuts or NFC tags that used the old links.
 
