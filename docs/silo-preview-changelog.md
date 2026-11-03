@@ -4,6 +4,8 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **Watched marks for Silo:** movies and episodes you have watched now show their check mark on their own page, in a season's episode list and in downloads (they used to look unwatched there, while Home cards were right). A show's page and its seasons show how many episodes you have left. Downloaded episodes that were wrongly reset to unwatched are corrected at the next sync while online.
+
 ## silo-preview-2.25.6
 
 Released November 3, 2026.

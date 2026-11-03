@@ -370,11 +370,27 @@ abstract final class SiloMappers {
     final seriesBackdrop = _url(json['series_backdrop_url'], ctx);
     final seasonPoster = _url(json['season_poster_url'], ctx);
 
-    final episodeCount = flexibleInt(json['episode_count']);
-    final unplayed = flexibleInt(userData?['unplayed_count']);
-    final viewedLeaf = episodeCount != null && unplayed != null
-        ? (episodeCount - unplayed).clamp(0, episodeCount)
-        : (played && episodeCount != null ? episodeCount : null);
+    // `user_data` is Silo's watch rollup. On a season or series its
+    // `watched_count` / `unplayed_count` count episodes; a series detail has
+    // no `episode_count`, so the two together give the total. On a movie or
+    // episode the server always sends `watched_count: 0` (it is not a play
+    // count), so only `played` says whether a leaf is watched.
+    final isContainer = kind == MediaKind.show || kind == MediaKind.season;
+    final watchedLeaves = isContainer ? flexibleInt(userData?['watched_count']) : null;
+    final unplayed = isContainer ? flexibleInt(userData?['unplayed_count']) : null;
+    final episodeCount =
+        flexibleInt(json['episode_count']) ??
+        (watchedLeaves != null && unplayed != null ? watchedLeaves + unplayed : null);
+    final int? viewedLeaf;
+    if (!isContainer || episodeCount == null) {
+      viewedLeaf = null;
+    } else if (unplayed != null) {
+      viewedLeaf = (episodeCount - unplayed).clamp(0, episodeCount);
+    } else if (watchedLeaves != null) {
+      viewedLeaf = watchedLeaves.clamp(0, episodeCount);
+    } else {
+      viewedLeaf = played ? episodeCount : null;
+    }
 
     String? title = _string(json['title']);
     String? parentId;
@@ -448,7 +464,7 @@ abstract final class SiloMappers {
       clearLogoPath: logo,
       durationMs: durationMs,
       viewOffsetMs: resumeOffsetMs(positionSeconds, durationMs),
-      viewCount: played ? (flexibleInt(userData?['watched_count']) ?? 1) : 0,
+      viewCount: played ? 1 : 0,
       lastViewedAt: _epochSeconds(json['progress_updated_at']) ?? _epochSeconds(userData?['last_played_at']),
       leafCount: kind == MediaKind.show || kind == MediaKind.season ? episodeCount : null,
       viewedLeafCount: viewedLeaf,

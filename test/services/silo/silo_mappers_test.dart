@@ -159,6 +159,144 @@ void main() {
     expect(item.childCount, 3);
   });
 
+  group('watch state as Silo sends it', () {
+    // Leaf `user_data` comes from a progress row: `watched_count` and
+    // `unplayed_count` are always present and always 0 on a movie or episode.
+    Map<String, dynamic> leafUserData({required bool played, double position = 0}) => {
+      'played': played,
+      'is_in_progress': position > 0,
+      'position_seconds': position,
+      'duration_seconds': 3000,
+      'watched_count': 0,
+      'unplayed_count': 0,
+      'in_progress_count': 0,
+    };
+
+    test('a played movie detail is watched; an unplayed one is not', () {
+      final watched = SiloMappers.item({
+        'content_id': 'movie:heat-1995',
+        'type': 'movie',
+        'title': 'Heat',
+        'runtime': 170,
+        'user_state': {'played': false, 'is_favorite': false, 'in_watchlist': false, 'not_interested': false},
+        'user_data': leafUserData(played: true),
+      }, _ctx)!;
+      expect(watched.viewCount, 1);
+      expect(watched.isWatched, isTrue);
+
+      final unwatched = SiloMappers.item({
+        'content_id': 'movie:ronin-1998',
+        'type': 'movie',
+        'title': 'Ronin',
+        'user_data': leafUserData(played: false, position: 900),
+      }, _ctx)!;
+      expect(unwatched.viewCount, 0);
+      expect(unwatched.isWatched, isFalse);
+      expect(unwatched.hasActiveProgress, isTrue);
+    });
+
+    test('a movie card is watched from user_state.played', () {
+      Map<String, dynamic> card(bool played) => {
+        'content_id': 'movie:heat-1995',
+        'type': 'movie',
+        'title': 'Heat',
+        'user_state': {'played': played, 'is_favorite': false, 'in_watchlist': false, 'not_interested': false},
+      };
+      expect(SiloMappers.item(card(true), _ctx)!.isWatched, isTrue);
+      expect(SiloMappers.item(card(false), _ctx)!.isWatched, isFalse);
+    });
+
+    test('episode rows of a season list carry their own played flag', () {
+      final rows = SiloMappers.items([
+        {
+          'content_id': 'episode:orbital-s01e01',
+          'type': 'episode',
+          'season_number': 1,
+          'episode_number': 1,
+          'title': 'Pilot',
+          'runtime': 50,
+          'user_data': leafUserData(played: true),
+        },
+        {
+          'content_id': 'episode:orbital-s01e02',
+          'type': 'episode',
+          'season_number': 1,
+          'episode_number': 2,
+          'title': 'Second',
+          'runtime': 50,
+        },
+      ], _ctx);
+      expect(rows.map((e) => e.isWatched), [true, false]);
+      expect(rows.first.unwatchedCount, isNull, reason: 'episodes have no unwatched badge');
+    });
+
+    test('a season counts its unwatched episodes from the rollup', () {
+      final season = SiloMappers.item({
+        'content_id': 'season:orbital-s01',
+        'type': 'season',
+        'series_id': 'series:orbital',
+        'season_number': 1,
+        'title': 'Season 1',
+        'episode_count': 10,
+        'user_data': {'played': false, 'watched_count': 3, 'unplayed_count': 7, 'in_progress_count': 1},
+      }, _ctx)!;
+      expect(season.leafCount, 10);
+      expect(season.viewedLeafCount, 3);
+      expect(season.unwatchedCount, 7);
+      expect(season.isWatched, isFalse);
+      expect(season.isPartiallyWatched, isTrue);
+
+      final done = SiloMappers.item({
+        'content_id': 'season:orbital-s02',
+        'type': 'season',
+        'series_id': 'series:orbital',
+        'season_number': 2,
+        'episode_count': 8,
+        'user_data': {'played': true, 'watched_count': 8, 'unplayed_count': 0, 'in_progress_count': 0},
+      }, _ctx)!;
+      expect(done.isWatched, isTrue);
+      expect(done.unwatchedCount, 0);
+    });
+
+    test('a series detail without episode_count counts episodes from the rollup', () {
+      final series = SiloMappers.item({
+        'content_id': 'series:orbital',
+        'type': 'series',
+        'title': 'Orbital',
+        'season_count': 2,
+        'user_data': {'played': false, 'watched_count': 11, 'unplayed_count': 7, 'in_progress_count': 0},
+      }, _ctx)!;
+      expect(series.leafCount, 18);
+      expect(series.viewedLeafCount, 11);
+      expect(series.unwatchedCount, 7);
+      expect(series.isWatched, isFalse);
+
+      final finished = SiloMappers.item({
+        'content_id': 'series:orbital',
+        'type': 'series',
+        'title': 'Orbital',
+        'user_data': {'played': true, 'watched_count': 18, 'unplayed_count': 0, 'in_progress_count': 0},
+      }, _ctx)!;
+      expect(finished.isWatched, isTrue);
+      expect(finished.unwatchedCount, 0);
+    });
+
+    test('a series card has only user_state: watched mark, no count', () {
+      Map<String, dynamic> card(bool played) => {
+        'content_id': 'series:orbital',
+        'type': 'series',
+        'title': 'Orbital',
+        'user_state': {'played': played, 'is_favorite': false, 'in_watchlist': false, 'not_interested': false},
+      };
+      final watched = SiloMappers.item(card(true), _ctx)!;
+      expect(watched.isWatched, isTrue);
+      final unwatched = SiloMappers.item(card(false), _ctx)!;
+      expect(unwatched.isWatched, isFalse);
+      expect(unwatched.unwatchedCount, isNull);
+      expect(unwatched.withWatchedFlag(true).isWatched, isTrue);
+    });
+  });
+
   test('audio and reading items are not mapped', () {
     expect(SiloMappers.item({'content_id': 'audiobook:x', 'type': 'audiobook'}, _ctx), isNull);
     expect(SiloMappers.item({'type': 'movie'}, _ctx), isNull);
@@ -312,9 +450,10 @@ void main() {
       'type': 'movie',
       'title': 'Seen before',
       'duration_seconds': 6000,
-      'user_data': {'played': true, 'position_seconds': 1500, 'watched_count': 2},
+      'user_data': {'played': true, 'position_seconds': 1500, 'watched_count': 0, 'unplayed_count': 0},
     }, _ctx)!;
-    expect(item.viewCount, 2);
+    expect(item.viewCount, 1);
+    expect(item.isWatched, isTrue);
     expect(item.viewOffsetMs, 1500000);
   });
 }

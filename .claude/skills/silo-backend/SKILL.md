@@ -132,6 +132,16 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
   `silo-season:<n>:<seriesId>` (`SiloMappers.syntheticSeasonId`); `fetchItem`/`fetchChildren`
   resolve it. Season lists use the server's real season `content_id`. Writes (watched, rating,
   favorite) on a synthetic season resolve it to that real id first — never to the series.
+- **Watch state:** cards (catalog, Home, search, similar, history) carry only
+  `user_state.played`; details, season lists and episode lists carry `user_data`, Silo's watch
+  rollup (`played`, `watched_count`, `unplayed_count`, `in_progress_count`, `position_seconds`).
+  On a season or series the counts are episodes; on a **movie or episode `watched_count` is
+  always 0** (the server never fills it for leaves; it is not a play count), so a leaf is watched
+  only by `played` and `viewCount` is `played ? 1 : 0` (reading `watched_count` hid every
+  watched movie/episode on detail pages, episode lists and downloads before this fix). A series
+  detail has no `episode_count`: `SiloMappers.item` takes `watched_count + unplayed_count` as
+  its `leafCount`. Series cards have no counts at all, so they get a check mark but no
+  unwatched badge, like Silo's TV app (`TvMediaCard`: `userState.played` only).
 - **Images:** URLs arrive ready-made and self-authorising (signed `exp`/`sig`, or S3 presigned).
   Resolve root-relative ones against the server **origin**, never add auth, never re-encode the query.
   `artworkStorageKey` strips the rotating signature so downloaded artwork is found again.
