@@ -13,11 +13,12 @@ import 'snackbar_helper.dart';
 /// How Plezy opens a YouTube trailer on this device.
 enum YoutubeTrailerRoute {
   /// YouTube's official IFrame player in a full-screen route
-  /// ([YoutubeTrailerScreen]). Phones, tablets and macOS.
+  /// ([YoutubeTrailerScreen]). Android phones, tablets, Android TV and Fire
+  /// TV, iOS and macOS.
   inAppPlayer,
 
   /// `ACTION_VIEW` intents handed to the YouTube app, then the browser
-  /// (Android TV, and Android when the in-app player cannot play).
+  /// (Android Automotive, and Android when the in-app player cannot play).
   androidIntents,
 
   /// The YouTube app's URL scheme through the tvOS Runner's own channel
@@ -39,9 +40,10 @@ YoutubeTrailerRoute youtubeTrailerRouteFor({
   if (isAppleTv) return YoutubeTrailerRoute.appleTvApp;
   switch (platform) {
     case TargetPlatform.android:
-      // No web view player on a TV (D-pad cannot drive YouTube's page) or in
-      // a car: hand off to the YouTube app instead, as Silo's TV app does.
-      return isTv || isAutomotive ? YoutubeTrailerRoute.androidIntents : YoutubeTrailerRoute.inAppPlayer;
+      // TVs play in the app too (the user's choice over Silo's TV app, which
+      // hands off): the trailer screen adds remote controls above the player.
+      // A car has no web view to rely on: hand off to the YouTube app.
+      return isAutomotive ? YoutubeTrailerRoute.androidIntents : YoutubeTrailerRoute.inAppPlayer;
     case TargetPlatform.iOS || TargetPlatform.macOS:
       return YoutubeTrailerRoute.inAppPlayer;
     case TargetPlatform.windows || TargetPlatform.linux || TargetPlatform.fuchsia:

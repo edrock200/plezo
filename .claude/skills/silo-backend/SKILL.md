@@ -232,11 +232,15 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
   `RemoteTrailer`s; the row is local extras first, then YouTube (`buildExtrasRail`). Stills come
   from `i.ytimg.com/vi/<key>/hqdefault.jpg` (`ytimg.com` is a pinned system-CA domain in
   `network_security_config.xml` / `CertificateTrust`).
-- **Opening YouTube** (`youtubeTrailerRouteFor`): Android phones/tablets, iOS and macOS play in
+- **Opening YouTube** (`youtubeTrailerRouteFor`): Android phones/tablets, Android TV/Fire TV, iOS
+  and macOS play in
   YouTube's unmodified IFrame player (`youtube_player_iframe` → webview_flutter) with
   privacy-enhanced host and `origin` `https://www.youtube-nocookie.com` (a missing origin/referrer
   gives errors 152/153); any player error (101/150 embedding disabled, …) hands off to the app or
-  browser. Android TV (and Automotive) hand off like Silo's TV app through
+  browser. On a TV (the user's choice, unlike Silo's TV app) the bar above the player adds Back
+  10 s / Play-Pause / Forward 10 s, the remote's media keys drive the player, and the web view is
+  wrapped in `ExcludeFocus` (focus inside YouTube's page could not get out). Only Android
+  Automotive, and any player error, hands off through
   `com.plezy/external_player` `openViewIntents`: `com.google.android.youtube.tv` with the watch
   page, then `vnd.youtube:<id>`, then the watch page. Windows/Linux open the browser (no web view
   there; never build a `YoutubePlayerController` on them). tvOS opens `youtube://watch/<id>`

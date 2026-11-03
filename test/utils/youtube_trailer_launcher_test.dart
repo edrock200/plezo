@@ -13,8 +13,11 @@ void main() {
       expect(route(TargetPlatform.macOS), YoutubeTrailerRoute.inAppPlayer);
     });
 
-    test('Android TV and cars hand off to the YouTube app', () {
-      expect(route(TargetPlatform.android, tv: true), YoutubeTrailerRoute.androidIntents);
+    test('Android TV and Fire TV play in the built-in player', () {
+      expect(route(TargetPlatform.android, tv: true), YoutubeTrailerRoute.inAppPlayer);
+    });
+
+    test('cars hand off to the YouTube app', () {
       expect(route(TargetPlatform.android, car: true), YoutubeTrailerRoute.androidIntents);
     });
 
