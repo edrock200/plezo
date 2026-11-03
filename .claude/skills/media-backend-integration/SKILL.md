@@ -1,9 +1,11 @@
 ---
 name: media-backend-integration
-description: Checklist for adding a new media-server backend to Plezy or changing how an existing one plugs into the app (MediaBackend enum, MediaItem union, Connection subclasses, credential storage, MultiServerManager, ActiveProfileBinder, API caches, add-server UI, downloads, tests). Use before editing lib/media/media_backend.dart, lib/media/media_item.dart, lib/connection/connection.dart or lib/services/multi_server_manager.dart, and when a backend works in tests but is missing from part of the app.
+description: Checklist for adding a new media-server backend to Plezilo (this Plezy fork; the code still says Plezy internally) or changing how an existing one plugs into the app (MediaBackend enum, MediaItem union, Connection subclasses, credential storage, MultiServerManager, ActiveProfileBinder, API caches, add-server UI, downloads, tests). Use before editing lib/media/media_backend.dart, lib/media/media_item.dart, lib/connection/connection.dart or lib/services/multi_server_manager.dart, and when a backend works in tests but is missing from part of the app.
 ---
 
-# Adding or changing a Plezy server backend
+# Adding or changing a Plezilo server backend
+
+Plezilo is the user-facing name of this Plezy fork; "Plezy" below means the shared codebase.
 
 Plezy's UI and providers only see `MediaServerClient`, `MediaItem` and `Connection`. A backend is
 "in the app" only when every layer below knows it. Silo was added this way; grep for

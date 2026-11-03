@@ -37,12 +37,12 @@ CMAKE = ROOT / "windows/CMakeLists.txt"
 PUBSPEC = ROOT / "pubspec.yaml"
 WORKFLOW = ROOT / ".github/workflows/build.yml"
 MSIX_STEP = "Build Store package (MSIX)"
-BUNDLE = "plezy-windows.msixbundle"
+BUNDLE = "plezilo-windows.msixbundle"
 # Partner Center reserves these identity values and derives the package family name.
-IDENTITY_NAME = "edde746.Plezy"
-PUBLISHER = "CN=AA9C53CB-AD3C-48DA-B3E3-D1E8986D4E25"
-PUBLISHER_DISPLAY_NAME = "edde746"
-PACKAGE_FAMILY_SUFFIX = "13q3sv6jzathm"
+IDENTITY_NAME = "edrock200.Plezilo"
+PUBLISHER = "CN=edrock200"
+PUBLISHER_DISPLAY_NAME = "edrock200"
+PACKAGE_FAMILY_SUFFIX = "1wgfev03rhy7r"
 FOUNDATION = "http://schemas.microsoft.com/appx/manifest/foundation/windows10"
 ASSET_REFERENCE = re.compile(r"assets\\([A-Za-z0-9._-]+\.png)")
 # Package child order is fixed by the foundation schema.

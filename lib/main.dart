@@ -82,6 +82,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'services/jellyfin_api_cache.dart';
 import 'services/silo/silo_api_cache.dart';
 import 'services/plex_api_cache.dart';
+import 'services/plezy_server.dart';
 import 'database/app_database.dart';
 import 'database/download_operations.dart';
 import 'database/tvos_database_recovery_store.dart';
@@ -113,8 +114,10 @@ import 'utils/dialogs.dart';
 import 'widgets/dialog_action_button.dart';
 import 'widgets/startup_failure_view.dart';
 
-const bool _enableSentry = bool.fromEnvironment('ENABLE_SENTRY', defaultValue: false);
-const String _sentryDsn = 'https://6a1a6ef8c72140099b2798973c1bfb2f@bugs.plezy.app/1';
+// Crash reports went to the Plezy project's own Sentry (bugs.plezy.app), which
+// Plezilo may not use: off whatever ENABLE_SENTRY says (see plezy_server.dart).
+const bool _enableSentry = plezyProjectServicesEnabled && bool.fromEnvironment('ENABLE_SENTRY', defaultValue: false);
+const String _sentryDsn = '';
 const String gitCommit = String.fromEnvironment('GIT_COMMIT');
 const String _sentryEnvironment = String.fromEnvironment('SENTRY_ENVIRONMENT');
 const String _sentryDist = String.fromEnvironment('SENTRY_DIST');
@@ -1094,7 +1097,7 @@ Future<void> _logEnvironmentDiagnostics() async {
     await Future.sync(() => Sentry.configureScope((scope) => scope.setTag('renderer', rendererName ?? 'unknown')));
   }
   appLogger.i(
-    'Plezy v${packageInfo.version}+${packageInfo.buildNumber}$commitSuffix$renderer'
+    'Plezilo v${packageInfo.version}+${packageInfo.buildNumber}$commitSuffix$renderer'
     ' [effects: ${DevicePerformance.describeSync()}]',
   );
   appLogger.i('Display: ${DevicePerformance.describeDisplay()}');
@@ -2547,7 +2550,7 @@ class _SetupScreenState extends State<SetupScreen> with MountedSetStateMixin {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  SvgPicture.asset('assets/plezy_adaptive_foreground.svg', width: 160, height: 160),
+                  SvgPicture.asset('assets/plezilo_mark.svg', width: 160, height: 160),
                   _buildStatusText(context),
                   const SizedBox(height: 16),
                   Center(
@@ -2570,7 +2573,7 @@ class _SetupScreenState extends State<SetupScreen> with MountedSetStateMixin {
       color: Theme.of(context).scaffoldBackgroundColor,
       child: Stack(
         children: [
-          Center(child: SvgPicture.asset('assets/plezy_adaptive_foreground.svg', width: 288, height: 288)),
+          Center(child: SvgPicture.asset('assets/plezilo_mark.svg', width: 288, height: 288)),
           Positioned(left: 0, right: 0, bottom: height * 0.5 - 170, child: _buildStatusText(context)),
           Positioned(
             left: 0,

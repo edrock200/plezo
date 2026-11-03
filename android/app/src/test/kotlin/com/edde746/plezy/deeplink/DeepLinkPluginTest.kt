@@ -38,14 +38,14 @@ class DeepLinkPluginTest {
   @Test
   fun everyPlezyLinkIsForwardedVerbatim() {
     val links = listOf(
-      "plezy://open",
-      "plezy://open?profile=Kids",
-      "plezy://play?server=srv-1&id=42&mode=shuffle&profile=Kids",
-      "plezy://play?type=show&tvdb=81189&mode=next",
-      "plezy://play?content_id=plezy_srv-1_42",
-      "plezy://live?channel=News%20HD&server=srv-1&start=beginning",
-      "plezy://external-player/success/session-7?position=1234&duration=5678",
-      "plezy://future-host/some/path?param=value#fragment"
+      "plezilo://open",
+      "plezilo://open?profile=Kids",
+      "plezilo://play?server=srv-1&id=42&mode=shuffle&profile=Kids",
+      "plezilo://play?type=show&tvdb=81189&mode=next",
+      "plezilo://play?content_id=plezy_srv-1_42",
+      "plezilo://live?channel=News%20HD&server=srv-1&start=beginning",
+      "plezilo://external-player/success/session-7?position=1234&duration=5678",
+      "plezilo://future-host/some/path?param=value#fragment"
     )
 
     for (link in links) {
@@ -55,7 +55,7 @@ class DeepLinkPluginTest {
 
   @Test
   fun schemeMatchIgnoresCaseAndKeepsTheUrlUnchanged() {
-    for (link in listOf("PLEZY://open", "Plezy://play?server=srv-1&id=42")) {
+    for (link in listOf("PLEZILO://open", "Plezilo://play?server=srv-1&id=42")) {
       assertEquals(link, DeepLinkPlugin.linkFrom(viewIntent(link)))
     }
   }
@@ -74,7 +74,7 @@ class DeepLinkPluginTest {
     val dart = FakeDart()
     val plugin = DeepLinkPlugin()
     plugin.onAttachedToEngine(dart.binding())
-    val link = "plezy://play?server=srv-1&id=42"
+    val link = "plezilo://play?server=srv-1&id=42"
     val declines = listOf<(BinaryMessenger.BinaryReply) -> Unit>(
       { it.reply(codec.encodeSuccessEnvelope(false).rewound()) },
       { it.reply(codec.encodeSuccessEnvelope(null).rewound()) },
@@ -104,8 +104,8 @@ class DeepLinkPluginTest {
     val dart = FakeDart()
     val plugin = DeepLinkPlugin()
     plugin.onAttachedToEngine(dart.binding())
-    val older = "plezy://play?server=srv-1&id=1"
-    val newer = "plezy://live?channel=7"
+    val older = "plezilo://play?server=srv-1&id=1"
+    val newer = "plezilo://live?channel=7"
 
     plugin.notifyLink(older)
     plugin.notifyLink(newer)
@@ -117,7 +117,7 @@ class DeepLinkPluginTest {
   @Test
   fun getInitialLinkReturnsALinkThatArrivedBeforeTheEngineOnce() {
     val plugin = DeepLinkPlugin()
-    val link = "plezy://open?profile=Kids"
+    val link = "plezilo://open?profile=Kids"
 
     plugin.notifyLink(link)
 
@@ -131,7 +131,7 @@ class DeepLinkPluginTest {
     val firstBinding = firstDart.binding()
     val first = DeepLinkPlugin()
     first.onAttachedToEngine(firstBinding)
-    val link = "plezy://play?type=movie&imdb=tt0111161"
+    val link = "plezilo://play?type=movie&imdb=tt0111161"
 
     first.notifyLink(link)
     firstDart.sent.single().reply.reply(null)

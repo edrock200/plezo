@@ -33,7 +33,7 @@ class AboutScreen extends StatelessWidget {
                     child: Column(
                       children: [
                         const SizedBox(height: 24),
-                        Image.asset('assets/plezy.png', width: 80, height: 80),
+                        Image.asset('assets/plezilo.png', width: 80, height: 80),
                         const SizedBox(height: 16),
                         Text(appName, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: .bold)),
                         const SizedBox(height: 8),
@@ -45,6 +45,12 @@ class AboutScreen extends StatelessWidget {
                         Text(
                           t.about.appDescription,
                           style: Theme.of(context).textTheme.bodyLarge,
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          t.about.basedOn,
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: tokens(context).textMuted),
                           textAlign: TextAlign.center,
                         ),
                       ],

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:plezy/services/log_upload_service.dart';
 import 'package:plezy/i18n/strings.g.dart';
 import 'package:plezy/services/app_exit_service.dart';
 import 'package:plezy/services/startup_diagnostics.dart';
@@ -97,7 +98,9 @@ void main() {
     expect(find.byKey(startupFailureRepairKey), findsNothing);
     // The diagnostic actions stay, because a stuck user still needs them out.
     expect(find.byKey(startupFailureCopyKey), findsOneWidget);
-    expect(find.byKey(startupFailureUploadKey), findsOneWidget);
+    // Upload only where log upload is available (off while the Plezy project's
+    // services are: lib/services/plezy_server.dart).
+    expect(find.byKey(startupFailureUploadKey), logUploadAvailable ? findsOneWidget : findsNothing);
     expect(find.text(t.startup.restartRequiredBody), findsOneWidget);
   });
 

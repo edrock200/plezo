@@ -18,20 +18,22 @@ Profile _home(String id, String name, String uuid) =>
 void main() {
   group('DeepLink.tryParse', () {
     test('reads an item on a server, of any backend', () {
-      final link = DeepLink.tryParse('plezy://play?server=abc123&id=42&mode=shuffle&profile=Kids') as PlayLink;
+      final link = DeepLink.tryParse('plezilo://play?server=abc123&id=42&mode=shuffle&profile=Kids') as PlayLink;
       expect(link.target, ItemPlayTarget(serverId: ServerId('abc123'), itemId: '42'));
       expect(link.mode, PlayMode.shuffle);
       expect(link.profile, 'Kids');
     });
 
     test('reads the launcher shelf content id', () {
-      final link = DeepLink.tryParse('plezy://play?content_id=plezy_abc123_42') as PlayLink;
+      final link = DeepLink.tryParse('plezilo://play?content_id=plezy_abc123_42') as PlayLink;
       expect(link.target, ItemPlayTarget(serverId: ServerId('abc123'), itemId: '42'));
       expect(link.mode, PlayMode.next);
     });
 
     test('reads a catalogue title and normalizes its ids', () {
-      final link = DeepLink.tryParse('plezy://play?type=Show&tvdb=81189&imdb=TT0903747&plex=5d9c086c46115600200aa2fe');
+      final link = DeepLink.tryParse(
+        'plezilo://play?type=Show&tvdb=81189&imdb=TT0903747&plex=5d9c086c46115600200aa2fe',
+      );
       expect(
         (link! as PlayLink).target,
         const CatalogPlayTarget(
@@ -44,25 +46,25 @@ void main() {
     });
 
     test('reads a live channel', () {
-      final link = DeepLink.tryParse('plezy://live?channel=4.1&server=abc123&start=beginning') as LiveLink;
+      final link = DeepLink.tryParse('plezilo://live?channel=4.1&server=abc123&start=beginning') as LiveLink;
       expect(link.channel, '4.1');
       expect(link.serverId, 'abc123');
       expect(link.startPosition, LiveTvStartPosition.beginning);
-      expect((DeepLink.tryParse('plezy://live?channel=KNTV')! as LiveLink).startPosition, LiveTvStartPosition.ask);
+      expect((DeepLink.tryParse('plezilo://live?channel=KNTV')! as LiveLink).startPosition, LiveTvStartPosition.ask);
       expect(
-        (DeepLink.tryParse('plezy://live?channel=4&start=live')! as LiveLink).startPosition,
+        (DeepLink.tryParse('plezilo://live?channel=4&start=live')! as LiveLink).startPosition,
         LiveTvStartPosition.live,
       );
     });
 
     test('reads open with and without a profile', () {
-      expect((DeepLink.tryParse('plezy://open')! as OpenLink).profile, isNull);
-      expect((DeepLink.tryParse('plezy://open?profile=%20Kids%20')! as OpenLink).profile, 'Kids');
-      expect(DeepLink.tryParse('PLEZY://OPEN'), isA<OpenLink>());
+      expect((DeepLink.tryParse('plezilo://open')! as OpenLink).profile, isNull);
+      expect((DeepLink.tryParse('plezilo://open?profile=%20Kids%20')! as OpenLink).profile, 'Kids');
+      expect(DeepLink.tryParse('PLEZILO://OPEN'), isA<OpenLink>());
     });
 
     test('keeps an external player return link whole', () {
-      const url = 'plezy://external-player/success/s1?position=12.5&duration=1420.016';
+      const url = 'plezilo://external-player/success/s1?position=12.5&duration=1420.016';
       final link = DeepLink.tryParse(url) as ExternalPlayerReturnLink;
       expect(link.uri.toString(), url);
     });
@@ -70,22 +72,22 @@ void main() {
     test('rejects links that do not say what to play', () {
       for (final url in [
         'https://example.com/play?server=a&id=1',
-        'plezy://unknown',
-        'plezy://play',
-        'plezy://play?id=42',
-        'plezy://play?server=abc123',
-        'plezy://play?server=abc123&id=42&mode=random',
-        'plezy://play?content_id=garbage',
-        'plezy://play?type=movie',
-        'plezy://play?type=episode&tmdb=1',
-        'plezy://play?type=movie&tmdb=12a',
-        'plezy://play?type=movie&tmdb=99999999999999999999999',
-        'plezy://play?type=movie&imdb=0903747',
-        'plezy://play?type=movie&plex=not-a-hash',
-        'plezy://live',
-        'plezy://live?channel=',
-        'plezy://live?channel=4&start=sideways',
-        'plezy://play?server=a&id=%E0%A4%A',
+        'plezilo://unknown',
+        'plezilo://play',
+        'plezilo://play?id=42',
+        'plezilo://play?server=abc123',
+        'plezilo://play?server=abc123&id=42&mode=random',
+        'plezilo://play?content_id=garbage',
+        'plezilo://play?type=movie',
+        'plezilo://play?type=episode&tmdb=1',
+        'plezilo://play?type=movie&tmdb=12a',
+        'plezilo://play?type=movie&tmdb=99999999999999999999999',
+        'plezilo://play?type=movie&imdb=0903747',
+        'plezilo://play?type=movie&plex=not-a-hash',
+        'plezilo://live',
+        'plezilo://live?channel=',
+        'plezilo://live?channel=4&start=sideways',
+        'plezilo://play?server=a&id=%E0%A4%A',
       ]) {
         expect(DeepLink.tryParse(url), isNull, reason: url);
       }

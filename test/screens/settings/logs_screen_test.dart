@@ -59,7 +59,7 @@ void main() {
     String? clipboardText;
 
     PackageInfo.setMockInitialValues(
-      appName: 'Plezy',
+      appName: 'Plezilo',
       packageName: 'com.plezy.test',
       version: '1.2.3',
       buildNumber: '45',
@@ -141,7 +141,7 @@ void main() {
     expect(find.text(capability, findRichText: true), findsOneWidget);
     expect(utf8.encode(uploadedBody!).length, lessThanOrEqualTo(maxLogUploadBytes));
     expect(uploadedRequest!.method, 'POST');
-    expect(uploadedRequest!.url, Uri.parse('https://ice.plezy.app/logs'));
+    expect(uploadedRequest!.url, Uri.parse(logUploadEndpoint));
     final contentType = uploadedRequest!.headers.entries
         .singleWhere((entry) => entry.key.toLowerCase() == 'content-type')
         .value;
@@ -164,14 +164,38 @@ void main() {
     await tester.pump();
     expect(clipboardText, capability);
     expect(tester.takeException(), isNull);
-  });
+  }, skip: !logUploadAvailable);
+
+  testWidgets('offers no log upload while the Plezy project\'s services are off', (tester) async {
+    var requests = 0;
+    final client = MediaServerHttpClient(
+      client: MockClient((request) async {
+        requests++;
+        return http.Response('{}', 200);
+      }),
+    );
+    addTearDown(client.close);
+    await tester.pumpWidget(
+      TranslationProvider(
+        child: InputModeTracker(
+          child: MaterialApp(home: LogsScreen(httpClient: client)),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byTooltip(t.logs.uploadLogs), findsNothing);
+    expect(find.byTooltip(t.logs.copyLogs), findsOneWidget);
+    await expectLater(uploadDiagnosticText('payload', client: client), throwsStateError);
+    expect(requests, 0);
+  }, skip: logUploadAvailable);
 
   group('previous startup failure', () {
     late StartupFailureRecord record;
 
     Future<void> pumpLogs(WidgetTester tester) async {
       PackageInfo.setMockInitialValues(
-        appName: 'Plezy',
+        appName: 'Plezilo',
         packageName: 'com.plezy.test',
         version: '2.11.0',
         buildNumber: '124',
@@ -225,7 +249,7 @@ void main() {
       // Gating these on the log buffer alone would show the record and then
       // refuse to let the user do anything with it.
       final bar = tester.widget<FocusableActionBar>(find.byType(FocusableActionBar));
-      for (final tooltip in [t.logs.uploadLogs, t.logs.copyLogs, t.logs.clearLogs]) {
+      for (final tooltip in [if (logUploadAvailable) t.logs.uploadLogs, t.logs.copyLogs, t.logs.clearLogs]) {
         final action = bar.actions.singleWhere((candidate) => candidate.tooltip == tooltip);
         expect(action.onPressed, isNotNull, reason: tooltip);
       }
@@ -237,7 +261,7 @@ void main() {
 
     setUp(() {
       PackageInfo.setMockInitialValues(
-        appName: 'Plezy',
+        appName: 'Plezilo',
         packageName: 'com.plezy.test',
         version: '1.2.3',
         buildNumber: '45',
@@ -440,7 +464,7 @@ void main() {
       await tester.pump();
 
       expect(clipboardText, isNotNull);
-      expect(clipboardText, startsWith('Plezy'));
+      expect(clipboardText, startsWith('Plezilo'));
       expect(clipboardText, matches(RegExp(r'---\n\[')));
       expect(clipboardText, matches(RegExp(r'newer-row\n\[')));
       expect(clipboardText, endsWith('older-row'));
@@ -463,7 +487,7 @@ void main() {
 
       await pumpLogs(tester);
       await pumpSelectionRegistration(tester);
-      final header = find.textContaining('Plezy', findRichText: true);
+      final header = find.textContaining('Plezilo', findRichText: true);
       final newerRow = find.textContaining('newer-row', findRichText: true);
       final gesture = await tester.startGesture(
         tester.getTopLeft(header) + const Offset(1, 6),
@@ -501,7 +525,7 @@ void main() {
       await TvDetectionService.getInstance(forceTv: true);
       TvDetectionService.setForceTVSync(true);
       PackageInfo.setMockInitialValues(
-        appName: 'Plezy',
+        appName: 'Plezilo',
         packageName: 'com.plezy.test',
         version: '1.2.3',
         buildNumber: '45',

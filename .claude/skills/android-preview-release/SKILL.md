@@ -1,6 +1,6 @@
 ---
 name: android-preview-release
-description: Build, publish and verify Plezy's Android preview APKs (the "Plezy with Silo" pre-releases). Use when the user asks for an APK, a test build, a release, or to put a build in GitHub Releases; when the preview workflow fails; or when installing the Android SDK in a cloud session to check an APK.
+description: Build, publish and verify Plezilo's Android preview APKs (the Silo-capable Plezy fork's pre-releases; formerly "Plezy with Silo"). Use when the user asks for an APK, a test build, a release, or to put a build in GitHub Releases; when the preview workflow fails; or when installing the Android SDK in a cloud session to check an APK.
 ---
 
 # Android preview builds
@@ -16,7 +16,7 @@ description: Build, publish and verify Plezy's Android preview APKs (the "Plezy 
   **pre-release** versioned `<pubspec major.minor>.N` (the user's choice): N is one above the highest
   existing `silo-preview-<major.minor>.*` **tag** (tags of deleted releases count, so a number is
   never reused), at least pubspec's patch + 1. After the 2.25.0 upstream merge the first preview is
-  2.25.1. Tagged `silo-preview-<version>`, titled "Plezy <version> with Silo".
+  2.25.1. Tagged `silo-preview-<version>`, titled "Plezilo <version> (Silo preview)".
 - Build number (Android versionCode) = max(pubspec build + N, last preview's build + 1), so a
   preview always installs as an update, even when an upstream merge moves pubspec's version (2.22.5
   was build 157; pubspec 2.25.0+157 makes 2.25.1 build 158). Each release records its build in a
@@ -26,7 +26,7 @@ description: Build, publish and verify Plezy's Android preview APKs (the "Plezy 
   `gh` on `PATH`. The workflow refuses to publish if the tag already exists or this commit already
   has a preview. `SUPPORTER_MODE` is left unset (perks off), like upstream's GitHub APK.
 - Tags are pure versions because GitHub lists releases by the version in the tag (short-sha tags
-  sorted by their letters and put older builds first). Assets: `plezy-silo-<version>-<sha>-{arm64-v8a,armeabi-v7a,x86_64}.apk`,
+  sorted by their letters and put older builds first). Assets: `plezilo-<version>-<sha>-{arm64-v8a,armeabi-v7a,x86_64}.apk` (`plezy-silo-…` before the rename),
   `SHA256SUMS.txt` and `silo-preview-build.txt`.
 - Signing: the repository's `ANDROID_KEYSTORE_BASE64`/`ANDROID_STORE_PASSWORD`/`ANDROID_KEY_PASSWORD`/
   `ANDROID_KEY_ALIAS` secrets when set; otherwise a keystore generated once and kept in the Actions
@@ -39,22 +39,28 @@ description: Build, publish and verify Plezy's Android preview APKs (the "Plezy 
   generates a new key and the next preview will not install over the last one. Recommend that the
   user add the `ANDROID_*` secrets for a stable key; never promise updates without them. Without `key.properties` a release
   build would be **unsigned** and uninstallable — never remove the signing step.
-- Package id stays `com.edde746.plezy`: previews replace (and cannot update) a store-installed
-  Plezy. Making them install side by side would need the hard-coded provider authorities
+- Package id is `com.edrock200.plezilo` (Kotlin namespace stays `com.edde746.plezy`, internal).
+  Plezilo installs beside Plezy and beside the old "Plezy with Silo" previews (`com.edde746.plezy`),
+  which it cannot update: users sign in again and uninstall the old app. The provider authorities
   (`AndroidManifest.xml`, `ExternalPlayerChannel.kt`, `SystemShelfArtworkProvider.AUTHORITY` and its
-  tests) to follow `applicationId` first.
+  tests) are hard-coded to `com.edrock200.plezilo.*`; change them with `applicationId`.
+- Fixed links: the workflow's last step (`scripts/silo_android_latest.sh`) copies the APKs to the
+  rolling `plezilo-android-latest` release as `plezilo-<abi>.apk`. The old `silo-android-latest`
+  release (`plezy-silo-<abi>.apk`, Downloader codes 7329550 / 4196538) is frozen; never update it.
+  New Downloader codes are pending (`DOWNLOADER_CODES` in `scripts/silo_announce_discord.py` is
+  empty, so announcements show the direct links).
 
 ## Windows and macOS builds
 - Workflow: `.github/workflows/silo-preview-desktop.yml`. A `gate` job reads the release marker from
   the commit's first line; `resolve` picks the code and version; then:
   - Windows (`SUPPORTER_MODE=msstore`, as upstream): x64 on `windows-latest`, arm64 on
     `windows-11-arm` (Flutter from `setup-flutter-git`), bundle checked like upstream's (required
-    files present; no `*.pdb`, `plezy.lib`, `plezy.exp`, `simdutf.lib`), packaged with
-    `windows/build-installer.ps1` into `plezy-silo-<v>-windows-installer.exe` and
+    files present (`plezilo.exe`); no `*.pdb`, `plezilo.lib`, `plezilo.exp`, `simdutf.lib`), packaged with
+    `windows/build-installer.ps1` into `plezilo-<v>-windows-installer.exe` and
     `…-windows-{x64,arm64}-portable.7z` + `SHA256SUMS-windows.txt`.
   - macOS (`SUPPORTER_MODE=unlocked`, as upstream): universal app on `macos-26`, signed **ad hoc** (no Developer ID), checked with
     `codesign --verify --deep --strict` and its `CFBundleShortVersionString`, packaged as
-    `plezy-silo-<v>-macos.dmg` + `SHA256SUMS-macos.txt`. Users must allow it once in
+    `plezilo-<v>-macos.dmg` (`Plezilo.app`) + `SHA256SUMS-macos.txt`. Users must allow it once in
     System Settings › Privacy & Security › Open Anyway (or `xattr -dr com.apple.quarantine`).
     With an Apple Developer account, port upstream `build.yml`'s import/sign/notarize steps.
 - `[release-apk]` builds both from the same commit with the same version and build number, and
@@ -62,8 +68,9 @@ description: Build, publish and verify Plezy's Android preview APKs (the "Plezy 
   or was cancelled, and checks the release's commit and recorded build before uploading.
   `[release-desktop]`, `[release-windows]` or `[release-macos]` builds from the commit of the
   highest-versioned preview release and attaches to it.
-- Never pass `ENABLE_UPDATE_CHECK=true` (the updater reads upstream Plezy's feed). Both apps keep
-  Plezy's app id, so they replace an installed Plezy.
+- Never pass `ENABLE_UPDATE_CHECK=true` (the updater reads upstream Plezy's feed) or
+  `ENABLE_SENTRY=true` (crash reports are off: Plezy's Sentry). Both apps have Plezilo's own ids
+  (`com.edrock200.plezilo`, Windows installer AppId), so they install beside Plezy.
 - Each build takes 10–25 minutes; verify the attached files and checksums. Running the apps is the
   user's step.
 

@@ -3,7 +3,11 @@ import 'dart:convert';
 import '../utils/media_server_http_client.dart';
 import 'plezy_server.dart';
 
-/// Plezy server endpoint that returns a short, quotable Log ID.
+/// Whether log upload is offered. The relay is the Plezy project's own server,
+/// which Plezilo may not use ([plezyProjectServicesEnabled]).
+const bool logUploadAvailable = plezyProjectServicesEnabled;
+
+/// Server endpoint that returns a short, quotable Log ID.
 const String logUploadEndpoint = '$plezyServerBaseUrl/logs';
 
 /// The server's `/logs` accepts 1 MiB. The in-memory buffer intentionally remains
@@ -48,6 +52,7 @@ String constrainLogUploadPayload({required String header, required String logs, 
 /// [payload] must already be redacted and allowlisted by the caller; this
 /// function performs no sanitisation of its own.
 Future<String> uploadDiagnosticText(String payload, {MediaServerHttpClient? client}) async {
+  if (!logUploadAvailable) throw StateError('Log upload is not available in this build');
   final response = await (client ?? httpClient).post(
     logUploadEndpoint,
     body: payload,

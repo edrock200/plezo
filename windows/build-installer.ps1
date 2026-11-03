@@ -22,7 +22,7 @@ function New-InnoSetupScript {
 
     # Uninstall registry keys are named "{AppId}_is1", so the installer and the
     # elevation code below have to agree on this GUID.
-    $AppGuid = '4213385e-f7be-4f2b-95f9-54082a28bb8f'
+    $AppGuid = '4249b662-d506-4b85-8ac1-da4eef6d595c'
 
     if ($HasX64 -and $HasArm64) {
         $ArchAllowed = 'x64compatible arm64'
@@ -39,10 +39,10 @@ Source: "staging\arm64\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs
     }
 
     return @"
-#define Name "Plezy"
+#define Name "Plezilo"
 #define Version "$Version"
-#define Publisher "edde746"
-#define ExeName "plezy.exe"
+#define Publisher "edrock200"
+#define ExeName "plezilo.exe"
 
 [Setup]
 AppId={{$AppGuid}
@@ -53,7 +53,7 @@ DefaultDirName={autopf}\{#Name}
 DefaultGroupName={#Name}
 AllowNoIcons=yes
 OutputDir=.
-OutputBaseFilename=plezy-windows-installer
+OutputBaseFilename=plezilo-windows-installer
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
@@ -68,7 +68,7 @@ ArchitecturesInstallIn64BitMode=$ArchAllowed
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [CustomMessages]
-ElevationRequired=Plezy is installed in %1, which requires administrator privileges to update.%n%nRe-run this installer using "Run as administrator", or download the latest installer from https://github.com/edde746/plezy/releases/latest
+ElevationRequired=Plezilo is installed in %1, which requires administrator privileges to update.%n%nRe-run this installer using "Run as administrator", or download the latest installer from https://github.com/edrock200/plezo/releases
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
@@ -87,7 +87,7 @@ Filename: "{app}\{#ExeName}"; Description: "{cm:LaunchProgram,{#Name}}"; Flags: 
 [Code]
 const
   UninstallSubkey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{$AppGuid}_is1';
-  WriteProbeName = 'plezy-write-probe.tmp';
+  WriteProbeName = 'plezilo-write-probe.tmp';
 
 function IsNoRun: Boolean;
 begin
@@ -207,7 +207,7 @@ begin
 
     { A machine-wide install that took over a directory registered per-user
       leaves that user's uninstall entry and Start Menu group pointing at files
-      this install now owns, listing Plezy twice in Apps & Features. }
+      this install now owns, listing Plezilo twice in Apps & Features. }
     if IsAdminInstallMode then
     begin
       if RegQueryStringValue(HKCU, UninstallSubkey, 'Inno Setup: App Path', PreviousDir) and
@@ -286,7 +286,7 @@ if (-not (Get-Command 7z -ErrorAction SilentlyContinue)) {
 
 if ($HasX64) {
     Write-Host "`nCreating x64 portable archive..." -ForegroundColor Cyan
-    $X64Portable = Join-Path $ResolvedOutput "plezy-windows-x64-portable.7z"
+    $X64Portable = Join-Path $ResolvedOutput "plezilo-windows-x64-portable.7z"
     Push-Location $X64BuildDir
     try {
         if (Test-Path $X64Portable) { Remove-Item $X64Portable -Force }
@@ -299,7 +299,7 @@ if ($HasX64) {
 
 if ($HasArm64) {
     Write-Host "`nCreating arm64 portable archive..." -ForegroundColor Cyan
-    $Arm64Portable = Join-Path $ResolvedOutput "plezy-windows-arm64-portable.7z"
+    $Arm64Portable = Join-Path $ResolvedOutput "plezilo-windows-arm64-portable.7z"
     Push-Location $Arm64BuildDir
     try {
         if (Test-Path $Arm64Portable) { Remove-Item $Arm64Portable -Force }
@@ -362,4 +362,4 @@ Remove-Item $StagingDir -Recurse -Force -ErrorAction SilentlyContinue
 Write-Host "`nBuild complete!" -ForegroundColor Green
 if ($HasX64)   { Write-Host "Portable (x64):   $X64Portable" -ForegroundColor White }
 if ($HasArm64) { Write-Host "Portable (arm64): $Arm64Portable" -ForegroundColor White }
-Write-Host "Installer:        $(Join-Path $ResolvedOutput 'plezy-windows-installer.exe')" -ForegroundColor White
+Write-Host "Installer:        $(Join-Path $ResolvedOutput 'plezilo-windows-installer.exe')" -ForegroundColor White

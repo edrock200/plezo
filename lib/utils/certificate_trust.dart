@@ -34,7 +34,6 @@ abstract final class CertificateTrust {
   /// `test/android/network_security_config_test.dart` pins both to the sources.
   static const Set<String> fixedEndpointDomains = {
     'plex.tv',
-    'plezy.app',
     'trakt.tv',
     'myanimelist.net',
     'anilist.co',

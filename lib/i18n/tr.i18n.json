@@ -1,6 +1,6 @@
 {
   "app": {
-    "title": "Plezy"
+    "title": "Plezilo"
   },
   "appIcon": {
     "title": "Uygulama simgesi",
@@ -9,8 +9,8 @@
     "locked": "Supporter avantajı",
     "lockedHint": "Alternatif simgeler bir Supporter avantajıdır.",
     "changeFailed": "Uygulama simgesi değiştirilemedi",
-    "launcherHint": "Yeni simge, Plezy'den çıktığınızda ana ekranınızda görünür.",
-    "tvLauncherHint": "Yeni banner, Plezy'den çıktığınızda görünür. Android TV, TV yeniden başlatılana kadar eskisini göstermeye devam edebilir.",
+    "launcherHint": "Yeni simge, Plezilo'den çıktığınızda ana ekranınızda görünür.",
+    "tvLauncherHint": "Yeni banner, Plezilo'den çıktığınızda görünür. Android TV, TV yeniden başlatılana kadar eskisini göstermeye devam edebilir.",
     "names": {
       "midnight": "Gece Yarısı",
       "ember": "Kor",
@@ -53,7 +53,7 @@
     "quickConnectWaiting": "Onay bekleniyor…",
     "quickConnectCancel": "İptal",
     "quickConnectExpired": "Hızlı Bağlantı süresi doldu. Tekrar deneyin.",
-    "localDataRecoveryRequired": "Plezy yerel giriş ve bekleyen oynatma verilerini güvenli bir şekilde kurtaramadı. Lütfen tekrar giriş yapın.",
+    "localDataRecoveryRequired": "Plezilo yerel giriş ve bekleyen oynatma verilerini güvenli bir şekilde kurtaramadı. Lütfen tekrar giriş yapın.",
     "pinCheckRejected": "Plex PIN denetimi reddedildi"
   },
   "common": {
@@ -153,19 +153,19 @@
     "checkFailed": "Güncellemeler kontrol edilemedi"
   },
   "supporter": {
-    "title": "Plezy Supporter",
-    "intro": "Plezy'nin geliştirilmesini destekleyen ve kozmetik ekstraların kilidini açan tek seferlik bir satın alım:",
+    "title": "Plezilo Supporter",
+    "intro": "Plezilo'nin geliştirilmesini destekleyen ve kozmetik ekstraların kilidini açan tek seferlik bir satın alım:",
     "presetThemes": "Hazır temalar",
     "presetThemesDescription": "Kor, Buzul, Orman, Erik ve Kâğıt",
     "customTheme": "Özel tema",
     "customThemeDescription": "Her rengi kendiniz seçin",
     "appIcons": "Uygulama simgeleri",
-    "appIconsDescription": "Alternatif bir Plezy simgesi seçin",
+    "appIconsDescription": "Alternatif bir Plezilo simgesi seçin",
     "buy": "${price} karşılığında satın al",
     "loadingPrice": "Fiyat yükleniyor...",
     "restore": "Satın Alımları Geri Yükle",
     "pending": "Satın alımınız ödeme veya onay bekliyor. Mağaza işlemi tamamladığı anda ekstraların kilidi açılır.",
-    "thankYouTitle": "Plezy'yi desteklediğiniz için teşekkürler",
+    "thankYouTitle": "Plezilo'yi desteklediğiniz için teşekkürler",
     "thankYouBody": "Supporter ekstralarınızın kilidi açıldı.",
     "tileSubtitle": "Temaların ve uygulama simgelerinin kilidini tek seferlik bir satın alımla açın",
     "tileSubtitleThemesOnly": "Temaların kilidini tek seferlik bir satın alımla açın",
@@ -181,7 +181,7 @@
   },
   "settings": {
     "title": "Ayarlar",
-    "supportDeveloper": "Plezy'yi Destekleyin",
+    "supportDeveloper": "Plezilo'yi Destekleyin",
     "supportDeveloperDescription": "Geliştirmeyi fonlamak için Liberapay üzerinden bağış yapın",
     "language": "Dil",
     "theme": "Tema",
@@ -328,7 +328,7 @@
     "importSettingsDescription": "Tercihleri bir dosyadan geri yükleyin",
     "importSettingsConfirm": "Bu işlem mevcut ayarlarınızın üzerine yazacak. Devam edilsin mi?",
     "importSettingsSuccess": "Ayarlar içe aktarıldı",
-    "importSettingsInvalidFile": "Bu dosya geçerli bir Plezy ayar dosyası değil",
+    "importSettingsInvalidFile": "Bu dosya geçerli bir Plezilo ayar dosyası değil",
     "importSettingsNoUser": "Ayarları içe aktarmadan önce giriş yapın",
     "shortcutsReset": "Kısayollar varsayılana sıfırlandı",
     "resetShortcutsConfirm": "Bu işlem özel kısayollarınızı varsayılanlarla değiştirecek. Devam edilsin mi?",
@@ -465,7 +465,7 @@
     "forceTvMode": "TV modunu zorla",
     "forceTvModeDescription": "TV düzenini zorla. Otomatik algılamayan cihazlar içindir. Yeniden başlatma gerektirir.",
     "startInFullscreen": "Tam ekranda başlat",
-    "startInFullscreenDescription": "Plezy'yi açılışta tam ekran modunda aç",
+    "startInFullscreenDescription": "Plezilo'yi açılışta tam ekran modunda aç",
     "exitFullscreenOnPlayerClose": "Oynatıcı kapandığında tam ekrandan çık",
     "exitFullscreenOnPlayerCloseDescription": "Video oynatıcıyı kapatırken otomatik olarak tam ekrandan çık",
     "autoHidePerformanceOverlay": "Performans Katmanını Otomatik Gizle",
@@ -514,7 +514,7 @@
     "playerScopeGlobal": "Her yerde",
     "playerScopeLibrary": "Kitaplık başına",
     "playerScopeTitle": "Dizi veya film başına",
-    "exportDialogTitle": "Plezy ayarlarını dışa aktar"
+    "exportDialogTitle": "Plezilo ayarlarını dışa aktar"
   },
   "themeEditor": {
     "builtIn": "Yerleşik",
@@ -755,8 +755,8 @@
       "one": "${n} başka bölüm aynı dosyada saklanıyor ve o da silinecek:",
       "other": "${n} başka bölüm aynı dosyada saklanıyor ve onlar da silinecek:"
     },
-    "deleteScopeUnverifiedProbeFailed": "Plezy bunun hangi dosyaları sileceğini kontrol edemedi, bu yüzden yukarıda adı geçen ögeden daha fazlasını silebilir. İptal edip tekrar deneyin veya yine de silin.",
-    "deleteScopeUnverifiedNoFileInfo": "Sunucunuz bu öge için dosya ayrıntıları sağlamadı, bu yüzden Plezy bunun hangi dosyaları sileceğini kontrol edemiyor. Yukarıda adı geçen ögeden daha fazlasını silebilir.",
+    "deleteScopeUnverifiedProbeFailed": "Plezilo bunun hangi dosyaları sileceğini kontrol edemedi, bu yüzden yukarıda adı geçen ögeden daha fazlasını silebilir. İptal edip tekrar deneyin veya yine de silin.",
+    "deleteScopeUnverifiedNoFileInfo": "Sunucunuz bu öge için dosya ayrıntıları sağlamadı, bu yüzden Plezilo bunun hangi dosyaları sileceğini kontrol edemiyor. Yukarıda adı geçen ögeden daha fazlasını silebilir.",
     "mediaDeletedSuccessfully": "Medya ögesi başarıyla silindi",
     "mediaFailedToDelete": "Medya ögesi silinemedi",
     "rate": "Oyla",
@@ -1033,7 +1033,7 @@
     "confirmAction": "Eylemi Onayla"
   },
   "profiles": {
-    "addPlezyProfile": "Plezy profili ekle",
+    "addPlezyProfile": "Plezilo profili ekle",
     "switchingProfile": "Profil değiştiriliyor…",
     "deleteThisProfileTitle": "Bu profil silinsin mi?",
     "deleteThisProfileMessage": "${displayName} kişisi kaldırılacak. Bağlantılar etkilenmez.",
@@ -1110,14 +1110,14 @@
     "accessDeniedMany": "${count} sunucu bu hesabın erişimini reddetti",
     "signInAgain": "Tekrar giriş yap",
     "editMediaBrowserTitle": "${product} bağlantısını düzenle",
-    "editMediaBrowserIntro": "${serverName} için URL ekleyin veya kaldırın. Plezy, erişilebilir olan en düşük gecikmeli URL'yi kullanacak."
+    "editMediaBrowserIntro": "${serverName} için URL ekleyin veya kaldırın. Plezilo, erişilebilir olan en düşük gecikmeli URL'yi kullanacak."
   },
   "accountPreferences": {
     "sectionTitle": "Hesap tercihleri",
     "hubSubtitleSingle": "Ses, altyazı ve kitaplık seçenekleri ${account} hesabına kaydedildi",
     "hubSubtitleMultiple": "Ses, altyazı ve kitaplık seçenekleri ${count} hesaba kaydedildi",
     "pickAccount": "Her hesap kendi tercihlerini saklar. Düzenlemek için birini seçin.",
-    "storedOnAccount": "Bu seçenekler hesabın kendisine kaydedilir; böylece hesaba giriş yapan her uygulama bunları kullanır — diğer cihazlarınızdaki Plezy dahil.",
+    "storedOnAccount": "Bu seçenekler hesabın kendisine kaydedilir; böylece hesaba giriş yapan her uygulama bunları kullanır — diğer cihazlarınızdaki Plezilo dahil.",
     "noAccounts": "Yapılandırılacak hesap yok",
     "noAccountsHint": "Plex'e giriş yapın veya bir Jellyfin ya da Emby sunucusu bağlayın; o hesapta saklanan tercihler burada görünür.",
     "unavailable": "Bu hesaba ulaşılamıyor",
@@ -1394,9 +1394,9 @@
     "uploadLogs": "Günlükleri Yükle"
   },
   "startup": {
-    "failedTitle": "Plezy başlatılamadı",
+    "failedTitle": "Plezilo başlatılamadı",
     "failedBody": "Başlatma sırasında bir şeyler ters gitti. Aşağıdaki ayrıntılar neyin başarısız olduğunu gösteriyor.",
-    "failedBodyRepairable": "Plezy'nin kayıtlı ayar dosyası hasarlı ve Plezy başlamadan önce yeniden oluşturulması gerekiyor. Tekrar denemek işe yaramaz — Depolama Alanını Onar'ı seçin.",
+    "failedBodyRepairable": "Plezilo'nin kayıtlı ayar dosyası hasarlı ve Plezilo başlamadan önce yeniden oluşturulması gerekiyor. Tekrar denemek işe yaramaz — Depolama Alanını Onar'ı seçin.",
     "phaseLabel": "Adım",
     "showDetails": "Ayrıntıları göster",
     "hideDetails": "Ayrıntıları gizle",
@@ -1405,16 +1405,16 @@
     "uploadDetails": "Ayrıntıları yükle",
     "repairStorage": "Depolama Alanını Onar",
     "repairTitle": "Kayıtlı veriler onarılsın mı?",
-    "repairBodyCommon": "Plezy'nin ayar dosyası hasarlı ve okunamıyor. Onarım, her ayarı varsayılanına sıfırlar.",
+    "repairBodyCommon": "Plezilo'nin ayar dosyası hasarlı ve okunamıyor. Onarım, her ayarı varsayılanına sıfırlar.",
     "repairBodyOneCredential": "Kayıtlı bir giriş hasarlı ve okunamıyor. Onarım yalnızca onu kaldırır; diğer ayarlarınıza dokunulmaz.",
     "repairBodySignInsKept": "Sunucularınız ve profilleriniz giriş yapılı kalmalı.",
     "repairBodySignInsLost": "Kayıtlı girişlerinizi koruyan anahtar bu dosyadan kurtarılamıyor, bu yüzden her sunucuya ve profile yeniden giriş yapmanız gerekecek. Medya sunucunuzdaki hiçbir şey etkilenmez.",
-    "repairBodySessionsUncertain": "Takip hizmetleri (MAL, AniList, Simkl, Trakt) ve Seerr ayrı olarak saklanır; korunup korunmayacakları belirsizdir. Plezy tam olarak neyi koruduğunu size söyleyecek.",
+    "repairBodySessionsUncertain": "Takip hizmetleri (MAL, AniList, Simkl, Trakt) ve Seerr ayrı olarak saklanır; korunup korunmayacakları belirsizdir. Plezilo tam olarak neyi koruduğunu size söyleyecek.",
     "repairConfirm": "Onar",
     "repairSucceeded": "Depolama alanı onarıldı",
     "repairNeedsRestart": "Depolama alanı onarıldı — yeniden başlatma gerekli",
-    "restartRequiredBody": "Verileriniz onarıldı, ancak Plezy'nin bunları kullanabilmesi için temiz bir başlangıç yapması gerekiyor. Plezy'yi kapatıp yeniden açın.",
-    "quitPlezy": "Plezy'den Çık",
+    "restartRequiredBody": "Verileriniz onarıldı, ancak Plezilo'nin bunları kullanabilmesi için temiz bir başlangıç yapması gerekiyor. Plezilo'yi kapatıp yeniden açın.",
+    "quitPlezy": "Plezilo'den Çık",
     "repairFailed": "Onarım başarısız oldu",
     "repairKeptSignIns": "Sunucularınız ve profilleriniz hâlâ giriş yapılı.",
     "repairLostSignIns": "Kayıtlı girişlerinizi koruyan anahtar kurtarılamadı. Her sunucuya ve profile yeniden giriş yapmanız gerekecek.",
@@ -1423,7 +1423,7 @@
     "backupWarning": "Giriş bilgilerinizi içerir. Yüklemeyin veya paylaşmayın.",
     "deleteBackup": "Kopyayı Sil",
     "backupDeleted": "Kopya silindi.",
-    "previousFailureTitle": "Plezy geçen sefer başlatılamadı"
+    "previousFailureTitle": "Plezilo geçen sefer başlatılamadı"
   },
   "licenses": {
     "relatedPackages": "İlgili Paketler",
@@ -1825,7 +1825,7 @@
     "codeCopied": "Oda kodu kopyalandı",
     "shareInvite": "Daveti Paylaş",
     "inviteCopied": "Davet kopyalandı. Bir mesaja yapıştırın.",
-    "inviteMessage": "Plezy'de Birlikte İzle odama katıl: Birlikte İzle'yi aç, Odaya Katıl seçeneğini seç ve ${code} kodunu gir.",
+    "inviteMessage": "Plezilo'de Birlikte İzle odama katıl: Birlikte İzle'yi aç, Odaya Katıl seçeneğini seç ve ${code} kodunu gir.",
     "openSessionControls": "Birlikte İzle oturum kontrollerini aç",
     "reconnecting": "Yeniden bağlanılıyor...",
     "reconnectingDescription": "Bağlantı koptu. Odaya otomatik olarak yeniden katılacaksınız.",
@@ -1851,7 +1851,7 @@
     "chooseAnotherCopy": "Başka Kopya Seç",
     "dontPlay": "Oynatma",
     "unavailableTitle": "Bu video sizde yok",
-    "unavailableDescription": "Plezy bunu kitaplıklarınızda bulamadı. Kendiniz bir kopya seçin veya tekrar arayın.",
+    "unavailableDescription": "Plezilo bunu kitaplıklarınızda bulamadı. Kendiniz bir kopya seçin veya tekrar arayın.",
     "chooseCopy": "Kopya Seç",
     "searchAgain": "Tekrar Ara",
     "noCandidates": "Kitaplıklarınızda kopya bulunamadı.",
@@ -1951,7 +1951,7 @@
       "relayFull": "Birlikte İzle şu anda yoğun. Daha sonra tekrar deneyin.",
       "unreachable": "Birlikte İzle aktarıcısına ulaşılamadı. Bağlantınızı kontrol edin.",
       "rateLimited": "Çok fazla deneme yapıldı. Biraz bekleyip tekrar deneyin.",
-      "clientBlocked": "Plezy'nin bu sürümü aktarıcıyı kullanamıyor. Uygulamayı güncelleyin.",
+      "clientBlocked": "Plezilo'nin bu sürümü aktarıcıyı kullanamıyor. Uygulamayı güncelleyin.",
       "forbidden": "Bunu yalnızca kurucu yapabilir.",
       "notInRoom": "Bir odada değilsiniz.",
       "alreadyInRoom": "Zaten bir odadasınız.",
@@ -2049,14 +2049,14 @@
       "bannerAction": "Detaylar",
       "sheetTitle": "Arka plan indirmeleri engellendi",
       "sheetTitleDegraded": "Arka plan indirmeleri sınırlı olabilir",
-      "sheetIntro": "Android, Plezy'nin arka planda güvenilir şekilde indirme yapmasını engelliyor.",
-      "sheetIntroDegraded": "Cihazınız, Plezy'nin arka planda ne zaman indirme yapabileceğini sınırlıyor.",
-      "reasonBackgroundRestricted": "Plezy'nin arka plan kullanımı kısıtlanmış. Pil veya arka plan kullanımını \"Kısıtlanmamış\" olarak ayarlayın.",
-      "reasonStandbyRestricted": "Android, Plezy'yi kısıtlı bekleme durumuna aldı. Pil kullanımını \"Kısıtlanmamış\" olarak ayarlayın.",
+      "sheetIntro": "Android, Plezilo'nin arka planda güvenilir şekilde indirme yapmasını engelliyor.",
+      "sheetIntroDegraded": "Cihazınız, Plezilo'nin arka planda ne zaman indirme yapabileceğini sınırlıyor.",
+      "reasonBackgroundRestricted": "Plezilo'nin arka plan kullanımı kısıtlanmış. Pil veya arka plan kullanımını \"Kısıtlanmamış\" olarak ayarlayın.",
+      "reasonStandbyRestricted": "Android, Plezilo'yi kısıtlı bekleme durumuna aldı. Pil kullanımını \"Kısıtlanmamış\" olarak ayarlayın.",
       "reasonDownloadChannelBlocked": "İndirme bildirimleri kapalı; bu nedenle ilerleme ve kontroller kullanılamayabilir.",
       "reasonNotificationsDisabled": "Bildirimler kapalı. Android 13 ve sonraki sürümlerde uzun arka plan indirmeleri için gereklidir.",
       "reasonDataSaver": "Veri Tasarrufu açık; bu, mobil veride arka plan indirmelerini engeller. Wi-Fi üzerinde indirmeler yine de çalışır.",
-      "reasonOemUnknown": "Plezy arka plandayken indirmeler tekrar tekrar durdu. Plezy'nin pil veya arka plan kullanım ayarlarını kontrol edin.",
+      "reasonOemUnknown": "Plezilo arka plandayken indirmeler tekrar tekrar durdu. Plezilo'nin pil veya arka plan kullanım ayarlarını kontrol edin.",
       "openSettings": "Ayarları aç",
       "stillNotWorking": "Cihaza özel yardım",
       "stillNotWorkingDescription": "Cihazınıza yönelik adımlara bakın veya sorun sürerse Ayarlar › Günlükleri Görüntüle bölümünden bir günlük gönderin.",
@@ -2130,19 +2130,19 @@
       "manualAddressHint": "Manuel bağlantı adresi:"
     },
     "pairing": {
-      "discoveryDescription": "Aynı Plex hesabına sahip Plezy cihazları burada görünür",
+      "discoveryDescription": "Aynı Plex hesabına sahip Plezilo cihazları burada görünür",
       "hostAddressHint": "192.168.1.100:48632",
       "connecting": "Bağlanılıyor...",
       "searchingForDevices": "Cihazlar aranıyor...",
       "noDevicesFound": "Ağınızda cihaz bulunamadı",
-      "noDevicesHint": "Masaüstünde Plezy'yi açın ve aynı Wi-Fi ağını kullanın",
+      "noDevicesHint": "Masaüstünde Plezilo'yi açın ve aynı Wi-Fi ağını kullanın",
       "availableDevices": "Kullanılabilir Cihazlar",
       "manualConnection": "Manuel Bağlantı",
       "cryptoInitFailed": "Güvenli bağlantı başlatılamadı. Önce Plex'e giriş yapın.",
       "validationHostRequired": "Lütfen ana bilgisayar adresini girin",
       "validationHostFormat": "Biçim IP:port şeklinde olmalıdır (ör. 192.168.1.100:48632)",
       "connectionTimedOut": "Bağlantı zaman aşımına uğradı. Her iki cihazda da aynı ağı kullanın.",
-      "sessionNotFound": "Cihaz bulunamadı. Plezy'nin ana bilgisayarda çalıştığından emin olun.",
+      "sessionNotFound": "Cihaz bulunamadı. Plezilo'nin ana bilgisayarda çalıştığından emin olun.",
       "authFailed": "Kimlik doğrulama başarısız oldu. Her iki cihazın da aynı Plex hesabına ihtiyacı var.",
       "failedToConnect": "Bağlantı başarısız: ${error}"
     },
@@ -2388,11 +2388,11 @@
     "connected": "Bağlandı",
     "connectedAs": "@${username} olarak bağlandı",
     "disconnectConfirm": "Trakt hesabının bağlantısı kesilsin mi?",
-    "disconnectConfirmBody": "Plezy, Trakt'a olay göndermeyi durduracak. İstediğiniz zaman yeniden bağlanabilirsiniz.",
+    "disconnectConfirmBody": "Plezilo, Trakt'a olay göndermeyi durduracak. İstediğiniz zaman yeniden bağlanabilirsiniz.",
     "scrobble": "Gerçek zamanlı scrobble",
     "scrobbleDescription": "Oynatma sırasında Trakt'a oynatma, duraklatma ve durdurma olayları gönderin.",
     "watchedSync": "İzleme durumunu eşitle",
-    "watchedSyncDescription": "Plezy'de ögeleri izlendi olarak işaretlediğinizde, Trakt üzerinde de izlendi olarak işaretlenir."
+    "watchedSyncDescription": "Plezilo'de ögeleri izlendi olarak işaretlediğinizde, Trakt üzerinde de izlendi olarak işaretlenir."
   },
   "seerr": {
     "title": "Seerr",
@@ -2404,10 +2404,10 @@
     "signInWithEmby": "Emby ile Giriş Yap",
     "signInWithLocal": "Yerel hesap kullan",
     "email": "E-posta",
-    "noSignInMethods": "Bu Seerr örneği Plezy'nin desteklediği bir giriş yöntemi sunmuyor.",
+    "noSignInMethods": "Bu Seerr örneği Plezilo'nin desteklediği bir giriş yöntemi sunmuyor.",
     "instance": "Örnek (Instance)",
     "disconnectConfirm": "Seerr bağlantısı kesilsin mi?",
-    "disconnectConfirmBody": "Plezy bu Seerr örneğini unutacak. İstediğiniz zaman yeniden bağlanabilirsiniz.",
+    "disconnectConfirmBody": "Plezilo bu Seerr örneğini unutacak. İstediğiniz zaman yeniden bağlanabilirsiniz.",
     "request": "İstek Gönder",
     "request4k": "4K İstek Gönder",
     "seasons": "Sezonlar",
@@ -2432,7 +2432,7 @@
     "statusBlocklisted": "Engelleme listesinde",
     "couldNotReach": "${url} adresine ulaşılamadı: ${error}",
     "noInstanceAtUrl": "${url} adresinde Seerr örneği bulunamadı (HTTP ${status})",
-    "behindAuthProxy": "Seerr yerine kimlik doğrulayan bir ters proxy (SSO veya HTTP kimlik doğrulaması) yanıt verdi. Plezy bunun üzerinden giriş yapamaz: bu uygulama için Seerr'in /api/v1 yolunun proxy'yi atlamasına izin verin veya Seerr'e doğrudan ulaşan bir adres kullanın.",
+    "behindAuthProxy": "Seerr yerine kimlik doğrulayan bir ters proxy (SSO veya HTTP kimlik doğrulaması) yanıt verdi. Plezilo bunun üzerinden giriş yapamaz: bu uygulama için Seerr'in /api/v1 yolunun proxy'yi atlamasına izin verin veya Seerr'e doğrudan ulaşan bir adres kullanın.",
     "invalidUrl": "https://seerr.example.com gibi bir sunucu adresi girin",
     "quickConnectUnsupported": "Bu Seerr örneği Quick Connect'i desteklemiyor. Seerr 3.4 veya daha yenisini gerektiriyor.",
     "notInitialized": "Bu Seerr örneği ilk çalıştırma kurulumunu tamamlamadı",
@@ -2455,7 +2455,7 @@
     "scrobble": "İlerlemeyi otomatik takip et",
     "scrobbleDescription": "Bir bölümü veya filmi bitirdiğinizde listenizi güncelleyin.",
     "disconnectConfirm": "${service} bağlantısı kesilsin mi?",
-    "disconnectConfirmBody": "Plezy, ${service} güncellemeyi durduracak. İstediğiniz zaman yeniden bağlanabilirsiniz.",
+    "disconnectConfirmBody": "Plezilo, ${service} güncellemeyi durduracak. İstediğiniz zaman yeniden bağlanabilirsiniz.",
     "connectFailed": "${service} ile bağlantı kurulamadı. Tekrar deneyin.",
     "names": {
       "mal": "MyAnimeList",
@@ -2466,10 +2466,10 @@
     },
     "simklReconnect": {
       "title": "Simkl'i Yeniden Bağla",
-      "subtitle": "Simkl, bu bağlantının kullandığı giriş yöntemini kullanımdan kaldırıyor. Yeniden bağlandığınızda Plezy'yi onaylamanız için simkl.com açılır — Plezy şifrenizi asla görmez. İzleme geçmişiniz Simkl'de kalır."
+      "subtitle": "Simkl, bu bağlantının kullandığı giriş yöntemini kullanımdan kaldırıyor. Yeniden bağlandığınızda Plezilo'yi onaylamanız için simkl.com açılır — Plezilo şifrenizi asla görmez. İzleme geçmişiniz Simkl'de kalır."
     },
     "deviceCode": {
-      "title": "Plezy'yi ${service} üzerinde etkinleştirin",
+      "title": "Plezilo'yi ${service} üzerinde etkinleştirin",
       "instructions": "QR kodunu tarayın veya aşağıdaki adresi ziyaret edip bu kodu girin:",
       "openToActivate": "Etkinleştirmek için ${service} servisini açın",
       "copyCode": "Etkinleştirme kodunu kopyala",

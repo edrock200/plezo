@@ -17,7 +17,7 @@ DEFAULT_SCRIPT = ROOT / "windows/build-installer.ps1"
 if len(sys.argv) > 2:
     raise SystemExit(f"Usage: {Path(sys.argv[0]).name} [build-installer-path]")
 SCRIPT = Path(sys.argv[1]).resolve() if len(sys.argv) == 2 else DEFAULT_SCRIPT
-APP_GUID = "4213385e-f7be-4f2b-95f9-54082a28bb8f"
+APP_GUID = "4249b662-d506-4b85-8ac1-da4eef6d595c"
 text = SCRIPT.read_text(encoding="utf-8")
 errors: list[str] = []
 
@@ -62,7 +62,7 @@ require(
     "the uninstall subkey must be the shared AppId with Inno's _is1 suffix",
 )
 require(
-    "OutputBaseFilename=plezy-windows-installer" in iss,
+    "OutputBaseFilename=plezilo-windows-installer" in iss,
     "the release asset name is referenced by the appcast, winget and the website",
 )
 require(

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../i18n/strings.g.dart';
 import '../../models/catalog/catalog_item.dart';
 import '../../providers/trackers_provider.dart';
+import '../../services/plezy_server.dart';
 import '../../services/trackers/anilist/anilist_tracker.dart';
 import '../../services/trackers/mal/mal_tracker.dart';
 import '../../services/trackers/mdblist/mdblist_tracker.dart';
@@ -59,8 +60,11 @@ class TrackerServiceInfo {
        buildSettingsScreen = (() => TrackerSettingsScreen(config: config));
 
   /// Display order shared by every list. Built per call because [displayName]
-  /// reads the active locale.
-  static List<TrackerServiceInfo> get all => [
+  /// reads the active locale. Empty while [plezyProjectServicesEnabled] is off:
+  /// every tracker signs in through the Plezy project's app registrations.
+  static List<TrackerServiceInfo> get all => plezyProjectServicesEnabled ? _all : const [];
+
+  static List<TrackerServiceInfo> get _all => [
     TrackerServiceInfo(
       service: TrackerService.trakt,
       displayName: t.trakt.title,

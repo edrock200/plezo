@@ -15,9 +15,10 @@ run-name: Silo preview APK ${{ github.sha }}
 # unused; add the secrets for a stable key). With a PREVIEW_KEYSTORE_PASSPHRASE
 # secret the cached keystore and its password are encrypted with it
 # (openssl aes-256-cbc, pbkdf2); a plaintext key cached before the secret
-# existed is still used and moved to the encrypted cache entry. These APKs use
-# Plezy's package id, so they replace (and cannot update) a Plezy installed
-# from a store.
+# existed is still used and moved to the encrypted cache entry. The app is
+# Plezilo (package com.edrock200.plezilo), so it installs beside Plezy and
+# beside the older "Plezy with Silo" previews (com.edde746.plezy) instead of
+# replacing them.
 #
 # Versions: <pubspec major.minor>.N, where N is one above the highest existing
 # silo-preview-<major.minor>.* tag; the build number is above every earlier
@@ -150,7 +151,7 @@ jobs:
               keytool -genkeypair -noprompt -keystore "$work/preview.jks" -storetype JKS \
                 -alias preview -keyalg RSA -keysize 4096 -validity 36500 \
                 -storepass "$(cat "$work/password")" -keypass "$(cat "$work/password")" \
-                -dname "CN=Plezy Silo preview"
+                -dname "CN=Plezilo preview"
             fi
             # Leave in the cache directory exactly what the cache post step should save.
             if [[ -n "$PASSPHRASE" ]]; then
@@ -212,7 +213,7 @@ jobs:
           version="${{ steps.ver.outputs.version }}"
           mkdir -p dist
           for abi in arm64-v8a armeabi-v7a x86_64; do
-            cp "build/app/outputs/flutter-apk/app-${abi}-release.apk" "dist/plezy-silo-${version}-${short_sha}-${abi}.apk"
+            cp "build/app/outputs/flutter-apk/app-${abi}-release.apk" "dist/plezilo-${version}-${short_sha}-${abi}.apk"
           done
           (cd dist && sha256sum *.apk > SHA256SUMS.txt)
           # GitHub orders releases by the version in the tag: newest first.
@@ -245,7 +246,7 @@ jobs:
           files: dist/*
           draft: false
           prerelease: true
-          name: Plezy ${{ steps.apks.outputs.version }} with Silo
+          name: Plezilo ${{ steps.apks.outputs.version }} (Silo preview)
           tag_name: ${{ steps.apks.outputs.tag }}
           target_commitish: ${{ github.sha }}
           body_path: release-notes.md
@@ -253,7 +254,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # Fixed-name copies for links that must not change (Fire TV Downloader codes):
-      # releases/download/silo-android-latest/plezy-silo-<abi>.apk always serves this preview.
+      # releases/download/plezilo-android-latest/plezilo-<abi>.apk always serves this preview.
       - name: Refresh the latest Android links
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

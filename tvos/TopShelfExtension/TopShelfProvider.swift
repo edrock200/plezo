@@ -4,7 +4,7 @@ import TVServices
 
 private enum TopShelfShared {
   static let schemaVersion = 3
-  static let appGroupIdentifier = "group.com.edde746.plezy"
+  static let appGroupIdentifier = "group.com.edrock200.plezilo"
   static let cacheDataKey = "PlezySystemShelfCacheData"
   static let artworkDirectoryName = "SystemShelfArtwork"
   /// English fallback for sources persisted before the localized title existed.
@@ -257,7 +257,7 @@ final class TopShelfProvider: TVTopShelfContentProvider {
 
   private func deepLinkURL(contentId: String) -> URL? {
     var components = URLComponents()
-    components.scheme = "plezy"
+    components.scheme = "plezilo"
     components.host = "play"
     components.queryItems = [URLQueryItem(name: "content_id", value: contentId)]
     return components.url

@@ -97,7 +97,7 @@ ln -s plezy.sh "$APPDIR/AppRun"
 cp "$SCRIPT_DIR/com.edde746.plezy.desktop" "$APPDIR/"
 ICON_DIR="$APPDIR/usr/share/icons/hicolor/256x256/apps"
 mkdir -p "$ICON_DIR"
-"$IMAGEMAGICK" "$PROJECT_ROOT/assets/plezy.png" -resize 256x256 "$ICON_DIR/plezy.png"
+"$IMAGEMAGICK" "$PROJECT_ROOT/assets/plezilo.png" -resize 256x256 "$ICON_DIR/plezy.png"
 ln -s usr/share/icons/hicolor/256x256/apps/plezy.png "$APPDIR/plezy.png"
 ln -s plezy.png "$APPDIR/.DirIcon"
 

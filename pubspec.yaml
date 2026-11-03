@@ -159,8 +159,8 @@ flutter:
   uses-material-design: true
   assets:
     - assets/licenses/SpatialAudioBridge.txt
-    - assets/plezy.png
-    - assets/plezy_adaptive_foreground.svg
+    - assets/plezilo.png
+    - assets/plezilo_mark.svg
     - assets/plex_chevron.svg
     - assets/jellyfin_icon.svg
     - assets/emby_icon.svg
@@ -181,8 +181,7 @@ flutter:
     - assets/shaders/anime4k/
     - assets/player_icons/
     - assets/rating_icons/
-    # App icon picker thumbnails; scripts/codegen/generate_app_icons.py renders them from
-    # assets/app_icons/source, which stays out of the bundle.
+    # The default icon as the TV launchers draw it; scripts/make_plezilo_icon.py renders them.
     - assets/app_icons/previews/
   # Registered as UI font families so the Linux build, whose fontconfig may
   # lack CJK fonts, can fall back to the bundled subtitle fonts (mono_theme).

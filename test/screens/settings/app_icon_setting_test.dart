@@ -25,6 +25,10 @@ import 'package:provider/provider.dart';
 import '../../test_helpers/app_icon_fakes.dart';
 import '../../test_helpers/prefs.dart';
 
+/// Plezilo ships only the default icon (Plezy's alternates are its trademark), so the
+/// picker tests that need an alternate are skipped until it has its own.
+final _noAlternates = appIconCatalog.length < 2;
+
 void main() {
   late FakeAppIconPlatform platform;
 
@@ -159,7 +163,20 @@ void main() {
       expect(find.text(t.appIcon.title), findsNothing);
     });
 
-    testWidgets('the row sits right below Theme, names the current icon and opens the picker', (tester) async {
+    testWidgets('Plezilo ships no alternates, so a Supporter build on a capable device shows no App icon row', (
+      tester,
+    ) async {
+      final supporter = SupporterService.forTesting(availability: SupporterAvailability.free);
+      addTearDown(supporter.dispose);
+      await pumpAppearance(tester, supporter, await appIconsFor(supporter));
+
+      expect(appIconCatalog.map((option) => option.id), [defaultAppIconId]);
+      expect(find.text(t.appIcon.title), findsNothing);
+    });
+
+    testWidgets('the row sits right below Theme, names the current icon and opens the picker', skip: _noAlternates, (
+      tester,
+    ) async {
       final supporter = SupporterService.forTesting(availability: SupporterAvailability.free);
       addTearDown(supporter.dispose);
       platform.current = 'vhs';
@@ -179,57 +196,60 @@ void main() {
       expect(find.byType(AppIconPickerSheet), findsOneWidget);
     });
 
-    testWidgets('on TV the picker is a hosted sheet that starts D-pad focus in the grid and closes on Back', (
-      tester,
-    ) async {
-      TvDetectionService.debugSetAppleTVOverride(true);
-      PlatformDetector.debugSetIsDesktopOSOverride(false);
-      addTearDown(() {
-        TvDetectionService.debugSetAppleTVOverride(null);
-        PlatformDetector.debugSetIsDesktopOSOverride(null);
-        BackKeyCoordinator.clear();
-      });
-      final supporter = SupporterService.forTesting(availability: SupporterAvailability.free);
-      addTearDown(supporter.dispose);
-      await pumpAppearance(tester, supporter, await appIconsFor(supporter));
+    testWidgets(
+      'on TV the picker is a hosted sheet that starts D-pad focus in the grid and closes on Back',
+      skip: _noAlternates,
+      (tester) async {
+        TvDetectionService.debugSetAppleTVOverride(true);
+        PlatformDetector.debugSetIsDesktopOSOverride(false);
+        addTearDown(() {
+          TvDetectionService.debugSetAppleTVOverride(null);
+          PlatformDetector.debugSetIsDesktopOSOverride(null);
+          BackKeyCoordinator.clear();
+        });
+        final supporter = SupporterService.forTesting(availability: SupporterAvailability.free);
+        addTearDown(supporter.dispose);
+        await pumpAppearance(tester, supporter, await appIconsFor(supporter));
 
-      // A remote arrow puts the app in D-pad mode; Select on the row opens the picker.
-      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
-      Focus.of(tester.element(find.text(t.appIcon.title))).requestFocus();
-      await tester.pump();
-      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
-      await tester.pumpAndSettle();
+        // A remote arrow puts the app in D-pad mode; Select on the row opens the picker.
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+        Focus.of(tester.element(find.text(t.appIcon.title))).requestFocus();
+        await tester.pump();
+        await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+        await tester.pumpAndSettle();
 
-      final picker = find.byType(AppIconPickerSheet);
-      expect(picker, findsOneWidget);
-      expect(find.ancestor(of: picker, matching: find.byType(OverlaySheetHost)), findsOneWidget);
-      expect(find.byType(BottomSheet), findsNothing, reason: 'not the modal fallback');
-      expect(
-        find.byWidgetPredicate(
-          (widget) => widget is Container && widget.constraints == const BoxConstraints.tightFor(width: 32, height: 4),
-        ),
-        findsNothing,
-        reason: 'no drag handle on TV',
-      );
-      expect(focusedId(), defaultAppIconId);
+        final picker = find.byType(AppIconPickerSheet);
+        expect(picker, findsOneWidget);
+        expect(find.ancestor(of: picker, matching: find.byType(OverlaySheetHost)), findsOneWidget);
+        expect(find.byType(BottomSheet), findsNothing, reason: 'not the modal fallback');
+        expect(
+          find.byWidgetPredicate(
+            (widget) =>
+                widget is Container && widget.constraints == const BoxConstraints.tightFor(width: 32, height: 4),
+          ),
+          findsNothing,
+          reason: 'no drag handle on TV',
+        );
+        expect(focusedId(), defaultAppIconId);
 
-      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
-      await tester.pumpAndSettle();
-      expect(focusedId(), appIconCatalog[1].id, reason: 'the first RIGHT already moves along the grid');
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+        await tester.pumpAndSettle();
+        expect(focusedId(), appIconCatalog[1].id, reason: 'the first RIGHT already moves along the grid');
 
-      await tester.sendKeyDownEvent(LogicalKeyboardKey.gameButtonB);
-      // Android TV can also dispatch a route Back for the same press.
-      await tester.binding.handlePopRoute();
-      await tester.sendKeyUpEvent(LogicalKeyboardKey.gameButtonB);
-      await tester.pumpAndSettle();
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.gameButtonB);
+        // Android TV can also dispatch a route Back for the same press.
+        await tester.binding.handlePopRoute();
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.gameButtonB);
+        await tester.pumpAndSettle();
 
-      expect(picker, findsNothing);
-      expect(find.byType(AppearanceSettingsScreen), findsOneWidget);
-    });
+        expect(picker, findsNothing);
+        expect(find.byType(AppearanceSettingsScreen), findsOneWidget);
+      },
+    );
   });
 
   group('picker', () {
-    testWidgets('the default comes first and the current icon is marked', (tester) async {
+    testWidgets('the default comes first and the current icon is marked', skip: _noAlternates, (tester) async {
       final supporter = SupporterService.forTesting(availability: SupporterAvailability.free);
       addTearDown(supporter.dispose);
       platform.current = 'gold';
@@ -246,7 +266,7 @@ void main() {
       expect(find.text(t.appIcon.lockedHint), findsNothing);
     });
 
-    testWidgets('a free build switches straight to the chosen icon', (tester) async {
+    testWidgets('a free build switches straight to the chosen icon', skip: _noAlternates, (tester) async {
       final supporter = SupporterService.forTesting(availability: SupporterAvailability.free);
       addTearDown(supporter.dispose);
       var sheetOpened = false;
@@ -266,7 +286,9 @@ void main() {
       expect(tileSemantics(tester, defaultAppIconId), marked(t.appIcon.defaultIcon, null));
     });
 
-    testWidgets('locked alternates carry a lock and a declined Supporter sheet changes nothing', (tester) async {
+    testWidgets('locked alternates carry a lock and a declined Supporter sheet changes nothing', skip: _noAlternates, (
+      tester,
+    ) async {
       final supporter = ToggleSupporter(unlocked: false);
       addTearDown(supporter.dispose);
       var sheetOpened = 0;
@@ -289,7 +311,9 @@ void main() {
       expect(tileSemantics(tester, defaultAppIconId), marked(t.appIcon.defaultIcon, t.appIcon.current));
     });
 
-    testWidgets('a purchase in the Supporter sheet applies the locked icon that opened it', (tester) async {
+    testWidgets('a purchase in the Supporter sheet applies the locked icon that opened it', skip: _noAlternates, (
+      tester,
+    ) async {
       final supporter = ToggleSupporter(unlocked: false);
       addTearDown(supporter.dispose);
       await pumpPicker(
@@ -327,7 +351,7 @@ void main() {
       expect(platform.current, defaultAppIconId);
     });
 
-    testWidgets('a refused switch reports it and keeps the current icon', (tester) async {
+    testWidgets('a refused switch reports it and keeps the current icon', skip: _noAlternates, (tester) async {
       final supporter = SupporterService.forTesting(availability: SupporterAvailability.free);
       addTearDown(supporter.dispose);
       final appIcons = await appIconsFor(supporter);
@@ -351,9 +375,6 @@ void main() {
 
       Finder defaultLogo() => find.descendant(of: tile(defaultAppIconId), matching: find.byType(SvgPicture));
 
-      Color plate(WidgetTester tester) =>
-          tester.widget<ColoredBox>(find.ancestor(of: defaultLogo(), matching: find.byType(ColoredBox)).first).color;
-
       testWidgets('on TV: the dark TV artwork', (tester) async {
         TvDetectionService.debugSetAppleTVOverride(true);
         addTearDown(() => TvDetectionService.debugSetAppleTVOverride(null));
@@ -364,35 +385,26 @@ void main() {
         expect(defaultLogo(), findsNothing);
       });
 
-      testWidgets('on Android phones: white, or #1A1A1A in night mode', (tester) async {
-        debugDefaultTargetPlatformOverride = TargetPlatform.android;
-        try {
-          await pumpDefault(tester);
-          expect(plate(tester), const Color(0xFFFFFFFF));
-
-          tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
-          addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
-          await tester.pump();
-          expect(plate(tester), const Color(0xFF1A1A1A));
-        } finally {
-          debugDefaultTargetPlatformOverride = null;
-        }
-      });
-
-      testWidgets('on iOS: the light plate, also in dark mode', (tester) async {
-        debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-        try {
-          tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
-          addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
-          await pumpDefault(tester);
-          expect(plate(tester), const Color(0xFFF1F1F1));
-        } finally {
-          debugDefaultTargetPlatformOverride = null;
+      testWidgets('on phones: the Plezilo app icon, in light and dark mode', (tester) async {
+        for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
+          debugDefaultTargetPlatformOverride = platform;
+          try {
+            await pumpDefault(tester);
+            final image = tester.widget<Image>(
+              find.descendant(of: tile(defaultAppIconId), matching: find.byType(Image)),
+            );
+            expect((image.image as AssetImage).assetName, 'assets/plezilo.png');
+            expect(defaultLogo(), findsNothing);
+          } finally {
+            debugDefaultTargetPlatformOverride = null;
+          }
         }
       });
     });
 
-    testWidgets('D-pad moves through the grid by row and column and Select applies the icon', (tester) async {
+    testWidgets('D-pad moves through the grid by row and column and Select applies the icon', skip: _noAlternates, (
+      tester,
+    ) async {
       final supporter = SupporterService.forTesting(availability: SupporterAvailability.free);
       addTearDown(supporter.dispose);
       await pumpPicker(tester, supporter: supporter, appIcons: await appIconsFor(supporter));

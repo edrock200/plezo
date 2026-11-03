@@ -84,7 +84,7 @@ class _CallbackSession {
 }
 
 /// How playback in an x-callback-url player ended: the `<result>` of its
-/// return link, `plezy://external-player/<result>/<session>`.
+/// return link, `plezilo://external-player/<result>/<session>`.
 abstract final class _ReturnResult {
   static const success = 'success';
   static const cancel = 'cancel';
@@ -344,7 +344,7 @@ class ExternalPlayerService {
     ).id;
   }
 
-  /// Handles `plezy://external-player/<result>/<session>?position=&duration=`,
+  /// Handles `plezilo://external-player/<result>/<session>?position=&duration=`,
   /// the return link an x-callback-url player opens when playback ends, and
   /// syncs the position it reports. `DeepLinkService` hands every
   /// [ExternalPlayerReturnLink] here. Returns whether the link belonged to

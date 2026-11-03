@@ -103,8 +103,8 @@ class BuildWorkflowGuardTest(unittest.TestCase):
 
     def test_downloaded_signer_execution_is_rejected(self) -> None:
         workflow = self._workflow().replace(
-            "dart run auto_updater:sign_update plezy-windows-installer.exe $keyPath",
-            "dart run sign.dart plezy-windows-installer.exe $keyPath",
+            "dart run auto_updater:sign_update plezilo-windows-installer.exe $keyPath",
+            "dart run sign.dart plezilo-windows-installer.exe $keyPath",
             1,
         )
 

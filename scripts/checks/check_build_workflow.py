@@ -56,7 +56,7 @@ def validate_windows_signing(block: str) -> None:
         "Windows signing must use the enforced root dependency lock",
     )
     require(
-        "dart run auto_updater:sign_update plezy-windows-installer.exe $keyPath"
+        "dart run auto_updater:sign_update plezilo-windows-installer.exe $keyPath"
         in signing,
         "Windows signing must execute the locked auto_updater package",
     )

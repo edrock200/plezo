@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Posts a Plezy-with-Silo preview release to a Discord channel webhook.
+"""Posts a Plezilo (Silo preview) release to a Discord channel webhook.
 
   DISCORD_WEBHOOK_URL=<url> python3 scripts/silo_announce_discord.py <tag> [<repo>]
 
@@ -24,19 +24,26 @@ def release(repo: str, tag: str) -> dict:
         return json.load(resp)
 
 
-# Fire TV "Downloader" app codes (aftv.news short links). They point at the rolling
-# silo-android-latest release, whose fixed-name APKs every preview replaces, so they never change.
-DOWNLOADER_CODES = [
-    ("Fire TV and Android TV sticks; 32-bit, also runs on 64-bit", "7329550", "armeabi-v7a"),
-    ("Android phones, tablets and newer Android TV / Fire TV; 64-bit", "4196538", "arm64-v8a"),
+# Fire TV "Downloader" app codes (aftv.news short links) for the rolling plezilo-android-latest
+# release, whose fixed-name APKs every preview replaces. Empty until the user makes codes for the
+# new Plezilo links (the old codes 7329550 / 4196538 point at the retired silo-android-latest
+# release and must not be announced for Plezilo). Entries: (label, code, abi).
+DOWNLOADER_CODES: list[tuple[str, str, str]] = []
+LATEST_ABIS = [
+    ("Fire TV and Android TV sticks; 32-bit, also runs on 64-bit", "armeabi-v7a"),
+    ("Android phones, tablets and newer Android TV / Fire TV; 64-bit", "arm64-v8a"),
 ]
-LATEST = "https://github.com/{repo}/releases/download/silo-android-latest/plezy-silo-{abi}.apk"
+LATEST = "https://github.com/{repo}/releases/download/plezilo-android-latest/plezilo-{abi}.apk"
 
 
 def downloader(repo: str) -> str:
-    rows = [f"`{code}` · [aftv.news/{code}](http://aftv.news/{code}) · [{abi} APK]({LATEST.format(repo=repo, abi=abi)}) ({label})"
-            for label, code, abi in DOWNLOADER_CODES]
-    return "**Android & Fire TV — Downloader app codes** (always the newest preview):\n" + "\n".join(rows)
+    if DOWNLOADER_CODES:
+        rows = [f"`{code}` · [aftv.news/{code}](http://aftv.news/{code}) · [{abi} APK]({LATEST.format(repo=repo, abi=abi)}) ({label})"
+                for label, code, abi in DOWNLOADER_CODES]
+        return "**Android & Fire TV — Downloader app codes** (always the newest preview):\n" + "\n".join(rows)
+    rows = [f"[{abi} APK]({LATEST.format(repo=repo, abi=abi)}) ({label})" for label, abi in LATEST_ABIS]
+    return ("**Android & Fire TV — direct links** (always the newest preview; Downloader codes for them "
+            "are coming soon, until then type the link into Downloader):\n" + "\n".join(rows))
 
 
 def downloads(assets: list) -> str:
@@ -71,9 +78,9 @@ def main() -> int:
     if len(notes) > room:
         notes = notes[: room - 40].rsplit("\n", 1)[0] + "\n… (full notes on the release page)"
     payload = {
-        "username": "Plezy with Silo",
-        "embeds": [{"title": f"Plezy {version} with Silo is out", "url": page,
-                    "description": notes + links, "color": 0xE5A00D}],
+        "username": "Plezilo",
+        "embeds": [{"title": f"Plezilo {version} is out", "url": page,
+                    "description": notes + links, "color": 0x4F46E5}],
         "allowed_mentions": {"parse": []},
     }
     req = urllib.request.Request(url + "?wait=true", data=json.dumps(payload).encode(),

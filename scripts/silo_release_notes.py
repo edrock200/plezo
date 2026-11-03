@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build GitHub release notes for Silo preview APKs from docs/silo-preview-changelog.md.
+"""Build GitHub release notes for Plezilo (Silo preview) releases from docs/silo-preview-changelog.md.
 
   silo_release_notes.py <changelog> <section> <out-file> [<branch> <sha>]
 
@@ -11,20 +11,20 @@ given (a new build): then the page gets a placeholder and the install notes, and
 import sys
 
 INSTALL = (
-    "These previews use Plezy's package id but not the store signing key: uninstall a store-installed "
-    "Plezy before installing one. A later preview installs over an earlier one as an update only when "
-    "both are signed with the same key; if Android refuses the update, uninstall the previous preview first."
+    "Plezilo installs as its own app, beside Plezy and beside the older \"Plezy with Silo\" previews. "
+    "A later preview installs over an earlier one as an update only when both are signed with the same key; "
+    "if Android refuses the update, uninstall the previous preview first."
 )
 
 WINDOWS_INSTALL = (
-    "On Windows the installer replaces an installed Plezy (it uses Plezy's app id). The files are not code-signed, so SmartScreen may warn on first run: choose More info, then Run anyway. "
-    "These builds do not check for updates, so they never replace themselves with Plezy without Silo."
+    "On Windows Plezilo installs as its own app. The files are not code-signed, so SmartScreen may warn on first run: choose More info, then Run anyway. "
+    "These builds do not check for updates."
 )
 
 MACOS_INSTALL = (
-    "On macOS the app replaces an installed Plezy. It is not signed by Apple, so the first launch is blocked: "
+    "On macOS Plezilo is its own app. It is not signed by Apple, so the first launch is blocked: "
     "open it once, then go to System Settings › Privacy & Security and choose Open Anyway (or run "
-    "`xattr -dr com.apple.quarantine /Applications/Plezy.app` in Terminal). It does not update itself either."
+    "`xattr -dr com.apple.quarantine /Applications/Plezilo.app` in Terminal). It does not update itself either."
 )
 
 # One line per paragraph or bullet: release pages render single line breaks as hard breaks.
@@ -37,10 +37,10 @@ FOOTER = f"""
 
 **Windows** (when attached)
 - `windows-installer.exe`: installs on Windows 10/11, picking x64 or ARM automatically.
-- `windows-x64-portable.7z` / `windows-arm64-portable.7z`: no install; unzip and run `plezy.exe`.
+- `windows-x64-portable.7z` / `windows-arm64-portable.7z`: no install; unzip and run `plezilo.exe` (`plezy.exe` in builds from before the rename).
 
 **macOS** (when attached)
-- `macos.dmg`: macOS app for Apple silicon and Intel Macs; open it and drag Plezy to Applications.
+- `macos.dmg`: macOS app for Apple silicon and Intel Macs; open it and drag Plezilo to Applications.
 
 ### Installing
 {INSTALL}

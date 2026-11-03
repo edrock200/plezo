@@ -484,7 +484,7 @@ jobs:
           $foundFiles | ForEach-Object { Write-Host "  $_" }
 
           $requiredFiles = @(
-            "plezy.exe"
+            "plezilo.exe"
             "flutter_windows.dll"
             "sqlite3.dll"
             "libmpv-2.dll"
@@ -498,8 +498,8 @@ jobs:
             "vcruntime140.dll"
           )
           $forbiddenFiles = @(
-            "plezy.lib"
-            "plezy.exp"
+            "plezilo.lib"
+            "plezilo.exp"
             "simdutf.lib"
           )
 
@@ -608,7 +608,7 @@ jobs:
           $keyPath = Join-Path $env:RUNNER_TEMP "plezy-winsparkle-ed25519.pem"
           try {
             Set-Content -Path $keyPath -Value $env:SPARKLE_PRIVATE_KEY -Encoding ascii -NoNewline
-            $output = & dart run auto_updater:sign_update plezy-windows-installer.exe $keyPath
+            $output = & dart run auto_updater:sign_update plezilo-windows-installer.exe $keyPath
             if ($LASTEXITCODE -ne 0) {
               throw "WinSparkle signer failed with exit code $LASTEXITCODE"
             }
@@ -617,7 +617,7 @@ jobs:
               throw "WinSparkle signer returned no EdDSA signature"
             }
             Set-Content -Path win-ed-signature.txt -Value $match.Groups[1].Value -Encoding ascii -NoNewline
-            Set-Content -Path win-installer-size.txt -Value (Get-Item plezy-windows-installer.exe).Length.ToString() -Encoding ascii -NoNewline
+            Set-Content -Path win-installer-size.txt -Value (Get-Item plezilo-windows-installer.exe).Length.ToString() -Encoding ascii -NoNewline
           } finally {
             Remove-Item -Path $keyPath -Force -ErrorAction SilentlyContinue
           }
@@ -626,29 +626,29 @@ jobs:
         uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4
         with:
           subject-path: |
-            plezy-windows-x64-portable.7z
-            plezy-windows-arm64-portable.7z
-            plezy-windows-installer.exe
-            plezy-windows.msixbundle
+            plezilo-windows-x64-portable.7z
+            plezilo-windows-arm64-portable.7z
+            plezilo-windows-installer.exe
+            plezilo-windows.msixbundle
 
       - name: Upload x64 portable
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: windows-x64-portable
-          path: plezy-windows-x64-portable.7z
+          path: plezilo-windows-x64-portable.7z
 
       - name: Upload arm64 portable
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: windows-arm64-portable
-          path: plezy-windows-arm64-portable.7z
+          path: plezilo-windows-arm64-portable.7z
 
       - name: Upload installer
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: windows-installer
           path: |
-            plezy-windows-installer.exe
+            plezilo-windows-installer.exe
             win-ed-signature.txt
             win-installer-size.txt
 
@@ -659,7 +659,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: windows-msix
-          path: plezy-windows.msixbundle
+          path: plezilo-windows.msixbundle
 
   build-linux:
     needs: validate-trusted-ref
@@ -1064,7 +1064,7 @@ jobs:
           # Windows enclosure
           if [ -n "$WIN_ED_SIG" ]; then
             cat >> appcast.xml << XMLEOF
-                <enclosure url="https://github.com/edde746/plezy/releases/download/${VERSION}/plezy-windows-installer.exe"
+                <enclosure url="https://github.com/edde746/plezy/releases/download/${VERSION}/plezilo-windows-installer.exe"
                            length="${WIN_INSTALLER_SIZE}" type="application/octet-stream"
                            sparkle:edSignature="${WIN_ED_SIG}"
                            sparkle:installerArguments="/SILENT /SP-"
@@ -1101,9 +1101,9 @@ jobs:
               echo artifacts/macos-dmg/plezy-macos.dmg
             fi
             if [ "${{ inputs.build_windows }}" = "true" ]; then
-              echo artifacts/windows-x64-portable/plezy-windows-x64-portable.7z
-              echo artifacts/windows-arm64-portable/plezy-windows-arm64-portable.7z
-              echo artifacts/windows-installer/plezy-windows-installer.exe
+              echo artifacts/windows-x64-portable/plezilo-windows-x64-portable.7z
+              echo artifacts/windows-arm64-portable/plezilo-windows-arm64-portable.7z
+              echo artifacts/windows-installer/plezilo-windows-installer.exe
             fi
             if [ "${{ inputs.build_linux }}" = "true" ]; then
               echo 'artifacts/linux-x64/*'
