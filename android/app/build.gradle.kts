@@ -399,6 +399,10 @@ android {
   testBuildType = (findProperty("plezy.testBuildType") as String?) ?: "debug"
 
   packaging {
+    resources {
+      // BouncyCastle's jars each ship this OSGi multi-release stub.
+      excludes += "/META-INF/versions/*/OSGI-INF/MANIFEST.MF"
+    }
     jniLibs {
       // pickFirst only suppresses the duplicate libc++ merge error; the
       // sourceSets rule below makes the runtime the mpv-android AAR carries
@@ -509,6 +513,12 @@ dependencies {
   // Keeping libass in-project lets its static core share the app's native
   // packaging rules.
   implementation(project(":libass"))
+
+  // TLS-PSK for "sign in from your phone" (Silo companion pairing,
+  // silopairing/SiloPairingTls.kt): the same library and suites Silo's
+  // Android TV app uses. Bouncy Castle Licence (MIT).
+  implementation("org.bouncycastle:bcprov-jdk18on:1.84")
+  implementation("org.bouncycastle:bctls-jdk18on:1.84")
 
   testImplementation("junit:junit:4.13.2")
   // Real android.util.* implementations for tests exercising media3 classes

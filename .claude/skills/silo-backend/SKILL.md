@@ -41,6 +41,8 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
 | `lib/services/silo/silo_password_change.dart`, `lib/screens/settings/silo_password_change_panel.dart` | Temporary passwords (Silo Android #790): capability/limits, change result mapping, `SiloTemporaryPasswordSession`, `SiloPasswordChangeController` (port of `PasswordChangeViewModel`) and the "Choose a new password" form |
 | `lib/media/remote_trailer.dart` | `RemoteTrailer` (YouTube video, never a `MediaItem`), `RemoteTrailerClient`, `buildExtrasRail` (port of Silo's `trailerRailEntries`) |
 | `lib/utils/youtube_trailer_launcher.dart`, `lib/screens/youtube_trailer_screen.dart` | Opening a YouTube trailer per platform; the in-app IFrame player route |
+| `lib/services/silo/pairing/` | Sign in from a phone (Silo companion pairing): `silo_pairing_protocol.dart` (frames, messages, codes), `silo_pairing_receiver.dart` (the TV state machine, port of Silo's `PairingReceiver`), `silo_pairing_host.dart` (loopback bridge + advertiser channel), `silo_pairing_flow.dart` (device-code flow → pairing code/outcome) |
+| `android/app/src/main/kotlin/com/edde746/plezy/silopairing/` | `SiloPairingChannel.kt` (`com.plezy/silo_pairing`: NsdManager registration, LAN listener, one phone at a time, relay to Dart) and `SiloPairingTls.kt` (BouncyCastle TLS-PSK server) |
 | `lib/connection/connection.dart` | `SiloConnection` (id `serverId/userId/profileId`) |
 | `lib/services/cached_playback_metadata_service.dart` | Offline markers/tracks for downloaded Silo items |
 
@@ -64,6 +66,31 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
   keep the live code on screen. Start 404/501 → password only; 410/426 → update required. An approved
   code is spent: never cancel it (no Cancel button after approval). Use `package:clock` (`clock.now()`)
   so `fake_async` tests can drive it.
+- **Sign in from a phone** (Silo companion pairing; Android only, `SiloPairingHost.supported`): while
+  the add-server screen shows the address step (`st=setup`) or a code (`st=login`, `srv=<server_id>`),
+  the device advertises **`_silopair._tcp`** like Silo's Android TV app (`TvPairingAdvertiser.kt`;
+  never `_silopair-roku._tcp`, which makes the phone treat it as a Roku). TXT: `v=1`, `name` (device
+  name cut to 63 UTF-8 bytes, else "Plezilo"), `id` (the `X-Silo-Device-Id`), `sid` (fresh UUID per
+  advertisement), `st`, `srv`. Transport: **TLS-PSK**, key `silo-companion-pairing-v1`, identity
+  `silo-pairing`, TLS 1.3 `TLS_AES_128_GCM_SHA256` / TLS 1.2 `TLS_PSK_WITH_AES_128_GCM_SHA256`,
+  BouncyCastle 1.84 in non-blocking server mode (`SiloPairingTls.kt`, copied from
+  `TlsPskPairingTransport.kt`; the TV writes first). Dart has no PSK, so Kotlin terminates TLS and
+  relays plaintext to a `127.0.0.1` socket that must open with a 32-byte one-time secret. Frames: 4-byte
+  big-endian length + UTF-8 JSON (max 1 MiB). Messages (`type` + `v:1`): TV `hello {tvName,
+  tvDeviceId, state, supportedVersions:[1]}`; phone `pushServer {serverURL, serverName?,
+  serverIdentity?, endpoints?[{url, kind, provider?, displayName?}]}`; TV `deviceStarted {serverURL,
+  userCode, matchCode}` (the start reply's `match_code`: the phone refuses a mismatch with its own
+  lookup); TV `serverResult {serverURL (always the pushed one), status signedIn|failed, error?
+  auth_failed|denied|expired|unreachable|identity_mismatch|update_required}`; phone `done`; either
+  `cancel {reason}` (`consent_denied` from the TV). The first push asks "Allow this setup?" (again for
+  a plain-HTTP origin); setup checks `GET /api/v2/system/identity` at the pushed address (another id or
+  a v1 server = `identity_mismatch`; unreachable offers a verified alternate endpoint, never takes it),
+  then runs the screen's own probe + device-code flow; login only accepts `serverIdentity == srv` and
+  lends the code on screen. `serverResult signedIn` goes out once the approval became a session
+  (`completeDeviceLogin`), before the profile is picked. 180 s of silence (nothing in flight) drops the
+  phone. **Plezilo signs in to one server per session**: a push after a sign-in answers `failed
+  auth_failed` (Silo's TVs take several). Tokens never cross the LAN. Golden frames are those of
+  silo-android `PairingProtocolGoldenFramesTest`.
 - **Abandoned sessions:** a sign-in that is not saved (screen left, Change server, no profiles,
   completion failed, approval arriving after the flow was abandoned) is revoked with
   `POST /api/v2/auth/logout` (bearer, best effort, 5 s). The screen marks the session handed off just
@@ -323,8 +350,11 @@ PIN length (matches Silo's apps). Open follow-ups: an edit screen for an existin
   artwork routes need auth headers). Plezy's downloads therefore do not show in Silo's download list.
 - No OIDC/browser or network-identity ("Continue as") sign-in, no cleartext-HTTP consent prompt —
   Plezy's other backends have none either. Phones may also start a device code.
+- Sign in from a phone: one server per session (see above); the add-server screen advertises only
+  on Android TV / Fire TV (`SiloPairingHost.supported`; phones and tablets would be listed as TVs
+  by Silo's phone app, and they can scan the QR code); no cleartext-consent store (each plain-HTTP push is flagged on the consent screen instead).
 - YouTube trailers: Silo's apps always hand them to the YouTube app; Plezy plays them in YouTube's
-  embedded player on phones, tablets and macOS (falling back to the app), hands off only on TV.
+  embedded player on phones, tablets, Android TV / Fire TV and macOS (falling back to the app).
   The TV detail rail holds playable `MediaItem`s only, so on TV a YouTube trailer is reached
   through the Trailer button (first YouTube `trailer`, else `teaser`, when there is no local
   trailer); the phone/desktop row shows every YouTube video after the local extras.
@@ -360,6 +390,13 @@ PIN length (matches Silo's apps). Open follow-ups: an edit screen for an existin
   `test/services/silo/silo_password_change_test.dart` covers the wire, the session and the controller,
   and `add_silo_screen_test.dart` the phone form and the TV message. Siku's mock server has no
   temporary-password switch.
+- Sign in from a phone: `test/services/silo/pairing/` covers the frames and golden messages, the receiver
+  state machine over an in-memory transport (`FakePairingTransport`, `FakePairingPort` in
+  `test/test_helpers/silo_pairing_phone.dart`), the flow glue and `probeIdentity`, and
+  `silo_pairing_host_test.dart` plays Silo's phone (`SiloPairingPhone`) over real loopback sockets
+  against `SiloPairingHost` (secret, one phone at a time, malformed frames, advertisement between
+  sessions). `add_silo_screen_test.dart` drives the screen end to end (consent, code, approval,
+  profiles). The TLS-PSK handshake and NSD need a real Android device and Silo's phone app.
 - Manager integration (`test/services/silo/silo_server_manager_test.dart`): `MultiServerManager(
   siloClientFactory: ...)` injects `SiloClient.forTesting` clients over a small fake server with a
   rotating refresh token; status tests run under `fakeAsync` (5 s debounce).
@@ -388,7 +425,8 @@ PIN length (matches Silo's apps). Open follow-ups: an edit screen for an existin
   Plezy refuse playback against it; test playback with `MockClient` handlers instead.
 - Stop the mock with `kill <pid>` from `ps -eo pid,args | grep "[m]ock_server"`, not `pkill`.
 - What cannot be verified in a cloud session: real playback, TV focus on a device, real Silo
-  servers. Say so in the report.
+  servers, phone sign-in discovery and TLS (needs a device on a LAN with Silo's phone app; read
+  `adb logcat -s SiloPairing` and the `[silo-pair]` app log lines). Say so in the report.
 
 ## Debugging user reports
 - **"Signed out" / auth banner:** refresh refused (`session_expired`) → re-add the server. Check the

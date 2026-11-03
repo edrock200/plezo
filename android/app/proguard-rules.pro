@@ -35,3 +35,10 @@
   private androidx.media3.extractor.ExtractorOutput extractorOutput;
   private androidx.media3.common.util.ParsableByteArray subtitleSample;
 }
+
+# BouncyCastle (TLS-PSK for Silo "sign in from your phone", silopairing/SiloPairingTls.kt).
+# Kept whole as Silo's own apps do: parts of the library are looked up by name, and a class
+# R8 strips would only fail at handshake time, on a TV, in release builds.
+-keep class org.bouncycastle.** { *; }
+-dontwarn org.bouncycastle.**
+-dontwarn javax.naming.**

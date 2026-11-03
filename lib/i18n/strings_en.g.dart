@@ -95,6 +95,7 @@ class Translations with BaseTranslations<AppLocale, Translations> {
 	late final Translations$services$en services = Translations$services$en.internal(_root);
 	late final Translations$addServer$en addServer = Translations$addServer$en.internal(_root);
 	late final Translations$deepLinks$en deepLinks = Translations$deepLinks$en.internal(_root);
+	late final Translations$siloPairing$en siloPairing = Translations$siloPairing$en.internal(_root);
 }
 
 // Path: app
@@ -6390,6 +6391,111 @@ class Translations$deepLinks$en {
 	String get copied => 'Link copied';
 }
 
+// Path: siloPairing
+class Translations$siloPairing$en {
+	Translations$siloPairing$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Sign in with your phone'
+	String get phoneTitle => 'Sign in with your phone';
+
+	/// en: 'Open the ${product} app on a phone or tablet on the same Wi‑Fi and choose this device. It brings over the server and your account, with no typing.'
+	String phoneBody({required Object product}) => 'Open the ${product} app on a phone or tablet on the same Wi‑Fi and choose this device. It brings over the server and your account, with no typing.';
+
+	/// en: 'Looking for a phone or tablet…'
+	String get looking => 'Looking for a phone or tablet…';
+
+	/// en: 'Have the ${product} app on your phone? Open it on the same Wi‑Fi to sign this device in.'
+	String codeHint({required Object product}) => 'Have the ${product} app on your phone? Open it on the same Wi‑Fi to sign this device in.';
+
+	/// en: 'Check that your phone or tablet shows this code, then approve it there.'
+	String get confirmOnPhone => 'Check that your phone or tablet shows this code, then approve it there.';
+
+	/// en: 'Continue on your phone'
+	String get connectedTitle => 'Continue on your phone';
+
+	/// en: 'On your phone or tablet, choose the server to sign in to.'
+	String get connectedBody => 'On your phone or tablet, choose the server to sign in to.';
+
+	/// en: 'Allow this setup?'
+	String get consentTitle => 'Allow this setup?';
+
+	/// en: 'Allow this sign-in?'
+	String get consentTitleSignIn => 'Allow this sign-in?';
+
+	/// en: 'A nearby phone or tablet wants to sign Plezilo in to ${server}.'
+	String consentBody({required Object server}) => 'A nearby phone or tablet wants to sign Plezilo in to ${server}.';
+
+	/// en: 'The connection to ${server} is not encrypted. Only allow this on a network you trust.'
+	String consentUnencrypted({required Object server}) => 'The connection to ${server} is not encrypted. Only allow this on a network you trust.';
+
+	/// en: 'Only allow it if you started this on your own phone or tablet.'
+	String get consentNote => 'Only allow it if you started this on your own phone or tablet.';
+
+	/// en: 'Allow'
+	String get allow => 'Allow';
+
+	/// en: 'Don't allow'
+	String get dontAllow => 'Don\'t allow';
+
+	/// en: 'Cancel'
+	String get cancel => 'Cancel';
+
+	/// en: 'OK'
+	String get ok => 'OK';
+
+	/// en: 'Try again'
+	String get tryAgain => 'Try again';
+
+	/// en: 'Signing in to ${server}'
+	String workingTitle({required Object server}) => 'Signing in to ${server}';
+
+	/// en: 'Getting this device's sign-in code.'
+	String get workingBody => 'Getting this device\'s sign-in code.';
+
+	/// en: 'Can't reach ${server}'
+	String unreachableTitle({required Object server}) => 'Can\'t reach ${server}';
+
+	/// en: 'This device can't reach ${server} through ${provider}. Install or open the ${provider} app on this device and make sure it can reach the server's network, then try again.'
+	String unreachableProvider({required Object server, required Object provider}) => 'This device can\'t reach ${server} through ${provider}. Install or open the ${provider} app on this device and make sure it can reach the server\'s network, then try again.';
+
+	/// en: 'This device can't reach ${server} at ${url}. Check its network connection and try again.'
+	String unreachablePublic({required Object server, required Object url}) => 'This device can\'t reach ${server} at ${url}. Check its network connection and try again.';
+
+	/// en: 'Use ${url}'
+	String useAlternate({required Object url}) => 'Use ${url}';
+
+	/// en: 'Setup didn't finish'
+	String get failedTitle => 'Setup didn\'t finish';
+
+	/// en: 'Sign-in didn't finish'
+	String get failedTitleSignIn => 'Sign-in didn\'t finish';
+
+	/// en: 'Something went wrong signing in to ${server}. Try again from your phone or tablet, or add the server here.'
+	String failedGeneric({required Object server}) => 'Something went wrong signing in to ${server}. Try again from your phone or tablet, or add the server here.';
+
+	/// en: 'The sign-in to ${server} was declined. Try again from your phone or tablet.'
+	String failedDenied({required Object server}) => 'The sign-in to ${server} was declined. Try again from your phone or tablet.';
+
+	/// en: 'The code for ${server} expired before it was approved. Try again from your phone or tablet.'
+	String failedExpired({required Object server}) => 'The code for ${server} expired before it was approved. Try again from your phone or tablet.';
+
+	/// en: 'This device can't reach ${server}. You can also add the server here with its public address.'
+	String failedUnreachable({required Object server}) => 'This device can\'t reach ${server}. You can also add the server here with its public address.';
+
+	/// en: 'The phone or tablet sent an address for ${server} that answered as a different server. Check the server on your phone or tablet, or add it here.'
+	String failedIdentity({required Object server}) => 'The phone or tablet sent an address for ${server} that answered as a different server. Check the server on your phone or tablet, or add it here.';
+
+	/// en: 'The phone or tablet offered ${server}, which isn't the server this sign-in is for. Choose the same server on your phone or tablet.'
+	String failedIdentitySignIn({required Object server}) => 'The phone or tablet offered ${server}, which isn\'t the server this sign-in is for. Choose the same server on your phone or tablet.';
+
+	/// en: '${server} or Plezilo needs an update before this device can sign in.'
+	String failedUpdate({required Object server}) => '${server} or Plezilo needs an update before this device can sign in.';
+}
+
 // Path: appIcon.names
 class Translations$appIcon$names$en {
 	Translations$appIcon$names$en.internal(this._root);
@@ -10914,6 +11020,38 @@ extension on Translations {
 			'deepLinks.openAsProfile' => ({required Object name}) => 'Open as ${name}',
 			'deepLinks.copy' => 'Copy',
 			'deepLinks.copied' => 'Link copied',
+			'siloPairing.phoneTitle' => 'Sign in with your phone',
+			'siloPairing.phoneBody' => ({required Object product}) => 'Open the ${product} app on a phone or tablet on the same Wi‑Fi and choose this device. It brings over the server and your account, with no typing.',
+			'siloPairing.looking' => 'Looking for a phone or tablet…',
+			'siloPairing.codeHint' => ({required Object product}) => 'Have the ${product} app on your phone? Open it on the same Wi‑Fi to sign this device in.',
+			'siloPairing.confirmOnPhone' => 'Check that your phone or tablet shows this code, then approve it there.',
+			'siloPairing.connectedTitle' => 'Continue on your phone',
+			'siloPairing.connectedBody' => 'On your phone or tablet, choose the server to sign in to.',
+			'siloPairing.consentTitle' => 'Allow this setup?',
+			'siloPairing.consentTitleSignIn' => 'Allow this sign-in?',
+			'siloPairing.consentBody' => ({required Object server}) => 'A nearby phone or tablet wants to sign Plezilo in to ${server}.',
+			'siloPairing.consentUnencrypted' => ({required Object server}) => 'The connection to ${server} is not encrypted. Only allow this on a network you trust.',
+			'siloPairing.consentNote' => 'Only allow it if you started this on your own phone or tablet.',
+			'siloPairing.allow' => 'Allow',
+			'siloPairing.dontAllow' => 'Don\'t allow',
+			'siloPairing.cancel' => 'Cancel',
+			'siloPairing.ok' => 'OK',
+			'siloPairing.tryAgain' => 'Try again',
+			'siloPairing.workingTitle' => ({required Object server}) => 'Signing in to ${server}',
+			'siloPairing.workingBody' => 'Getting this device\'s sign-in code.',
+			'siloPairing.unreachableTitle' => ({required Object server}) => 'Can\'t reach ${server}',
+			'siloPairing.unreachableProvider' => ({required Object server, required Object provider}) => 'This device can\'t reach ${server} through ${provider}. Install or open the ${provider} app on this device and make sure it can reach the server\'s network, then try again.',
+			'siloPairing.unreachablePublic' => ({required Object server, required Object url}) => 'This device can\'t reach ${server} at ${url}. Check its network connection and try again.',
+			'siloPairing.useAlternate' => ({required Object url}) => 'Use ${url}',
+			'siloPairing.failedTitle' => 'Setup didn\'t finish',
+			'siloPairing.failedTitleSignIn' => 'Sign-in didn\'t finish',
+			'siloPairing.failedGeneric' => ({required Object server}) => 'Something went wrong signing in to ${server}. Try again from your phone or tablet, or add the server here.',
+			'siloPairing.failedDenied' => ({required Object server}) => 'The sign-in to ${server} was declined. Try again from your phone or tablet.',
+			'siloPairing.failedExpired' => ({required Object server}) => 'The code for ${server} expired before it was approved. Try again from your phone or tablet.',
+			'siloPairing.failedUnreachable' => ({required Object server}) => 'This device can\'t reach ${server}. You can also add the server here with its public address.',
+			'siloPairing.failedIdentity' => ({required Object server}) => 'The phone or tablet sent an address for ${server} that answered as a different server. Check the server on your phone or tablet, or add it here.',
+			'siloPairing.failedIdentitySignIn' => ({required Object server}) => 'The phone or tablet offered ${server}, which isn\'t the server this sign-in is for. Choose the same server on your phone or tablet.',
+			'siloPairing.failedUpdate' => ({required Object server}) => '${server} or Plezilo needs an update before this device can sign in.',
 			_ => null,
 		};
 	}

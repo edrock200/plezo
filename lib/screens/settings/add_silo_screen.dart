@@ -19,6 +19,10 @@ import '../../profiles/active_profile_binder.dart';
 import '../../profiles/active_profile_provider.dart';
 import '../../profiles/profile.dart';
 import '../../profiles/profile_connection.dart';
+import '../../services/silo/pairing/silo_pairing_flow.dart';
+import '../../services/silo/pairing/silo_pairing_host.dart';
+import '../../services/silo/pairing/silo_pairing_protocol.dart';
+import '../../services/silo/pairing/silo_pairing_receiver.dart';
 import '../../services/silo/silo_api.dart';
 import '../../services/silo/silo_auth_service.dart';
 import '../../services/silo/silo_device_sign_in.dart';
@@ -26,6 +30,7 @@ import '../../services/silo/silo_password_change.dart';
 import '../../services/storage_service.dart';
 import '../../theme/mono_tokens.dart';
 import '../../utils/app_logger.dart';
+import '../../utils/device_identity.dart';
 import '../../utils/platform_detector.dart';
 import '../../widgets/app_icon.dart';
 import '../../widgets/focused_scroll_scaffold.dart';
@@ -49,6 +54,11 @@ const _silo = 'Silo';
 ///      (TVs say where to change it instead, as Silo's TV apps do).
 ///   4. Persist the connection and bind it to [targetProfile] (or the active
 ///      Plezy profile), exactly as Jellyfin connections are.
+///
+/// On Android, while the address or code step is up, the device also
+/// advertises itself to Silo's phone app on the LAN ("sign in from your
+/// phone", [SiloPairingHost]): the phone pushes a server (address step) or
+/// approves the code on screen (code step), after the person here allows it.
 class AddSiloScreen extends StatefulWidget {
   final Profile? targetProfile;
 
@@ -60,11 +70,26 @@ class AddSiloScreen extends StatefulWidget {
   @visibleForTesting
   final SiloDeviceSignInConfig deviceSignInConfig;
 
+  /// Test seam: offer sign-in from a phone (default: on Android only).
+  @visibleForTesting
+  final bool? phoneSignIn;
+
+  /// Test seam: the LAN advertiser (default: the Android platform channel).
+  @visibleForTesting
+  final SiloPairingAdvertiser? pairingAdvertiser;
+
+  /// Test seam: called once the phone sign-in listener exists.
+  @visibleForTesting
+  final void Function(SiloPairingHost host)? onPairingHost;
+
   const AddSiloScreen({
     super.key,
     this.targetProfile,
     this.authService,
     this.deviceSignInConfig = const SiloDeviceSignInConfig(),
+    this.phoneSignIn,
+    this.pairingAdvertiser,
+    this.onPairingHost,
   });
 
   @override
@@ -111,6 +136,9 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
   final _cancelCodeFocus = FocusNode(debugLabel: 'AddSilo:CancelCode');
   final _profileChangeServerFocus = FocusNode(debugLabel: 'AddSilo:ProfileChangeServer');
   final _tvSignOutFocus = FocusNode(debugLabel: 'AddSilo:TvSignOut');
+  final _pairingPrimaryFocus = FocusNode(debugLabel: 'AddSilo:PairingPrimary');
+  final _pairingSecondaryFocus = FocusNode(debugLabel: 'AddSilo:PairingSecondary');
+  final _pairingCancelFocus = FocusNode(debugLabel: 'AddSilo:PairingCancel');
   final _formKey = GlobalKey<FormState>();
 
   _Step _step = _Step.address;
@@ -139,8 +167,34 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
   /// second refusal is not handed off again (it would loop).
   bool _passwordChanged = false;
 
+  /// Sign in from a phone (Android): the LAN listener and its receiver.
+  SiloPairingHost? _pairing;
+  SiloPairingStatus _pairingStatus = const SiloPairingIdle();
+  SiloPairingAdvertisement? _pairingAdvertised;
+  bool _pairingSyncScheduled = false;
+
+  /// The current device flow was started for a phone's `setup` push.
+  bool _pairingSetupFlow = false;
+
+  /// Completes when the current device flow's approval became a sign-in
+  /// (true) or could not (false); a phone attempt relays it.
+  Completer<bool>? _pairingApproval;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.phoneSignIn ?? SiloPairingHost.supported) unawaited(_startPairing());
+  }
+
   @override
   void dispose() {
+    _completePairingApproval(false);
+    final pairing = _pairing;
+    _pairing = null;
+    if (pairing != null) {
+      pairing.receiver.status.removeListener(_onPairingStatus);
+      unawaited(pairing.dispose());
+    }
     _disposeDeviceFlow();
     _closePasswordChange();
     _discardSignIn();
@@ -156,6 +210,9 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
       _cancelCodeFocus,
       _profileChangeServerFocus,
       _tvSignOutFocus,
+      _pairingPrimaryFocus,
+      _pairingSecondaryFocus,
+      _pairingCancelFocus,
     ]) {
       node.dispose();
     }
@@ -190,6 +247,178 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
     _signIn = null;
     final auth = _auth;
     if (signIn != null && !_handedOff && auth != null) unawaited(auth.logout(signIn.server, signIn.tokens));
+  }
+
+  // ---------------------------------------------------------------------------
+  // Sign in from a phone (Silo companion pairing)
+  // ---------------------------------------------------------------------------
+
+  Future<void> _startPairing() async {
+    final auth = await _authService();
+    final identity = await DeviceIdentityService.resolve();
+    if (!mounted) return;
+    // The id Silo already knows this device by (X-Silo-Device-Id).
+    final deviceId = auth.deviceId;
+    final name = SiloPairingProtocol.fittedServiceName(identity.deviceName);
+    final receiver = SiloPairingReceiver(
+      port: _ScreenPairingPort(this),
+      identityProbe: auth.probeIdentity,
+      deviceName: name,
+      deviceId: deviceId,
+    );
+    final host = SiloPairingHost(
+      receiver: receiver,
+      advertiser: widget.pairingAdvertiser ?? MethodChannelSiloPairingAdvertiser(),
+      serviceName: name,
+      deviceId: deviceId,
+    );
+    _pairing = host;
+    receiver.status.addListener(_onPairingStatus);
+    widget.onPairingHost?.call(host);
+    _syncPairingAdvertisement();
+  }
+
+  /// What the current step advertises: `setup` on the address step, `login`
+  /// for the server whose code is on screen, nothing elsewhere.
+  SiloPairingAdvertisement? _wantedAdvertisement() {
+    final server = _server;
+    return switch (_step) {
+      _Step.address => SiloPairingAdvertisement.setup,
+      _Step.deviceCode when server != null && !_completingApproval && server.serverId.isNotEmpty =>
+        SiloPairingAdvertisement.login(server.serverId),
+      _ => null,
+    };
+  }
+
+  /// Keep the advertisement in step with the screen (after each frame, so
+  /// every step change is covered without touching each setState).
+  void _syncPairingAdvertisement() {
+    final pairing = _pairing;
+    if (pairing == null || !mounted) return;
+    final wanted = _wantedAdvertisement();
+    if (wanted == _pairingAdvertised) return;
+    _pairingAdvertised = wanted;
+    unawaited(pairing.advertise(wanted));
+  }
+
+  void _schedulePairingSync() {
+    if (_pairing == null || _pairingSyncScheduled) return;
+    _pairingSyncScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _pairingSyncScheduled = false;
+      _syncPairingAdvertisement();
+    });
+  }
+
+  /// Statuses that replace the screen's own content with the pairing panel.
+  bool _pairingTakesOver(SiloPairingStatus status) => switch (status) {
+    SiloPairingConsentRequested() || SiloPairingUnreachable() || SiloPairingFailed() => true,
+    SiloPairingConnected() || SiloPairingWorking() => _step != _Step.deviceCode,
+    _ => false,
+  };
+
+  void _onPairingStatus() {
+    final pairing = _pairing;
+    if (pairing == null || !mounted) return;
+    final previous = _pairingStatus;
+    final next = pairing.receiver.status.value;
+    setState(() => _pairingStatus = next);
+    final took = _pairingTakesOver(previous);
+    final takes = _pairingTakesOver(next);
+    if (takes && (!took || previous.runtimeType != next.runtimeType)) {
+      requestFocusAfterFrame(switch (next) {
+        SiloPairingConnected() || SiloPairingWorking() => _pairingCancelFocus,
+        SiloPairingUnreachable(alternateUrl: null) => _pairingSecondaryFocus,
+        _ => _pairingPrimaryFocus,
+      });
+    } else if (took && !takes) {
+      _focusCurrentStep();
+    }
+  }
+
+  void _focusCurrentStep() {
+    switch (_step) {
+      case _Step.address:
+        requestFocusAfterFrame(_urlFocus);
+      case _Step.deviceCode:
+        requestFocusAfterFrame(_cancelCodeFocus);
+      case _Step.signIn:
+        _focusSignInStep();
+      case _Step.profile || _Step.passwordChange || _Step.passwordOnTv:
+        break;
+    }
+  }
+
+  void _completePairingApproval(bool signedIn) {
+    final completer = _pairingApproval;
+    _pairingApproval = null;
+    if (completer != null && !completer.isCompleted) completer.complete(signedIn);
+  }
+
+  /// A phone pushed [target] and the person allowed it: check the server,
+  /// start a device code there and return it once the server issued it.
+  Future<SiloPairingCode> _pairingStartSetup(SiloPairingTarget target) async {
+    if (!mounted) throw const SiloPairingAttemptFailure(SiloPairingFailureCode.authFailed);
+    final auth = await _authService();
+    final SiloServerInfo server;
+    try {
+      server = await auth.probe(target.url);
+    } on SiloServerUnsupportedException {
+      throw const SiloPairingAttemptFailure(SiloPairingFailureCode.updateRequired);
+    } catch (e) {
+      appLogger.i('[silo-pair] pushed server did not answer: ${e.runtimeType}');
+      throw const SiloPairingAttemptFailure(SiloPairingFailureCode.unreachable);
+    }
+    final verified = target.verifiedServerId;
+    if (verified != null && server.serverId != verified) {
+      throw const SiloPairingAttemptFailure(SiloPairingFailureCode.identityMismatch);
+    }
+    if (!server.deviceLoginAvailable) throw const SiloPairingAttemptFailure(SiloPairingFailureCode.authFailed);
+    if (!mounted) throw const SiloPairingAttemptFailure(SiloPairingFailureCode.authFailed);
+    // Whatever the screen was doing, the person allowed this server instead.
+    _disposeDeviceFlow();
+    _closePasswordChange();
+    _discardSignIn();
+    setErrorText(null);
+    setState(() {
+      _server = server;
+      _urlController.text = server.baseUrl;
+      _profiles = const [];
+      _completingApproval = false;
+      _step = _Step.signIn;
+    });
+    await _startDeviceLogin();
+    final flow = _deviceFlow;
+    if (flow == null || !mounted) throw const SiloPairingAttemptFailure(SiloPairingFailureCode.authFailed);
+    _pairingSetupFlow = true;
+    return siloPairingFirstCode(flow.state);
+  }
+
+  /// `login`: the code on screen, waiting briefly while one is fetched.
+  Future<SiloPairingCode?> _pairingCurrentCode() async {
+    final flow = _deviceFlow;
+    if (flow == null || _completingApproval) return null;
+    try {
+      return await siloPairingFirstCode(flow.state, timeout: const Duration(seconds: 10));
+    } on SiloPairingAttemptFailure {
+      return null;
+    }
+  }
+
+  Future<SiloPairingFailureCode?> _pairingOutcome(String deviceCode) {
+    final flow = _deviceFlow;
+    if (flow == null) return Future.value(SiloPairingFailureCode.expired);
+    final approval = _pairingApproval ??= Completer<bool>();
+    return siloPairingOutcome(flow.state, deviceCode, approval.future);
+  }
+
+  /// The phone's `setup` attempt ended without a sign-in: leave its code.
+  void _pairingAbandonSetup(String? deviceCode) {
+    if (!mounted || !_pairingSetupFlow || _completingApproval) return;
+    final flow = _deviceFlow;
+    if (deviceCode != null && flow != null && flow.code != null && flow.code!.deviceCode != deviceCode) return;
+    if (_step != _Step.deviceCode) return;
+    _changeServer();
   }
 
   // ---------------------------------------------------------------------------
@@ -265,6 +494,7 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
     if (!mounted || !identical(server, _server)) return;
     _disposeDeviceFlow();
     final flow = SiloDeviceSignIn(auth: auth, server: server, config: widget.deviceSignInConfig);
+    _pairingApproval = Completer<bool>();
     _deviceFlow = flow;
     flow.state.addListener(() => _onDeviceState(flow));
     setState(() {
@@ -315,6 +545,7 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
       signIn = await auth.completeDeviceLogin(server, approval);
     } catch (e, st) {
       appLogger.w('Silo device sign-in could not finish', error: e, stackTrace: st);
+      if (identical(flow, _deviceFlow)) _completePairingApproval(false);
       final tokens = approval.tokens;
       if (tokens != null) unawaited(auth.logout(server, tokens));
       if (mounted && identical(flow, _deviceFlow)) _deviceFailed(t.addServer.siloDeviceCouldntFinish);
@@ -325,6 +556,9 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
       unawaited(auth.logout(server, signIn.tokens));
       return;
     }
+    // A phone approving this code hears that this device is signed in; the
+    // profile is picked here afterwards.
+    _completePairingApproval(true);
     await _onSignedIn(signIn);
     // Still on the code panel means a later step failed (profiles, saving):
     // leave the panel so the error and the form show.
@@ -362,6 +596,8 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
     final flow = _deviceFlow;
     _deviceFlow = null;
     _deviceState = null;
+    _pairingSetupFlow = false;
+    _completePairingApproval(false);
     flow?.dispose();
   }
 
@@ -676,10 +912,24 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    _schedulePairingSync();
+    final pairingPanel = _pairingTakesOver(_pairingStatus);
     return FocusedScrollScaffold(
       title: Text(t.addServer.addMediaBrowserTitle(product: _silo)),
       slivers: [
-        if (_step == _Step.deviceCode && _deviceState != null)
+        if (pairingPanel)
+          SliverPadding(
+            padding: const EdgeInsets.all(24),
+            sliver: SliverToBoxAdapter(
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 560),
+                  child: _buildPairingPanel(theme, _pairingStatus),
+                ),
+              ),
+            ),
+          )
+        else if (_step == _Step.deviceCode && _deviceState != null)
           // Centred in the space left, scrolling when taller (a 540-high TV
           // with a status and two buttons). Real layout, not the intrinsic
           // sizes SliverFillRemaining needs (the QR view cannot give them).
@@ -762,6 +1012,7 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
             label: Text(t.addServer.findServer),
           ),
         ),
+        if (_pairing != null) ...[const SizedBox(height: 24), _buildPhoneCard(theme)],
       ] else ...[
         _buildServerCard(theme, server),
         if (server.deviceLoginAvailable) ...[
@@ -934,6 +1185,16 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
             ),
           ],
         ),
+        if (_pairing != null && code != null) ...[
+          const SizedBox(height: 16),
+          Text(
+            _pairingStatus is SiloPairingAwaitingApproval
+                ? t.siloPairing.confirmOnPhone
+                : t.siloPairing.codeHint(product: _silo),
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodySmall?.copyWith(color: muted),
+          ),
+        ],
         if (action != null) ...[
           const SizedBox(height: 24),
           FocusableButton(
@@ -977,6 +1238,211 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
           Flexible(child: details),
         ],
       ),
+    );
+  }
+
+  Widget _buildPhoneCard(ThemeData theme) {
+    final muted = theme.colorScheme.onSurface.withValues(alpha: 0.7);
+    final looking = _pairingStatus is SiloPairingAdvertising;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(tokens(context).radiusMd),
+      ),
+      child: Row(
+        crossAxisAlignment: .start,
+        children: [
+          const AppIcon(Symbols.smartphone_rounded, fill: 1),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: .start,
+              children: [
+                Text(t.siloPairing.phoneTitle, style: theme.textTheme.titleSmall),
+                const SizedBox(height: 4),
+                Text(
+                  t.siloPairing.phoneBody(product: _silo),
+                  style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                ),
+                if (looking) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const LoadingIndicatorBox(size: 14),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(t.siloPairing.looking, style: theme.textTheme.bodySmall?.copyWith(color: muted)),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _pairingFailureText(SiloPairingFailed failed) {
+    final server = failed.serverName;
+    return switch (failed.code) {
+      SiloPairingFailureCode.denied => t.siloPairing.failedDenied(server: server),
+      SiloPairingFailureCode.expired => t.siloPairing.failedExpired(server: server),
+      SiloPairingFailureCode.unreachable => t.siloPairing.failedUnreachable(server: server),
+      SiloPairingFailureCode.identityMismatch =>
+        failed.signIn
+            ? t.siloPairing.failedIdentitySignIn(server: server)
+            : t.siloPairing.failedIdentity(server: server),
+      SiloPairingFailureCode.updateRequired => t.siloPairing.failedUpdate(server: server),
+      SiloPairingFailureCode.authFailed => t.siloPairing.failedGeneric(server: server),
+    };
+  }
+
+  Widget _pairingButton({
+    required FocusNode focusNode,
+    required String label,
+    required VoidCallback onPressed,
+    bool primary = false,
+    FocusNode? up,
+    FocusNode? down,
+  }) {
+    return FocusableButton(
+      focusNode: focusNode,
+      useBackgroundFocus: true,
+      onNavigateUp: up == null ? null : () => up.requestFocus(),
+      onNavigateDown: down == null ? null : () => down.requestFocus(),
+      onPressed: onPressed,
+      child: primary
+          ? FilledButton(onPressed: onPressed, child: Text(label))
+          : OutlinedButton(onPressed: onPressed, child: Text(label)),
+    );
+  }
+
+  /// The phone sign-in panel: what the phone is doing, "Allow this setup?",
+  /// an address that did not answer, or how the attempt ended.
+  Widget _buildPairingPanel(ThemeData theme, SiloPairingStatus status) {
+    final receiver = _pairing?.receiver;
+    final muted = theme.colorScheme.onSurface.withValues(alpha: 0.7);
+    String title;
+    final lines = <(String, bool)>[];
+    final buttons = <Widget>[];
+    var working = false;
+    void cancelButton() => buttons.add(
+      _pairingButton(
+        focusNode: _pairingCancelFocus,
+        label: t.siloPairing.cancel,
+        onPressed: () => receiver?.cancelActiveSession(),
+      ),
+    );
+    switch (status) {
+      case SiloPairingConsentRequested(:final serverName, :final unencrypted, :final signIn):
+        title = signIn ? t.siloPairing.consentTitleSignIn : t.siloPairing.consentTitle;
+        lines.add((t.siloPairing.consentBody(server: serverName), false));
+        if (unencrypted) lines.add((t.siloPairing.consentUnencrypted(server: serverName), true));
+        lines.add((t.siloPairing.consentNote, false));
+        buttons
+          ..add(
+            _pairingButton(
+              focusNode: _pairingPrimaryFocus,
+              label: t.siloPairing.allow,
+              primary: true,
+              down: _pairingSecondaryFocus,
+              onPressed: () => receiver?.allowPendingServer(),
+            ),
+          )
+          ..add(
+            _pairingButton(
+              focusNode: _pairingSecondaryFocus,
+              label: t.siloPairing.dontAllow,
+              up: _pairingPrimaryFocus,
+              onPressed: () => receiver?.denyPendingServer(),
+            ),
+          );
+      case SiloPairingUnreachable(:final serverUrl, :final serverName, :final providerName, :final alternateUrl):
+        title = t.siloPairing.unreachableTitle(server: serverName);
+        lines.add((
+          providerName != null
+              ? t.siloPairing.unreachableProvider(server: serverName, provider: providerName)
+              : t.siloPairing.unreachablePublic(server: serverName, url: normalizeSiloPairingUrl(serverUrl)),
+          false,
+        ));
+        if (alternateUrl != null) {
+          buttons.add(
+            _pairingButton(
+              focusNode: _pairingPrimaryFocus,
+              label: t.siloPairing.useAlternate(url: alternateUrl),
+              primary: true,
+              down: _pairingSecondaryFocus,
+              onPressed: () => receiver?.useAlternateAddress(),
+            ),
+          );
+        }
+        buttons.add(
+          _pairingButton(
+            focusNode: _pairingSecondaryFocus,
+            label: t.siloPairing.tryAgain,
+            primary: alternateUrl == null,
+            up: alternateUrl != null ? _pairingPrimaryFocus : null,
+            down: _pairingCancelFocus,
+            onPressed: () => receiver?.retryPushedAddress(),
+          ),
+        );
+        buttons.add(
+          _pairingButton(
+            focusNode: _pairingCancelFocus,
+            label: t.siloPairing.cancel,
+            up: _pairingSecondaryFocus,
+            onPressed: () => receiver?.cancelActiveSession(),
+          ),
+        );
+      case SiloPairingFailed(:final signIn):
+        title = signIn ? t.siloPairing.failedTitleSignIn : t.siloPairing.failedTitle;
+        lines.add((_pairingFailureText(status), false));
+        buttons.add(
+          _pairingButton(
+            focusNode: _pairingPrimaryFocus,
+            label: t.siloPairing.ok,
+            primary: true,
+            onPressed: () => receiver?.cancelActiveSession(),
+          ),
+        );
+      case SiloPairingWorking(:final serverName):
+        title = t.siloPairing.workingTitle(server: serverName);
+        lines.add((t.siloPairing.workingBody, false));
+        working = true;
+        cancelButton();
+      case _:
+        title = t.siloPairing.connectedTitle;
+        lines.add((t.siloPairing.connectedBody, false));
+        working = true;
+        cancelButton();
+    }
+    return Column(
+      mainAxisSize: .min,
+      crossAxisAlignment: .stretch,
+      children: [
+        const Center(child: AppIcon(Symbols.smartphone_rounded, fill: 1, size: 40)),
+        const SizedBox(height: 16),
+        Semantics(
+          header: true,
+          liveRegion: true,
+          child: Text(title, textAlign: TextAlign.center, style: theme.textTheme.headlineSmall),
+        ),
+        const SizedBox(height: 12),
+        for (final (text, warning) in lines) ...[
+          Text(
+            text,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyLarge?.copyWith(color: warning ? theme.colorScheme.error : muted),
+          ),
+          const SizedBox(height: 8),
+        ],
+        if (working) ...[const SizedBox(height: 8), const Center(child: LoadingIndicatorBox(size: 20))],
+        const SizedBox(height: 16),
+        for (final (i, button) in buttons.indexed) ...[if (i > 0) const SizedBox(height: 12), button],
+      ],
     );
   }
 
@@ -1164,4 +1630,23 @@ class _SiloProfileTile extends StatelessWidget {
       child: tile,
     );
   }
+}
+
+/// The sign-in screen's side of a phone's pairing attempt.
+class _ScreenPairingPort implements SiloPairingSignInPort {
+  _ScreenPairingPort(this._state);
+
+  final _AddSiloScreenState _state;
+
+  @override
+  Future<SiloPairingCode> startSetup(SiloPairingTarget target) => _state._pairingStartSetup(target);
+
+  @override
+  Future<SiloPairingCode?> currentCode() => _state._pairingCurrentCode();
+
+  @override
+  Future<SiloPairingFailureCode?> outcome(String deviceCode) => _state._pairingOutcome(deviceCode);
+
+  @override
+  void abandonSetup(String? deviceCode) => _state._pairingAbandonSetup(deviceCode);
 }

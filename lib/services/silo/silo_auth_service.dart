@@ -9,6 +9,8 @@ import '../../utils/app_logger.dart';
 import '../../utils/media_server_http_client.dart';
 import '../../utils/url_utils.dart';
 import 'silo_api.dart';
+import 'pairing/silo_pairing_protocol.dart';
+import 'pairing/silo_pairing_receiver.dart';
 import 'silo_password_change.dart';
 
 /// What a reachable Silo server told us about itself before sign-in.
@@ -107,6 +109,10 @@ class SiloProfile {
 class SiloDeviceCode {
   final String deviceCode;
   final String userCode;
+
+  /// The server's `match_code`, sent to a phone signing this device in from
+  /// the LAN (it compares it with its own lookup). Empty when not sent.
+  final String matchCode;
   final String verificationUri;
   final String? verificationUriComplete;
 
@@ -123,6 +129,7 @@ class SiloDeviceCode {
   const SiloDeviceCode({
     required this.deviceCode,
     required this.userCode,
+    this.matchCode = '',
     required this.verificationUri,
     required this.expiresAt,
     required this.interval,
@@ -376,6 +383,37 @@ class SiloAuthService {
   /// never answers fails over to the next candidate.
   static const probeTimeout = Duration(seconds: 8);
 
+  /// Classify one address by `GET /api/v2/system/identity` for a phone's
+  /// LAN sign-in (Silo's `ServerIdentityApi.probeIdentity`): its deployment
+  /// identity, an older server (the legacy plain-text 404), or unreachable.
+  /// Never throws.
+  Future<SiloIdentityProbeResult> probeIdentity(String serverUrl) async {
+    final base = normalizeSiloPairingUrl(serverUrl);
+    if (base.isEmpty) return const SiloIdentityUnreachable();
+    final SiloApi api;
+    try {
+      api = await _api(base);
+    } catch (_) {
+      return const SiloIdentityUnreachable();
+    }
+    try {
+      final response = await api.request('GET', '/api/v2/system/identity', auth: false, timeout: probeTimeout);
+      final data = response.data;
+      if (response.statusCode == 200 && data is Map) {
+        final id = data['server_id']?.toString().trim() ?? '';
+        return id.isEmpty ? const SiloIdentityUnreachable() : SiloIdentityAnswer(id);
+      }
+      if (response.statusCode == 404 && data is String && data.trim() == '404 page not found') {
+        return const SiloIdentityUnsupported();
+      }
+      return const SiloIdentityUnreachable();
+    } catch (_) {
+      return const SiloIdentityUnreachable();
+    } finally {
+      api.close();
+    }
+  }
+
   Future<String> _serverName(SiloApi api, String baseUrl) async {
     try {
       final response = await api.request('GET', '/api/v2/theme/branding', auth: false, timeout: probeTimeout);
@@ -476,6 +514,7 @@ class SiloAuthService {
       return SiloDeviceCode(
         deviceCode: data['device_code'] as String,
         userCode: data['user_code'] as String,
+        matchCode: data['match_code'] is String ? data['match_code'] as String : '',
         verificationUri: (data['verification_uri'] as String?) ?? '${server.baseUrl}/activate',
         verificationUriComplete: complete is String && complete.isNotEmpty ? complete : null,
         // Local clock from `expires_in`, so a skewed device clock cannot
