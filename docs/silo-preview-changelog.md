@@ -4,6 +4,10 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+## silo-preview-2.25.5
+
+Released November 3, 2026.
+
 - **Temporary passwords from your Silo admin:** if your Silo server's admin gave you a temporary password, signing in on a phone, tablet or computer no longer ends in an error. Plezilo asks you to choose your own password (type the temporary one, then your new one twice), saves it and carries on to your profiles. On a TV, Plezilo tells you to set the new password in Silo's phone app or website and then sign in again. Other screens now say the account has a temporary password instead of showing a confusing server message.
 - **From upstream Plezy:** posters and backgrounds no longer reload over and over from your server while a window or screen is being resized.
 
