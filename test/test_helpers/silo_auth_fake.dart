@@ -66,6 +66,9 @@ class FakeSiloAuthServer {
   /// Answers `/auth/device/start`; defaults to a fresh code.
   http.Response Function()? startAnswer;
 
+  /// Answers `GET /system/identity`; defaults to `srv-1`.
+  http.Response Function()? identityAnswer;
+
   /// Answers `/profiles/{id}/verify-pin`.
   http.Response Function(String pin) verifyPinAnswer = (_) => siloJson({'valid': false});
 
@@ -175,7 +178,7 @@ class FakeSiloAuthServer {
       case '/api/v2/system/info':
         return siloJson({'api_major': 2, 'server_version': '1.2.3'});
       case '/api/v2/system/identity':
-        return siloJson({'server_id': 'srv-1'});
+        return identityAnswer?.call() ?? siloJson({'server_id': 'srv-1'});
       case '/api/v2/theme/branding':
         return siloJson({'server_name': 'Home Silo'});
       case '/api/v2/auth/device/capability':
@@ -189,6 +192,7 @@ class FakeSiloAuthServer {
         return siloJson({
           'device_code': 'dev-$n',
           'user_code': '4821773$n',
+          'match_code': 'brave-otter-$n',
           'verification_uri': 'https://silo.example.com/activate',
           'verification_uri_complete': 'https://silo.example.com/activate?code=4821773$n',
           'expires_in': expiresIn,

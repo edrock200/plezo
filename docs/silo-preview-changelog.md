@@ -4,6 +4,8 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **Sign in from your phone (Android TV, Fire TV, Android phones and tablets):** while Plezilo's "Add Silo server" screen is open, Silo's phone app on the same Wi‑Fi now lists this device, just as it lists a TV running Silo's own app. Pick it on your phone and choose your server; Plezilo asks "Allow this setup?", shows a sign-in code, your phone checks the same code and approves it, and you go straight to choosing your profile. With a code already on screen, the phone can approve that code too. Your password and sign-in tokens never travel over your home network: the server hands them to Plezilo directly. Plezilo signs in to one server at a time, so pick one server on your phone.
+
 ## silo-preview-2.25.6
 
 Released November 3, 2026.

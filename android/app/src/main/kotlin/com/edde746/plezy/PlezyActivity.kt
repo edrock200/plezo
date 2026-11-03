@@ -36,6 +36,7 @@ import com.edde746.plezy.mpv.MpvPlayerPlugin
 import com.edde746.plezy.shared.AssistiveTechnologyMonitor
 import com.edde746.plezy.shared.DeviceQuirks
 import com.edde746.plezy.shared.ThemeHelper
+import com.edde746.plezy.silopairing.SiloPairingChannel
 import com.edde746.plezy.watchnext.WatchNextPlugin
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.android.FlutterTextureView
@@ -134,6 +135,7 @@ class PlezyActivity : FlutterActivity() {
   private val externalPlayerChannel = ExternalPlayerChannel(this)
   private val userCertificateChannel = UserCertificateChannel()
   private val appIconChannel = AppIconChannel(this)
+  private val siloPairingChannel by lazy { SiloPairingChannel(this) }
   private val exitDiagnosticsRequested = AtomicBoolean(false)
 
   private inline fun logTextInputDiag(message: () -> String) {
@@ -624,6 +626,7 @@ class PlezyActivity : FlutterActivity() {
 
   override fun onDestroy() {
     externalPlayerChannel.dispose()
+    siloPairingChannel.dispose()
     systemBarsInsetsHost?.setOnApplyWindowInsetsListener(null)
     systemBarsInsetsHost = null
     cancelPendingSystemBarsHide()
@@ -977,6 +980,7 @@ class PlezyActivity : FlutterActivity() {
     externalPlayerChannel.attach(flutterEngine.dartExecutor.binaryMessenger)
     userCertificateChannel.attach(flutterEngine.dartExecutor.binaryMessenger)
     appIconChannel.attach(flutterEngine.dartExecutor.binaryMessenger)
+    siloPairingChannel.attach(flutterEngine.dartExecutor.binaryMessenger)
 
     // Splash screen theme: persist user's chosen theme for next launch (API 31+)
     MethodChannel(flutterEngine.dartExecutor.binaryMessenger, THEME_CHANNEL).setMethodCallHandler { call, result ->

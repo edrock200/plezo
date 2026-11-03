@@ -1,12 +1,18 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:plezy/screens/settings/add_silo_screen.dart';
+import 'package:plezy/services/silo/pairing/silo_pairing_host.dart';
+import 'package:plezy/services/silo/pairing/silo_pairing_protocol.dart';
+import 'package:plezy/utils/device_identity.dart';
 import 'package:plezy/utils/platform_detector.dart';
 import 'package:plezy/theme/mono_theme.dart';
 
 import '../../test_helpers/prefs.dart';
 import '../../test_helpers/silo_auth_fake.dart';
+import '../../test_helpers/silo_pairing_phone.dart';
 
 Widget _testApp(Widget home) => MaterialApp(theme: monoTheme(MonoPalette.dark), home: home);
 
@@ -238,6 +244,142 @@ void main() {
       await _frames(tester);
       expect(server.countOf('/api/v2/auth/logout'), 1);
       expect(server.countOf('/api/v2/account/password'), 0);
+      await _leave(tester);
+    });
+  });
+
+  group('sign in from a phone', () {
+    tearDown(() => DeviceIdentityService.debugOverride(null));
+
+    Future<SiloPairingHost> openWithPairing(WidgetTester tester, FakeSiloAuthServer server) async {
+      resetSharedPreferencesForTest();
+      // Inside the test's zone, so the screen's await completes under fake time.
+      DeviceIdentityService.debugOverride(const DeviceIdentity(platform: 'Android', deviceName: 'Den TV'));
+      SiloPairingHost? host;
+      await tester.pumpWidget(
+        _testApp(
+          AddSiloScreen(
+            authService: server.service(),
+            phoneSignIn: true,
+            pairingAdvertiser: FakePairingAdvertiser(),
+            onPairingHost: (h) => host = h,
+          ),
+        ),
+      );
+      await _frames(tester);
+      expect(host, isNotNull);
+      return host!;
+    }
+
+    testWidgets('a phone pushes the server, the TV allows it and signs in with the device code', (tester) async {
+      final server = FakeSiloAuthServer();
+      final host = await openWithPairing(tester, server);
+      expect(find.text('Sign in with your phone'), findsOneWidget);
+
+      final phone = FakePairingTransport();
+      unawaited(host.receiver.run(phone));
+      await _frames(tester, count: 2);
+      final hello = phone.sent.first as SiloPairingHello;
+      expect(hello.tvName, 'Den TV');
+      expect(hello.state, SiloPairingReceiverState.setup);
+
+      phone.phoneSends(
+        const SiloPairingPushServer(serverUrl: 'https://silo.example.com', serverName: 'Home', serverIdentity: 'srv-1'),
+      );
+      await _frames(tester, count: 2);
+      expect(find.text('Allow this setup?'), findsOneWidget);
+      expect(find.text('A nearby phone or tablet wants to sign Plezilo in to Home.'), findsOneWidget);
+      expect(server.countOf('/api/v2/auth/device/start'), 0, reason: 'nothing starts before Allow');
+
+      await tester.tap(find.text('Allow'));
+      await _frames(tester);
+      expect(find.text('4821 7731'), findsOneWidget);
+      expect(find.text('Check that your phone or tablet shows this code, then approve it there.'), findsOneWidget);
+      final started = phone.sent.whereType<SiloPairingDeviceStarted>().single;
+      expect(started.userCode, '48217731');
+      expect(started.matchCode, 'brave-otter-1');
+      expect(started.serverUrl, 'https://silo.example.com');
+
+      // The phone approves on the server; the next poll collects the tokens.
+      server.pollAnswer = (_) => FakeSiloAuthServer.approved();
+      for (var i = 0; i < 8; i++) {
+        await tester.pump(const Duration(seconds: 1));
+      }
+      expect(find.text("Who's watching?"), findsOneWidget);
+      final result = phone.sent.whereType<SiloPairingServerResult>().single;
+      expect(result.status, SiloPairingServerStatus.signedIn);
+
+      phone.phoneSends(const SiloPairingDone());
+      await _frames(tester, count: 2);
+      // The session's teardown finishes outside fake time.
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+      await _frames(tester, count: 2);
+      expect(phone.closed, isTrue);
+      expect(find.text("Who's watching?"), findsOneWidget);
+      await _leave(tester);
+    });
+
+    testWidgets("Don't allow tells the phone and keeps the address form", (tester) async {
+      final server = FakeSiloAuthServer();
+      final host = await openWithPairing(tester, server);
+      final phone = FakePairingTransport();
+      unawaited(host.receiver.run(phone));
+      await _frames(tester, count: 2);
+      phone.phoneSends(const SiloPairingPushServer(serverUrl: 'http://192.168.1.5:8090', serverName: 'NAS'));
+      await _frames(tester, count: 2);
+      expect(
+        find.text('The connection to NAS is not encrypted. Only allow this on a network you trust.'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text("Don't allow"));
+      await _frames(tester, count: 2);
+      expect((phone.sent.last as SiloPairingCancel).reason, 'consent_denied');
+      expect(find.text('Allow this setup?'), findsNothing);
+      expect(find.text('Find server'), findsOneWidget);
+      expect(server.countOf('/api/v2/auth/device/start'), 0);
+      await _leave(tester);
+    });
+
+    testWidgets('a phone that leaves mid-approval takes its code with it', (tester) async {
+      final server = FakeSiloAuthServer();
+      final host = await openWithPairing(tester, server);
+      final phone = FakePairingTransport();
+      unawaited(host.receiver.run(phone));
+      await _frames(tester, count: 2);
+      phone.phoneSends(
+        const SiloPairingPushServer(serverUrl: 'https://silo.example.com', serverName: 'Home', serverIdentity: 'srv-1'),
+      );
+      await _frames(tester, count: 2);
+      await tester.tap(find.text('Allow'));
+      await _frames(tester);
+      expect(find.text('4821 7731'), findsOneWidget);
+
+      phone.phoneSends(const SiloPairingCancel('user-cancelled'));
+      await _frames(tester);
+      expect(find.text('4821 7731'), findsNothing);
+      expect(find.text('Find server'), findsOneWidget);
+      expect(server.bodiesFor('/api/v2/auth/device/cancel'), [contains('dev-1')]);
+      await _leave(tester);
+    });
+
+    testWidgets('another server at the pushed address is refused and explained', (tester) async {
+      final server = FakeSiloAuthServer();
+      server.identityAnswer = () => siloJson({'server_id': 'someone-else'});
+      final host = await openWithPairing(tester, server);
+      final phone = FakePairingTransport();
+      unawaited(host.receiver.run(phone));
+      await _frames(tester, count: 2);
+      phone.phoneSends(
+        const SiloPairingPushServer(serverUrl: 'https://silo.example.com', serverName: 'Home', serverIdentity: 'srv-1'),
+      );
+      await _frames(tester, count: 2);
+      await tester.tap(find.text('Allow'));
+      await _frames(tester);
+      expect(find.text("Setup didn't finish"), findsOneWidget);
+      expect((phone.sent.last as SiloPairingServerResult).error, 'identity_mismatch');
+      await tester.tap(find.text('OK'));
+      await _frames(tester, count: 2);
+      expect(find.text('Find server'), findsOneWidget);
       await _leave(tester);
     });
   });
