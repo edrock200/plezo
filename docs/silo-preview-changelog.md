@@ -4,6 +4,10 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+## silo-preview-2.25.4
+
+Released November 3, 2026.
+
 - **YouTube trailers play inside Plezilo on Android TV and Fire TV:** trailers from a Silo server (and other YouTube trailers) now play in Plezilo's built-in YouTube player instead of opening the YouTube app, so you stay in the app. Buttons above the video go back or forward 10 seconds and pause or play, and the remote's play/pause, rewind and fast-forward buttons work too. Press Back to close the trailer. If YouTube doesn't allow a video to play inside other apps, it still opens in the YouTube app.
 
 ## silo-preview-2.25.3
