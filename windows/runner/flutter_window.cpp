@@ -6,7 +6,7 @@
 #include "mpv/display_mode_manager.h"
 #include "mpv/mpv_plugin.h"
 
-static constexpr wchar_t kWindowPlacementKey[] = L"Software\\Plezy";
+static constexpr wchar_t kWindowPlacementKey[] = L"Software\\Plezilo";
 static constexpr wchar_t kWindowPlacementValue[] = L"WindowPlacement";
 
 static UINT_PTR g_saveTimerId = 0;

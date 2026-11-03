@@ -23,29 +23,29 @@ final class SceneLifecycleTests: XCTestCase {
 
   func testEveryPlezyLinkIsForwardedVerbatim() throws {
     let links = [
-      "plezy://open",
-      "plezy://open?profile=Kids%20Room",
-      "plezy://play?content_id=plezy_server_item",
-      "plezy://play?server=abc123&id=42&mode=shuffle&profile=p1",
-      "plezy://play?type=show&tvdb=81189&mode=next",
-      "plezy://live?channel=5.1&server=abc123&start=beginning",
-      "plezy://external-player/success/session-1?position=1200",
-      "plezy://some-future-host/path?unknown=1",
+      "plezilo://open",
+      "plezilo://open?profile=Kids%20Room",
+      "plezilo://play?content_id=plezy_server_item",
+      "plezilo://play?server=abc123&id=42&mode=shuffle&profile=p1",
+      "plezilo://play?type=show&tvdb=81189&mode=next",
+      "plezilo://live?channel=5.1&server=abc123&start=beginning",
+      "plezilo://external-player/success/session-1?position=1200",
+      "plezilo://some-future-host/path?unknown=1",
     ]
     for link in links {
       let url = try XCTUnwrap(URL(string: link))
       XCTAssertEqual(DeepLinkPlugin.forwardedLink(for: url), link)
     }
 
-    let mixedCase = try XCTUnwrap(URL(string: "PLEZY://play?server=abc123&id=42"))
+    let mixedCase = try XCTUnwrap(URL(string: "PLEZILO://play?server=abc123&id=42"))
     XCTAssertEqual(DeepLinkPlugin.forwardedLink(for: mixedCase), mixedCase.absoluteString)
   }
 
   func testOtherSchemesAreNotForwarded() throws {
     let others = [
       "https://example.com/play?content_id=plezy_server_item",
-      "plezyx://play?server=abc123&id=42",
-      "vlc-x-callback://x-callback-url/stream?url=plezy%3A%2F%2Fplay",
+      "plezilox://play?server=abc123&id=42",
+      "vlc-x-callback://x-callback-url/stream?url=plezilo%3A%2F%2Fplay",
       "file:///tmp/plezy",
     ]
     for other in others {
@@ -57,7 +57,7 @@ final class SceneLifecycleTests: XCTestCase {
   func testSceneURLRoutingReportsAcceptedURLAndVisitsEveryContext() {
     let urls = [
       URL(string: "https://example.com/first")!,
-      URL(string: "plezy://play?content_id=plezy_server_item")!,
+      URL(string: "plezilo://play?content_id=plezy_server_item")!,
       URL(string: "https://example.com/last")!,
     ]
     var visited: [URL] = []

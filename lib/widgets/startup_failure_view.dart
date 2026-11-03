@@ -242,14 +242,15 @@ class _StartupFailureViewState extends State<StartupFailureView> {
                       child: Text(t.startup.copyDetails),
                     ),
                   ),
-                  FocusableButton(
-                    onPressed: enabled ? () => _uploadDetails() : null,
-                    child: OutlinedButton(
-                      key: startupFailureUploadKey,
+                  if (logUploadAvailable)
+                    FocusableButton(
                       onPressed: enabled ? () => _uploadDetails() : null,
-                      child: Text(t.startup.uploadDetails),
+                      child: OutlinedButton(
+                        key: startupFailureUploadKey,
+                        onPressed: enabled ? () => _uploadDetails() : null,
+                        child: Text(t.startup.uploadDetails),
+                      ),
                     ),
-                  ),
                 ],
               ),
             ],

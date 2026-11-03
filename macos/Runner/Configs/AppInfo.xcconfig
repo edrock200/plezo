@@ -1,6 +1,6 @@
 
-PRODUCT_NAME = Plezy
+PRODUCT_NAME = Plezilo
 
-PRODUCT_BUNDLE_IDENTIFIER = com.edde746.plezy
+PRODUCT_BUNDLE_IDENTIFIER = com.edrock200.plezilo
 
 PRODUCT_COPYRIGHT = Copyright © 2025 edde746

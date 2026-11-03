@@ -15,8 +15,8 @@ run-name: Silo preview desktop ${{ github.sha }}
 #   the latest existing preview release and attaches to it.
 #
 # The update check is left off (no ENABLE_UPDATE_CHECK): it reads upstream
-# Plezy's feed and would replace this build with Plezy without Silo. Both
-# apps keep Plezy's app id, so they replace an installed Plezy. Neither is
+# Plezy's feed and would replace this build with Plezy. Both apps are
+# Plezilo (their own app ids), so they install beside Plezy. Neither is
 # signed with a vendor certificate (SmartScreen / Gatekeeper warn once).
 #
 # Like upstream's GitHub builds: SUPPORTER_MODE=unlocked on macOS, msstore on
@@ -194,14 +194,14 @@ jobs:
           $bundlePath = (Resolve-Path -LiteralPath $bundleDir).Path
           $found = @(Get-ChildItem -LiteralPath $bundlePath -File -Recurse |
             ForEach-Object { $_.FullName.Substring($bundlePath.Length + 1).Replace('\', '/') })
-          $required = @("plezy.exe", "flutter_windows.dll", "sqlite3.dll", "libmpv-2.dll", "data/app.so",
+          $required = @("plezilo.exe", "flutter_windows.dll", "sqlite3.dll", "libmpv-2.dll", "data/app.so",
             "data/icudtl.dat", "data/flutter_assets/NativeAssetsManifest.json", "msvcp140.dll", "vcruntime140.dll",
             "data/flutter_assets/assets/brand/silo/silo-project-icon.png")
           $missing = @($required | Where-Object { $found -notcontains $_ })
           if ($missing.Count -gt 0) { throw "Windows bundle is missing: $($missing -join ', ')" }
           # As upstream's build.yml: link by-products and PDBs (release links
           # emit them, windows/CMakeLists.txt) must not ship in the bundle.
-          $forbidden = @($found | Where-Object { $_ -in @("plezy.lib", "plezy.exp", "simdutf.lib") -or $_ -like '*.pdb' })
+          $forbidden = @($found | Where-Object { $_ -in @("plezilo.lib", "plezilo.exp", "simdutf.lib") -or $_ -like '*.pdb' })
           if ($forbidden.Count -gt 0) { throw "Windows bundle contains build by-products: $($forbidden -join ', ')" }
 
       - name: Upload ${{ matrix.arch }} build
@@ -244,9 +244,9 @@ jobs:
         run: |
           $v = "${{ needs.resolve.outputs.version }}"
           New-Item -ItemType Directory -Force dist | Out-Null
-          Move-Item plezy-windows-installer.exe "dist/plezy-silo-$v-windows-installer.exe"
-          Move-Item plezy-windows-x64-portable.7z "dist/plezy-silo-$v-windows-x64-portable.7z"
-          Move-Item plezy-windows-arm64-portable.7z "dist/plezy-silo-$v-windows-arm64-portable.7z"
+          Move-Item plezilo-windows-installer.exe "dist/plezilo-$v-windows-installer.exe"
+          Move-Item plezilo-windows-x64-portable.7z "dist/plezilo-$v-windows-x64-portable.7z"
+          Move-Item plezilo-windows-arm64-portable.7z "dist/plezilo-$v-windows-arm64-portable.7z"
           Push-Location dist
           Get-ChildItem -File | ForEach-Object {
             "$((Get-FileHash $_.Name -Algorithm SHA256).Hash.ToLower())  $($_.Name)"
@@ -344,10 +344,10 @@ jobs:
       - name: Sign ad hoc and verify
         run: |
           set -euo pipefail
-          app="build/macos/Build/Products/Release/Plezy.app"
+          app="build/macos/Build/Products/Release/Plezilo.app"
           codesign --force --deep --sign - --entitlements macos/Runner/Release.entitlements "$app"
           codesign --verify --deep --strict --verbose=2 "$app"
-          exe="$app/Contents/MacOS/Plezy"
+          exe="$app/Contents/MacOS/Plezilo"
           lipo -archs "$exe"
           version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Contents/Info.plist")"
           [[ "$version" == "${{ needs.resolve.outputs.version }}" ]] || { echo "::error::App version is $version"; exit 1; }
@@ -358,9 +358,9 @@ jobs:
           set -euo pipefail
           v="${{ needs.resolve.outputs.version }}"
           mkdir -p dmg-staging dist
-          cp -R build/macos/Build/Products/Release/Plezy.app dmg-staging/
+          cp -R build/macos/Build/Products/Release/Plezilo.app dmg-staging/
           ln -s /Applications dmg-staging/Applications
-          hdiutil create -format ULMO -srcfolder dmg-staging -volname "Plezy" "dist/plezy-silo-${v}-macos.dmg"
+          hdiutil create -format ULMO -srcfolder dmg-staging -volname "Plezilo" "dist/plezilo-${v}-macos.dmg"
           (cd dist && shasum -a 256 *.dmg > SHA256SUMS-macos.txt)
 
       # A [release-apk] build attaches to the release the Android build

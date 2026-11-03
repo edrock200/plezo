@@ -18,7 +18,7 @@ platform :ios do
     sh("cd #{PROJECT_ROOT_ARG} && SENTRY_DIST=app-store BUGS_APPLE_ARCHIVE=build/ios/archive/Runner.xcarchive ./scripts/upload-symbols.sh ios")
 
     upload_to_app_store(
-      ipa: "../build/ios/ipa/Plezy.ipa",
+      ipa: "../build/ios/ipa/Plezilo.ipa",
       force: true,
       submit_for_review: false,
       skip_screenshots: true, # https://github.com/fastlane/fastlane/issues/29735

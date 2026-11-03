@@ -23,6 +23,7 @@ import '../../providers/libraries_provider.dart';
 import '../../services/donation_service.dart';
 import '../../services/download_storage_service.dart';
 import '../../services/file_picker_service.dart';
+import '../../services/plezy_server.dart';
 import '../../services/saf_storage_service.dart';
 import '../../services/settings_export_service.dart';
 import '../../providers/theme_provider.dart';
@@ -557,13 +558,15 @@ class _SettingsScreenState extends State<SettingsScreen> with FocusableTab, Moun
           subtitle: t.settings.watchTogetherRelayDescription,
           onTap: () => _showRelayUrlDialog(),
         ),
-        SettingSwitchTile(
-          focusNode: _focusTracker.get(_kCrashReporting),
-          pref: settings.SettingsService.crashReporting,
-          icon: Symbols.monitoring_rounded,
-          title: t.settings.crashReporting,
-          subtitle: t.settings.crashReportingDescription,
-        ),
+        // Crash reports need the Plezy project's server; hidden while it is off.
+        if (plezyProjectServicesEnabled)
+          SettingSwitchTile(
+            focusNode: _focusTracker.get(_kCrashReporting),
+            pref: settings.SettingsService.crashReporting,
+            icon: Symbols.monitoring_rounded,
+            title: t.settings.crashReporting,
+            subtitle: t.settings.crashReportingDescription,
+          ),
         SettingSwitchTile(
           focusNode: _focusTracker.get(_kDebugLogging),
           pref: settings.SettingsService.enableDebugLogging,

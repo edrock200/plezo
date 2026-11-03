@@ -5,7 +5,7 @@
   import FlutterMacOS
 #endif
 
-/// Answers `com.plezy/deep_link` on iOS, iPadOS, tvOS and macOS: hands every `plezy:` URL the
+/// Answers `com.plezy/deep_link` on iOS, iPadOS, tvOS and macOS: hands every `plezilo:` URL the
 /// system opens the app with to Dart unchanged.
 ///
 /// Dart owns the link grammar (lib/services/deep_links/deep_link.dart), so only the scheme is
@@ -13,7 +13,7 @@
 /// switches the engine to live delivery, after which `onLink` delivers each new link and only a
 /// `true` reply clears it. Compiled into the iOS, tvOS and macOS Runners.
 final class DeepLinkPlugin: NSObject, FlutterPlugin {
-  private static let scheme = "plezy"
+  private static let scheme = "plezilo"
   // Process-wide so a link received before a (re)created engine registers is not lost.
   private static let delivery = DeepLinkDeliveryCoordinator()
   private static var channel: FlutterMethodChannel?

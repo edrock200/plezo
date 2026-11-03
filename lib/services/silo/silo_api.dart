@@ -32,7 +32,7 @@ class SiloDeviceHeaders {
     required this.clientVersion,
   });
 
-  static const clientName = 'Plezy';
+  static const clientName = 'Plezilo';
 
   /// Resolve the headers for this install. Never throws: tests and
   /// non-platform contexts fall back to generic values.

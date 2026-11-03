@@ -102,7 +102,7 @@ class _Translations$app$ko extends Translations$app$en {
 	final TranslationsKo _root; // ignore: unused_field
 
 	// Translations
-	@override String get title => 'Plezy';
+	@override String get title => 'Plezilo';
 }
 
 // Path: appIcon
@@ -118,8 +118,8 @@ class _Translations$appIcon$ko extends Translations$appIcon$en {
 	@override String get locked => 'Supporter 혜택';
 	@override String get lockedHint => '대체 아이콘은 Supporter 혜택입니다.';
 	@override String get changeFailed => '앱 아이콘을 변경하지 못했습니다';
-	@override String get launcherHint => 'Plezy를 나가면 홈 화면에 새 아이콘이 표시됩니다.';
-	@override String get tvLauncherHint => 'Plezy를 나가면 새 배너가 표시됩니다. Android TV에서는 TV를 다시 시작할 때까지 이전 배너가 계속 표시될 수 있습니다.';
+	@override String get launcherHint => 'Plezilo를 나가면 홈 화면에 새 아이콘이 표시됩니다.';
+	@override String get tvLauncherHint => 'Plezilo를 나가면 새 배너가 표시됩니다. Android TV에서는 TV를 다시 시작할 때까지 이전 배너가 계속 표시될 수 있습니다.';
 	@override late final _Translations$appIcon$names$ko names = _Translations$appIcon$names$ko._(_root);
 }
 
@@ -145,7 +145,7 @@ class _Translations$auth$ko extends Translations$auth$en {
 	@override String get quickConnectWaiting => '승인 대기 중…';
 	@override String get quickConnectCancel => '취소';
 	@override String get quickConnectExpired => 'Quick Connect가 만료되었습니다. 다시 시도하세요.';
-	@override String get localDataRecoveryRequired => 'Plezy에서 로컬 로그인 정보와 대기 중인 재생 데이터를 안전하게 복구하지 못했습니다. 다시 로그인해 주세요.';
+	@override String get localDataRecoveryRequired => 'Plezilo에서 로컬 로그인 정보와 대기 중인 재생 데이터를 안전하게 복구하지 못했습니다. 다시 로그인해 주세요.';
 	@override String get pinCheckRejected => 'Plex PIN 확인이 거부되었습니다';
 }
 
@@ -246,19 +246,19 @@ class _Translations$supporter$ko extends Translations$supporter$en {
 	final TranslationsKo _root; // ignore: unused_field
 
 	// Translations
-	@override String get title => 'Plezy Supporter';
-	@override String get intro => 'Plezy 개발을 후원하고 외형 꾸미기 기능을 잠금 해제하는 1회성 구매입니다:';
+	@override String get title => 'Plezilo Supporter';
+	@override String get intro => 'Plezilo 개발을 후원하고 외형 꾸미기 기능을 잠금 해제하는 1회성 구매입니다:';
 	@override String get presetThemes => '프리셋 테마';
 	@override String get presetThemesDescription => '불씨, 빙하, 숲, 자두, 종이';
 	@override String get customTheme => '사용자 지정 테마';
 	@override String get customThemeDescription => '모든 색상을 직접 선택';
 	@override String get appIcons => '앱 아이콘';
-	@override String get appIconsDescription => '대체 Plezy 아이콘 선택';
+	@override String get appIconsDescription => '대체 Plezilo 아이콘 선택';
 	@override String buy({required Object price}) => '${price}에 구매';
 	@override String get loadingPrice => '가격 불러오는 중...';
 	@override String get restore => '구매 복원';
 	@override String get pending => '구매가 결제 또는 승인 대기 중입니다. 스토어에서 처리가 완료되는 즉시 추가 기능이 잠금 해제됩니다.';
-	@override String get thankYouTitle => 'Plezy를 후원해 주셔서 감사합니다';
+	@override String get thankYouTitle => 'Plezilo를 후원해 주셔서 감사합니다';
 	@override String get thankYouBody => 'Supporter 추가 기능이 잠금 해제되었습니다.';
 	@override String get tileSubtitle => '1회성 구매로 테마와 앱 아이콘 잠금 해제';
 	@override String get tileSubtitleThemesOnly => '1회성 구매로 테마 잠금 해제';
@@ -274,7 +274,7 @@ class _Translations$settings$ko extends Translations$settings$en {
 
 	// Translations
 	@override String get title => '설정';
-	@override String get supportDeveloper => 'Plezy 후원하기';
+	@override String get supportDeveloper => 'Plezilo 후원하기';
 	@override String get supportDeveloperDescription => 'Liberapay로 후원하여 개발 지원';
 	@override String get language => '언어';
 	@override String get theme => '테마';
@@ -421,7 +421,7 @@ class _Translations$settings$ko extends Translations$settings$en {
 	@override String get importSettingsDescription => '파일에서 기본 설정 복원';
 	@override String get importSettingsConfirm => '현재 설정을 대체합니다. 계속하시겠습니까?';
 	@override String get importSettingsSuccess => '설정 가져오기 완료';
-	@override String get importSettingsInvalidFile => '유효한 Plezy 설정 내보내기 파일이 아닙니다';
+	@override String get importSettingsInvalidFile => '유효한 Plezilo 설정 내보내기 파일이 아닙니다';
 	@override String get importSettingsNoUser => '설정을 가져오기 전에 로그인하세요';
 	@override String get shortcutsReset => '단축키가 기본값으로 재설정되었습니다';
 	@override String get resetShortcutsConfirm => '사용자 지정 단축키가 기본값으로 대체됩니다. 계속하시겠습니까?';
@@ -558,7 +558,7 @@ class _Translations$settings$ko extends Translations$settings$en {
 	@override String get forceTvMode => 'TV 모드 강제 사용';
 	@override String get forceTvModeDescription => 'TV 레이아웃을 강제합니다. 자동 감지되지 않는 기기용입니다. 재시작이 필요합니다.';
 	@override String get startInFullscreen => '전체 화면으로 시작';
-	@override String get startInFullscreenDescription => '실행 시 Plezy를 전체 화면 모드로 엽니다';
+	@override String get startInFullscreenDescription => '실행 시 Plezilo를 전체 화면 모드로 엽니다';
 	@override String get exitFullscreenOnPlayerClose => '플레이어를 닫을 때 전체 화면 종료';
 	@override String get exitFullscreenOnPlayerCloseDescription => '비디오 플레이어를 닫을 때 자동으로 전체 화면을 종료합니다';
 	@override String get autoHidePerformanceOverlay => '성능 오버레이 자동 숨기기';
@@ -607,7 +607,7 @@ class _Translations$settings$ko extends Translations$settings$en {
 	@override String get playerScopeGlobal => '모든 곳';
 	@override String get playerScopeLibrary => '라이브러리별';
 	@override String get playerScopeTitle => '시리즈 또는 영화별';
-	@override String get exportDialogTitle => 'Plezy 설정 내보내기';
+	@override String get exportDialogTitle => 'Plezilo 설정 내보내기';
 }
 
 // Path: themeEditor
@@ -839,8 +839,8 @@ class _Translations$mediaMenu$ko extends Translations$mediaMenu$en {
 	@override String deleteSharedFileHeading({required num n}) => (_root.$meta.cardinalResolver ?? PluralResolvers.cardinal('ko'))(n,
 		other: '같은 파일에 저장된 다른 에피소드 ${n}개도 함께 삭제됩니다:',
 	);
-	@override String get deleteScopeUnverifiedProbeFailed => 'Plezy가 어떤 파일이 삭제될지 확인하지 못해 위 항목보다 더 많은 파일이 삭제될 수 있습니다. 취소하고 다시 시도하거나 그래도 삭제하세요.';
-	@override String get deleteScopeUnverifiedNoFileInfo => '서버가 이 항목의 파일 정보를 제공하지 않아 Plezy가 어떤 파일이 삭제될지 확인할 수 없습니다. 위 항목보다 더 많은 파일이 삭제될 수 있습니다.';
+	@override String get deleteScopeUnverifiedProbeFailed => 'Plezilo가 어떤 파일이 삭제될지 확인하지 못해 위 항목보다 더 많은 파일이 삭제될 수 있습니다. 취소하고 다시 시도하거나 그래도 삭제하세요.';
+	@override String get deleteScopeUnverifiedNoFileInfo => '서버가 이 항목의 파일 정보를 제공하지 않아 Plezilo가 어떤 파일이 삭제될지 확인할 수 없습니다. 위 항목보다 더 많은 파일이 삭제될 수 있습니다.';
 	@override String get mediaDeletedSuccessfully => '미디어 항목이 성공적으로 삭제되었습니다';
 	@override String get mediaFailedToDelete => '미디어 항목 삭제 실패';
 	@override String get rate => '평가';
@@ -1173,7 +1173,7 @@ class _Translations$profiles$ko extends Translations$profiles$en {
 	final TranslationsKo _root; // ignore: unused_field
 
 	// Translations
-	@override String get addPlezyProfile => 'Plezy 프로필 추가';
+	@override String get addPlezyProfile => 'Plezilo 프로필 추가';
 	@override String get switchingProfile => '프로필 전환 중…';
 	@override String get deleteThisProfileTitle => '이 프로필을 삭제하시겠습니까?';
 	@override String deleteThisProfileMessage({required Object displayName}) => '${displayName}을(를) 제거합니다. 연결에는 영향이 없습니다.';
@@ -1257,7 +1257,7 @@ class _Translations$connections$ko extends Translations$connections$en {
 	@override String accessDeniedMany({required Object count}) => '${count}개 서버에서 이 계정의 접근을 거부했습니다';
 	@override String get signInAgain => '다시 로그인';
 	@override String editMediaBrowserTitle({required Object product}) => '${product} 연결 편집';
-	@override String editMediaBrowserIntro({required Object serverName}) => '${serverName}의 URL을 추가하거나 제거하세요. Plezy는 연결 가능한 URL 중 지연 시간이 가장 낮은 URL을 사용합니다.';
+	@override String editMediaBrowserIntro({required Object serverName}) => '${serverName}의 URL을 추가하거나 제거하세요. Plezilo는 연결 가능한 URL 중 지연 시간이 가장 낮은 URL을 사용합니다.';
 }
 
 // Path: accountPreferences
@@ -1271,7 +1271,7 @@ class _Translations$accountPreferences$ko extends Translations$accountPreference
 	@override String hubSubtitleSingle({required Object account}) => '${account}에 저장된 오디오, 자막 및 라이브러리 옵션';
 	@override String hubSubtitleMultiple({required Object count}) => '${count}개 계정에 저장된 오디오, 자막 및 라이브러리 옵션';
 	@override String get pickAccount => '각 계정은 고유한 기본 설정을 저장합니다. 편집할 계정을 선택하세요.';
-	@override String get storedOnAccount => '이 옵션은 계정 자체에 저장되므로 해당 계정으로 로그인한 모든 앱에서 사용됩니다 — 다른 기기의 Plezy를 포함합니다.';
+	@override String get storedOnAccount => '이 옵션은 계정 자체에 저장되므로 해당 계정으로 로그인한 모든 앱에서 사용됩니다 — 다른 기기의 Plezilo를 포함합니다.';
 	@override String get noAccounts => '구성할 계정이 없습니다';
 	@override String get noAccountsHint => 'Plex에 로그인하거나 Jellyfin 또는 Emby 서버에 연결하면 해당 계정에 저장된 기본 설정이 여기에 표시됩니다.';
 	@override String get unavailable => '이 계정에 연결할 수 없습니다';
@@ -1482,9 +1482,9 @@ class _Translations$startup$ko extends Translations$startup$en {
 	final TranslationsKo _root; // ignore: unused_field
 
 	// Translations
-	@override String get failedTitle => 'Plezy를 시작하지 못했습니다';
+	@override String get failedTitle => 'Plezilo를 시작하지 못했습니다';
 	@override String get failedBody => '시작 중 문제가 발생했습니다. 아래 세부 정보에서 실패 원인을 확인할 수 있습니다.';
-	@override String get failedBodyRepairable => 'Plezy의 저장된 설정 파일이 손상되어 Plezy를 시작하려면 먼저 파일을 다시 만들어야 합니다. 재시도해도 해결되지 않습니다 — 저장소 복구를 선택하세요.';
+	@override String get failedBodyRepairable => 'Plezilo의 저장된 설정 파일이 손상되어 Plezilo를 시작하려면 먼저 파일을 다시 만들어야 합니다. 재시도해도 해결되지 않습니다 — 저장소 복구를 선택하세요.';
 	@override String get phaseLabel => '단계';
 	@override String get showDetails => '세부 정보 표시';
 	@override String get hideDetails => '세부 정보 숨기기';
@@ -1493,16 +1493,16 @@ class _Translations$startup$ko extends Translations$startup$en {
 	@override String get uploadDetails => '세부 정보 업로드';
 	@override String get repairStorage => '저장소 복구';
 	@override String get repairTitle => '저장된 데이터를 복구할까요?';
-	@override String get repairBodyCommon => 'Plezy의 설정 파일이 손상되어 읽을 수 없습니다. 복구하면 모든 설정이 기본값으로 재설정됩니다.';
+	@override String get repairBodyCommon => 'Plezilo의 설정 파일이 손상되어 읽을 수 없습니다. 복구하면 모든 설정이 기본값으로 재설정됩니다.';
 	@override String get repairBodyOneCredential => '저장된 로그인 정보 하나가 손상되어 읽을 수 없습니다. 복구하면 해당 로그인 정보만 제거되며 다른 설정은 그대로 유지됩니다.';
 	@override String get repairBodySignInsKept => '서버와 프로필은 로그인 상태가 유지됩니다.';
 	@override String get repairBodySignInsLost => '저장된 로그인 정보를 보호하는 키를 이 파일에서 복구할 수 없어 모든 서버와 프로필에 다시 로그인해야 합니다. 미디어 서버의 데이터에는 영향이 없습니다.';
-	@override String get repairBodySessionsUncertain => '트래커(MAL, AniList, Simkl, Trakt)와 Seerr는 별도로 저장되며 유지 여부가 확실하지 않습니다. Plezy가 유지된 항목을 정확히 알려줄 것입니다.';
+	@override String get repairBodySessionsUncertain => '트래커(MAL, AniList, Simkl, Trakt)와 Seerr는 별도로 저장되며 유지 여부가 확실하지 않습니다. Plezilo가 유지된 항목을 정확히 알려줄 것입니다.';
 	@override String get repairConfirm => '복구';
 	@override String get repairSucceeded => '저장소가 복구되었습니다';
 	@override String get repairNeedsRestart => '저장소가 복구되었습니다 — 재시작 필요';
-	@override String get restartRequiredBody => '데이터가 복구되었지만 Plezy는 이를 사용하려면 새로 시작해야 합니다. Plezy를 종료한 후 다시 열어주세요.';
-	@override String get quitPlezy => 'Plezy 종료';
+	@override String get restartRequiredBody => '데이터가 복구되었지만 Plezilo는 이를 사용하려면 새로 시작해야 합니다. Plezilo를 종료한 후 다시 열어주세요.';
+	@override String get quitPlezy => 'Plezilo 종료';
 	@override String get repairFailed => '복구 실패';
 	@override String get repairKeptSignIns => '서버와 프로필이 계속 로그인 상태입니다.';
 	@override String get repairLostSignIns => '저장된 로그인 정보를 보호하는 키를 복구할 수 없었습니다. 모든 서버와 프로필에 다시 로그인해야 합니다.';
@@ -1511,7 +1511,7 @@ class _Translations$startup$ko extends Translations$startup$en {
 	@override String get backupWarning => '로그인 자격 증명이 포함되어 있습니다. 업로드하거나 공유하지 마세요.';
 	@override String get deleteBackup => '복사본 삭제';
 	@override String get backupDeleted => '복사본이 삭제되었습니다.';
-	@override String get previousFailureTitle => '지난번에 Plezy를 시작하지 못했습니다';
+	@override String get previousFailureTitle => '지난번에 Plezilo를 시작하지 못했습니다';
 }
 
 // Path: licenses
@@ -1813,7 +1813,7 @@ class _Translations$watchTogether$ko extends Translations$watchTogether$en {
 	@override String get codeCopied => '방 코드가 복사되었습니다';
 	@override String get shareInvite => '초대 공유';
 	@override String get inviteCopied => '초대 메시지가 복사되었습니다. 메시지에 붙여넣으세요.';
-	@override String inviteMessage({required Object code}) => 'Plezy 함께 보기 방에 초대합니다. \'함께 보기\'를 열고 \'방 참여\'를 선택한 다음 ${code} 코드를 입력하세요.';
+	@override String inviteMessage({required Object code}) => 'Plezilo 함께 보기 방에 초대합니다. \'함께 보기\'를 열고 \'방 참여\'를 선택한 다음 ${code} 코드를 입력하세요.';
 	@override String get openSessionControls => '함께 보기 세션 제어 열기';
 	@override String get reconnecting => '재연결 중...';
 	@override String get reconnectingDescription => '연결이 끊어졌습니다. 자동으로 방에 다시 참여합니다.';
@@ -1839,7 +1839,7 @@ class _Translations$watchTogether$ko extends Translations$watchTogether$en {
 	@override String get chooseAnotherCopy => '다른 사본 선택';
 	@override String get dontPlay => '재생 안 함';
 	@override String get unavailableTitle => '이 비디오가 없습니다';
-	@override String get unavailableDescription => 'Plezy가 라이브러리에서 이 비디오를 찾지 못했습니다. 직접 사본을 선택하거나 다시 검색하세요.';
+	@override String get unavailableDescription => 'Plezilo가 라이브러리에서 이 비디오를 찾지 못했습니다. 직접 사본을 선택하거나 다시 검색하세요.';
 	@override String get chooseCopy => '사본 선택';
 	@override String get searchAgain => '다시 검색';
 	@override String get noCandidates => '라이브러리에서 사본을 찾을 수 없습니다.';
@@ -2301,11 +2301,11 @@ class _Translations$trakt$ko extends Translations$trakt$en {
 	@override String get connected => '연결됨';
 	@override String connectedAs({required Object username}) => '@${username}(으)로 연결됨';
 	@override String get disconnectConfirm => 'Trakt 계정 연결을 끊으시겠습니까?';
-	@override String get disconnectConfirmBody => 'Plezy가 Trakt로 이벤트 전송을 중지합니다. 언제든 다시 연결할 수 있습니다.';
+	@override String get disconnectConfirmBody => 'Plezilo가 Trakt로 이벤트 전송을 중지합니다. 언제든 다시 연결할 수 있습니다.';
 	@override String get scrobble => '실시간 스크로블';
 	@override String get scrobbleDescription => '재생 중 재생, 일시정지, 정지 이벤트를 Trakt로 전송합니다.';
 	@override String get watchedSync => '시청 상태 동기화';
-	@override String get watchedSyncDescription => 'Plezy에서 시청 완료로 표시한 항목이 Trakt에도 시청 완료로 표시됩니다.';
+	@override String get watchedSyncDescription => 'Plezilo에서 시청 완료로 표시한 항목이 Trakt에도 시청 완료로 표시됩니다.';
 }
 
 // Path: seerr
@@ -2324,10 +2324,10 @@ class _Translations$seerr$ko extends Translations$seerr$en {
 	@override String get signInWithEmby => 'Emby로 로그인';
 	@override String get signInWithLocal => '로컬 계정 사용';
 	@override String get email => '이메일';
-	@override String get noSignInMethods => '이 Seerr 인스턴스에는 Plezy가 지원하는 로그인 방법이 없습니다.';
+	@override String get noSignInMethods => '이 Seerr 인스턴스에는 Plezilo가 지원하는 로그인 방법이 없습니다.';
 	@override String get instance => '인스턴스';
 	@override String get disconnectConfirm => 'Seerr 연결을 해제하시겠습니까?';
-	@override String get disconnectConfirmBody => 'Plezy가 이 Seerr 인스턴스를 삭제합니다. 언제든 다시 연결할 수 있습니다.';
+	@override String get disconnectConfirmBody => 'Plezilo가 이 Seerr 인스턴스를 삭제합니다. 언제든 다시 연결할 수 있습니다.';
 	@override String get request => '요청';
 	@override String get request4k => '4K로 요청';
 	@override String get seasons => '시즌';
@@ -2352,7 +2352,7 @@ class _Translations$seerr$ko extends Translations$seerr$en {
 	@override String get statusBlocklisted => '차단 목록에 있음';
 	@override String couldNotReach({required Object url, required Object error}) => '${url}에 연결할 수 없습니다: ${error}';
 	@override String noInstanceAtUrl({required Object url, required Object status}) => '${url}에 Seerr 인스턴스가 없습니다(HTTP ${status})';
-	@override String get behindAuthProxy => 'Seerr 대신 인증이 필요한 리버스 프록시(SSO 또는 HTTP 인증)가 응답했습니다. Plezy는 이를 통해 로그인할 수 없습니다. 이 앱에서 Seerr의 /api/v1 경로가 프록시를 우회하도록 하거나, Seerr에 직접 연결되는 주소를 사용하세요.';
+	@override String get behindAuthProxy => 'Seerr 대신 인증이 필요한 리버스 프록시(SSO 또는 HTTP 인증)가 응답했습니다. Plezilo는 이를 통해 로그인할 수 없습니다. 이 앱에서 Seerr의 /api/v1 경로가 프록시를 우회하도록 하거나, Seerr에 직접 연결되는 주소를 사용하세요.';
 	@override String get invalidUrl => 'https://seerr.example.com과 같은 서버 주소를 입력하세요';
 	@override String get quickConnectUnsupported => '이 Seerr 인스턴스는 Quick Connect를 지원하지 않습니다. Seerr 3.4 이상이 필요합니다.';
 	@override String get notInitialized => '이 Seerr 인스턴스는 최초 실행 설정을 완료하지 않았습니다';
@@ -2382,7 +2382,7 @@ class _Translations$services$ko extends Translations$services$en {
 	@override String get scrobble => '진행률 자동 추적';
 	@override String get scrobbleDescription => '에피소드나 영화를 시청하면 목록을 업데이트합니다.';
 	@override String disconnectConfirm({required Object service}) => '${service} 연결을 해제하시겠습니까?';
-	@override String disconnectConfirmBody({required Object service}) => 'Plezy가 ${service} 업데이트를 중지합니다. 언제든 다시 연결할 수 있습니다.';
+	@override String disconnectConfirmBody({required Object service}) => 'Plezilo가 ${service} 업데이트를 중지합니다. 언제든 다시 연결할 수 있습니다.';
 	@override String connectFailed({required Object service}) => '${service}에 연결할 수 없습니다. 다시 시도하세요.';
 	@override late final _Translations$services$names$ko names = _Translations$services$names$ko._(_root);
 	@override late final _Translations$services$simklReconnect$ko simklReconnect = _Translations$services$simklReconnect$ko._(_root);
@@ -3140,7 +3140,7 @@ class _Translations$watchTogether$errors$ko extends Translations$watchTogether$e
 	@override String get relayFull => '지금은 함께 보기 이용자가 많습니다. 나중에 다시 시도하세요.';
 	@override String get unreachable => '함께 보기 릴레이에 연결할 수 없습니다. 연결을 확인하세요.';
 	@override String get rateLimited => '시도 횟수가 너무 많습니다. 잠시 후 다시 시도하세요.';
-	@override String get clientBlocked => '이 버전의 Plezy는 릴레이를 사용할 수 없습니다. 앱을 업데이트하세요.';
+	@override String get clientBlocked => '이 버전의 Plezilo는 릴레이를 사용할 수 없습니다. 앱을 업데이트하세요.';
 	@override String get forbidden => '호스트만 이 작업을 할 수 있습니다.';
 	@override String get notInRoom => '방에 참여하고 있지 않습니다.';
 	@override String get alreadyInRoom => '이미 방에 참여하고 있습니다.';
@@ -3161,14 +3161,14 @@ class _Translations$downloads$backgroundWarning$ko extends Translations$download
 	@override String get bannerAction => '세부정보';
 	@override String get sheetTitle => '백그라운드 다운로드가 차단됨';
 	@override String get sheetTitleDegraded => '백그라운드 다운로드가 제한될 수 있음';
-	@override String get sheetIntro => 'Android가 Plezy의 안정적인 백그라운드 다운로드를 차단하고 있습니다.';
-	@override String get sheetIntroDegraded => '기기에서 Plezy가 백그라운드로 다운로드할 수 있는 시점을 제한하고 있습니다.';
-	@override String get reasonBackgroundRestricted => 'Plezy의 백그라운드 사용이 제한되어 있습니다. 배터리 또는 백그라운드 사용을 "제한 없음"으로 설정하세요.';
-	@override String get reasonStandbyRestricted => 'Android가 Plezy를 제한된 대기 상태로 전환했습니다. 배터리 사용량을 "제한 없음"으로 설정하세요.';
+	@override String get sheetIntro => 'Android가 Plezilo의 안정적인 백그라운드 다운로드를 차단하고 있습니다.';
+	@override String get sheetIntroDegraded => '기기에서 Plezilo가 백그라운드로 다운로드할 수 있는 시점을 제한하고 있습니다.';
+	@override String get reasonBackgroundRestricted => 'Plezilo의 백그라운드 사용이 제한되어 있습니다. 배터리 또는 백그라운드 사용을 "제한 없음"으로 설정하세요.';
+	@override String get reasonStandbyRestricted => 'Android가 Plezilo를 제한된 대기 상태로 전환했습니다. 배터리 사용량을 "제한 없음"으로 설정하세요.';
 	@override String get reasonDownloadChannelBlocked => '다운로드 알림이 꺼져 있어 진행 상황과 제어 기능을 사용하지 못할 수 있습니다.';
 	@override String get reasonNotificationsDisabled => '알림이 꺼져 있습니다. Android 13 이상에서는 장시간 백그라운드 다운로드에 알림이 필요합니다.';
 	@override String get reasonDataSaver => '데이터 절약 모드가 켜져 있어 모바일 데이터로 백그라운드 다운로드를 할 수 없습니다. Wi-Fi에서는 계속 다운로드할 수 있습니다.';
-	@override String get reasonOemUnknown => 'Plezy가 백그라운드에 있을 때 다운로드가 반복해서 중지되었습니다. Plezy의 배터리 또는 백그라운드 사용 설정을 확인하세요.';
+	@override String get reasonOemUnknown => 'Plezilo가 백그라운드에 있을 때 다운로드가 반복해서 중지되었습니다. Plezilo의 배터리 또는 백그라운드 사용 설정을 확인하세요.';
 	@override String get openSettings => '설정 열기';
 	@override String get stillNotWorking => '기기별 도움말';
 	@override String get stillNotWorkingDescription => '기기에 맞는 단계를 확인하세요. 문제가 계속되면 설정 › 로그 보기에서 로그를 보내 주세요.';
@@ -3223,19 +3223,19 @@ class _Translations$companionRemote$pairing$ko extends Translations$companionRem
 	final TranslationsKo _root; // ignore: unused_field
 
 	// Translations
-	@override String get discoveryDescription => '같은 Plex 계정의 Plezy 기기가 여기에 표시됩니다';
+	@override String get discoveryDescription => '같은 Plex 계정의 Plezilo 기기가 여기에 표시됩니다';
 	@override String get hostAddressHint => '192.168.1.100:48632';
 	@override String get connecting => '연결 중...';
 	@override String get searchingForDevices => '기기 검색 중...';
 	@override String get noDevicesFound => '네트워크에서 기기를 찾을 수 없습니다';
-	@override String get noDevicesHint => '데스크톱에서 Plezy를 열고 같은 Wi-Fi를 사용하세요';
+	@override String get noDevicesHint => '데스크톱에서 Plezilo를 열고 같은 Wi-Fi를 사용하세요';
 	@override String get availableDevices => '사용 가능한 기기';
 	@override String get manualConnection => '수동 연결';
 	@override String get cryptoInitFailed => '보안 연결을 시작할 수 없습니다. 먼저 Plex에 로그인하세요.';
 	@override String get validationHostRequired => '호스트 주소를 입력하세요';
 	@override String get validationHostFormat => '형식은 IP:포트여야 합니다 (예: 192.168.1.100:48632)';
 	@override String get connectionTimedOut => '연결 시간이 초과되었습니다. 두 기기에서 같은 네트워크를 사용하세요.';
-	@override String get sessionNotFound => '기기를 찾을 수 없습니다. 호스트에서 Plezy가 실행 중인지 확인하세요.';
+	@override String get sessionNotFound => '기기를 찾을 수 없습니다. 호스트에서 Plezilo가 실행 중인지 확인하세요.';
 	@override String get authFailed => '인증에 실패했습니다. 두 기기 모두 같은 Plex 계정이 필요합니다.';
 	@override String failedToConnect({required Object error}) => '연결 실패: ${error}';
 }
@@ -3315,7 +3315,7 @@ class _Translations$services$simklReconnect$ko extends Translations$services$sim
 
 	// Translations
 	@override String get title => 'Simkl 다시 연결';
-	@override String get subtitle => 'Simkl이 이 연결에 사용되는 로그인 방식을 종료합니다. 다시 연결하면 simkl.com이 열리고 그곳에서 Plezy를 승인합니다 — Plezy는 비밀번호를 볼 수 없습니다. 시청 기록은 Simkl에 그대로 유지됩니다.';
+	@override String get subtitle => 'Simkl이 이 연결에 사용되는 로그인 방식을 종료합니다. 다시 연결하면 simkl.com이 열리고 그곳에서 Plezilo를 승인합니다 — Plezilo는 비밀번호를 볼 수 없습니다. 시청 기록은 Simkl에 그대로 유지됩니다.';
 }
 
 // Path: services.deviceCode
@@ -3325,7 +3325,7 @@ class _Translations$services$deviceCode$ko extends Translations$services$deviceC
 	final TranslationsKo _root; // ignore: unused_field
 
 	// Translations
-	@override String title({required Object service}) => '${service}에서 Plezy 활성화';
+	@override String title({required Object service}) => '${service}에서 Plezilo 활성화';
 	@override String get instructions => 'QR 코드를 스캔하거나 아래 주소로 이동하여 이 코드를 입력하세요:';
 	@override String openToActivate({required Object service}) => '활성화하려면 ${service} 열기';
 	@override String get copyCode => '활성화 코드 복사';
@@ -3385,15 +3385,15 @@ class _Translations$services$libraryFilter$ko extends Translations$services$libr
 extension on TranslationsKo {
 	dynamic _flatMapFunction(String path) {
 		return switch (path) {
-			'app.title' => 'Plezy',
+			'app.title' => 'Plezilo',
 			'appIcon.title' => '앱 아이콘',
 			'appIcon.defaultIcon' => '기본',
 			'appIcon.current' => '현재 아이콘',
 			'appIcon.locked' => 'Supporter 혜택',
 			'appIcon.lockedHint' => '대체 아이콘은 Supporter 혜택입니다.',
 			'appIcon.changeFailed' => '앱 아이콘을 변경하지 못했습니다',
-			'appIcon.launcherHint' => 'Plezy를 나가면 홈 화면에 새 아이콘이 표시됩니다.',
-			'appIcon.tvLauncherHint' => 'Plezy를 나가면 새 배너가 표시됩니다. Android TV에서는 TV를 다시 시작할 때까지 이전 배너가 계속 표시될 수 있습니다.',
+			'appIcon.launcherHint' => 'Plezilo를 나가면 홈 화면에 새 아이콘이 표시됩니다.',
+			'appIcon.tvLauncherHint' => 'Plezilo를 나가면 새 배너가 표시됩니다. Android TV에서는 TV를 다시 시작할 때까지 이전 배너가 계속 표시될 수 있습니다.',
 			'appIcon.names.midnight' => '한밤',
 			'appIcon.names.ember' => '불씨',
 			'appIcon.names.paper' => '종이',
@@ -3432,7 +3432,7 @@ extension on TranslationsKo {
 			'auth.quickConnectWaiting' => '승인 대기 중…',
 			'auth.quickConnectCancel' => '취소',
 			'auth.quickConnectExpired' => 'Quick Connect가 만료되었습니다. 다시 시도하세요.',
-			'auth.localDataRecoveryRequired' => 'Plezy에서 로컬 로그인 정보와 대기 중인 재생 데이터를 안전하게 복구하지 못했습니다. 다시 로그인해 주세요.',
+			'auth.localDataRecoveryRequired' => 'Plezilo에서 로컬 로그인 정보와 대기 중인 재생 데이터를 안전하게 복구하지 못했습니다. 다시 로그인해 주세요.',
 			'auth.pinCheckRejected' => 'Plex PIN 확인이 거부되었습니다',
 			'common.cancel' => '취소',
 			'common.save' => '저장',
@@ -3520,19 +3520,19 @@ extension on TranslationsKo {
 			'update.viewRelease' => '릴리스 정보 보기',
 			'update.latestVersion' => '최신 버전을 사용 중입니다',
 			'update.checkFailed' => '업데이트 확인 실패',
-			'supporter.title' => 'Plezy Supporter',
-			'supporter.intro' => 'Plezy 개발을 후원하고 외형 꾸미기 기능을 잠금 해제하는 1회성 구매입니다:',
+			'supporter.title' => 'Plezilo Supporter',
+			'supporter.intro' => 'Plezilo 개발을 후원하고 외형 꾸미기 기능을 잠금 해제하는 1회성 구매입니다:',
 			'supporter.presetThemes' => '프리셋 테마',
 			'supporter.presetThemesDescription' => '불씨, 빙하, 숲, 자두, 종이',
 			'supporter.customTheme' => '사용자 지정 테마',
 			'supporter.customThemeDescription' => '모든 색상을 직접 선택',
 			'supporter.appIcons' => '앱 아이콘',
-			'supporter.appIconsDescription' => '대체 Plezy 아이콘 선택',
+			'supporter.appIconsDescription' => '대체 Plezilo 아이콘 선택',
 			'supporter.buy' => ({required Object price}) => '${price}에 구매',
 			'supporter.loadingPrice' => '가격 불러오는 중...',
 			'supporter.restore' => '구매 복원',
 			'supporter.pending' => '구매가 결제 또는 승인 대기 중입니다. 스토어에서 처리가 완료되는 즉시 추가 기능이 잠금 해제됩니다.',
-			'supporter.thankYouTitle' => 'Plezy를 후원해 주셔서 감사합니다',
+			'supporter.thankYouTitle' => 'Plezilo를 후원해 주셔서 감사합니다',
 			'supporter.thankYouBody' => 'Supporter 추가 기능이 잠금 해제되었습니다.',
 			'supporter.tileSubtitle' => '1회성 구매로 테마와 앱 아이콘 잠금 해제',
 			'supporter.tileSubtitleThemesOnly' => '1회성 구매로 테마 잠금 해제',
@@ -3544,7 +3544,7 @@ extension on TranslationsKo {
 			'supporter.errors.restoreFailed' => '구매를 복원하기 위해 스토어에 연결하지 못했습니다. 다시 시도하세요.',
 			'supporter.errors.nothingToRestore' => '이 스토어 계정에서 Supporter 구매 내역을 찾을 수 없습니다.',
 			'settings.title' => '설정',
-			'settings.supportDeveloper' => 'Plezy 후원하기',
+			'settings.supportDeveloper' => 'Plezilo 후원하기',
 			'settings.supportDeveloperDescription' => 'Liberapay로 후원하여 개발 지원',
 			'settings.language' => '언어',
 			'settings.theme' => '테마',
@@ -3691,7 +3691,7 @@ extension on TranslationsKo {
 			'settings.importSettingsDescription' => '파일에서 기본 설정 복원',
 			'settings.importSettingsConfirm' => '현재 설정을 대체합니다. 계속하시겠습니까?',
 			'settings.importSettingsSuccess' => '설정 가져오기 완료',
-			'settings.importSettingsInvalidFile' => '유효한 Plezy 설정 내보내기 파일이 아닙니다',
+			'settings.importSettingsInvalidFile' => '유효한 Plezilo 설정 내보내기 파일이 아닙니다',
 			'settings.importSettingsNoUser' => '설정을 가져오기 전에 로그인하세요',
 			'settings.shortcutsReset' => '단축키가 기본값으로 재설정되었습니다',
 			'settings.resetShortcutsConfirm' => '사용자 지정 단축키가 기본값으로 대체됩니다. 계속하시겠습니까?',
@@ -3828,7 +3828,7 @@ extension on TranslationsKo {
 			'settings.forceTvMode' => 'TV 모드 강제 사용',
 			'settings.forceTvModeDescription' => 'TV 레이아웃을 강제합니다. 자동 감지되지 않는 기기용입니다. 재시작이 필요합니다.',
 			'settings.startInFullscreen' => '전체 화면으로 시작',
-			'settings.startInFullscreenDescription' => '실행 시 Plezy를 전체 화면 모드로 엽니다',
+			'settings.startInFullscreenDescription' => '실행 시 Plezilo를 전체 화면 모드로 엽니다',
 			'settings.exitFullscreenOnPlayerClose' => '플레이어를 닫을 때 전체 화면 종료',
 			'settings.exitFullscreenOnPlayerCloseDescription' => '비디오 플레이어를 닫을 때 자동으로 전체 화면을 종료합니다',
 			'settings.autoHidePerformanceOverlay' => '성능 오버레이 자동 숨기기',
@@ -3877,7 +3877,7 @@ extension on TranslationsKo {
 			'settings.playerScopeGlobal' => '모든 곳',
 			'settings.playerScopeLibrary' => '라이브러리별',
 			'settings.playerScopeTitle' => '시리즈 또는 영화별',
-			'settings.exportDialogTitle' => 'Plezy 설정 내보내기',
+			'settings.exportDialogTitle' => 'Plezilo 설정 내보내기',
 			'themeEditor.builtIn' => '기본 제공',
 			'themeEditor.presets' => '프리셋',
 			'themeEditor.custom' => '사용자 지정',
@@ -4095,8 +4095,8 @@ extension on TranslationsKo {
 			'mediaMenu.deleteEpisodeCountWarning' => ({required num n}) => (_root.$meta.cardinalResolver ?? PluralResolvers.cardinal('ko'))(n, other: '포함된 에피소드 ${n}개와 해당 파일이 모두 삭제됩니다.', ), 
 			'mediaMenu.deleteMultiPartWarning' => ({required num n}) => (_root.$meta.cardinalResolver ?? PluralResolvers.cardinal('ko'))(n, other: '이 항목은 파일 ${n}개에 걸쳐 저장되어 있으며, 모든 파일이 삭제됩니다.', ), 
 			'mediaMenu.deleteSharedFileHeading' => ({required num n}) => (_root.$meta.cardinalResolver ?? PluralResolvers.cardinal('ko'))(n, other: '같은 파일에 저장된 다른 에피소드 ${n}개도 함께 삭제됩니다:', ), 
-			'mediaMenu.deleteScopeUnverifiedProbeFailed' => 'Plezy가 어떤 파일이 삭제될지 확인하지 못해 위 항목보다 더 많은 파일이 삭제될 수 있습니다. 취소하고 다시 시도하거나 그래도 삭제하세요.',
-			'mediaMenu.deleteScopeUnverifiedNoFileInfo' => '서버가 이 항목의 파일 정보를 제공하지 않아 Plezy가 어떤 파일이 삭제될지 확인할 수 없습니다. 위 항목보다 더 많은 파일이 삭제될 수 있습니다.',
+			'mediaMenu.deleteScopeUnverifiedProbeFailed' => 'Plezilo가 어떤 파일이 삭제될지 확인하지 못해 위 항목보다 더 많은 파일이 삭제될 수 있습니다. 취소하고 다시 시도하거나 그래도 삭제하세요.',
+			'mediaMenu.deleteScopeUnverifiedNoFileInfo' => '서버가 이 항목의 파일 정보를 제공하지 않아 Plezilo가 어떤 파일이 삭제될지 확인할 수 없습니다. 위 항목보다 더 많은 파일이 삭제될 수 있습니다.',
 			'mediaMenu.mediaDeletedSuccessfully' => '미디어 항목이 성공적으로 삭제되었습니다',
 			'mediaMenu.mediaFailedToDelete' => '미디어 항목 삭제 실패',
 			'mediaMenu.rate' => '평가',
@@ -4344,7 +4344,7 @@ extension on TranslationsKo {
 			'mpvConfig.removeLine' => '줄 제거',
 			'mpvConfig.embeddedVoHint' => 'Linux에서는 vo, gpu-context, gpu-api가 무시됩니다. 내장 동영상은 항상 비디오 평면에서 vo=libmpv로 렌더링되며, gpu-next(ArtCNN 같은 컴퓨트 셰이더에 필요)는 내장 방식으로 실행할 수 없습니다.',
 			'dialog.confirmAction' => '작업 확인',
-			'profiles.addPlezyProfile' => 'Plezy 프로필 추가',
+			'profiles.addPlezyProfile' => 'Plezilo 프로필 추가',
 			'profiles.switchingProfile' => '프로필 전환 중…',
 			'profiles.deleteThisProfileTitle' => '이 프로필을 삭제하시겠습니까?',
 			'profiles.deleteThisProfileMessage' => ({required Object displayName}) => '${displayName}을(를) 제거합니다. 연결에는 영향이 없습니다.',
@@ -4421,12 +4421,12 @@ extension on TranslationsKo {
 			'connections.accessDeniedMany' => ({required Object count}) => '${count}개 서버에서 이 계정의 접근을 거부했습니다',
 			'connections.signInAgain' => '다시 로그인',
 			'connections.editMediaBrowserTitle' => ({required Object product}) => '${product} 연결 편집',
-			'connections.editMediaBrowserIntro' => ({required Object serverName}) => '${serverName}의 URL을 추가하거나 제거하세요. Plezy는 연결 가능한 URL 중 지연 시간이 가장 낮은 URL을 사용합니다.',
+			'connections.editMediaBrowserIntro' => ({required Object serverName}) => '${serverName}의 URL을 추가하거나 제거하세요. Plezilo는 연결 가능한 URL 중 지연 시간이 가장 낮은 URL을 사용합니다.',
 			'accountPreferences.sectionTitle' => '계정 기본 설정',
 			'accountPreferences.hubSubtitleSingle' => ({required Object account}) => '${account}에 저장된 오디오, 자막 및 라이브러리 옵션',
 			'accountPreferences.hubSubtitleMultiple' => ({required Object count}) => '${count}개 계정에 저장된 오디오, 자막 및 라이브러리 옵션',
 			'accountPreferences.pickAccount' => '각 계정은 고유한 기본 설정을 저장합니다. 편집할 계정을 선택하세요.',
-			'accountPreferences.storedOnAccount' => '이 옵션은 계정 자체에 저장되므로 해당 계정으로 로그인한 모든 앱에서 사용됩니다 — 다른 기기의 Plezy를 포함합니다.',
+			'accountPreferences.storedOnAccount' => '이 옵션은 계정 자체에 저장되므로 해당 계정으로 로그인한 모든 앱에서 사용됩니다 — 다른 기기의 Plezilo를 포함합니다.',
 			'accountPreferences.noAccounts' => '구성할 계정이 없습니다',
 			'accountPreferences.noAccountsHint' => 'Plex에 로그인하거나 Jellyfin 또는 Emby 서버에 연결하면 해당 계정에 저장된 기본 설정이 여기에 표시됩니다.',
 			'accountPreferences.unavailable' => '이 계정에 연결할 수 없습니다',
@@ -4656,9 +4656,9 @@ extension on TranslationsKo {
 			'logs.clearLogs' => '로그 지우기',
 			'logs.copyLogs' => '로그 복사',
 			'logs.uploadLogs' => '로그 업로드',
-			'startup.failedTitle' => 'Plezy를 시작하지 못했습니다',
+			'startup.failedTitle' => 'Plezilo를 시작하지 못했습니다',
 			'startup.failedBody' => '시작 중 문제가 발생했습니다. 아래 세부 정보에서 실패 원인을 확인할 수 있습니다.',
-			'startup.failedBodyRepairable' => 'Plezy의 저장된 설정 파일이 손상되어 Plezy를 시작하려면 먼저 파일을 다시 만들어야 합니다. 재시도해도 해결되지 않습니다 — 저장소 복구를 선택하세요.',
+			'startup.failedBodyRepairable' => 'Plezilo의 저장된 설정 파일이 손상되어 Plezilo를 시작하려면 먼저 파일을 다시 만들어야 합니다. 재시도해도 해결되지 않습니다 — 저장소 복구를 선택하세요.',
 			'startup.phaseLabel' => '단계',
 			'startup.showDetails' => '세부 정보 표시',
 			'startup.hideDetails' => '세부 정보 숨기기',
@@ -4667,16 +4667,16 @@ extension on TranslationsKo {
 			'startup.uploadDetails' => '세부 정보 업로드',
 			'startup.repairStorage' => '저장소 복구',
 			'startup.repairTitle' => '저장된 데이터를 복구할까요?',
-			'startup.repairBodyCommon' => 'Plezy의 설정 파일이 손상되어 읽을 수 없습니다. 복구하면 모든 설정이 기본값으로 재설정됩니다.',
+			'startup.repairBodyCommon' => 'Plezilo의 설정 파일이 손상되어 읽을 수 없습니다. 복구하면 모든 설정이 기본값으로 재설정됩니다.',
 			'startup.repairBodyOneCredential' => '저장된 로그인 정보 하나가 손상되어 읽을 수 없습니다. 복구하면 해당 로그인 정보만 제거되며 다른 설정은 그대로 유지됩니다.',
 			'startup.repairBodySignInsKept' => '서버와 프로필은 로그인 상태가 유지됩니다.',
 			'startup.repairBodySignInsLost' => '저장된 로그인 정보를 보호하는 키를 이 파일에서 복구할 수 없어 모든 서버와 프로필에 다시 로그인해야 합니다. 미디어 서버의 데이터에는 영향이 없습니다.',
-			'startup.repairBodySessionsUncertain' => '트래커(MAL, AniList, Simkl, Trakt)와 Seerr는 별도로 저장되며 유지 여부가 확실하지 않습니다. Plezy가 유지된 항목을 정확히 알려줄 것입니다.',
+			'startup.repairBodySessionsUncertain' => '트래커(MAL, AniList, Simkl, Trakt)와 Seerr는 별도로 저장되며 유지 여부가 확실하지 않습니다. Plezilo가 유지된 항목을 정확히 알려줄 것입니다.',
 			'startup.repairConfirm' => '복구',
 			'startup.repairSucceeded' => '저장소가 복구되었습니다',
 			'startup.repairNeedsRestart' => '저장소가 복구되었습니다 — 재시작 필요',
-			'startup.restartRequiredBody' => '데이터가 복구되었지만 Plezy는 이를 사용하려면 새로 시작해야 합니다. Plezy를 종료한 후 다시 열어주세요.',
-			'startup.quitPlezy' => 'Plezy 종료',
+			'startup.restartRequiredBody' => '데이터가 복구되었지만 Plezilo는 이를 사용하려면 새로 시작해야 합니다. Plezilo를 종료한 후 다시 열어주세요.',
+			'startup.quitPlezy' => 'Plezilo 종료',
 			'startup.repairFailed' => '복구 실패',
 			'startup.repairKeptSignIns' => '서버와 프로필이 계속 로그인 상태입니다.',
 			'startup.repairLostSignIns' => '저장된 로그인 정보를 보호하는 키를 복구할 수 없었습니다. 모든 서버와 프로필에 다시 로그인해야 합니다.',
@@ -4685,7 +4685,7 @@ extension on TranslationsKo {
 			'startup.backupWarning' => '로그인 자격 증명이 포함되어 있습니다. 업로드하거나 공유하지 마세요.',
 			'startup.deleteBackup' => '복사본 삭제',
 			'startup.backupDeleted' => '복사본이 삭제되었습니다.',
-			'startup.previousFailureTitle' => '지난번에 Plezy를 시작하지 못했습니다',
+			'startup.previousFailureTitle' => '지난번에 Plezilo를 시작하지 못했습니다',
 			'licenses.relatedPackages' => '관련 소프트웨어 패키지',
 			'licenses.license' => '라이선스',
 			'licenses.licenseNumber' => ({required Object number}) => '라이선스 ${number}',
@@ -5030,7 +5030,7 @@ extension on TranslationsKo {
 			'watchTogether.codeCopied' => '방 코드가 복사되었습니다',
 			'watchTogether.shareInvite' => '초대 공유',
 			'watchTogether.inviteCopied' => '초대 메시지가 복사되었습니다. 메시지에 붙여넣으세요.',
-			'watchTogether.inviteMessage' => ({required Object code}) => 'Plezy 함께 보기 방에 초대합니다. \'함께 보기\'를 열고 \'방 참여\'를 선택한 다음 ${code} 코드를 입력하세요.',
+			'watchTogether.inviteMessage' => ({required Object code}) => 'Plezilo 함께 보기 방에 초대합니다. \'함께 보기\'를 열고 \'방 참여\'를 선택한 다음 ${code} 코드를 입력하세요.',
 			'watchTogether.openSessionControls' => '함께 보기 세션 제어 열기',
 			'watchTogether.reconnecting' => '재연결 중...',
 			'watchTogether.reconnectingDescription' => '연결이 끊어졌습니다. 자동으로 방에 다시 참여합니다.',
@@ -5056,7 +5056,7 @@ extension on TranslationsKo {
 			'watchTogether.chooseAnotherCopy' => '다른 사본 선택',
 			'watchTogether.dontPlay' => '재생 안 함',
 			'watchTogether.unavailableTitle' => '이 비디오가 없습니다',
-			'watchTogether.unavailableDescription' => 'Plezy가 라이브러리에서 이 비디오를 찾지 못했습니다. 직접 사본을 선택하거나 다시 검색하세요.',
+			'watchTogether.unavailableDescription' => 'Plezilo가 라이브러리에서 이 비디오를 찾지 못했습니다. 직접 사본을 선택하거나 다시 검색하세요.',
 			'watchTogether.chooseCopy' => '사본 선택',
 			'watchTogether.searchAgain' => '다시 검색',
 			'watchTogether.noCandidates' => '라이브러리에서 사본을 찾을 수 없습니다.',
@@ -5148,7 +5148,7 @@ extension on TranslationsKo {
 			'watchTogether.errors.relayFull' => '지금은 함께 보기 이용자가 많습니다. 나중에 다시 시도하세요.',
 			'watchTogether.errors.unreachable' => '함께 보기 릴레이에 연결할 수 없습니다. 연결을 확인하세요.',
 			'watchTogether.errors.rateLimited' => '시도 횟수가 너무 많습니다. 잠시 후 다시 시도하세요.',
-			'watchTogether.errors.clientBlocked' => '이 버전의 Plezy는 릴레이를 사용할 수 없습니다. 앱을 업데이트하세요.',
+			'watchTogether.errors.clientBlocked' => '이 버전의 Plezilo는 릴레이를 사용할 수 없습니다. 앱을 업데이트하세요.',
 			'watchTogether.errors.forbidden' => '호스트만 이 작업을 할 수 있습니다.',
 			'watchTogether.errors.notInRoom' => '방에 참여하고 있지 않습니다.',
 			'watchTogether.errors.alreadyInRoom' => '이미 방에 참여하고 있습니다.',
@@ -5242,14 +5242,14 @@ extension on TranslationsKo {
 			'downloads.backgroundWarning.bannerAction' => '세부정보',
 			'downloads.backgroundWarning.sheetTitle' => '백그라운드 다운로드가 차단됨',
 			'downloads.backgroundWarning.sheetTitleDegraded' => '백그라운드 다운로드가 제한될 수 있음',
-			'downloads.backgroundWarning.sheetIntro' => 'Android가 Plezy의 안정적인 백그라운드 다운로드를 차단하고 있습니다.',
-			'downloads.backgroundWarning.sheetIntroDegraded' => '기기에서 Plezy가 백그라운드로 다운로드할 수 있는 시점을 제한하고 있습니다.',
-			'downloads.backgroundWarning.reasonBackgroundRestricted' => 'Plezy의 백그라운드 사용이 제한되어 있습니다. 배터리 또는 백그라운드 사용을 "제한 없음"으로 설정하세요.',
-			'downloads.backgroundWarning.reasonStandbyRestricted' => 'Android가 Plezy를 제한된 대기 상태로 전환했습니다. 배터리 사용량을 "제한 없음"으로 설정하세요.',
+			'downloads.backgroundWarning.sheetIntro' => 'Android가 Plezilo의 안정적인 백그라운드 다운로드를 차단하고 있습니다.',
+			'downloads.backgroundWarning.sheetIntroDegraded' => '기기에서 Plezilo가 백그라운드로 다운로드할 수 있는 시점을 제한하고 있습니다.',
+			'downloads.backgroundWarning.reasonBackgroundRestricted' => 'Plezilo의 백그라운드 사용이 제한되어 있습니다. 배터리 또는 백그라운드 사용을 "제한 없음"으로 설정하세요.',
+			'downloads.backgroundWarning.reasonStandbyRestricted' => 'Android가 Plezilo를 제한된 대기 상태로 전환했습니다. 배터리 사용량을 "제한 없음"으로 설정하세요.',
 			'downloads.backgroundWarning.reasonDownloadChannelBlocked' => '다운로드 알림이 꺼져 있어 진행 상황과 제어 기능을 사용하지 못할 수 있습니다.',
 			'downloads.backgroundWarning.reasonNotificationsDisabled' => '알림이 꺼져 있습니다. Android 13 이상에서는 장시간 백그라운드 다운로드에 알림이 필요합니다.',
 			'downloads.backgroundWarning.reasonDataSaver' => '데이터 절약 모드가 켜져 있어 모바일 데이터로 백그라운드 다운로드를 할 수 없습니다. Wi-Fi에서는 계속 다운로드할 수 있습니다.',
-			'downloads.backgroundWarning.reasonOemUnknown' => 'Plezy가 백그라운드에 있을 때 다운로드가 반복해서 중지되었습니다. Plezy의 배터리 또는 백그라운드 사용 설정을 확인하세요.',
+			'downloads.backgroundWarning.reasonOemUnknown' => 'Plezilo가 백그라운드에 있을 때 다운로드가 반복해서 중지되었습니다. Plezilo의 배터리 또는 백그라운드 사용 설정을 확인하세요.',
 			'downloads.backgroundWarning.openSettings' => '설정 열기',
 			'downloads.backgroundWarning.stillNotWorking' => '기기별 도움말',
 			'downloads.backgroundWarning.stillNotWorkingDescription' => '기기에 맞는 단계를 확인하세요. 문제가 계속되면 설정 › 로그 보기에서 로그를 보내 주세요.',
@@ -5313,19 +5313,19 @@ extension on TranslationsKo {
 			'companionRemote.session.stopServer' => '서버 중지',
 			'companionRemote.session.minimize' => '최소화',
 			'companionRemote.session.manualAddressHint' => '수동 연결 주소:',
-			'companionRemote.pairing.discoveryDescription' => '같은 Plex 계정의 Plezy 기기가 여기에 표시됩니다',
+			'companionRemote.pairing.discoveryDescription' => '같은 Plex 계정의 Plezilo 기기가 여기에 표시됩니다',
 			'companionRemote.pairing.hostAddressHint' => '192.168.1.100:48632',
 			'companionRemote.pairing.connecting' => '연결 중...',
 			'companionRemote.pairing.searchingForDevices' => '기기 검색 중...',
 			'companionRemote.pairing.noDevicesFound' => '네트워크에서 기기를 찾을 수 없습니다',
-			'companionRemote.pairing.noDevicesHint' => '데스크톱에서 Plezy를 열고 같은 Wi-Fi를 사용하세요',
+			'companionRemote.pairing.noDevicesHint' => '데스크톱에서 Plezilo를 열고 같은 Wi-Fi를 사용하세요',
 			'companionRemote.pairing.availableDevices' => '사용 가능한 기기',
 			'companionRemote.pairing.manualConnection' => '수동 연결',
 			'companionRemote.pairing.cryptoInitFailed' => '보안 연결을 시작할 수 없습니다. 먼저 Plex에 로그인하세요.',
 			'companionRemote.pairing.validationHostRequired' => '호스트 주소를 입력하세요',
 			'companionRemote.pairing.validationHostFormat' => '형식은 IP:포트여야 합니다 (예: 192.168.1.100:48632)',
 			'companionRemote.pairing.connectionTimedOut' => '연결 시간이 초과되었습니다. 두 기기에서 같은 네트워크를 사용하세요.',
-			'companionRemote.pairing.sessionNotFound' => '기기를 찾을 수 없습니다. 호스트에서 Plezy가 실행 중인지 확인하세요.',
+			'companionRemote.pairing.sessionNotFound' => '기기를 찾을 수 없습니다. 호스트에서 Plezilo가 실행 중인지 확인하세요.',
 			'companionRemote.pairing.authFailed' => '인증에 실패했습니다. 두 기기 모두 같은 Plex 계정이 필요합니다.',
 			'companionRemote.pairing.failedToConnect' => ({required Object error}) => '연결 실패: ${error}',
 			'companionRemote.remote.disconnectConfirm' => '원격 세션 연결을 해제하시겠습니까?',
@@ -5553,11 +5553,11 @@ extension on TranslationsKo {
 			'trakt.connected' => '연결됨',
 			'trakt.connectedAs' => ({required Object username}) => '@${username}(으)로 연결됨',
 			'trakt.disconnectConfirm' => 'Trakt 계정 연결을 끊으시겠습니까?',
-			'trakt.disconnectConfirmBody' => 'Plezy가 Trakt로 이벤트 전송을 중지합니다. 언제든 다시 연결할 수 있습니다.',
+			'trakt.disconnectConfirmBody' => 'Plezilo가 Trakt로 이벤트 전송을 중지합니다. 언제든 다시 연결할 수 있습니다.',
 			'trakt.scrobble' => '실시간 스크로블',
 			'trakt.scrobbleDescription' => '재생 중 재생, 일시정지, 정지 이벤트를 Trakt로 전송합니다.',
 			'trakt.watchedSync' => '시청 상태 동기화',
-			'trakt.watchedSyncDescription' => 'Plezy에서 시청 완료로 표시한 항목이 Trakt에도 시청 완료로 표시됩니다.',
+			'trakt.watchedSyncDescription' => 'Plezilo에서 시청 완료로 표시한 항목이 Trakt에도 시청 완료로 표시됩니다.',
 			'seerr.title' => 'Seerr',
 			'seerr.connectTitle' => 'Seerr에 연결',
 			'seerr.serverUrl' => '서버 URL',
@@ -5567,10 +5567,10 @@ extension on TranslationsKo {
 			'seerr.signInWithEmby' => 'Emby로 로그인',
 			'seerr.signInWithLocal' => '로컬 계정 사용',
 			'seerr.email' => '이메일',
-			'seerr.noSignInMethods' => '이 Seerr 인스턴스에는 Plezy가 지원하는 로그인 방법이 없습니다.',
+			'seerr.noSignInMethods' => '이 Seerr 인스턴스에는 Plezilo가 지원하는 로그인 방법이 없습니다.',
 			'seerr.instance' => '인스턴스',
 			'seerr.disconnectConfirm' => 'Seerr 연결을 해제하시겠습니까?',
-			'seerr.disconnectConfirmBody' => 'Plezy가 이 Seerr 인스턴스를 삭제합니다. 언제든 다시 연결할 수 있습니다.',
+			'seerr.disconnectConfirmBody' => 'Plezilo가 이 Seerr 인스턴스를 삭제합니다. 언제든 다시 연결할 수 있습니다.',
 			'seerr.request' => '요청',
 			'seerr.request4k' => '4K로 요청',
 			'seerr.seasons' => '시즌',
@@ -5595,7 +5595,7 @@ extension on TranslationsKo {
 			'seerr.statusBlocklisted' => '차단 목록에 있음',
 			'seerr.couldNotReach' => ({required Object url, required Object error}) => '${url}에 연결할 수 없습니다: ${error}',
 			'seerr.noInstanceAtUrl' => ({required Object url, required Object status}) => '${url}에 Seerr 인스턴스가 없습니다(HTTP ${status})',
-			'seerr.behindAuthProxy' => 'Seerr 대신 인증이 필요한 리버스 프록시(SSO 또는 HTTP 인증)가 응답했습니다. Plezy는 이를 통해 로그인할 수 없습니다. 이 앱에서 Seerr의 /api/v1 경로가 프록시를 우회하도록 하거나, Seerr에 직접 연결되는 주소를 사용하세요.',
+			'seerr.behindAuthProxy' => 'Seerr 대신 인증이 필요한 리버스 프록시(SSO 또는 HTTP 인증)가 응답했습니다. Plezilo는 이를 통해 로그인할 수 없습니다. 이 앱에서 Seerr의 /api/v1 경로가 프록시를 우회하도록 하거나, Seerr에 직접 연결되는 주소를 사용하세요.',
 			'seerr.invalidUrl' => 'https://seerr.example.com과 같은 서버 주소를 입력하세요',
 			'seerr.quickConnectUnsupported' => '이 Seerr 인스턴스는 Quick Connect를 지원하지 않습니다. Seerr 3.4 이상이 필요합니다.',
 			'seerr.notInitialized' => '이 Seerr 인스턴스는 최초 실행 설정을 완료하지 않았습니다',
@@ -5616,7 +5616,7 @@ extension on TranslationsKo {
 			'services.scrobble' => '진행률 자동 추적',
 			'services.scrobbleDescription' => '에피소드나 영화를 시청하면 목록을 업데이트합니다.',
 			'services.disconnectConfirm' => ({required Object service}) => '${service} 연결을 해제하시겠습니까?',
-			'services.disconnectConfirmBody' => ({required Object service}) => 'Plezy가 ${service} 업데이트를 중지합니다. 언제든 다시 연결할 수 있습니다.',
+			'services.disconnectConfirmBody' => ({required Object service}) => 'Plezilo가 ${service} 업데이트를 중지합니다. 언제든 다시 연결할 수 있습니다.',
 			'services.connectFailed' => ({required Object service}) => '${service}에 연결할 수 없습니다. 다시 시도하세요.',
 			'services.names.mal' => 'MyAnimeList',
 			'services.names.anilist' => 'AniList',
@@ -5624,8 +5624,8 @@ extension on TranslationsKo {
 			'services.names.seerr' => 'Seerr',
 			'services.names.mdblist' => 'MDBList',
 			'services.simklReconnect.title' => 'Simkl 다시 연결',
-			'services.simklReconnect.subtitle' => 'Simkl이 이 연결에 사용되는 로그인 방식을 종료합니다. 다시 연결하면 simkl.com이 열리고 그곳에서 Plezy를 승인합니다 — Plezy는 비밀번호를 볼 수 없습니다. 시청 기록은 Simkl에 그대로 유지됩니다.',
-			'services.deviceCode.title' => ({required Object service}) => '${service}에서 Plezy 활성화',
+			'services.simklReconnect.subtitle' => 'Simkl이 이 연결에 사용되는 로그인 방식을 종료합니다. 다시 연결하면 simkl.com이 열리고 그곳에서 Plezilo를 승인합니다 — Plezilo는 비밀번호를 볼 수 없습니다. 시청 기록은 Simkl에 그대로 유지됩니다.',
+			'services.deviceCode.title' => ({required Object service}) => '${service}에서 Plezilo 활성화',
 			'services.deviceCode.instructions' => 'QR 코드를 스캔하거나 아래 주소로 이동하여 이 코드를 입력하세요:',
 			'services.deviceCode.openToActivate' => ({required Object service}) => '활성화하려면 ${service} 열기',
 			'services.deviceCode.copyCode' => '활성화 코드 복사',

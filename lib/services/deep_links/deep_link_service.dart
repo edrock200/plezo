@@ -32,7 +32,7 @@ class DeepLinkSession {
   final Future<void> Function(DeepLink link) launch;
 }
 
-/// Receives `plezy://` links from the platform and hands each to its owner.
+/// Receives `plezilo://` links from the platform and hands each to its owner.
 ///
 /// The native side (Android `DeepLinkPlugin`, the shared Apple
 /// `DeepLinkPlugin`) keeps a link until this service accepts it, so a link
@@ -124,7 +124,7 @@ class DeepLinkService {
 
     final link = DeepLink.tryParse(url);
     if (link == null) {
-      appLogger.w('Deep link: not a valid Plezy link (host "${Uri.tryParse(url)?.host}")');
+      appLogger.w('Deep link: not a valid Plezilo link (host "${Uri.tryParse(url)?.host}")');
       _report(t.deepLinks.invalid);
       return;
     }

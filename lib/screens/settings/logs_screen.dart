@@ -483,11 +483,12 @@ class _LogsScreenState extends State<LogsScreen> with MountedSetStateMixin {
                                 tooltip: t.common.refresh,
                                 onPressed: _loadLogs,
                               ),
-                              FocusableAction(
-                                icon: Symbols.upload_rounded,
-                                tooltip: t.logs.uploadLogs,
-                                onPressed: _hasDiagnostics ? _uploadLogs : null,
-                              ),
+                              if (logUploadAvailable)
+                                FocusableAction(
+                                  icon: Symbols.upload_rounded,
+                                  tooltip: t.logs.uploadLogs,
+                                  onPressed: _hasDiagnostics ? _uploadLogs : null,
+                                ),
                               FocusableAction(
                                 icon: Symbols.content_copy_rounded,
                                 tooltip: t.logs.copyLogs,

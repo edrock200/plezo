@@ -9,6 +9,7 @@ import 'package:plezy/media/media_server_client.dart';
 import 'package:plezy/media/server_capabilities.dart';
 import 'package:plezy/providers/trackers_provider.dart';
 import 'package:plezy/services/base_shared_preferences_service.dart';
+import 'package:plezy/services/plezy_server.dart';
 import 'package:plezy/services/trackers/anilist/anilist_tracker.dart';
 import 'package:plezy/services/trackers/mal/mal_tracker.dart';
 import 'package:plezy/services/trackers/mdblist/mdblist_tracker.dart';
@@ -42,52 +43,78 @@ void main() {
   });
   tearDown(_resetTrackerBindings);
 
-  testWidgets('an unratable tracker keeps its row so the sheet cannot resize under the user', (tester) async {
-    // The score load resolves asynchronously and finds every tracker unratable
-    // for this item. Removing those rows would shorten the sheet hundreds of ms
-    // after it opens, and because sheets are bottom-anchored that slides the
-    // rows above them — live rating controls — out from under the user.
+  testWidgets(
+    'an unratable tracker keeps its row so the sheet cannot resize under the user',
+    skip: !plezyProjectServicesEnabled,
+    (tester) async {
+      // The score load resolves asynchronously and finds every tracker unratable
+      // for this item. Removing those rows would shorten the sheet hundreds of ms
+      // after it opens, and because sheets are bottom-anchored that slides the
+      // rows above them — live rating controls — out from under the user.
+      await _seedAllTrackerSessions(_profileUuid);
+      await _pumpRatingSheet(
+        tester,
+        viewport: const Size(1280, 800),
+        serverClient: _StubServerClient(ServerCapabilities.plex),
+        profileUuid: _profileUuid,
+        item: testMediaItem(id: 'ep-1', kind: MediaKind.episode, serverId: 'server-1', serverName: 'Living Room'),
+      );
+
+      // Post-frame resolve has already run and reported every tracker unavailable.
+      expect(find.text(t.rateSheet.notAvailable), findsNWidgets(5));
+      expect(_listContentExtent(tester), _tallListExtent, reason: 'no row may be dropped');
+
+      final heightAfterResolve = tester.getSize(_sheetFinder).height;
+      final serverRowTop = tester.getRect(find.text(t.rateSheet.server)).top;
+
+      // Pump well past any further async settling: nothing may move.
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pumpAndSettle();
+
+      expect(tester.getSize(_sheetFinder).height, heightAfterResolve);
+      expect(tester.getRect(find.text(t.rateSheet.server)).top, serverRowTop);
+    },
+  );
+
+  testWidgets(
+    'tracker rows settle with an error when the item ids cannot be resolved',
+    skip: !plezyProjectServicesEnabled,
+    (tester) async {
+      await _seedAllTrackerSessions(_profileUuid);
+      await _pumpRatingSheet(
+        tester,
+        viewport: const Size(1280, 800),
+        serverClient: _StubServerClient(ServerCapabilities.plex, externalIdsError: StateError('server unreachable')),
+        profileUuid: _profileUuid,
+        item: testMediaItem(id: 'movie-1', kind: MediaKind.movie, serverId: 'server-1', serverName: 'Living Room'),
+      );
+
+      expect(find.text(t.errors.failedToRate), findsNWidgets(5));
+      expect(
+        find.descendant(of: _sheetFinder, matching: find.byType(CircularProgressIndicator)),
+        findsNothing,
+        reason: 'no row may keep loading',
+      );
+    },
+  );
+
+  testWidgets('shows no tracker rows while the Plezy project\'s services are off', (tester) async {
     await _seedAllTrackerSessions(_profileUuid);
     await _pumpRatingSheet(
       tester,
       viewport: const Size(1280, 800),
       serverClient: _StubServerClient(ServerCapabilities.plex),
       profileUuid: _profileUuid,
-      item: testMediaItem(id: 'ep-1', kind: MediaKind.episode, serverId: 'server-1', serverName: 'Living Room'),
-    );
-
-    // Post-frame resolve has already run and reported every tracker unavailable.
-    expect(find.text(t.rateSheet.notAvailable), findsNWidgets(5));
-    expect(_listContentExtent(tester), _tallListExtent, reason: 'no row may be dropped');
-
-    final heightAfterResolve = tester.getSize(_sheetFinder).height;
-    final serverRowTop = tester.getRect(find.text(t.rateSheet.server)).top;
-
-    // Pump well past any further async settling: nothing may move.
-    await tester.pump(const Duration(seconds: 2));
-    await tester.pumpAndSettle();
-
-    expect(tester.getSize(_sheetFinder).height, heightAfterResolve);
-    expect(tester.getRect(find.text(t.rateSheet.server)).top, serverRowTop);
-  });
-
-  testWidgets('tracker rows settle with an error when the item ids cannot be resolved', (tester) async {
-    await _seedAllTrackerSessions(_profileUuid);
-    await _pumpRatingSheet(
-      tester,
-      viewport: const Size(1280, 800),
-      serverClient: _StubServerClient(ServerCapabilities.plex, externalIdsError: StateError('server unreachable')),
-      profileUuid: _profileUuid,
       item: testMediaItem(id: 'movie-1', kind: MediaKind.movie, serverId: 'server-1', serverName: 'Living Room'),
     );
 
-    expect(find.text(t.errors.failedToRate), findsNWidgets(5));
-    expect(
-      find.descendant(of: _sheetFinder, matching: find.byType(CircularProgressIndicator)),
-      findsNothing,
-      reason: 'no row may keep loading',
-    );
-  });
+    // Even with every tracker signed in (e.g. carried over in imported settings), the sheet
+    // offers only the server's own rating: the trackers use the Plezy project's app registrations.
+    expect(find.text(t.rateSheet.server), findsOneWidget);
+    expect(find.text(t.trakt.title), findsNothing);
+    expect(find.text(t.rateSheet.notAvailable), findsNothing);
+    expect(find.text(t.errors.failedToRate), findsNothing);
+  }, skip: plezyProjectServicesEnabled);
 }
 
 /// The sheet body itself — the direct child of the host's capping

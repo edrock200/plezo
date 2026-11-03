@@ -103,6 +103,9 @@ class DiscordRPCService {
   final DiscordRPC Function() _rpcFactory;
 
   static bool get isAvailable {
+    // Rich presence runs as the Plezy project's Discord application and posts
+    // artwork to its poster host; off until Plezilo has its own.
+    if (!plezyProjectServicesEnabled) return false;
     if (!PlatformDetector.isDesktopOS()) {
       return false;
     }
@@ -391,7 +394,7 @@ class DiscordRPCService {
         return hostedUrl;
       }
     } catch (e) {
-      appLogger.d('Failed to upload thumbnail to Plezy poster host', error: e);
+      appLogger.d('Failed to upload thumbnail to the poster host', error: e);
     }
     return null;
   }

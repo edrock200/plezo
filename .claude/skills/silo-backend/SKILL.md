@@ -1,9 +1,11 @@
 ---
 name: silo-backend
-description: How Plezy's Silo media-server backend works and how to change, test and debug it. Use whenever you touch lib/services/silo/, the Silo sign-in screen (lib/screens/settings/add_silo_screen.dart), SiloConnection, SiloMediaItem or SiloApiCache; when a Silo user reports sign-in, browsing, playback, subtitle, download or progress problems; when checking Plezy against Silo's API contract or its Android/Android TV apps; or when running the Silo mock server.
+description: How Plezilo's (this Plezy fork's) Silo media-server backend works and how to change, test and debug it. Use whenever you touch lib/services/silo/, the Silo sign-in screen (lib/screens/settings/add_silo_screen.dart), SiloConnection, SiloMediaItem or SiloApiCache; when a Silo user reports sign-in, browsing, playback, subtitle, download or progress problems; when checking Plezy against Silo's API contract or its Android/Android TV apps; or when running the Silo mock server.
 ---
 
-# Silo backend for Plezy
+# Silo backend for Plezilo
+
+Plezilo is the user-facing name of this Plezy fork; "Plezy" below means the shared codebase.
 
 Silo (https://github.com/Silo-Server/silo-server) is a self-hosted media server. Plezy speaks its
 **`/api/v2` REST contract only** — never `/api/v1`, never the root `/health`, never the
@@ -43,7 +45,7 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
 
 ## Contract rules the code depends on
 - **Headers:** every request sends `Accept: application/json` and `X-Silo-Device-Id/-Name/-Platform`,
-  `X-Silo-Client` (`Plezy`), `-Client-Version`, `-Client-Family`. Family is a closed set
+  `X-Silo-Client` (`Plezilo`), `-Client-Version`, `-Client-Family`. Family is a closed set
   (`tv|mobile|tablet|desktop|web`) and selects `profile_client` settings rows, so tablets must say
   `tablet` (600 dp shortest side, decided once per process; a read before the view has a size is
   used but not cached). Platform is `android-tv` on Android TV.

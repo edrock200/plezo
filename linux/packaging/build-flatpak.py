@@ -65,7 +65,7 @@ def main():
         ET.SubElement(releases, "release", version=version.split("+", 1)[0],
                       date=datetime.now(timezone.utc).date().isoformat())
         metadata.write(stage / f"{APP_ID}.metainfo.xml", encoding="utf-8", xml_declaration=True)
-        subprocess.run([image_tool, str(PROJECT_ROOT / "assets/plezy.png"), "-resize", "512x512",
+        subprocess.run([image_tool, str(PROJECT_ROOT / "assets/plezilo.png"), "-resize", "512x512",
                         str(stage / "plezy.png")], check=True)
         manifest["modules"][0]["sources"][0]["path"] = str(bundle)
         manifest_path = stage / f"{APP_ID}.json"

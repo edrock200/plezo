@@ -1,6 +1,6 @@
 {
   "app": {
-    "title": "Plezy"
+    "title": "Plezilo"
   },
   "appIcon": {
     "title": "앱 아이콘",
@@ -9,8 +9,8 @@
     "locked": "Supporter 혜택",
     "lockedHint": "대체 아이콘은 Supporter 혜택입니다.",
     "changeFailed": "앱 아이콘을 변경하지 못했습니다",
-    "launcherHint": "Plezy를 나가면 홈 화면에 새 아이콘이 표시됩니다.",
-    "tvLauncherHint": "Plezy를 나가면 새 배너가 표시됩니다. Android TV에서는 TV를 다시 시작할 때까지 이전 배너가 계속 표시될 수 있습니다.",
+    "launcherHint": "Plezilo를 나가면 홈 화면에 새 아이콘이 표시됩니다.",
+    "tvLauncherHint": "Plezilo를 나가면 새 배너가 표시됩니다. Android TV에서는 TV를 다시 시작할 때까지 이전 배너가 계속 표시될 수 있습니다.",
     "names": {
       "midnight": "한밤",
       "ember": "불씨",
@@ -53,7 +53,7 @@
     "quickConnectWaiting": "승인 대기 중…",
     "quickConnectCancel": "취소",
     "quickConnectExpired": "Quick Connect가 만료되었습니다. 다시 시도하세요.",
-    "localDataRecoveryRequired": "Plezy에서 로컬 로그인 정보와 대기 중인 재생 데이터를 안전하게 복구하지 못했습니다. 다시 로그인해 주세요.",
+    "localDataRecoveryRequired": "Plezilo에서 로컬 로그인 정보와 대기 중인 재생 데이터를 안전하게 복구하지 못했습니다. 다시 로그인해 주세요.",
     "pinCheckRejected": "Plex PIN 확인이 거부되었습니다"
   },
   "common": {
@@ -153,19 +153,19 @@
     "checkFailed": "업데이트 확인 실패"
   },
   "supporter": {
-    "title": "Plezy Supporter",
-    "intro": "Plezy 개발을 후원하고 외형 꾸미기 기능을 잠금 해제하는 1회성 구매입니다:",
+    "title": "Plezilo Supporter",
+    "intro": "Plezilo 개발을 후원하고 외형 꾸미기 기능을 잠금 해제하는 1회성 구매입니다:",
     "presetThemes": "프리셋 테마",
     "presetThemesDescription": "불씨, 빙하, 숲, 자두, 종이",
     "customTheme": "사용자 지정 테마",
     "customThemeDescription": "모든 색상을 직접 선택",
     "appIcons": "앱 아이콘",
-    "appIconsDescription": "대체 Plezy 아이콘 선택",
+    "appIconsDescription": "대체 Plezilo 아이콘 선택",
     "buy": "${price}에 구매",
     "loadingPrice": "가격 불러오는 중...",
     "restore": "구매 복원",
     "pending": "구매가 결제 또는 승인 대기 중입니다. 스토어에서 처리가 완료되는 즉시 추가 기능이 잠금 해제됩니다.",
-    "thankYouTitle": "Plezy를 후원해 주셔서 감사합니다",
+    "thankYouTitle": "Plezilo를 후원해 주셔서 감사합니다",
     "thankYouBody": "Supporter 추가 기능이 잠금 해제되었습니다.",
     "tileSubtitle": "1회성 구매로 테마와 앱 아이콘 잠금 해제",
     "tileSubtitleThemesOnly": "1회성 구매로 테마 잠금 해제",
@@ -181,7 +181,7 @@
   },
   "settings": {
     "title": "설정",
-    "supportDeveloper": "Plezy 후원하기",
+    "supportDeveloper": "Plezilo 후원하기",
     "supportDeveloperDescription": "Liberapay로 후원하여 개발 지원",
     "language": "언어",
     "theme": "테마",
@@ -328,7 +328,7 @@
     "importSettingsDescription": "파일에서 기본 설정 복원",
     "importSettingsConfirm": "현재 설정을 대체합니다. 계속하시겠습니까?",
     "importSettingsSuccess": "설정 가져오기 완료",
-    "importSettingsInvalidFile": "유효한 Plezy 설정 내보내기 파일이 아닙니다",
+    "importSettingsInvalidFile": "유효한 Plezilo 설정 내보내기 파일이 아닙니다",
     "importSettingsNoUser": "설정을 가져오기 전에 로그인하세요",
     "shortcutsReset": "단축키가 기본값으로 재설정되었습니다",
     "resetShortcutsConfirm": "사용자 지정 단축키가 기본값으로 대체됩니다. 계속하시겠습니까?",
@@ -465,7 +465,7 @@
     "forceTvMode": "TV 모드 강제 사용",
     "forceTvModeDescription": "TV 레이아웃을 강제합니다. 자동 감지되지 않는 기기용입니다. 재시작이 필요합니다.",
     "startInFullscreen": "전체 화면으로 시작",
-    "startInFullscreenDescription": "실행 시 Plezy를 전체 화면 모드로 엽니다",
+    "startInFullscreenDescription": "실행 시 Plezilo를 전체 화면 모드로 엽니다",
     "exitFullscreenOnPlayerClose": "플레이어를 닫을 때 전체 화면 종료",
     "exitFullscreenOnPlayerCloseDescription": "비디오 플레이어를 닫을 때 자동으로 전체 화면을 종료합니다",
     "autoHidePerformanceOverlay": "성능 오버레이 자동 숨기기",
@@ -514,7 +514,7 @@
     "playerScopeGlobal": "모든 곳",
     "playerScopeLibrary": "라이브러리별",
     "playerScopeTitle": "시리즈 또는 영화별",
-    "exportDialogTitle": "Plezy 설정 내보내기"
+    "exportDialogTitle": "Plezilo 설정 내보내기"
   },
   "themeEditor": {
     "builtIn": "기본 제공",
@@ -752,8 +752,8 @@
     "deleteSharedFileHeading": {
       "other": "같은 파일에 저장된 다른 에피소드 ${n}개도 함께 삭제됩니다:"
     },
-    "deleteScopeUnverifiedProbeFailed": "Plezy가 어떤 파일이 삭제될지 확인하지 못해 위 항목보다 더 많은 파일이 삭제될 수 있습니다. 취소하고 다시 시도하거나 그래도 삭제하세요.",
-    "deleteScopeUnverifiedNoFileInfo": "서버가 이 항목의 파일 정보를 제공하지 않아 Plezy가 어떤 파일이 삭제될지 확인할 수 없습니다. 위 항목보다 더 많은 파일이 삭제될 수 있습니다.",
+    "deleteScopeUnverifiedProbeFailed": "Plezilo가 어떤 파일이 삭제될지 확인하지 못해 위 항목보다 더 많은 파일이 삭제될 수 있습니다. 취소하고 다시 시도하거나 그래도 삭제하세요.",
+    "deleteScopeUnverifiedNoFileInfo": "서버가 이 항목의 파일 정보를 제공하지 않아 Plezilo가 어떤 파일이 삭제될지 확인할 수 없습니다. 위 항목보다 더 많은 파일이 삭제될 수 있습니다.",
     "mediaDeletedSuccessfully": "미디어 항목이 성공적으로 삭제되었습니다",
     "mediaFailedToDelete": "미디어 항목 삭제 실패",
     "rate": "평가",
@@ -1029,7 +1029,7 @@
     "confirmAction": "작업 확인"
   },
   "profiles": {
-    "addPlezyProfile": "Plezy 프로필 추가",
+    "addPlezyProfile": "Plezilo 프로필 추가",
     "switchingProfile": "프로필 전환 중…",
     "deleteThisProfileTitle": "이 프로필을 삭제하시겠습니까?",
     "deleteThisProfileMessage": "${displayName}을(를) 제거합니다. 연결에는 영향이 없습니다.",
@@ -1106,14 +1106,14 @@
     "accessDeniedMany": "${count}개 서버에서 이 계정의 접근을 거부했습니다",
     "signInAgain": "다시 로그인",
     "editMediaBrowserTitle": "${product} 연결 편집",
-    "editMediaBrowserIntro": "${serverName}의 URL을 추가하거나 제거하세요. Plezy는 연결 가능한 URL 중 지연 시간이 가장 낮은 URL을 사용합니다."
+    "editMediaBrowserIntro": "${serverName}의 URL을 추가하거나 제거하세요. Plezilo는 연결 가능한 URL 중 지연 시간이 가장 낮은 URL을 사용합니다."
   },
   "accountPreferences": {
     "sectionTitle": "계정 기본 설정",
     "hubSubtitleSingle": "${account}에 저장된 오디오, 자막 및 라이브러리 옵션",
     "hubSubtitleMultiple": "${count}개 계정에 저장된 오디오, 자막 및 라이브러리 옵션",
     "pickAccount": "각 계정은 고유한 기본 설정을 저장합니다. 편집할 계정을 선택하세요.",
-    "storedOnAccount": "이 옵션은 계정 자체에 저장되므로 해당 계정으로 로그인한 모든 앱에서 사용됩니다 — 다른 기기의 Plezy를 포함합니다.",
+    "storedOnAccount": "이 옵션은 계정 자체에 저장되므로 해당 계정으로 로그인한 모든 앱에서 사용됩니다 — 다른 기기의 Plezilo를 포함합니다.",
     "noAccounts": "구성할 계정이 없습니다",
     "noAccountsHint": "Plex에 로그인하거나 Jellyfin 또는 Emby 서버에 연결하면 해당 계정에 저장된 기본 설정이 여기에 표시됩니다.",
     "unavailable": "이 계정에 연결할 수 없습니다",
@@ -1389,9 +1389,9 @@
     "uploadLogs": "로그 업로드"
   },
   "startup": {
-    "failedTitle": "Plezy를 시작하지 못했습니다",
+    "failedTitle": "Plezilo를 시작하지 못했습니다",
     "failedBody": "시작 중 문제가 발생했습니다. 아래 세부 정보에서 실패 원인을 확인할 수 있습니다.",
-    "failedBodyRepairable": "Plezy의 저장된 설정 파일이 손상되어 Plezy를 시작하려면 먼저 파일을 다시 만들어야 합니다. 재시도해도 해결되지 않습니다 — 저장소 복구를 선택하세요.",
+    "failedBodyRepairable": "Plezilo의 저장된 설정 파일이 손상되어 Plezilo를 시작하려면 먼저 파일을 다시 만들어야 합니다. 재시도해도 해결되지 않습니다 — 저장소 복구를 선택하세요.",
     "phaseLabel": "단계",
     "showDetails": "세부 정보 표시",
     "hideDetails": "세부 정보 숨기기",
@@ -1400,16 +1400,16 @@
     "uploadDetails": "세부 정보 업로드",
     "repairStorage": "저장소 복구",
     "repairTitle": "저장된 데이터를 복구할까요?",
-    "repairBodyCommon": "Plezy의 설정 파일이 손상되어 읽을 수 없습니다. 복구하면 모든 설정이 기본값으로 재설정됩니다.",
+    "repairBodyCommon": "Plezilo의 설정 파일이 손상되어 읽을 수 없습니다. 복구하면 모든 설정이 기본값으로 재설정됩니다.",
     "repairBodyOneCredential": "저장된 로그인 정보 하나가 손상되어 읽을 수 없습니다. 복구하면 해당 로그인 정보만 제거되며 다른 설정은 그대로 유지됩니다.",
     "repairBodySignInsKept": "서버와 프로필은 로그인 상태가 유지됩니다.",
     "repairBodySignInsLost": "저장된 로그인 정보를 보호하는 키를 이 파일에서 복구할 수 없어 모든 서버와 프로필에 다시 로그인해야 합니다. 미디어 서버의 데이터에는 영향이 없습니다.",
-    "repairBodySessionsUncertain": "트래커(MAL, AniList, Simkl, Trakt)와 Seerr는 별도로 저장되며 유지 여부가 확실하지 않습니다. Plezy가 유지된 항목을 정확히 알려줄 것입니다.",
+    "repairBodySessionsUncertain": "트래커(MAL, AniList, Simkl, Trakt)와 Seerr는 별도로 저장되며 유지 여부가 확실하지 않습니다. Plezilo가 유지된 항목을 정확히 알려줄 것입니다.",
     "repairConfirm": "복구",
     "repairSucceeded": "저장소가 복구되었습니다",
     "repairNeedsRestart": "저장소가 복구되었습니다 — 재시작 필요",
-    "restartRequiredBody": "데이터가 복구되었지만 Plezy는 이를 사용하려면 새로 시작해야 합니다. Plezy를 종료한 후 다시 열어주세요.",
-    "quitPlezy": "Plezy 종료",
+    "restartRequiredBody": "데이터가 복구되었지만 Plezilo는 이를 사용하려면 새로 시작해야 합니다. Plezilo를 종료한 후 다시 열어주세요.",
+    "quitPlezy": "Plezilo 종료",
     "repairFailed": "복구 실패",
     "repairKeptSignIns": "서버와 프로필이 계속 로그인 상태입니다.",
     "repairLostSignIns": "저장된 로그인 정보를 보호하는 키를 복구할 수 없었습니다. 모든 서버와 프로필에 다시 로그인해야 합니다.",
@@ -1418,7 +1418,7 @@
     "backupWarning": "로그인 자격 증명이 포함되어 있습니다. 업로드하거나 공유하지 마세요.",
     "deleteBackup": "복사본 삭제",
     "backupDeleted": "복사본이 삭제되었습니다.",
-    "previousFailureTitle": "지난번에 Plezy를 시작하지 못했습니다"
+    "previousFailureTitle": "지난번에 Plezilo를 시작하지 못했습니다"
   },
   "licenses": {
     "relatedPackages": "관련 소프트웨어 패키지",
@@ -1814,7 +1814,7 @@
     "codeCopied": "방 코드가 복사되었습니다",
     "shareInvite": "초대 공유",
     "inviteCopied": "초대 메시지가 복사되었습니다. 메시지에 붙여넣으세요.",
-    "inviteMessage": "Plezy 함께 보기 방에 초대합니다. '함께 보기'를 열고 '방 참여'를 선택한 다음 ${code} 코드를 입력하세요.",
+    "inviteMessage": "Plezilo 함께 보기 방에 초대합니다. '함께 보기'를 열고 '방 참여'를 선택한 다음 ${code} 코드를 입력하세요.",
     "openSessionControls": "함께 보기 세션 제어 열기",
     "reconnecting": "재연결 중...",
     "reconnectingDescription": "연결이 끊어졌습니다. 자동으로 방에 다시 참여합니다.",
@@ -1840,7 +1840,7 @@
     "chooseAnotherCopy": "다른 사본 선택",
     "dontPlay": "재생 안 함",
     "unavailableTitle": "이 비디오가 없습니다",
-    "unavailableDescription": "Plezy가 라이브러리에서 이 비디오를 찾지 못했습니다. 직접 사본을 선택하거나 다시 검색하세요.",
+    "unavailableDescription": "Plezilo가 라이브러리에서 이 비디오를 찾지 못했습니다. 직접 사본을 선택하거나 다시 검색하세요.",
     "chooseCopy": "사본 선택",
     "searchAgain": "다시 검색",
     "noCandidates": "라이브러리에서 사본을 찾을 수 없습니다.",
@@ -1939,7 +1939,7 @@
       "relayFull": "지금은 함께 보기 이용자가 많습니다. 나중에 다시 시도하세요.",
       "unreachable": "함께 보기 릴레이에 연결할 수 없습니다. 연결을 확인하세요.",
       "rateLimited": "시도 횟수가 너무 많습니다. 잠시 후 다시 시도하세요.",
-      "clientBlocked": "이 버전의 Plezy는 릴레이를 사용할 수 없습니다. 앱을 업데이트하세요.",
+      "clientBlocked": "이 버전의 Plezilo는 릴레이를 사용할 수 없습니다. 앱을 업데이트하세요.",
       "forbidden": "호스트만 이 작업을 할 수 있습니다.",
       "notInRoom": "방에 참여하고 있지 않습니다.",
       "alreadyInRoom": "이미 방에 참여하고 있습니다.",
@@ -2037,14 +2037,14 @@
       "bannerAction": "세부정보",
       "sheetTitle": "백그라운드 다운로드가 차단됨",
       "sheetTitleDegraded": "백그라운드 다운로드가 제한될 수 있음",
-      "sheetIntro": "Android가 Plezy의 안정적인 백그라운드 다운로드를 차단하고 있습니다.",
-      "sheetIntroDegraded": "기기에서 Plezy가 백그라운드로 다운로드할 수 있는 시점을 제한하고 있습니다.",
-      "reasonBackgroundRestricted": "Plezy의 백그라운드 사용이 제한되어 있습니다. 배터리 또는 백그라운드 사용을 \"제한 없음\"으로 설정하세요.",
-      "reasonStandbyRestricted": "Android가 Plezy를 제한된 대기 상태로 전환했습니다. 배터리 사용량을 \"제한 없음\"으로 설정하세요.",
+      "sheetIntro": "Android가 Plezilo의 안정적인 백그라운드 다운로드를 차단하고 있습니다.",
+      "sheetIntroDegraded": "기기에서 Plezilo가 백그라운드로 다운로드할 수 있는 시점을 제한하고 있습니다.",
+      "reasonBackgroundRestricted": "Plezilo의 백그라운드 사용이 제한되어 있습니다. 배터리 또는 백그라운드 사용을 \"제한 없음\"으로 설정하세요.",
+      "reasonStandbyRestricted": "Android가 Plezilo를 제한된 대기 상태로 전환했습니다. 배터리 사용량을 \"제한 없음\"으로 설정하세요.",
       "reasonDownloadChannelBlocked": "다운로드 알림이 꺼져 있어 진행 상황과 제어 기능을 사용하지 못할 수 있습니다.",
       "reasonNotificationsDisabled": "알림이 꺼져 있습니다. Android 13 이상에서는 장시간 백그라운드 다운로드에 알림이 필요합니다.",
       "reasonDataSaver": "데이터 절약 모드가 켜져 있어 모바일 데이터로 백그라운드 다운로드를 할 수 없습니다. Wi-Fi에서는 계속 다운로드할 수 있습니다.",
-      "reasonOemUnknown": "Plezy가 백그라운드에 있을 때 다운로드가 반복해서 중지되었습니다. Plezy의 배터리 또는 백그라운드 사용 설정을 확인하세요.",
+      "reasonOemUnknown": "Plezilo가 백그라운드에 있을 때 다운로드가 반복해서 중지되었습니다. Plezilo의 배터리 또는 백그라운드 사용 설정을 확인하세요.",
       "openSettings": "설정 열기",
       "stillNotWorking": "기기별 도움말",
       "stillNotWorkingDescription": "기기에 맞는 단계를 확인하세요. 문제가 계속되면 설정 › 로그 보기에서 로그를 보내 주세요.",
@@ -2118,19 +2118,19 @@
       "manualAddressHint": "수동 연결 주소:"
     },
     "pairing": {
-      "discoveryDescription": "같은 Plex 계정의 Plezy 기기가 여기에 표시됩니다",
+      "discoveryDescription": "같은 Plex 계정의 Plezilo 기기가 여기에 표시됩니다",
       "hostAddressHint": "192.168.1.100:48632",
       "connecting": "연결 중...",
       "searchingForDevices": "기기 검색 중...",
       "noDevicesFound": "네트워크에서 기기를 찾을 수 없습니다",
-      "noDevicesHint": "데스크톱에서 Plezy를 열고 같은 Wi-Fi를 사용하세요",
+      "noDevicesHint": "데스크톱에서 Plezilo를 열고 같은 Wi-Fi를 사용하세요",
       "availableDevices": "사용 가능한 기기",
       "manualConnection": "수동 연결",
       "cryptoInitFailed": "보안 연결을 시작할 수 없습니다. 먼저 Plex에 로그인하세요.",
       "validationHostRequired": "호스트 주소를 입력하세요",
       "validationHostFormat": "형식은 IP:포트여야 합니다 (예: 192.168.1.100:48632)",
       "connectionTimedOut": "연결 시간이 초과되었습니다. 두 기기에서 같은 네트워크를 사용하세요.",
-      "sessionNotFound": "기기를 찾을 수 없습니다. 호스트에서 Plezy가 실행 중인지 확인하세요.",
+      "sessionNotFound": "기기를 찾을 수 없습니다. 호스트에서 Plezilo가 실행 중인지 확인하세요.",
       "authFailed": "인증에 실패했습니다. 두 기기 모두 같은 Plex 계정이 필요합니다.",
       "failedToConnect": "연결 실패: ${error}"
     },
@@ -2376,11 +2376,11 @@
     "connected": "연결됨",
     "connectedAs": "@${username}(으)로 연결됨",
     "disconnectConfirm": "Trakt 계정 연결을 끊으시겠습니까?",
-    "disconnectConfirmBody": "Plezy가 Trakt로 이벤트 전송을 중지합니다. 언제든 다시 연결할 수 있습니다.",
+    "disconnectConfirmBody": "Plezilo가 Trakt로 이벤트 전송을 중지합니다. 언제든 다시 연결할 수 있습니다.",
     "scrobble": "실시간 스크로블",
     "scrobbleDescription": "재생 중 재생, 일시정지, 정지 이벤트를 Trakt로 전송합니다.",
     "watchedSync": "시청 상태 동기화",
-    "watchedSyncDescription": "Plezy에서 시청 완료로 표시한 항목이 Trakt에도 시청 완료로 표시됩니다."
+    "watchedSyncDescription": "Plezilo에서 시청 완료로 표시한 항목이 Trakt에도 시청 완료로 표시됩니다."
   },
   "seerr": {
     "title": "Seerr",
@@ -2392,10 +2392,10 @@
     "signInWithEmby": "Emby로 로그인",
     "signInWithLocal": "로컬 계정 사용",
     "email": "이메일",
-    "noSignInMethods": "이 Seerr 인스턴스에는 Plezy가 지원하는 로그인 방법이 없습니다.",
+    "noSignInMethods": "이 Seerr 인스턴스에는 Plezilo가 지원하는 로그인 방법이 없습니다.",
     "instance": "인스턴스",
     "disconnectConfirm": "Seerr 연결을 해제하시겠습니까?",
-    "disconnectConfirmBody": "Plezy가 이 Seerr 인스턴스를 삭제합니다. 언제든 다시 연결할 수 있습니다.",
+    "disconnectConfirmBody": "Plezilo가 이 Seerr 인스턴스를 삭제합니다. 언제든 다시 연결할 수 있습니다.",
     "request": "요청",
     "request4k": "4K로 요청",
     "seasons": "시즌",
@@ -2420,7 +2420,7 @@
     "statusBlocklisted": "차단 목록에 있음",
     "couldNotReach": "${url}에 연결할 수 없습니다: ${error}",
     "noInstanceAtUrl": "${url}에 Seerr 인스턴스가 없습니다(HTTP ${status})",
-    "behindAuthProxy": "Seerr 대신 인증이 필요한 리버스 프록시(SSO 또는 HTTP 인증)가 응답했습니다. Plezy는 이를 통해 로그인할 수 없습니다. 이 앱에서 Seerr의 /api/v1 경로가 프록시를 우회하도록 하거나, Seerr에 직접 연결되는 주소를 사용하세요.",
+    "behindAuthProxy": "Seerr 대신 인증이 필요한 리버스 프록시(SSO 또는 HTTP 인증)가 응답했습니다. Plezilo는 이를 통해 로그인할 수 없습니다. 이 앱에서 Seerr의 /api/v1 경로가 프록시를 우회하도록 하거나, Seerr에 직접 연결되는 주소를 사용하세요.",
     "invalidUrl": "https://seerr.example.com과 같은 서버 주소를 입력하세요",
     "quickConnectUnsupported": "이 Seerr 인스턴스는 Quick Connect를 지원하지 않습니다. Seerr 3.4 이상이 필요합니다.",
     "notInitialized": "이 Seerr 인스턴스는 최초 실행 설정을 완료하지 않았습니다",
@@ -2443,7 +2443,7 @@
     "scrobble": "진행률 자동 추적",
     "scrobbleDescription": "에피소드나 영화를 시청하면 목록을 업데이트합니다.",
     "disconnectConfirm": "${service} 연결을 해제하시겠습니까?",
-    "disconnectConfirmBody": "Plezy가 ${service} 업데이트를 중지합니다. 언제든 다시 연결할 수 있습니다.",
+    "disconnectConfirmBody": "Plezilo가 ${service} 업데이트를 중지합니다. 언제든 다시 연결할 수 있습니다.",
     "connectFailed": "${service}에 연결할 수 없습니다. 다시 시도하세요.",
     "names": {
       "mal": "MyAnimeList",
@@ -2454,10 +2454,10 @@
     },
     "simklReconnect": {
       "title": "Simkl 다시 연결",
-      "subtitle": "Simkl이 이 연결에 사용되는 로그인 방식을 종료합니다. 다시 연결하면 simkl.com이 열리고 그곳에서 Plezy를 승인합니다 — Plezy는 비밀번호를 볼 수 없습니다. 시청 기록은 Simkl에 그대로 유지됩니다."
+      "subtitle": "Simkl이 이 연결에 사용되는 로그인 방식을 종료합니다. 다시 연결하면 simkl.com이 열리고 그곳에서 Plezilo를 승인합니다 — Plezilo는 비밀번호를 볼 수 없습니다. 시청 기록은 Simkl에 그대로 유지됩니다."
     },
     "deviceCode": {
-      "title": "${service}에서 Plezy 활성화",
+      "title": "${service}에서 Plezilo 활성화",
       "instructions": "QR 코드를 스캔하거나 아래 주소로 이동하여 이 코드를 입력하세요:",
       "openToActivate": "활성화하려면 ${service} 열기",
       "copyCode": "활성화 코드 복사",

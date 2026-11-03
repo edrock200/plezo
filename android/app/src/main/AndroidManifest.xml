@@ -1,6 +1,6 @@
 <!-- android:installLocation="auto" is what makes the app eligible to be moved to adoptable
      storage (a USB drive adopted by an Android TV, an adopted SD card), which relocates the
-     private data directory — and therefore downloads — along with the APK. Plezy declares none
+     private data directory — and therefore downloads — along with the APK. Plezilo declares none
      of the components this is unsafe for: no app widget, IME, live wallpaper, device admin,
      accessibility service, sync adapter or account authenticator. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
@@ -32,7 +32,7 @@
     <uses-feature android:name="android.hardware.type.automotive" android:required="false" />
 
     <application
-        android:label="Plezy"
+        android:label="Plezilo"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:banner="@drawable/tv_banner"
@@ -46,7 +46,7 @@
         <!-- The activity itself has no launcher entry: the launcher components are the aliases
              below, so the app icon can be switched by enabling one alias and disabling the rest.
              Deep links stay here so they resolve whichever alias is enabled.
-             turnScreenOn lets a plezy:// link sent during the screensaver (e.g. by a home
+             turnScreenOn lets a plezilo:// link sent during the screensaver (e.g. by a home
              automation) wake the device; set at runtime it comes too late, as the activity
              is already launched behind the screensaver. -->
         <activity
@@ -67,13 +67,13 @@
             <meta-data
                 android:name="flutter_deeplinking_enabled"
                 android:value="false" />
-            <!-- Every plezy:// link, whatever its host. DeepLinkPlugin forwards the URL unchanged;
+            <!-- Every plezilo:// link, whatever its host. DeepLinkPlugin forwards the URL unchanged;
                  the grammar lives in lib/services/deep_links/deep_link.dart. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
                 <category android:name="android.intent.category.BROWSABLE"/>
-                <data android:scheme="plezy"/>
+                <data android:scheme="plezilo"/>
             </intent-filter>
         </activity>
         <!-- The default icon. Keep this component name forever: it was the launcher activity before
@@ -96,449 +96,12 @@
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER"/>
             </intent-filter>
         </activity-alias>
-        <!-- Alternate icons (AppIconChannel): disabled until chosen. Ids are permanent. -->
+        <!-- Alternate icons (AppIconChannel): Plezilo ships none, so this block stays empty. -->
         <!-- BEGIN generated app icon aliases (scripts/codegen/generate_app_icons.py); do not edit -->
-        <activity-alias
-            android:name=".appicon.midnight"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_midnight"
-            android:banner="@drawable/tv_banner_midnight"
-            android:targetActivity=".PlezyActivity">
-            <meta-data
-                android:name="io.flutter.embedding.android.NormalTheme"
-                android:resource="@style/NormalTheme" />
-            <meta-data
-                android:name="flutter_deeplinking_enabled"
-                android:value="false" />
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN"/>
-                <category android:name="android.intent.category.LAUNCHER"/>
-                <category android:name="android.intent.category.LEANBACK_LAUNCHER"/>
-            </intent-filter>
-        </activity-alias>
-        <activity-alias
-            android:name=".appicon.ember"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_ember"
-            android:banner="@drawable/tv_banner_ember"
-            android:targetActivity=".PlezyActivity">
-            <meta-data
-                android:name="io.flutter.embedding.android.NormalTheme"
-                android:resource="@style/NormalTheme" />
-            <meta-data
-                android:name="flutter_deeplinking_enabled"
-                android:value="false" />
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN"/>
-                <category android:name="android.intent.category.LAUNCHER"/>
-                <category android:name="android.intent.category.LEANBACK_LAUNCHER"/>
-            </intent-filter>
-        </activity-alias>
-        <activity-alias
-            android:name=".appicon.paper"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_paper"
-            android:banner="@drawable/tv_banner_paper"
-            android:targetActivity=".PlezyActivity">
-            <meta-data
-                android:name="io.flutter.embedding.android.NormalTheme"
-                android:resource="@style/NormalTheme" />
-            <meta-data
-                android:name="flutter_deeplinking_enabled"
-                android:value="false" />
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN"/>
-                <category android:name="android.intent.category.LAUNCHER"/>
-                <category android:name="android.intent.category.LEANBACK_LAUNCHER"/>
-            </intent-filter>
-        </activity-alias>
-        <activity-alias
-            android:name=".appicon.oled"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_oled"
-            android:banner="@drawable/tv_banner_oled"
-            android:targetActivity=".PlezyActivity">
-            <meta-data
-                android:name="io.flutter.embedding.android.NormalTheme"
-                android:resource="@style/NormalTheme" />
-            <meta-data
-                android:name="flutter_deeplinking_enabled"
-                android:value="false" />
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN"/>
-                <category android:name="android.intent.category.LAUNCHER"/>
-                <category android:name="android.intent.category.LEANBACK_LAUNCHER"/>
-            </intent-filter>
-        </activity-alias>
-        <activity-alias
-            android:name=".appicon.line"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_line"
-            android:banner="@drawable/tv_banner_line"
-            android:targetActivity=".PlezyActivity">
-            <meta-data
-                android:name="io.flutter.embedding.android.NormalTheme"
-                android:resource="@style/NormalTheme" />
-            <meta-data
-                android:name="flutter_deeplinking_enabled"
-                android:value="false" />
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN"/>
-                <category android:name="android.intent.category.LAUNCHER"/>
-                <category android:name="android.intent.category.LEANBACK_LAUNCHER"/>
-            </intent-filter>
-        </activity-alias>
-        <activity-alias
-            android:name=".appicon.ocean"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_ocean"
-            android:banner="@drawable/tv_banner_ocean"
-            android:targetActivity=".PlezyActivity">
-            <meta-data
-                android:name="io.flutter.embedding.android.NormalTheme"
-                android:resource="@style/NormalTheme" />
-            <meta-data
-                android:name="flutter_deeplinking_enabled"
-                android:value="false" />
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN"/>
-                <category android:name="android.intent.category.LAUNCHER"/>
-                <category android:name="android.intent.category.LEANBACK_LAUNCHER"/>
-            </intent-filter>
-        </activity-alias>
-        <activity-alias
-            android:name=".appicon.ultraviolet"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_ultraviolet"
-            android:banner="@drawable/tv_banner_ultraviolet"
-            android:targetActivity=".PlezyActivity">
-            <meta-data
-                android:name="io.flutter.embedding.android.NormalTheme"
-                android:resource="@style/NormalTheme" />
-            <meta-data
-                android:name="flutter_deeplinking_enabled"
-                android:value="false" />
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN"/>
-                <category android:name="android.intent.category.LAUNCHER"/>
-                <category android:name="android.intent.category.LEANBACK_LAUNCHER"/>
-            </intent-filter>
-        </activity-alias>
-        <activity-alias
-            android:name=".appicon.matcha"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_matcha"
-            android:banner="@drawable/tv_banner_matcha"
-            android:targetActivity=".PlezyActivity">
-            <meta-data
-                android:name="io.flutter.embedding.android.NormalTheme"
-                android:resource="@style/NormalTheme" />
-            <meta-data
-                android:name="flutter_deeplinking_enabled"
-                android:value="false" />
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN"/>
-                <category android:name="android.intent.category.LAUNCHER"/>
-                <category android:name="android.intent.category.LEANBACK_LAUNCHER"/>
-            </intent-filter>
-        </activity-alias>
-        <activity-alias
-            android:name=".appicon.sunset"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_sunset"
-            android:banner="@drawable/tv_banner_sunset"
-            android:targetActivity=".PlezyActivity">
-            <meta-data
-                android:name="io.flutter.embedding.android.NormalTheme"
-                android:resource="@style/NormalTheme" />
-            <meta-data
-                android:name="flutter_deeplinking_enabled"
-                android:value="false" />
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN"/>
-                <category android:name="android.intent.category.LAUNCHER"/>
-                <category android:name="android.intent.category.LEANBACK_LAUNCHER"/>
-            </intent-filter>
-        </activity-alias>
-        <activity-alias
-            android:name=".appicon.gold"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_gold"
-            android:banner="@drawable/tv_banner_gold"
-            android:targetActivity=".PlezyActivity">
-            <meta-data
-                android:name="io.flutter.embedding.android.NormalTheme"
-                android:resource="@style/NormalTheme" />
-            <meta-data
-                android:name="flutter_deeplinking_enabled"
-                android:value="false" />
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN"/>
-                <category android:name="android.intent.category.LAUNCHER"/>
-                <category android:name="android.intent.category.LEANBACK_LAUNCHER"/>
-            </intent-filter>
-        </activity-alias>
-        <activity-alias
-            android:name=".appicon.titanium"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_titanium"
-            android:banner="@drawable/tv_banner_titanium"
-            android:targetActivity=".PlezyActivity">
-            <meta-data
-                android:name="io.flutter.embedding.android.NormalTheme"
-                android:resource="@style/NormalTheme" />
-            <meta-data
-                android:name="flutter_deeplinking_enabled"
-                android:value="false" />
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN"/>
-                <category android:name="android.intent.category.LAUNCHER"/>
-                <category android:name="android.intent.category.LEANBACK_LAUNCHER"/>
-            </intent-filter>
-        </activity-alias>
-        <activity-alias
-            android:name=".appicon.glass"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_glass"
-            android:banner="@drawable/tv_banner_glass"
-            android:targetActivity=".PlezyActivity">
-            <meta-data
-                android:name="io.flutter.embedding.android.NormalTheme"
-                android:resource="@style/NormalTheme" />
-            <meta-data
-                android:name="flutter_deeplinking_enabled"
-                android:value="false" />
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN"/>
-                <category android:name="android.intent.category.LAUNCHER"/>
-                <category android:name="android.intent.category.LEANBACK_LAUNCHER"/>
-            </intent-filter>
-        </activity-alias>
-        <activity-alias
-            android:name=".appicon.crt"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_crt"
-            android:banner="@drawable/tv_banner_crt"
-            android:targetActivity=".PlezyActivity">
-            <meta-data
-                android:name="io.flutter.embedding.android.NormalTheme"
-                android:resource="@style/NormalTheme" />
-            <meta-data
-                android:name="flutter_deeplinking_enabled"
-                android:value="false" />
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN"/>
-                <category android:name="android.intent.category.LAUNCHER"/>
-                <category android:name="android.intent.category.LEANBACK_LAUNCHER"/>
-            </intent-filter>
-        </activity-alias>
-        <activity-alias
-            android:name=".appicon.vhs"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_vhs"
-            android:banner="@drawable/tv_banner_vhs"
-            android:targetActivity=".PlezyActivity">
-            <meta-data
-                android:name="io.flutter.embedding.android.NormalTheme"
-                android:resource="@style/NormalTheme" />
-            <meta-data
-                android:name="flutter_deeplinking_enabled"
-                android:value="false" />
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN"/>
-                <category android:name="android.intent.category.LAUNCHER"/>
-                <category android:name="android.intent.category.LEANBACK_LAUNCHER"/>
-            </intent-filter>
-        </activity-alias>
-        <activity-alias
-            android:name=".appicon.synthwave"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_synthwave"
-            android:banner="@drawable/tv_banner_synthwave"
-            android:targetActivity=".PlezyActivity">
-            <meta-data
-                android:name="io.flutter.embedding.android.NormalTheme"
-                android:resource="@style/NormalTheme" />
-            <meta-data
-                android:name="flutter_deeplinking_enabled"
-                android:value="false" />
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN"/>
-                <category android:name="android.intent.category.LAUNCHER"/>
-                <category android:name="android.intent.category.LEANBACK_LAUNCHER"/>
-            </intent-filter>
-        </activity-alias>
-        <activity-alias
-            android:name=".appicon.pixel"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_pixel"
-            android:banner="@drawable/tv_banner_pixel"
-            android:targetActivity=".PlezyActivity">
-            <meta-data
-                android:name="io.flutter.embedding.android.NormalTheme"
-                android:resource="@style/NormalTheme" />
-            <meta-data
-                android:name="flutter_deeplinking_enabled"
-                android:value="false" />
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN"/>
-                <category android:name="android.intent.category.LAUNCHER"/>
-                <category android:name="android.intent.category.LEANBACK_LAUNCHER"/>
-            </intent-filter>
-        </activity-alias>
-        <activity-alias
-            android:name=".appicon.neon"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_neon"
-            android:banner="@drawable/tv_banner_neon"
-            android:targetActivity=".PlezyActivity">
-            <meta-data
-                android:name="io.flutter.embedding.android.NormalTheme"
-                android:resource="@style/NormalTheme" />
-            <meta-data
-                android:name="flutter_deeplinking_enabled"
-                android:value="false" />
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN"/>
-                <category android:name="android.intent.category.LAUNCHER"/>
-                <category android:name="android.intent.category.LEANBACK_LAUNCHER"/>
-            </intent-filter>
-        </activity-alias>
-        <activity-alias
-            android:name=".appicon.sticker"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_sticker"
-            android:banner="@drawable/tv_banner_sticker"
-            android:targetActivity=".PlezyActivity">
-            <meta-data
-                android:name="io.flutter.embedding.android.NormalTheme"
-                android:resource="@style/NormalTheme" />
-            <meta-data
-                android:name="flutter_deeplinking_enabled"
-                android:value="false" />
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN"/>
-                <category android:name="android.intent.category.LAUNCHER"/>
-                <category android:name="android.intent.category.LEANBACK_LAUNCHER"/>
-            </intent-filter>
-        </activity-alias>
-        <activity-alias
-            android:name=".appicon.ticket"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_ticket"
-            android:banner="@drawable/tv_banner_ticket"
-            android:targetActivity=".PlezyActivity">
-            <meta-data
-                android:name="io.flutter.embedding.android.NormalTheme"
-                android:resource="@style/NormalTheme" />
-            <meta-data
-                android:name="flutter_deeplinking_enabled"
-                android:value="false" />
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN"/>
-                <category android:name="android.intent.category.LAUNCHER"/>
-                <category android:name="android.intent.category.LEANBACK_LAUNCHER"/>
-            </intent-filter>
-        </activity-alias>
-        <activity-alias
-            android:name=".appicon.pop"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_pop"
-            android:banner="@drawable/tv_banner_pop"
-            android:targetActivity=".PlezyActivity">
-            <meta-data
-                android:name="io.flutter.embedding.android.NormalTheme"
-                android:resource="@style/NormalTheme" />
-            <meta-data
-                android:name="flutter_deeplinking_enabled"
-                android:value="false" />
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN"/>
-                <category android:name="android.intent.category.LAUNCHER"/>
-                <category android:name="android.intent.category.LEANBACK_LAUNCHER"/>
-            </intent-filter>
-        </activity-alias>
-        <activity-alias
-            android:name=".appicon.strata"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_strata"
-            android:banner="@drawable/tv_banner_strata"
-            android:targetActivity=".PlezyActivity">
-            <meta-data
-                android:name="io.flutter.embedding.android.NormalTheme"
-                android:resource="@style/NormalTheme" />
-            <meta-data
-                android:name="flutter_deeplinking_enabled"
-                android:value="false" />
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN"/>
-                <category android:name="android.intent.category.LAUNCHER"/>
-                <category android:name="android.intent.category.LEANBACK_LAUNCHER"/>
-            </intent-filter>
-        </activity-alias>
-        <activity-alias
-            android:name=".appicon.facet"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_facet"
-            android:banner="@drawable/tv_banner_facet"
-            android:targetActivity=".PlezyActivity">
-            <meta-data
-                android:name="io.flutter.embedding.android.NormalTheme"
-                android:resource="@style/NormalTheme" />
-            <meta-data
-                android:name="flutter_deeplinking_enabled"
-                android:value="false" />
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN"/>
-                <category android:name="android.intent.category.LAUNCHER"/>
-                <category android:name="android.intent.category.LEANBACK_LAUNCHER"/>
-            </intent-filter>
-        </activity-alias>
-        <activity-alias
-            android:name=".appicon.tilde"
-            android:enabled="false"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_tilde"
-            android:banner="@drawable/tv_banner_tilde"
-            android:targetActivity=".PlezyActivity">
-            <meta-data
-                android:name="io.flutter.embedding.android.NormalTheme"
-                android:resource="@style/NormalTheme" />
-            <meta-data
-                android:name="flutter_deeplinking_enabled"
-                android:value="false" />
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN"/>
-                <category android:name="android.intent.category.LAUNCHER"/>
-                <category android:name="android.intent.category.LEANBACK_LAUNCHER"/>
-            </intent-filter>
-        </activity-alias>
         <!-- END generated app icon aliases -->
         <provider
             android:name="androidx.core.content.FileProvider"
-            android:authorities="com.edde746.plezy.fileprovider"
+            android:authorities="com.edrock200.plezilo.fileprovider"
             android:exported="false"
             android:grantUriPermissions="true">
             <meta-data
@@ -549,7 +112,7 @@
              per-URI read grants issued to CATEGORY_HOME packages by WatchNextProvider. -->
         <provider
             android:name=".watchnext.SystemShelfArtworkProvider"
-            android:authorities="com.edde746.plezy.systemshelf.artwork"
+            android:authorities="com.edrock200.plezilo.systemshelf.artwork"
             android:exported="false"
             android:grantUriPermissions="true" />
         <receiver

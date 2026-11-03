@@ -1,9 +1,7 @@
 import 'dart:io' show Platform;
 import 'dart:math' as math;
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:provider/provider.dart';
 
@@ -29,11 +27,13 @@ import '../../widgets/supporter_sheet.dart';
 class AppIconSetting extends StatelessWidget {
   const AppIconSetting({super.key});
 
-  /// Whether this install offers alternate icons: the Supporter perks are not
+  /// Whether this install offers alternate icons: the catalog has any (Plezilo
+  /// ships none, so this is false), the Supporter perks are not
   /// hidden in this build and the device can switch its icon (iOS, iPadOS,
   /// tvOS, Android phones and Android TV). Rebuilds [context] when either
   /// changes.
   static bool isShown(BuildContext context) =>
+      appIconCatalog.length > 1 &&
       context.select<SupporterService?, bool>((supporter) => supporter?.isAvailable ?? false) &&
       context.select<AppIconService?, bool>((appIcons) => appIcons?.isSupported ?? false);
 
@@ -246,19 +246,12 @@ class _AppIconPreview extends StatelessWidget {
 
 /// The shipping icon as this device's launcher draws it, so picking Default
 /// looks like what comes back on the home screen:
-/// * tvOS and Android TV: dark plates, from the thumbnails
-///   scripts/codegen/generate_app_icons.py renders from the shipping image
-///   stack and banner.
-/// * Android phones: the adaptive foreground on `ic_launcher_background`, white
-///   or #1A1A1A with the system night mode the launcher resolves it in
-///   (res/values/colors.xml, res/values-night/colors.xml).
-/// * iOS: ios/plezy.icon's one light fill, which its dark appearance inherits.
+/// * tvOS and Android TV: the thumbnails scripts/make_plezilo_icon.py renders
+///   from the shipping image stack and banner.
+/// * Phones: the white mark on the brand gradient, as every launcher draws
+///   Plezilo's icon (assets/plezilo.png without its rounded corners).
 class _DefaultIconPreview extends StatelessWidget {
   const _DefaultIconPreview();
-
-  static const _iosFill = Color(0xFFF1F1F1);
-  static const _androidDayFill = Color(0xFFFFFFFF);
-  static const _androidNightFill = Color(0xFF1A1A1A);
 
   @override
   Widget build(BuildContext context) {
@@ -267,16 +260,7 @@ class _DefaultIconPreview extends StatelessWidget {
         : PlatformDetector.isTVDevice()
         ? defaultAppIconAndroidTvPreview
         : null;
-    if (tvPreview != null) return Image.asset(tvPreview, fit: BoxFit.cover, filterQuality: FilterQuality.medium);
-    final fill = defaultTargetPlatform != TargetPlatform.android
-        ? _iosFill
-        : MediaQuery.platformBrightnessOf(context) == Brightness.dark
-        ? _androidNightFill
-        : _androidDayFill;
-    return ColoredBox(
-      color: fill,
-      child: SvgPicture.asset('assets/plezy_adaptive_foreground.svg', fit: BoxFit.contain),
-    );
+    return Image.asset(tvPreview ?? 'assets/plezilo.png', fit: BoxFit.cover, filterQuality: FilterQuality.medium);
   }
 }
 

@@ -1,6 +1,6 @@
 import Foundation
 
-/// Keeps incoming `plezy:` links single-shot without suppressing a deliberate
+/// Keeps incoming `plezilo:` links single-shot without suppressing a deliberate
 /// second open forever. All access is confined to the main thread by the host.
 final class DeepLinkDeliveryCoordinator {
   struct Event: Equatable {

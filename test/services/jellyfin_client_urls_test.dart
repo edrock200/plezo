@@ -3393,7 +3393,7 @@ void main() {
       final auth = headers['Authorization'];
       expect(auth, isNotNull);
       expect(auth, startsWith('MediaBrowser '));
-      expect(auth, contains('Client="Plezy%20Test"'));
+      expect(auth, contains('Client="Plezilo%20Test"'));
       expect(auth, contains('Device="Test"'));
       expect(auth, contains('DeviceId="dev-xyz"'));
       expect(auth, contains(RegExp(r'Version="[^"]+"')));
@@ -3417,7 +3417,7 @@ void main() {
       addTearDown(scoped.close);
 
       final auth = scoped.defaultHeadersForTesting['Authorization'];
-      expect(auth, contains('Client="Plezy%20Android%20TV"'));
+      expect(auth, contains('Client="Plezilo%20Android%20TV"'));
       expect(auth, contains('Device="Living%20Room%20Shield"'));
     });
 
@@ -3428,7 +3428,7 @@ void main() {
       addTearDown(scoped.close);
 
       final auth = scoped.defaultHeadersForTesting['Authorization'];
-      expect(auth, contains('Client="Plezy%20tvOS"'));
+      expect(auth, contains('Client="Plezilo%20tvOS"'));
       expect(auth, contains('Device="Apple%20TV"'));
     });
 

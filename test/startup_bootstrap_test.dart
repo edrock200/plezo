@@ -7,6 +7,7 @@ import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:plezy/services/log_upload_service.dart';
 import 'package:plezy/database/app_database.dart';
 import 'package:plezy/database/download_operations.dart';
 import 'package:plezy/database/tvos_database_recovery_store.dart';
@@ -464,7 +465,9 @@ void main() {
     // Copy and Upload stay live — the whole point of the failure screen is
     // that a stuck user can still get the diagnostic out.
     expect(find.byKey(startupFailureCopyKey), findsOneWidget);
-    expect(find.byKey(startupFailureUploadKey), findsOneWidget);
+    // Upload only where log upload is available (off while the Plezy project's
+    // services are: lib/services/plezy_server.dart).
+    expect(find.byKey(startupFailureUploadKey), logUploadAvailable ? findsOneWidget : findsNothing);
   });
 
   testWidgets('repair receives a context below the bootstrap MaterialApp that can show its dialogs', (tester) async {
