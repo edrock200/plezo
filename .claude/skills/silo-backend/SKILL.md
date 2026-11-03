@@ -155,9 +155,9 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
 - **Movie box sets** (Silo Android #646; newer than the scratchpad OpenAPI, so routes follow the
   Android client exactly): `GET /user/libraries` rows may carry `box_sets_enabled`; `fetchLibraries`
   records them (`_boxSetLibraryIds`), and nothing box-set related is ever sent to a server without
-  the flag. Such a library's browse (`fetchLibraryPagedContent`, not a Shows-only view) adds
-  `group=box_set` (part of the cursor signature); the server answers cards `type: "box_set"` with a
-  `box_set` object (`id`, `library_id`, `title`, `overview`, `poster_url`, `backdrop_url`,
+  the flag. Library browse **never** sends `group=box_set` (Silo Android #796: the server dropped it
+  from the catalog group enum and answers 422), so a grid lists a collection's movies as titles. A
+  card `type: "box_set"` (search, the movie page row) carries a `box_set` object (`id`, `library_id`, `title`, `overview`, `poster_url`, `backdrop_url`,
   `movie_count`, `played_count`, `first_year`, `last_year`). `SiloMappers.boxSet` makes them
   `MediaKind.collection` items with id `silo-boxset:<library>:<box set>` (leaf counts = movies /
   played), so the grid, search chips and `CollectionDetailScreen` show them unchanged. The box set

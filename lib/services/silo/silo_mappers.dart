@@ -334,8 +334,8 @@ abstract final class SiloMappers {
   /// Map a Silo card or detail object. Returns `null` for rows without an
   /// id or of a type Plezy cannot show (audio and reading media).
   static MediaItem? item(Map<String, dynamic> json, SiloMappingContext ctx, {String? libraryId, String? libraryTitle}) {
-    // A `group=box_set` browse answers one card per box set in place of its
-    // movies (Silo Android #646).
+    // A box set card (Silo Android #646). Library browse no longer asks for
+    // them (`group=box_set`, dropped in #796), but a list may still carry one.
     if (_string(json['type']) == boxSetType) {
       final boxSetJson = _map(json['box_set']);
       return boxSetJson == null ? null : boxSet(boxSetJson, ctx, libraryTitle: libraryTitle);

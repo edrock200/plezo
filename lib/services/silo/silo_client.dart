@@ -562,12 +562,10 @@ class SiloClient
       'type': ?SiloMappers.catalogType(kind),
       if (query.search case final search? when search.trim().isNotEmpty) 'q': search.trim(),
       if (query.nameStartsWith case final prefix? when prefix.isNotEmpty && prefix != '#') 'name_prefix': prefix,
-      // A library with box sets on browses each TMDB collection as one box
-      // set card; the server groups before paging, and the parameter is part
-      // of the cursor signature, so a listing never mixes groupings. Box sets
-      // are movies: a series-only view is left ungrouped.
-      if (_hasBoxSets(libraryId) && kind != MediaKind.show && kind != MediaKind.episode)
-        'group': SiloMappers.boxSetType,
+      // Never `group=box_set` (Silo Android #796): the server dropped it from
+      // the catalog group enum and answers 422, so a library grid lists a
+      // collection's movies as titles. Box sets stay in search and on a
+      // movie's page.
     };
     for (final filter in query.filters) {
       if (filter.op != LibraryFilterOperator.is_ || filter.values.isEmpty) continue;

@@ -1142,17 +1142,10 @@ void main() {
         });
       }
       if (path.endsWith('/api/v2/catalog')) {
+        // Silo dropped box_set from the catalog group enum (Silo Android #796).
+        if (q['group'] == 'box_set') return _json({'code': 'validation_failed'}, 422);
         return _json({
-          'items': [
-            if (q['group'] == 'box_set')
-              {
-                'content_id': 'box_set:1:1241',
-                'type': 'box_set',
-                'title': 'The Paper Collection',
-                'box_set': boxSetFields(),
-              },
-            _movie(1),
-          ],
+          'items': [_movie(1)],
           'page': {'has_more': false},
           'total': 2,
         });
@@ -1160,22 +1153,24 @@ void main() {
       return _json({}, 404);
     }
 
-    test('a library with box sets on browses with group=box_set; others never do', () async {
+    test('library grids never group box sets, even with box sets on (Silo Android #796)', () async {
       final c = client(server);
       await c.fetchLibraries();
       final page = await c.fetchLibraryPagedContent('1', query: const LibraryQuery(offset: 0, limit: 50));
-      expect(requests.last.url.queryParameters['group'], 'box_set');
-      final boxSet = page.items.first;
-      expect(boxSet.kind, MediaKind.collection);
-      expect(boxSet.id, 'silo-boxset:1:1241');
-      expect(boxSet.libraryTitle, 'Movies');
-      expect(page.items.last.id, 'movie:m1');
-
+      expect(requests.last.url.queryParameters.containsKey('group'), isFalse);
+      expect(page.items.map((i) => i.id), ['movie:m1']);
       await c.fetchLibraryPagedContent('2', query: const LibraryQuery(offset: 0, limit: 50));
       expect(requests.last.url.queryParameters.containsKey('group'), isFalse);
-      // A Shows view of a box set library is left ungrouped.
-      await c.fetchLibraryPagedContent('1', query: const LibraryQuery(offset: 0, limit: 50, kind: MediaKind.show));
-      expect(requests.last.url.queryParameters.containsKey('group'), isFalse);
+    });
+
+    test('a box set card in a list still maps to a collection', () {
+      final item = SiloMappers.item(
+        {'content_id': 'box_set:1:1241', 'type': 'box_set', 'title': 'The Paper Collection', 'box_set': boxSetFields()},
+        const SiloMappingContext(serverId: 'srv-1', serverName: null, resolveUrl: _same),
+        libraryTitle: 'Movies',
+      );
+      expect(item?.kind, MediaKind.collection);
+      expect(item?.id, 'silo-boxset:1:1241');
     });
 
     test('a server without box sets browses exactly as before', () async {
