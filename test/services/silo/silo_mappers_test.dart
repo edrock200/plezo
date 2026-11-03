@@ -217,6 +217,88 @@ void main() {
     expect(fromDetail.single.startTimeOffset, 5000);
   });
 
+  test('every marker occurrence is its own marker, in source-time order (Silo Android #694)', () {
+    final markers = SiloMappers.markers(
+      {
+        'credits': {'start_seconds': 2975.5, 'end_seconds': 3167.4},
+      },
+      {
+        'credits': {'start_seconds': 2975.5, 'end_seconds': 3167.4},
+        'marker_segments': [
+          {'kind': 'credits', 'start_seconds': 3189, 'end_seconds': 3300},
+          {'kind': 'intro', 'start_seconds': 30, 'end_seconds': 90},
+          {'kind': 'credits', 'start_seconds': 2975.5, 'end_seconds': 3167.4},
+          {'kind': 'commercial', 'start_seconds': 100, 'end_seconds': 120},
+          {'kind': 'recap', 'start_seconds': 50, 'end_seconds': 40},
+        ],
+      },
+    );
+    expect(markers.map((m) => (m.id, m.type, m.startTimeOffset, m.endTimeOffset)), [
+      (0, 'intro', 30000, 90000),
+      (1, 'credits', 2975500, 3167400),
+      (2, 'credits', 3189000, 3300000),
+    ]);
+    // Each skip ends at its own range: the scene between the two credits
+    // ranges is not inside either marker.
+    expect(markers.any((m) => m.containsPosition(const Duration(seconds: 3175))), isFalse);
+  });
+
+  group('box sets (Silo Android #646)', () {
+    final card = {
+      'content_id': 'box_set:1:1241',
+      'type': 'box_set',
+      'title': 'The Paper Collection',
+      'box_set': {
+        'id': '1241',
+        'library_id': '1',
+        'title': 'The Paper Collection',
+        'overview': 'Two films.',
+        'poster_url': '/img/p.jpg',
+        'backdrop_url': '/img/b.jpg',
+        'movie_count': 3,
+        'played_count': 1,
+        'first_year': 2001,
+        'last_year': 2011,
+      },
+    };
+
+    test('a box set card of a grouped browse is a collection named by library and box set', () {
+      final item = SiloMappers.item(card, _ctx, libraryTitle: 'Movies')!;
+      expect(item.kind, MediaKind.collection);
+      expect(item.id, 'silo-boxset:1:1241');
+      expect(SiloMappers.parseBoxSetId(item.id), (libraryId: '1', boxSetId: '1241'));
+      expect(SiloMappers.isBoxSet(item), isTrue);
+      expect(item.title, 'The Paper Collection');
+      expect(item.summary, 'Two films.');
+      expect(item.thumbPath, 'https://silo.example.com/img/p.jpg');
+      expect(item.artPath, 'https://silo.example.com/img/b.jpg');
+      expect(item.libraryId, '1');
+      expect(item.libraryTitle, 'Movies');
+      expect(item.leafCount, 3);
+      expect(item.viewedLeafCount, 1);
+      expect(item.isPartiallyWatched, isTrue);
+    });
+
+    test('a box set card without its box set is dropped', () {
+      expect(SiloMappers.item({'content_id': 'x', 'type': 'box_set'}, _ctx), isNull);
+      expect(SiloMappers.parseBoxSetId('silo-collection:1:2'), isNull);
+      expect(SiloMappers.parseBoxSetId('silo-boxset:1:'), isNull);
+    });
+
+    test('Play starts the first movie not watched, else the first', () {
+      MediaItem movie(String id, {bool watched = false, int? offset}) => MediaItem.silo(
+        id: id,
+        kind: MediaKind.movie,
+        viewCount: watched ? 1 : 0,
+        viewOffsetMs: offset,
+        durationMs: 6000000,
+      );
+      expect(SiloMappers.boxSetStartIndex([movie('a', watched: true), movie('b', offset: 60000), movie('c')]), 1);
+      expect(SiloMappers.boxSetStartIndex([movie('a', watched: true), movie('b', watched: true)]), 0);
+      expect(SiloMappers.boxSetStartIndex(const []), 0);
+    });
+  });
+
   test('resume points follow Silo\'s TV app thresholds and survive a re-watch', () {
     expect(SiloMappers.resumeOffsetMs(null, 600000), isNull);
     expect(SiloMappers.resumeOffsetMs(30, 600000), isNull);

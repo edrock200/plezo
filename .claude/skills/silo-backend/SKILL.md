@@ -126,6 +126,25 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
   Every row with cards has `more: true` (Silo's "Explore all"): rows are capped and Home drops
   titles other rows show, so `total_count` cannot tell whether the page holds more. The full page
   is `fetchMoreHubItemsPage` → `GET /catalog?source=section&section_id=&scope=home|library`.
+- **Movie box sets** (Silo Android #646; newer than the scratchpad OpenAPI, so routes follow the
+  Android client exactly): `GET /user/libraries` rows may carry `box_sets_enabled`; `fetchLibraries`
+  records them (`_boxSetLibraryIds`), and nothing box-set related is ever sent to a server without
+  the flag. Such a library's browse (`fetchLibraryPagedContent`, not a Shows-only view) adds
+  `group=box_set` (part of the cursor signature); the server answers cards `type: "box_set"` with a
+  `box_set` object (`id`, `library_id`, `title`, `overview`, `poster_url`, `backdrop_url`,
+  `movie_count`, `played_count`, `first_year`, `last_year`). `SiloMappers.boxSet` makes them
+  `MediaKind.collection` items with id `silo-boxset:<library>:<box set>` (leaf counts = movies /
+  played), so the grid, search chips and `CollectionDetailScreen` show them unchanged. The box set
+  page is `GET /catalog/box-sets/{id}?library_id=` (fields + `items` in release order; 404/410 =
+  gone → `fetchItem` null); `fetchCollectionPage`/`fetchChildren`/`fetchPlayableDescendants` read it.
+  Play (`JellyfinSequentialLauncher`) starts at `SiloMappers.boxSetStartIndex` (first not watched,
+  else the first). Search runs `GET /catalog/box-sets?q=&limit=5` beside the titles while any library
+  has box sets, prepends them, waits at most 1.5 s for them and shows none on failure (the app's
+  search ranking may still reorder them). A movie page's related hubs start with a box set row
+  (`GET /catalog/items/{id}/box-set[?library_id=]`, `{}` = none; only movies, only while its library
+  has box sets): the films, then the box set card (Silo's "Explore all"). Never send `image_size` or
+  other unknown query params to these routes (422 `unknown_parameter`). Silo collections and box sets
+  are read-only: Delete / Remove from collection / Add to collection are hidden for Silo items.
 - **Sort fields** unknown to the server return 422 — map only known ones (`_sortFields`).
 - **Playback (protocol v3):** `GET /playback/capabilities` must be `available`, list protocol 3
   and the `sequenced_progress_v1` feature (Silo's apps refuse playback otherwise) → keep `installation_id` (409
@@ -143,7 +162,11 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
   `bandwidth_cap_kbps`. An `original_http` answer to a capped preset is legitimate when the source
   fits it; the "transcode unavailable" fallback is reported only when `playback_plan.source`
   (`height`, `bitrate_kbps`) exceeds the preset (`SiloPlaybackCaps.refusedCappedPreset`).
-  Markers: `GET /watch/{id}?file_id=<playing file>` (the server fills that version's on-demand
+  Markers: every `marker_segments` occurrence is its own `MediaMarker` (Silo Android #694; the
+  singular `intro`/`credits`/… fields hold only the first), sorted by start then end, unknown kinds
+  and empty ranges dropped; the player skips each range to its own end and offers the next episode
+  only from a credits range that reaches the end of the file, i.e. the last one. They are read
+  from `GET /watch/{id}?file_id=<playing file>` (the server fills that version's on-demand
   markers; cached per file) and `playbackExtras` picks that version. A progress 404/410 drops the
   session row (later reports go through `/sync/progress`).
 - **Resume points:** `SiloMappers.resumeOffsetMs` ports the TV app's `resumePositionSeconds`:
@@ -158,6 +181,15 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
   entries become sidecars (embedded ones are in the file). Subtitle routes have no signed `st`, so
   their URLs carry the short-lived access token as `token=` for players that do not forward
   headers. Such URLs live only in memory for one playback or download; never persist them.
+- **Subtitles the server cannot show** (Silo Android #776): inventory rows may carry
+  `unplayable: true` (e.g. an MKV `S_TEXT/WEBVTT` track stored without a codec; selecting it ends
+  in `subtitle_codec_unsupported`); from older servers an **embedded** row with no codec counts the
+  same (`SiloSubtitleRules.isUnplayable`; watch-detail rows use `external` instead of `source`).
+  They are dropped from `MediaSourceInfo.subtitleTracks` (the other rows keep their index + 1 ids),
+  from sidecars, from the detail page's streams, from download subtitle specs and from AI translate
+  sources. Plezy's track sheet has no disabled rows, so they are hidden rather than listed disabled.
+  On direct play mpv still lists the file's own embedded tracks (it demuxes the file itself; the
+  server is not involved). Plezy's start request never names a subtitle.
 - **Stored subtitles** (provider downloads and AI results) are inventory rows with `source: "downloaded"` and
   `sync_key: "stored-<id>"` (the sidecar URL also carries `downloaded_subtitle_id=<id>`); they are not in the watch
   detail's `subtitle_tracks`. They become sidecars on every delivery (direct play too) and get their own
@@ -266,6 +298,11 @@ PIN length (matches Silo's apps). Open follow-ups: an edit screen for an existin
   `TrackManager` persists per file part (Plex) or through account flags (Jellyfin), and Silo's
   subtitle start is resolved client-side; honouring it needs a series-scoped persister in the
   shared player plus a resolver for the signatures. Plezy saves no Silo track pick to the server.
+- Box sets reuse Plezy's collection UI: no "Box set" badge, sleeves or "THIS FILM" outline, the
+  card caption is the film count, Play queues the films from the next unwatched one (Silo plays
+  that one film), and the movie page's row shows every film (Silo fits as many as the screen holds).
+  Embedded subtitles drawn from the stream (Silo Android #770: `hls_subtitle_renditions_all_v1`,
+  `native_embedded`) are not declared: Plezy keeps server sidecars.
 - Theme music (Silo Android #678) is not offered: Plezy plays no theme music for any backend.
 - Music, audiobooks and e-books are not mapped (`SiloMappers.item` returns null; those libraries
   are hidden). Silo's own TV app keeps music minimal; the v2 contract has no album/track types.
@@ -283,7 +320,8 @@ PIN length (matches Silo's apps). Open follow-ups: an edit screen for an existin
 - Unit tests: `scripts/run_tests.sh test/services/silo` (mappers, connection/vault, client with an
   `http/testing.dart` `MockClient`, headers/form factor). Client tests cover cursor `seek`/restart,
   synthetic-season writes, refused refresh, playback start/progress/stop, downloads, sessionless
-  progress, extras/remote trailers and seek previews (`silo_trickplay_test.dart`: manifest
+  progress, extras/remote trailers, box sets (browse grouping, page, search, movie row, servers
+  without the flag) and seek previews (`silo_trickplay_test.dart`: manifest
   validation, tile mapping, sheet cache/renewal, header-free sheet fetch) (plus `test/media/remote_trailer_test.dart` and
   `test/utils/youtube_trailer_launcher_test.dart`); add one for each contract rule you change. Capability mocks must list
   `features: ['sequenced_progress_v1']`. Mock-client handlers must

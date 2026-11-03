@@ -464,20 +464,33 @@ class SiloClient
 
   final Map<String, String> _libraryTitles = {};
 
+  /// Libraries whose `box_sets_enabled` was true in the last library list
+  /// (Silo Android #646). Servers without box sets never send the flag, so
+  /// nothing below asks them for box sets.
+  Set<String> _boxSetLibraryIds = const {};
+
   @override
   Future<List<MediaLibrary>> fetchLibraries() async {
     final data = await _cachedGet('/api/v2/user/libraries');
     final libraries = <MediaLibrary>[];
+    final boxSetLibraries = <String>{};
     for (final json in _itemsOf(data)) {
       // Music, audiobooks and reading libraries have no Plezy surface yet.
       if (SiloMappers.libraryFamily(json['type'] as String?) != SiloLibraryFamily.video) continue;
       final library = SiloMappers.library(json, _ctx);
       if (library == null) continue;
       _libraryTitles[library.id] = library.title;
+      if (json['box_sets_enabled'] == true) boxSetLibraries.add(library.id);
       libraries.add(library);
     }
+    _boxSetLibraryIds = boxSetLibraries;
     return libraries;
   }
+
+  /// Whether a library this profile sees has box sets on, or [libraryId]
+  /// does when given.
+  bool _hasBoxSets([String? libraryId]) =>
+      libraryId == null ? _boxSetLibraryIds.isNotEmpty : _boxSetLibraryIds.contains(libraryId);
 
   static const _sortFields = {
     'title': 'title',
@@ -549,6 +562,12 @@ class SiloClient
       'type': ?SiloMappers.catalogType(kind),
       if (query.search case final search? when search.trim().isNotEmpty) 'q': search.trim(),
       if (query.nameStartsWith case final prefix? when prefix.isNotEmpty && prefix != '#') 'name_prefix': prefix,
+      // A library with box sets on browses each TMDB collection as one box
+      // set card; the server groups before paging, and the parameter is part
+      // of the cursor signature, so a listing never mixes groupings. Box sets
+      // are movies: a series-only view is left ungrouped.
+      if (_hasBoxSets(libraryId) && kind != MediaKind.show && kind != MediaKind.episode)
+        'group': SiloMappers.boxSetType,
     };
     for (final filter in query.filters) {
       if (filter.op != LibraryFilterOperator.is_ || filter.values.isEmpty) continue;
@@ -707,7 +726,11 @@ class SiloClient
   /// is recent, else a fetch. Null for ids that have no detail document
   /// (synthetic seasons, collections) and for missing items.
   Future<Map<String, dynamic>?> _recentItemDetail(String id) async {
-    if (SiloMappers.parseSyntheticSeasonId(id) != null || id.startsWith(_collectionPrefix)) return null;
+    if (SiloMappers.parseSyntheticSeasonId(id) != null ||
+        id.startsWith(_collectionPrefix) ||
+        id.startsWith(SiloMappers.boxSetPrefix)) {
+      return null;
+    }
     final row = _detailRows[id];
     if (row != null && DateTime.now().difference(row.fetchedAt) < _detailRowFreshness) return row.data;
     try {
@@ -723,6 +746,7 @@ class SiloClient
     final synthetic = SiloMappers.parseSyntheticSeasonId(id);
     if (synthetic != null) return _fetchSeason(synthetic.seriesId, synthetic.seasonNumber, id: id);
     if (id.startsWith(_collectionPrefix)) return _collectionItem(id);
+    if (SiloMappers.parseBoxSetId(id) != null) return (await _boxSet(id))?.boxSet;
     try {
       final data = await _itemDetail(id);
       if (data == null) return null;
@@ -835,8 +859,48 @@ class SiloClient
     );
   }
 
+  /// `GET /catalog/box-sets/{id}?library_id=`: the box set's own fields
+  /// beside the movies the viewer can see in that library, in collection
+  /// (release) order. Null for an id that is not a box set, or a box set the
+  /// server no longer has (box sets turned off, too few of its movies left).
+  Future<({MediaItem boxSet, List<MediaItem> movies})?> _boxSet(String id, {AbortController? abort}) async {
+    final parsed = SiloMappers.parseBoxSetId(id);
+    if (parsed == null) return null;
+    final Map<String, dynamic>? data;
+    try {
+      data = await _cachedGet(
+        '/api/v2/catalog/box-sets/${_seg(parsed.boxSetId)}',
+        query: {'library_id': parsed.libraryId},
+        abort: abort,
+      );
+    } on MediaServerHttpException catch (e) {
+      if (e.statusCode == 404 || e.statusCode == 410) return null;
+      rethrow;
+    }
+    if (data == null) return null;
+    return _mapBoxSetDetail(data, fallbackLibraryId: parsed.libraryId);
+  }
+
+  ({MediaItem boxSet, List<MediaItem> movies})? _mapBoxSetDetail(
+    Map<String, dynamic> data, {
+    String? fallbackLibraryId,
+  }) {
+    final libraryId = data['library_id']?.toString() ?? fallbackLibraryId;
+    if (libraryId == null) return null;
+    final libraryTitle = _libraryTitles[libraryId];
+    final boxSet = SiloMappers.boxSet(
+      {...data, 'library_id': libraryId}..remove('items'),
+      _ctx,
+      libraryTitle: libraryTitle,
+    );
+    if (boxSet == null) return null;
+    final movies = SiloMappers.items(_itemsOf(data), _ctx, libraryId: libraryId, libraryTitle: libraryTitle);
+    return (boxSet: boxSet, movies: movies);
+  }
+
   @override
   Future<List<MediaItem>> fetchChildren(String parentId) async {
+    if (SiloMappers.parseBoxSetId(parentId) != null) return (await _boxSet(parentId))?.movies ?? const [];
     if (parentId.startsWith(_collectionPrefix)) {
       final page = await fetchCollectionPage(parentId, start: 0, size: 200);
       return page.items;
@@ -871,7 +935,9 @@ class SiloClient
 
   @override
   Future<List<MediaItem>> fetchPlayableDescendants(String parentId) async {
-    if (parentId.startsWith(_collectionPrefix)) return fetchChildren(parentId);
+    if (parentId.startsWith(_collectionPrefix) || parentId.startsWith(SiloMappers.boxSetPrefix)) {
+      return fetchChildren(parentId);
+    }
     final seasonRef = SiloMappers.parseSyntheticSeasonId(parentId) ?? _seasonRefs[parentId];
     if (seasonRef != null) return _fetchEpisodes(seasonRef.seriesId, seasonRef.seasonNumber, seasonId: parentId);
     final item = await fetchItem(parentId);
@@ -958,6 +1024,9 @@ class SiloClient
   }) async {
     final text = query.trim();
     if (text.isEmpty) return const [];
+    // Matching box sets lead the results (Silo Android #646). They are asked
+    // beside the titles, only while a library has box sets on.
+    final boxSets = _hasBoxSets() ? _searchBoxSets(text, abort: abort) : null;
     final response = await _api.send(
       'GET',
       '/api/v2/catalog',
@@ -965,10 +1034,38 @@ class SiloClient
       abort: abort,
     );
     final data = response.data is Map<String, dynamic> ? response.data as Map<String, dynamic> : null;
-    return SiloMappers.items(
-      _itemsOf(data),
-      _ctx,
-    ).where((item) => item.libraryId == null || !excludedLibraryIds.contains(item.libraryId)).toList();
+    final titles = SiloMappers.items(_itemsOf(data), _ctx);
+    // Box sets only add to the titles, so a slow answer never holds them back
+    // for long: past the grace period this query shows none.
+    final sets = boxSets == null
+        ? const <MediaItem>[]
+        : await boxSets.timeout(boxSetSearchGrace, onTimeout: () => const <MediaItem>[]);
+    return [
+      ...sets,
+      ...titles,
+    ].where((item) => item.libraryId == null || !excludedLibraryIds.contains(item.libraryId)).toList();
+  }
+
+  /// How long search holds its titles for the box sets asked beside them
+  /// (Silo's `BOX_SET_SEARCH_GRACE_MILLIS`).
+  static const boxSetSearchGrace = Duration(milliseconds: 1500);
+
+  /// `GET /catalog/box-sets?q=&limit=5`: box sets whose name, or two or more
+  /// of whose movies' titles, match; best first. A failed read answers none,
+  /// so it never fails the search it sits beside.
+  Future<List<MediaItem>> _searchBoxSets(String text, {AbortController? abort}) async {
+    if (text.length > 200) return const [];
+    try {
+      final response = await _api.send('GET', '/api/v2/catalog/box-sets', query: {'q': text, 'limit': 5}, abort: abort);
+      final data = response.data is Map<String, dynamic> ? response.data as Map<String, dynamic> : null;
+      return [
+        for (final row in _itemsOf(data))
+          ?SiloMappers.boxSet(row, _ctx, libraryTitle: _libraryTitles[row['library_id']?.toString()]),
+      ];
+    } catch (e) {
+      appLogger.d('SiloClient: box set search failed; showing titles only', error: e.runtimeType);
+      return const [];
+    }
   }
 
   /// `GET /api/v2/catalog/people/{id}?prefetch=true` (prefetch: read what the server has without
@@ -1243,28 +1340,67 @@ class SiloClient
 
   @override
   Future<List<MediaHub>> fetchRelatedHubs(String id, {int count = 10}) async {
+    final (boxSet, similar) = await (_movieBoxSetHub(id), _similarHub(id, count)).wait;
+    // A movie page's box set row sits above More Like This, as in Silo's apps.
+    return [?boxSet, ?similar];
+  }
+
+  Future<MediaHub?> _similarHub(String id, int count) async {
     try {
       final data = await _api.getJson(
         '/api/v2/recommendations/similar/${_seg(id)}',
         query: {'limit': count.clamp(1, 50)},
       );
       final items = SiloMappers.items(_itemsOf(data), _ctx);
-      if (items.isEmpty) return const [];
-      return [
-        MediaHub(
-          id: 'similar:$id',
-          identifier: 'similar',
-          title: t.discover.moreLikeThis,
-          type: _hubType(items),
-          items: items,
-          size: items.length,
-          serverId: serverId,
-          serverName: serverName,
-        ),
-      ];
+      if (items.isEmpty) return null;
+      return MediaHub(
+        id: 'similar:$id',
+        identifier: 'similar',
+        title: t.discover.moreLikeThis,
+        type: _hubType(items),
+        items: items,
+        size: items.length,
+        serverId: serverId,
+        serverName: serverName,
+      );
     } on MediaServerHttpException catch (e) {
-      if (e.statusCode == 404) return const [];
+      if (e.statusCode == 404) return null;
       rethrow;
+    }
+  }
+
+  /// The box set row of a movie page (Silo Android #646): the box set's
+  /// movies in release order, then the box set itself as a card that opens
+  /// its page (Silo's "Explore all"). Only a movie asks, and only while its
+  /// library (or, when the detail names none, any library) has box sets on,
+  /// so servers without box sets are never asked. `GET
+  /// /catalog/items/{id}/box-set` answers `{}` for a movie in no box set. A
+  /// failed read shows no row; it never costs the page its other rows.
+  Future<MediaHub?> _movieBoxSetHub(String id) async {
+    if (!_hasBoxSets()) return null;
+    try {
+      final detail = await _recentItemDetail(id);
+      if (detail == null || SiloMappers.itemKind(detail['type']?.toString()) != MediaKind.movie) return null;
+      final libraryId = detail['library_id']?.toString();
+      if (!_hasBoxSets(libraryId)) return null;
+      final data = await _api.getJson('/api/v2/catalog/items/${_seg(id)}/box-set', query: {'library_id': ?libraryId});
+      final boxSetData = data['box_set'];
+      if (boxSetData is! Map<String, dynamic>) return null;
+      final mapped = _mapBoxSetDetail(boxSetData, fallbackLibraryId: libraryId);
+      if (mapped == null || mapped.movies.isEmpty) return null;
+      return MediaHub(
+        id: 'boxset:${mapped.boxSet.id}',
+        identifier: 'box_set',
+        title: mapped.boxSet.title ?? '',
+        type: MediaKind.movie.id,
+        items: [...mapped.movies, mapped.boxSet],
+        size: mapped.movies.length + 1,
+        serverId: serverId,
+        serverName: serverName,
+      );
+    } catch (e) {
+      appLogger.d('SiloClient: movie box set unavailable', error: e.runtimeType);
+      return null;
     }
   }
 
@@ -1528,6 +1664,9 @@ class SiloClient
     String? libraryId,
     String? libraryTitle,
   }) async {
+    if (SiloMappers.parseBoxSetId(collectionId) != null) {
+      return _slice((await _boxSet(collectionId, abort: abort))?.movies ?? const [], start, size);
+    }
     final parsed = _parseCollectionId(collectionId);
     if (parsed == null) return const LibraryPage(items: [], totalCount: 0);
     final offset = start ?? 0;

@@ -236,9 +236,26 @@ abstract final class SiloSubtitleRules {
   /// Tracks the server can translate (Silo's TV app): embedded tracks it can
   /// extract to text, and external or stored files in a text format it parses.
   static bool isTranslatable(Map<dynamic, dynamic> entry) {
+    if (isUnplayable(entry)) return false;
     final codec = entry['codec']?.toString().toLowerCase();
     if (entry['source'] == 'embedded') return !isBitmap(codec);
     return _textCodecs.contains(codec);
+  }
+
+  /// Whether no route of the server can show this subtitle (Silo Android
+  /// #776): the inventory row's `unplayable` flag, or, from a server that
+  /// predates it, an embedded track stored without a codec (an MKV
+  /// `S_TEXT/WEBVTT` track the server's probe did not recognise). Selecting
+  /// one ends in `subtitle_codec_unsupported`. Only embedded rows count:
+  /// downloaded and external files can arrive without a codec and still
+  /// play. Watch-detail `subtitle_tracks` rows say `external: true` instead
+  /// of a `source`.
+  static bool isUnplayable(Map<dynamic, dynamic> entry) {
+    if (entry['unplayable'] == true) return true;
+    final source =
+        entry['source']?.toString().trim().toLowerCase() ?? (entry['external'] == true ? 'external' : 'embedded');
+    final codec = entry['codec']?.toString().trim() ?? '';
+    return source == 'embedded' && codec.isEmpty;
   }
 
   /// The stored subtitle id of an inventory row: its `stored-<id>` sync key,

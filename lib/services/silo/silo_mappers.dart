@@ -11,6 +11,7 @@ import '../../media/media_stream.dart';
 import '../../media/media_version.dart';
 import '../../media/remote_trailer.dart';
 import '../../utils/json_utils.dart';
+import 'silo_subtitles.dart';
 
 /// Everything a mapping needs from the client: who the items belong to and
 /// how to make a server URL absolute.
@@ -266,6 +267,9 @@ abstract final class SiloMappers {
       var position = 0;
       for (final track in subs.whereType<Map>()) {
         final index = flexibleInt(track['index']) ?? position;
+        position++;
+        // A track the server cannot show is never offered (Silo Android #776).
+        if (SiloSubtitleRules.isUnplayable(track)) continue;
         out.add(
           MediaStream(
             id: 'file:$fileId:subtitle:$index',
@@ -279,7 +283,6 @@ abstract final class SiloMappers {
             forced: track['forced'] == true,
           ),
         );
-        position++;
       }
     }
     return out;
@@ -331,6 +334,12 @@ abstract final class SiloMappers {
   /// Map a Silo card or detail object. Returns `null` for rows without an
   /// id or of a type Plezy cannot show (audio and reading media).
   static MediaItem? item(Map<String, dynamic> json, SiloMappingContext ctx, {String? libraryId, String? libraryTitle}) {
+    // A `group=box_set` browse answers one card per box set in place of its
+    // movies (Silo Android #646).
+    if (_string(json['type']) == boxSetType) {
+      final boxSetJson = _map(json['box_set']);
+      return boxSetJson == null ? null : boxSet(boxSetJson, ctx, libraryTitle: libraryTitle);
+    }
     final id = _string(json['content_id']) ?? _string(json['id']);
     if (id == null) return null;
     final kind = itemKind(_string(json['type']) ?? (json.containsKey('episode_number') ? 'episode' : null));
@@ -476,6 +485,70 @@ abstract final class SiloMappers {
       .toList();
 
   // ---------------------------------------------------------------------------
+  // Movie box sets (Silo Android #646)
+  // ---------------------------------------------------------------------------
+
+  /// `type` of a box set card in a `group=box_set` browse, and that `group`.
+  static const boxSetType = 'box_set';
+
+  /// Prefix of the ids Plezy gives box sets:
+  /// `silo-boxset:<library id>:<box set id>`. A box set (a TMDB collection) is library-scoped, and search can
+  /// return one collection from two libraries, so the id names both.
+  static const boxSetPrefix = 'silo-boxset:';
+
+  static String boxSetId(String libraryId, String boxSetId) => '$boxSetPrefix$libraryId:$boxSetId';
+
+  /// Parse a [boxSetId]; `null` for any other id.
+  static ({String libraryId, String boxSetId})? parseBoxSetId(String id) {
+    if (!id.startsWith(boxSetPrefix)) return null;
+    final rest = id.substring(boxSetPrefix.length);
+    final colon = rest.indexOf(':');
+    if (colon <= 0 || colon == rest.length - 1) return null;
+    return (libraryId: rest.substring(0, colon), boxSetId: rest.substring(colon + 1));
+  }
+
+  static bool isBoxSet(MediaItem item) => item.backend == MediaBackend.silo && item.id.startsWith(boxSetPrefix);
+
+  /// A box set (`box_set` of a browse card, a box set search row, or the box
+  /// set read itself) as a collection, so the library grid, search and the
+  /// collection screen show it. `movie_count` / `played_count` become the
+  /// leaf counts, which give the card its watched share.
+  static MediaItem? boxSet(Map<String, dynamic> json, SiloMappingContext ctx, {String? libraryTitle}) {
+    final id = _string(json['id']);
+    final libraryId = _string(json['library_id']);
+    if (id == null || libraryId == null) return null;
+    final movies = flexibleInt(json['movie_count']);
+    final played = flexibleInt(json['played_count']);
+    final backdrop = _url(json['backdrop_url'], ctx);
+    return MediaItem.silo(
+      id: boxSetId(libraryId, id),
+      kind: MediaKind.collection,
+      title: _string(json['title']),
+      summary: _string(json['overview']),
+      year: flexibleInt(json['first_year']),
+      thumbPath: _url(json['poster_url'], ctx),
+      artPath: backdrop,
+      backdropPaths: backdrop == null ? null : [backdrop],
+      leafCount: movies,
+      childCount: movies,
+      viewedLeafCount: movies == null || played == null ? null : played.clamp(0, movies),
+      libraryId: libraryId,
+      libraryTitle: libraryTitle,
+      serverId: ctx.serverId,
+      serverName: ctx.serverName,
+      raw: json,
+    );
+  }
+
+  /// The movie a box set's Play starts, as Silo's `boxSetNextMovie` picks
+  /// it: the first in release order the profile has not watched (one in
+  /// progress counts as not watched), else the first.
+  static int boxSetStartIndex(List<MediaItem> movies) {
+    final next = movies.indexWhere((movie) => !movie.isWatched);
+    return next < 0 ? 0 : next;
+  }
+
+  // ---------------------------------------------------------------------------
   // Extras and remote trailers (item detail `extras[]` / `videos[]`)
   // ---------------------------------------------------------------------------
 
@@ -569,36 +642,51 @@ abstract final class SiloMappers {
     return out;
   }
 
+  /// The marker kinds Silo sends (`marker_segments[].kind`).
+  static const _markerKinds = {'intro', 'credits', 'recap', 'preview'};
+
   /// Skip markers from a watch-detail version's `marker_segments`, falling
   /// back to the item-level `intro`/`credits`/`recap` objects (`{start,end}`
   /// on catalog detail, `{start_seconds,end_seconds}` on watch detail).
+  ///
+  /// `marker_segments` lists every occurrence of a kind (two credits ranges
+  /// around a mid-credits scene, Silo Android #694); the singular fields
+  /// hold only the first. Each occurrence becomes its own marker, so the
+  /// skip button shows in each range and seeks to that range's end, and only
+  /// a credits range that reaches the end of the file offers the next
+  /// episode. Markers come back in source-time order (start, then end), as
+  /// Silo's `MarkerTimeline` orders them; unknown kinds and empty or
+  /// negative ranges are dropped.
   static List<MediaMarker> markers(Map<String, dynamic>? item, Map<String, dynamic>? version) {
-    final out = <MediaMarker>[];
-    var id = 0;
+    final regions = <({String kind, int start, int end})>[];
     void add(String? kind, Object? start, Object? end) {
       final startMs = _secondsToMs(start);
       final endMs = _secondsToMs(end);
-      if (kind == null || startMs == null || endMs == null || endMs <= startMs) return;
-      out.add(MediaMarker(id: id++, type: kind, startTimeOffset: startMs, endTimeOffset: endMs));
+      if (kind == null || !_markerKinds.contains(kind) || startMs == null || endMs == null || endMs <= startMs) return;
+      regions.add((kind: kind, start: startMs, end: endMs));
     }
 
     final segments = version?['marker_segments'];
     if (segments is List && segments.isNotEmpty) {
       for (final segment in segments.whereType<Map>()) {
-        add(_string(segment['kind']), segment['start_seconds'], segment['end_seconds']);
+        add(_string(segment['kind'])?.toLowerCase(), segment['start_seconds'], segment['end_seconds']);
       }
-      return out;
-    }
-    for (final source in [version, item].nonNulls) {
-      for (final kind in const ['intro', 'credits', 'recap', 'preview']) {
-        final marker = source[kind];
-        if (marker is Map) {
-          add(kind, marker['start_seconds'] ?? marker['start'], marker['end_seconds'] ?? marker['end']);
+    } else {
+      for (final source in [version, item].nonNulls) {
+        for (final kind in _markerKinds) {
+          final marker = source[kind];
+          if (marker is Map) {
+            add(kind, marker['start_seconds'] ?? marker['start'], marker['end_seconds'] ?? marker['end']);
+          }
         }
+        if (regions.isNotEmpty) break;
       }
-      if (out.isNotEmpty) return out;
     }
-    return out;
+    regions.sort((a, b) => a.start != b.start ? a.start.compareTo(b.start) : a.end.compareTo(b.end));
+    return [
+      for (var i = 0; i < regions.length; i++)
+        MediaMarker(id: i, type: regions[i].kind, startTimeOffset: regions[i].start, endTimeOffset: regions[i].end),
+    ];
   }
 
   // ---------------------------------------------------------------------------
@@ -651,6 +739,7 @@ abstract final class SiloMappers {
     required SiloMappingContext ctx,
     int? selectedAudioIndex,
     Set<int> sidecarSubtitleIndexes = const {},
+    Set<int> unplayableSubtitleIndexes = const {},
     List<MediaSubtitleTrack> extraSubtitleTracks = const [],
   }) {
     final audio = <MediaAudioTrack>[];
@@ -682,6 +771,13 @@ abstract final class SiloMappers {
       var position = 0;
       for (final track in rawSubs.whereType<Map>()) {
         final index = (track['index'] as num?)?.toInt() ?? position;
+        position++;
+        // Silo Android #776: a track no route can show (the playback
+        // inventory's `unplayable`, or an embedded track without a codec) is
+        // left out, so no picker offers it and automatic selection never
+        // lands on it. The player's list has no disabled rows; the other
+        // rows keep their ids (index + 1), so nothing shifts.
+        if (unplayableSubtitleIndexes.contains(index) || SiloSubtitleRules.isUnplayable(track)) continue;
         subs.add(
           MediaSubtitleTrack(
             id: trackId(index),
@@ -696,7 +792,6 @@ abstract final class SiloMappers {
             usesExternalDelivery: sidecarSubtitleIndexes.contains(index),
           ),
         );
-        position++;
       }
     }
     // Subtitles stored on the server for this file (provider downloads, AI

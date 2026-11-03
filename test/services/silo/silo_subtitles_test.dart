@@ -69,8 +69,15 @@ void main() {
   late List<http.Request> requests;
   // Answers for paths the playback fake does not know; null → 404.
   late FutureOr<http.Response?> Function(http.Request request, String path) extra;
+  // Rows the watch detail and the playback inventory add for one test.
+  late List<Map<String, Object?>> extraTracks;
+  late List<Map<String, Object?>> extraInventory;
+  late String delivery;
 
   setUp(() {
+    extraTracks = [];
+    extraInventory = [];
+    delivery = 'original_http';
     final db = AppDatabase.forTesting(NativeDatabase.memory());
     PlexApiCache.initialize(db);
     SiloApiCache.initialize(db);
@@ -98,6 +105,7 @@ void main() {
               'subtitle_tracks': [
                 {'index': 0, 'language': 'eng', 'codec': 'srt', 'external': true},
                 {'index': 1, 'language': 'eng', 'codec': 'hdmv_pgs_subtitle'},
+                ...extraTracks,
               ],
             },
           ],
@@ -118,7 +126,7 @@ void main() {
           'outcome': 'playable',
           'session_id': 'sess-1',
           'playback_plan': {
-            'delivery': 'original_http',
+            'delivery': delivery,
             'stream': {'url': '/api/v2/stream/sess-1?st=sig'},
             'selected_tracks': {
               'audio': {'index': 1},
@@ -151,6 +159,7 @@ void main() {
                   'delivery': 'sidecar',
                   'url': '/api/v2/stream/sess-1/subtitles/2.vtt?file_id=42&downloaded_subtitle_id=7',
                 },
+                ...extraInventory,
               ],
             },
           },
@@ -188,6 +197,20 @@ void main() {
       expect(SiloSubtitleRules.isTranslatable({'source': 'downloaded', 'codec': 'webvtt'}), isTrue);
     });
 
+    test('unplayable: the server flag, or an embedded track without a codec (Silo Android #776)', () {
+      expect(SiloSubtitleRules.isUnplayable({'source': 'embedded', 'codec': 'webvtt', 'unplayable': true}), isTrue);
+      expect(SiloSubtitleRules.isUnplayable({'source': 'embedded', 'codec': ''}), isTrue);
+      expect(SiloSubtitleRules.isUnplayable({'source': 'embedded'}), isTrue);
+      expect(SiloSubtitleRules.isUnplayable({'source': 'embedded', 'codec': 'subrip'}), isFalse);
+      // Downloaded and external files may arrive without a codec and still play.
+      expect(SiloSubtitleRules.isUnplayable({'source': 'downloaded'}), isFalse);
+      expect(SiloSubtitleRules.isUnplayable({'source': 'external', 'codec': null}), isFalse);
+      // Watch-detail rows say `external` instead of a source.
+      expect(SiloSubtitleRules.isUnplayable({'index': 3, 'language': 'eng'}), isTrue);
+      expect(SiloSubtitleRules.isUnplayable({'index': 3, 'external': true}), isFalse);
+      expect(SiloSubtitleRules.isTranslatable({'source': 'embedded', 'codec': 'webvtt', 'unplayable': true}), isFalse);
+    });
+
     test('transcribe kind: no translation when the audio is already in the target', () {
       expect(
         SiloSubtitleRules.transcribeKind(audioLanguage: 'eng', target: 'en', canTranslate: true),
@@ -221,6 +244,44 @@ void main() {
       // bitmap track is in the file.
       expect(result.subtitleSidecars.map((s) => s.sourceStreamId), [1, storedTrackId]);
       expect(result.subtitleSidecars.last.track.uri, contains('downloaded_subtitle_id=7'));
+    });
+
+    test('tracks the server cannot show are never offered, sent or translated', () async {
+      delivery = 'server_transcode_hls';
+      extraTracks = [
+        {'index': 3, 'language': 'eng', 'codec': 'webvtt', 'title': 'Flagged'},
+        // An older server stored this MKV S_TEXT/WEBVTT track without a codec.
+        {'index': 4, 'language': 'ger', 'title': 'No codec'},
+        {'index': 5, 'language': 'spa', 'codec': 'subrip'},
+      ];
+      Map<String, Object?> row(int index, {String? codec, bool? unplayable}) => {
+        'combined_index': index,
+        'source': 'embedded',
+        'codec': ?codec,
+        'language': 'eng',
+        'unplayable': ?unplayable,
+        'delivery': 'sidecar',
+        'url': '/api/v2/stream/sess-1/subtitles/$index.vtt?file_id=42',
+      };
+      extraInventory = [row(3, codec: 'webvtt', unplayable: true), row(4), row(5, codec: 'subrip')];
+      final c = client();
+      final result = await c.getPlaybackInitialization(
+        PlaybackInitializationOptions(metadata: _movie, selectedMediaIndex: 0),
+      );
+      final ids = result.mediaInfo!.subtitleTracks.map((t) => t.id).toList();
+      // Track ids are index + 1: 4 and 5 are gone, 6 (Spanish) keeps its id.
+      expect(ids, containsAll([1, 2, 6]));
+      expect(ids, isNot(contains(4)));
+      expect(ids, isNot(contains(5)));
+      final sidecarIds = result.subtitleSidecars.map((s) => s.sourceStreamId).toList();
+      expect(sidecarIds, isNot(contains(4)));
+      expect(sidecarIds, isNot(contains(5)));
+      expect(sidecarIds, contains(6));
+      expect(c.aiPlaybackContext('movie:m1')!.subtitleSources.map((s) => s.combinedIndex), isNot(contains(3)));
+      expect(c.aiPlaybackContext('movie:m1')!.subtitleSources.map((s) => s.combinedIndex), isNot(contains(4)));
+      // The start request names no subtitle at all: Plezy picks them itself.
+      final start = requests.where((r) => r.url.path.endsWith('/playback/start')).single;
+      expect(body(start).keys.where((k) => k.contains('subtitle') && k != 'subtitle_fidelity_preference'), isEmpty);
     });
 
     test('the AI sheet sees the playing session, its translatable tracks and audio', () async {

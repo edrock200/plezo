@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../media/ids.dart';
 import '../focus/focusable_action_bar.dart';
 import '../media/library_query.dart';
+import '../media/media_backend.dart';
 import '../media/media_item.dart';
 import '../mixins/deletion_aware.dart';
 import '../mixins/paginated_item_loader.dart';
@@ -164,12 +165,14 @@ class _CollectionDetailScreenState extends BaseMediaListDetailScreen<CollectionD
         showDownload: true,
         onDownload: _downloadCollection,
       ),
-      FocusableAction(
-        icon: Symbols.delete_rounded,
-        tooltip: t.common.delete,
-        onPressed: _deleteCollection,
-        iconColor: Colors.red,
-      ),
+      // Silo's collections and box sets are read-only for clients.
+      if (widget.collection.backend != MediaBackend.silo)
+        FocusableAction(
+          icon: Symbols.delete_rounded,
+          tooltip: t.common.delete,
+          onPressed: _deleteCollection,
+          iconColor: Colors.red,
+        ),
     ];
   }
 

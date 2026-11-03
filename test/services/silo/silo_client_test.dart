@@ -1071,6 +1071,180 @@ void main() {
       );
     });
   });
+
+  group('box sets (Silo Android #646)', () {
+    Map<String, dynamic> boxSetFields({String id = '1241', String library = '1'}) => {
+      'id': id,
+      'library_id': library,
+      'title': 'The Paper Collection',
+      'poster_url': '/img/p.jpg',
+      'movie_count': 2,
+      'played_count': 1,
+      'first_year': 2001,
+      'last_year': 2011,
+    };
+    Map<String, dynamic> film(String id, {bool played = false}) => {
+      'content_id': id,
+      'type': 'movie',
+      'title': id,
+      'library_id': '1',
+      'user_state': {'played': played},
+    };
+
+    /// A server whose library 1 has box sets on (library 2 has none), with
+    /// [boxSetsOn] false acting as a server without the feature.
+    Future<http.Response> server(http.Request request, {bool boxSetsOn = true, bool failBoxSetSearch = false}) async {
+      final path = Uri.decodeComponent(request.url.path);
+      final q = request.url.queryParameters;
+      if (path.endsWith('/user/libraries')) {
+        return _json({
+          'items': [
+            {
+              'id': 1,
+              'name': 'Movies',
+              'type': 'movie',
+              'sort_order': 0,
+              'box_sets_enabled': ?(boxSetsOn ? true : null),
+            },
+            {'id': 2, 'name': 'Shows', 'type': 'series', 'sort_order': 1, 'box_sets_enabled': false},
+          ],
+        });
+      }
+      if (path.endsWith('/catalog/box-sets/1241')) {
+        if (q['library_id'] != '1') return _problem(404, 'not_found');
+        return _json({
+          ...boxSetFields(),
+          'items': [film('movie:paper-moons', played: true), film('movie:paper-tigers')],
+        });
+      }
+      if (path.endsWith('/catalog/box-sets')) {
+        if (failBoxSetSearch) return _problem(500, 'internal');
+        return _json({
+          'items': [boxSetFields()],
+        });
+      }
+      if (path.endsWith('/catalog/items/movie:paper-tigers/box-set')) {
+        return _json({
+          'box_set': {
+            ...boxSetFields(),
+            'items': [film('movie:paper-moons', played: true), film('movie:paper-tigers')],
+          },
+        });
+      }
+      if (path.endsWith('/catalog/items/movie:alone/box-set')) return _json({});
+      if (path.contains('/catalog/items/')) {
+        final id = path.split('/catalog/items/').last;
+        return _json({'content_id': id, 'type': id.startsWith('series:') ? 'series' : 'movie', 'library_id': '1'});
+      }
+      if (path.contains('/recommendations/similar/')) {
+        return _json({
+          'items': [_movie(9)],
+        });
+      }
+      if (path.endsWith('/api/v2/catalog')) {
+        return _json({
+          'items': [
+            if (q['group'] == 'box_set')
+              {
+                'content_id': 'box_set:1:1241',
+                'type': 'box_set',
+                'title': 'The Paper Collection',
+                'box_set': boxSetFields(),
+              },
+            _movie(1),
+          ],
+          'page': {'has_more': false},
+          'total': 2,
+        });
+      }
+      return _json({}, 404);
+    }
+
+    test('a library with box sets on browses with group=box_set; others never do', () async {
+      final c = client(server);
+      await c.fetchLibraries();
+      final page = await c.fetchLibraryPagedContent('1', query: const LibraryQuery(offset: 0, limit: 50));
+      expect(requests.last.url.queryParameters['group'], 'box_set');
+      final boxSet = page.items.first;
+      expect(boxSet.kind, MediaKind.collection);
+      expect(boxSet.id, 'silo-boxset:1:1241');
+      expect(boxSet.libraryTitle, 'Movies');
+      expect(page.items.last.id, 'movie:m1');
+
+      await c.fetchLibraryPagedContent('2', query: const LibraryQuery(offset: 0, limit: 50));
+      expect(requests.last.url.queryParameters.containsKey('group'), isFalse);
+      // A Shows view of a box set library is left ungrouped.
+      await c.fetchLibraryPagedContent('1', query: const LibraryQuery(offset: 0, limit: 50, kind: MediaKind.show));
+      expect(requests.last.url.queryParameters.containsKey('group'), isFalse);
+    });
+
+    test('a server without box sets browses exactly as before', () async {
+      final c = client((r) => server(r, boxSetsOn: false));
+      await c.fetchLibraries();
+      await c.fetchLibraryPagedContent('1', query: const LibraryQuery(offset: 0, limit: 50));
+      expect(requests.last.url.queryParameters.containsKey('group'), isFalse);
+      final results = await c.searchItems('paper');
+      expect(results.map((i) => i.id), ['movie:m1']);
+      final hubs = await c.fetchRelatedHubs('movie:paper-tigers');
+      expect(hubs.map((h) => h.identifier), ['similar']);
+      expect(requests.where((r) => r.url.path.contains('box-set')), isEmpty);
+    });
+
+    test('a box set opens as a collection of its films in release order; Play picks the next unwatched', () async {
+      final c = client(server);
+      await c.fetchLibraries();
+      const id = 'silo-boxset:1:1241';
+      final page = await c.fetchCollectionPage(id, start: 0, size: 200);
+      expect(page.items.map((i) => i.id), ['movie:paper-moons', 'movie:paper-tigers']);
+      expect(page.totalCount, 2);
+      final read = requests.last;
+      expect(Uri.decodeComponent(read.url.path), '/base/api/v2/catalog/box-sets/1241');
+      expect(read.url.queryParameters, {'library_id': '1'});
+
+      final playable = await c.fetchPlayableDescendants(id);
+      expect(SiloMappers.boxSetStartIndex(playable), 1);
+
+      final item = await c.fetchItem(id);
+      expect(item!.kind, MediaKind.collection);
+      expect(item.title, 'The Paper Collection');
+      expect(item.leafCount, 2);
+      expect(item.viewedLeafCount, 1);
+      expect(await c.fetchItem('silo-boxset:9:1241'), isNull);
+    });
+
+    test('search lists matching box sets first and survives a failed box set read', () async {
+      final c = client(server);
+      await c.fetchLibraries();
+      final results = await c.searchItems('paper');
+      expect(results.map((i) => i.id), ['silo-boxset:1:1241', 'movie:m1']);
+      final search = requests.where((r) => r.url.path.endsWith('/catalog/box-sets')).single;
+      expect(search.url.queryParameters, {'q': 'paper', 'limit': '5'});
+      expect((await c.searchItems('paper', excludedLibraryIds: {'1'})).map((i) => i.id), ['movie:m1']);
+
+      final failing = client((r) => server(r, failBoxSetSearch: true));
+      await failing.fetchLibraries();
+      expect((await failing.searchItems('paper')).map((i) => i.id), ['movie:m1']);
+    });
+
+    test('a movie in a box set gets the box set row ahead of More Like This', () async {
+      final c = client(server);
+      await c.fetchLibraries();
+      final hubs = await c.fetchRelatedHubs('movie:paper-tigers');
+      expect(hubs.map((h) => h.identifier), ['box_set', 'similar']);
+      final row = hubs.first;
+      expect(row.title, 'The Paper Collection');
+      // The films, then the box set itself: its card opens the box set page.
+      expect(row.items.map((i) => i.id), ['movie:paper-moons', 'movie:paper-tigers', 'silo-boxset:1:1241']);
+      final read = requests.where((r) => r.url.path.endsWith('/box-set')).single;
+      expect(read.url.queryParameters, {'library_id': '1'});
+
+      expect((await c.fetchRelatedHubs('movie:alone')).map((h) => h.identifier), ['similar']);
+      // Only movies ask.
+      requests.clear();
+      await c.fetchRelatedHubs('series:s1');
+      expect(requests.where((r) => r.url.path.endsWith('/box-set')), isEmpty);
+    });
+  });
 }
 
 String _same(String url) => url;

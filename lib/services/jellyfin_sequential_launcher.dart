@@ -17,6 +17,7 @@ import '../utils/media_server_http_client.dart';
 import 'jellyfin_client.dart';
 import 'media_list_playback_launcher.dart';
 import 'playlist_items_loader.dart';
+import 'silo/silo_mappers.dart';
 
 /// Backend-neutral launcher for MediaBrowser collections, playlists, folders,
 /// and whole-library shuffles.
@@ -103,7 +104,13 @@ class JellyfinSequentialLauncher extends MediaListPlaybackLauncher {
       // original order and move the local queue cursor to that item.
       resolveStartIndex: (items) {
         final start = startItem;
-        if (shuffle || start == null) return 0;
+        if (shuffle) return 0;
+        // A Silo box set plays from its next unwatched movie, in release
+        // order, as Silo's own box set page does.
+        if (start == null && facts.isCollection && facts.id.startsWith(SiloMappers.boxSetPrefix)) {
+          return SiloMappers.boxSetStartIndex(items);
+        }
+        if (start == null) return 0;
         final index = items.indexWhere((it) => it.id == start.id);
         return index < 0 ? 0 : index;
       },

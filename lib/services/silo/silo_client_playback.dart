@@ -294,9 +294,16 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
     // added.
     final sidecars = <PlaybackSubtitleSidecar>[];
     final sidecarIndexes = <int>{};
+    final unplayableIndexes = <int>{};
     final storedTracks = <MediaSubtitleTrack>[];
     if (inventory is List) {
       for (final entry in inventory.whereType<Map>()) {
+        // A track the server cannot show (Silo Android #776) is neither a
+        // sidecar nor a picker row.
+        if (SiloSubtitleRules.isUnplayable(entry)) {
+          if ((entry['combined_index'] as num?)?.toInt() case final index?) unplayableIndexes.add(index);
+          continue;
+        }
         final url = entry['url']?.toString();
         if (entry['delivery'] != 'sidecar' || url == null || url.isEmpty) continue;
         final codec = entry['codec']?.toString().toLowerCase();
@@ -350,6 +357,7 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
       ctx: _ctx,
       selectedAudioIndex: selectedAudio,
       sidecarSubtitleIndexes: sidecarIndexes,
+      unplayableSubtitleIndexes: unplayableIndexes,
       extraSubtitleTracks: storedTracks,
     );
 
@@ -469,6 +477,7 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
         if (entry['source'] == 'external' &&
             entry['delivery'] == 'sidecar' &&
             (entry['url']?.toString() ?? '').isNotEmpty &&
+            !SiloSubtitleRules.isUnplayable(entry) &&
             !_bitmapSubtitleCodecs.contains(entry['codec']?.toString().toLowerCase()))
           DownloadSubtitleSpec(
             id: SiloMappers.trackId((entry['combined_index'] as num?)?.toInt() ?? 0),

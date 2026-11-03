@@ -141,7 +141,7 @@ class _MenuContext {
   /// administrator (or holds a collection-management policy that sign-in
   /// does not capture), so MediaBrowser non-admins only get playlists. Plex
   /// keeps offering collections to everyone, as before.
-  bool get canManageCollections => isPlex || isAdmin;
+  bool get canManageCollections => (isPlex || isAdmin) && itemBackend != MediaBackend.silo;
 }
 
 /// Whether the picked entry navigated away, in which case the menu must not
@@ -610,7 +610,9 @@ class MediaContextMenuState extends State<MediaContextMenu> {
           hasAnyDownload: false,
           downloadValue: menu.isPlaylist ? 'download_playlist' : 'download_collection',
         ),
-      _MenuAction(value: 'delete', icon: Symbols.delete_rounded, label: t.common.delete, destructive: true),
+      // Silo's collections and box sets are read-only for clients.
+      if (menu.itemBackend != MediaBackend.silo)
+        _MenuAction(value: 'delete', icon: Symbols.delete_rounded, label: t.common.delete, destructive: true),
     ];
   }
 
