@@ -301,10 +301,7 @@ jobs:
     needs: [gate, resolve]
     if: ${{ needs.gate.outputs.macos == 'true' }}
     name: Build macOS
-    # macos-26 runners stopped being assigned to this repo on 2026-11-03 (three
-    # jobs queued 15 minutes and were cancelled); macos-latest is GitHub's
-    # standard image.
-    runs-on: macos-latest
+    runs-on: macos-26
     permissions:
       contents: write
       actions: read
