@@ -19,8 +19,10 @@ import '../../profiles/active_profile_binder.dart';
 import '../../profiles/active_profile_provider.dart';
 import '../../profiles/profile.dart';
 import '../../profiles/profile_connection.dart';
+import '../../services/silo/silo_api.dart';
 import '../../services/silo/silo_auth_service.dart';
 import '../../services/silo/silo_device_sign_in.dart';
+import '../../services/silo/silo_password_change.dart';
 import '../../services/storage_service.dart';
 import '../../theme/mono_tokens.dart';
 import '../../utils/app_logger.dart';
@@ -32,6 +34,7 @@ import '../profile/pin_entry_dialog.dart';
 import '../profile/profile_switch_screen.dart';
 import 'async_form_state_mixin.dart';
 import 'connection_persistence.dart';
+import 'silo_password_change_panel.dart';
 
 /// Product name shown in the UI; not localized.
 const _silo = 'Silo';
@@ -41,7 +44,9 @@ const _silo = 'Silo';
 ///   2. Sign in with a device code (approved on a phone or the web, Silo's
 ///      main TV flow) or with username and password.
 ///   3. Pick one of the account's Silo profiles, entering its PIN when it
-///      has one. One account profile is one connection.
+///      has one. One account profile is one connection. An account holding a
+///      temporary password an admin set gets "Choose a new password" first
+///      (TVs say where to change it instead, as Silo's TV apps do).
 ///   4. Persist the connection and bind it to [targetProfile] (or the active
 ///      Plezy profile), exactly as Jellyfin connections are.
 class AddSiloScreen extends StatefulWidget {
@@ -66,7 +71,18 @@ class AddSiloScreen extends StatefulWidget {
   State<AddSiloScreen> createState() => _AddSiloScreenState();
 }
 
-enum _Step { address, signIn, deviceCode, profile }
+enum _Step {
+  address,
+  signIn,
+  deviceCode,
+  profile,
+
+  /// "Choose a new password" (phones, tablets, desktops).
+  passwordChange,
+
+  /// A TV's "change it on your phone or the web" message.
+  passwordOnTv,
+}
 
 /// The message for a failed `verify-pin`, shown in the PIN dialog. A wrong PIN
 /// is not an error (the service returns null); this covers rate limiting, a
@@ -94,6 +110,7 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
   final _codeActionFocus = FocusNode(debugLabel: 'AddSilo:CodeAction');
   final _cancelCodeFocus = FocusNode(debugLabel: 'AddSilo:CancelCode');
   final _profileChangeServerFocus = FocusNode(debugLabel: 'AddSilo:ProfileChangeServer');
+  final _tvSignOutFocus = FocusNode(debugLabel: 'AddSilo:TvSignOut');
   final _formKey = GlobalKey<FormState>();
 
   _Step _step = _Step.address;
@@ -114,9 +131,18 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
   bool _handedOff = false;
   List<SiloProfile> _profiles = const [];
 
+  /// "Choose a new password" for [_signIn], while it is open.
+  SiloTemporaryPasswordSession? _passwordSession;
+  SiloPasswordChangeController? _passwordChange;
+
+  /// [_signIn] already replaced its temporary password and refreshed: a
+  /// second refusal is not handed off again (it would loop).
+  bool _passwordChanged = false;
+
   @override
   void dispose() {
     _disposeDeviceFlow();
+    _closePasswordChange();
     _discardSignIn();
     for (final node in [
       _urlFocus,
@@ -129,6 +155,7 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
       _codeActionFocus,
       _cancelCodeFocus,
       _profileChangeServerFocus,
+      _tvSignOutFocus,
     ]) {
       node.dispose();
     }
@@ -194,6 +221,7 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
 
   void _changeServer() {
     _disposeDeviceFlow();
+    _closePasswordChange();
     _discardSignIn();
     setState(() {
       _server = null;
@@ -350,13 +378,29 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
   // ---------------------------------------------------------------------------
 
   Future<void> _onSignedIn(SiloSignIn signIn) async {
-    if (!identical(_signIn, signIn)) _discardSignIn();
+    if (!identical(_signIn, signIn)) {
+      _discardSignIn();
+      _passwordChanged = false;
+    }
     _signIn = signIn;
+    var passwordChangeRequired = false;
     final profiles = await runAsync<List<SiloProfile>>(
       () async => (await _authService()).fetchProfiles(signIn),
-      errorMapper: (e) => e is SiloSignInException ? _errorFor(e) : t.addServer.signInFailed(error: e.toString()),
+      errorMapper: (e) {
+        if (e is SiloPasswordChangeRequiredException) {
+          passwordChangeRequired = true;
+          return '';
+        }
+        return e is SiloSignInException ? _errorFor(e) : t.addServer.signInFailed(error: e.toString());
+      },
     );
     if (!mounted) return;
+    if (passwordChangeRequired && identical(_signIn, signIn) && !_passwordChanged) {
+      setErrorText(null);
+      await _openPasswordChange(signIn);
+      return;
+    }
+    if (passwordChangeRequired) setErrorText(t.addServer.siloDeviceCouldntFinish);
     if (profiles == null || profiles.isEmpty) {
       // Nothing to pick: this session will not be used.
       _discardSignIn();
@@ -429,6 +473,103 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
     }
     await _finish(profile, profileToken: profileToken);
   }
+
+  // ---------------------------------------------------------------------------
+  // Temporary password (Silo Android #790)
+  // ---------------------------------------------------------------------------
+
+  /// The account holds a temporary password, so the server refuses its
+  /// profiles until it is replaced. Phones, tablets and desktops choose a new
+  /// one here; a TV says where to change it, with Sign out focused.
+  Future<void> _openPasswordChange(SiloSignIn signIn) async {
+    _disposeDeviceFlow();
+    _closePasswordChange();
+    if (PlatformDetector.isTV()) {
+      setState(() {
+        _completingApproval = false;
+        _step = _Step.passwordOnTv;
+      });
+      requestFocusAfterFrame(_tvSignOutFocus);
+      return;
+    }
+    final auth = await _authService();
+    if (!mounted || !identical(_signIn, signIn)) return;
+    late final SiloTemporaryPasswordSession session;
+    session = await auth.temporaryPasswordSession(
+      signIn,
+      onTokensRefreshed: (tokens) {
+        // The old pair is dead: keep the new one, so leaving logs out the
+        // live session and the profiles are read with it.
+        final current = _signIn;
+        if (identical(_passwordSession, session) && current != null) _signIn = current.withTokens(tokens);
+      },
+    );
+    if (!mounted || !identical(_signIn, signIn)) {
+      session.close();
+      return;
+    }
+    final controller = SiloPasswordChangeController(session);
+    controller.addListener(() => _onPasswordChangeState(controller));
+    _passwordSession = session;
+    _passwordChange = controller;
+    setState(() {
+      _completingApproval = false;
+      _step = _Step.passwordChange;
+    });
+    unawaited(controller.load());
+  }
+
+  void _onPasswordChangeState(SiloPasswordChangeController controller) {
+    if (!mounted || !identical(controller, _passwordChange) || !controller.value.finished) return;
+    final signIn = _signIn;
+    // The session no longer carries the restriction: on to the profiles.
+    _closePasswordChange();
+    if (signIn == null) return;
+    _passwordChanged = true;
+    unawaited(_onSignedIn(signIn));
+  }
+
+  void _closePasswordChange() {
+    final controller = _passwordChange;
+    final session = _passwordSession;
+    _passwordChange = null;
+    _passwordSession = null;
+    // After this frame: the panel may still be listening while it unmounts.
+    if (controller != null) WidgetsBinding.instance.addPostFrameCallback((_) => controller.dispose());
+    session?.close();
+  }
+
+  /// "Sign out" from the temporary-password step: ends this sign-in and goes
+  /// back to the sign-in methods.
+  void _signOutTemporaryPassword() {
+    _closePasswordChange();
+    _discardSignIn();
+    _passwordController.clear();
+    setState(() => _step = _Step.signIn);
+    setErrorText(null);
+    _focusSignInStep(preferPassword: true);
+  }
+
+  List<Widget> _buildPasswordOnTvStep(ThemeData theme) => [
+    Semantics(header: true, child: Text(t.addServer.siloPasswordChangeTitle, style: theme.textTheme.titleLarge)),
+    const SizedBox(height: 8),
+    Semantics(liveRegion: true, child: Text(t.addServer.siloPasswordResetOnTv, style: theme.textTheme.bodyLarge)),
+    const SizedBox(height: 24),
+    Align(
+      alignment: AlignmentDirectional.centerStart,
+      child: FocusableButton(
+        focusNode: _tvSignOutFocus,
+        autofocus: true,
+        useBackgroundFocus: true,
+        onPressed: _signOutTemporaryPassword,
+        child: FilledButton.icon(
+          onPressed: _signOutTemporaryPassword,
+          icon: const AppIcon(Symbols.logout_rounded, fill: 1),
+          label: Text(t.addServer.siloSignOut),
+        ),
+      ),
+    ),
+  ];
 
   // ---------------------------------------------------------------------------
   // Step 4: persist and bind
@@ -566,7 +707,14 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
                 key: _formKey,
                 child: Column(
                   crossAxisAlignment: .stretch,
-                  children: _step == _Step.profile ? _buildProfileStep(theme) : _buildFormStep(theme),
+                  children: switch (_step) {
+                    _Step.profile => _buildProfileStep(theme),
+                    _Step.passwordOnTv => _buildPasswordOnTvStep(theme),
+                    _Step.passwordChange when _passwordChange != null => [
+                      SiloPasswordChangePanel(controller: _passwordChange!, onSignOut: _signOutTemporaryPassword),
+                    ],
+                    _ => _buildFormStep(theme),
+                  },
                 ),
               ),
             ),

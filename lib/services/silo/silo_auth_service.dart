@@ -9,6 +9,7 @@ import '../../utils/app_logger.dart';
 import '../../utils/media_server_http_client.dart';
 import '../../utils/url_utils.dart';
 import 'silo_api.dart';
+import 'silo_password_change.dart';
 
 /// What a reachable Silo server told us about itself before sign-in.
 class SiloServerInfo {
@@ -39,7 +40,18 @@ class SiloAccount {
   final String username;
   final bool isAdministrator;
 
-  const SiloAccount({required this.id, required this.username, this.isAdministrator = false});
+  /// `password_change_required`: an admin set a temporary password the
+  /// account has not replaced yet. Read from the account, not the session:
+  /// right after the change it is false while the access token still carries
+  /// the restriction. Null from servers that predate it.
+  final bool? passwordChangeRequired;
+
+  const SiloAccount({
+    required this.id,
+    required this.username,
+    this.isAdministrator = false,
+    this.passwordChangeRequired,
+  });
 
   static SiloAccount? fromJson(Object? json) {
     if (json is! Map) return null;
@@ -49,6 +61,10 @@ class SiloAccount {
       id: id.toString(),
       username: (json['username'] as String?) ?? '',
       isAdministrator: json['role'] == 'admin',
+      passwordChangeRequired: switch (json['password_change_required']) {
+        final bool value => value,
+        _ => null,
+      },
     );
   }
 }
@@ -186,6 +202,17 @@ class SiloSignIn {
     this.presetProfileId,
     this.presetProfileToken,
   });
+
+  /// The same sign-in on a rotated token pair (Silo refresh tokens rotate, so
+  /// the old pair is dead once a refresh lands).
+  SiloSignIn withTokens(SiloTokens next) => SiloSignIn(
+    server: server,
+    tokens: next,
+    account: account,
+    deviceId: deviceId,
+    presetProfileId: presetProfileId,
+    presetProfileToken: presetProfileToken,
+  );
 }
 
 /// Thrown for a Silo server that is reachable but cannot be used: too old for
@@ -578,7 +605,23 @@ class SiloAuthService {
     );
   }
 
-  /// `GET /api/v2/profiles` for a fresh sign-in.
+  /// The calls "Choose a new password" makes for [signIn] when its account
+  /// holds a temporary password (`fetchProfiles` threw
+  /// [SiloPasswordChangeRequiredException]). Every rotated token pair is
+  /// passed to [onTokensRefreshed]: the old pair is dead once it fires. The
+  /// caller closes the session.
+  Future<SiloTemporaryPasswordSession> temporaryPasswordSession(
+    SiloSignIn signIn, {
+    required void Function(SiloTokens tokens) onTokensRefreshed,
+  }) async {
+    final api = await _api(signIn.server.baseUrl, tokens: signIn.tokens);
+    api.onTokensRefreshed = onTokensRefreshed;
+    return SiloTemporaryPasswordSession(api);
+  }
+
+  /// `GET /api/v2/profiles` for a fresh sign-in. Throws
+  /// [SiloPasswordChangeRequiredException] for an account holding a temporary
+  /// password.
   Future<List<SiloProfile>> fetchProfiles(SiloSignIn signIn) async {
     final api = await _api(signIn.server.baseUrl, tokens: signIn.tokens);
     try {

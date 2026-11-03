@@ -1,6 +1,7 @@
 import '../exceptions/media_server_exceptions.dart';
 import '../i18n/strings.g.dart';
 import '../services/playback_initialization_types.dart';
+import '../services/silo/silo_api.dart';
 import 'app_logger.dart';
 
 /// Logs a load failure once and returns a localized, user-safe message.
@@ -16,6 +17,8 @@ String localizedLoadErrorMessage(Object error, StackTrace stackTrace, {required 
 ///
 /// The returned text never includes exception or server response content.
 String localizedLoadErrorText(Object error, {required String context}) {
+  // A Silo account holding a temporary password: say what to do, not "try again".
+  if (error is SiloPasswordChangeRequiredException) return t.errors.siloTemporaryPassword;
   if (error is MediaServerHttpException) {
     switch (error.type) {
       case MediaServerHttpErrorType.connectionTimeout:
@@ -50,6 +53,7 @@ String localizedErrorReason(Object error) {
   // specific reason ("Stream selection is not available for this source") is
   // better than anything this function could substitute.
   if (error is PlaybackException) return error.message;
+  if (error is SiloPasswordChangeRequiredException) return t.errors.reasonSiloTemporaryPassword;
   if (error is MediaServerException) {
     final display = error.display;
     if (display != null && display.isNotEmpty) return display;

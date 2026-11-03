@@ -3426,6 +3426,12 @@ class Translations$errors$en {
 
 	/// en: 'an unexpected error occurred'
 	String get reasonUnexpected => 'an unexpected error occurred';
+
+	/// en: 'An admin set a temporary password for this account. Remove this Silo server in Settings and add it again to choose your own.'
+	String get siloTemporaryPassword => 'An admin set a temporary password for this account. Remove this Silo server in Settings and add it again to choose your own.';
+
+	/// en: 'this account has a temporary password; remove the Silo server in Settings and add it again to choose your own'
+	String get reasonSiloTemporaryPassword => 'this account has a temporary password; remove the Silo server in Settings and add it again to choose your own';
 }
 
 // Path: libraries
@@ -6235,6 +6241,93 @@ class Translations$addServer$en {
 
 	/// en: 'Kids profile'
 	String get siloProfileKids => 'Kids profile';
+
+	/// en: 'Choose a new password'
+	String get siloPasswordChangeTitle => 'Choose a new password';
+
+	/// en: 'An admin set a temporary password for ${account}. Choose your own to continue.'
+	String siloPasswordChangeLead({required Object account}) => 'An admin set a temporary password for ${account}. Choose your own to continue.';
+
+	/// en: 'An admin set a temporary password for your account. Choose your own to continue.'
+	String get siloPasswordChangeLeadNoName => 'An admin set a temporary password for your account. Choose your own to continue.';
+
+	/// en: 'Temporary password'
+	String get siloTemporaryPassword => 'Temporary password';
+
+	/// en: 'New password'
+	String get siloNewPassword => 'New password';
+
+	/// en: 'Confirm new password'
+	String get siloConfirmNewPassword => 'Confirm new password';
+
+	/// en: 'At least ${count} characters'
+	String siloPasswordMinimum({required Object count}) => 'At least ${count} characters';
+
+	/// en: 'Save password'
+	String get siloSavePassword => 'Save password';
+
+	/// en: 'Saving…'
+	String get siloSavingPassword => 'Saving…';
+
+	/// en: 'Sign out'
+	String get siloSignOut => 'Sign out';
+
+	/// en: 'Password changed'
+	String get siloPasswordChangedTitle => 'Password changed';
+
+	/// en: 'Your new password is saved, but signing you in didn't finish.'
+	String get siloPasswordChangedLead => 'Your new password is saved, but signing you in didn\'t finish.';
+
+	/// en: 'Trying again…'
+	String get siloTryingAgain => 'Trying again…';
+
+	/// en: 'Password not confirmed'
+	String get siloPasswordNotConfirmedTitle => 'Password not confirmed';
+
+	/// en: 'Plezilo couldn't check whether your new password was saved. Try again in a moment.'
+	String get siloPasswordNotConfirmedLead => 'Plezilo couldn\'t check whether your new password was saved. Try again in a moment.';
+
+	/// en: 'Checking…'
+	String get siloCheckingPassword => 'Checking…';
+
+	/// en: 'Enter the temporary password.'
+	String get siloPasswordErrorEnterTemporary => 'Enter the temporary password.';
+
+	/// en: 'Enter a new password.'
+	String get siloPasswordErrorEnterNew => 'Enter a new password.';
+
+	/// en: 'The new passwords don't match.'
+	String get siloPasswordErrorMismatch => 'The new passwords don\'t match.';
+
+	/// en: 'Use at least ${count} characters.'
+	String siloPasswordErrorTooShort({required Object count}) => 'Use at least ${count} characters.';
+
+	/// en: 'That password is too long. Use a shorter one.'
+	String get siloPasswordErrorTooLong => 'That password is too long. Use a shorter one.';
+
+	/// en: 'That temporary password is incorrect.'
+	String get siloPasswordErrorWrongTemporary => 'That temporary password is incorrect.';
+
+	/// en: 'Choose a different password, then try again.'
+	String get siloPasswordErrorRejected => 'Choose a different password, then try again.';
+
+	/// en: 'Too many attempts. Wait a moment, then try again.'
+	String get siloPasswordErrorRateLimited => 'Too many attempts. Wait a moment, then try again.';
+
+	/// en: 'This account doesn't sign in with a Silo password. Ask your server admin for help.'
+	String get siloPasswordErrorNotPasswordAccount => 'This account doesn\'t sign in with a Silo password. Ask your server admin for help.';
+
+	/// en: 'This session can't change the password. Sign in with your own account and try again.'
+	String get siloPasswordErrorNotAllowed => 'This session can\'t change the password. Sign in with your own account and try again.';
+
+	/// en: 'Couldn't change your password. Try again.'
+	String get siloPasswordErrorFailed => 'Couldn\'t change your password. Try again.';
+
+	/// en: 'Your password wasn't changed. Try again.'
+	String get siloPasswordErrorNotChanged => 'Your password wasn\'t changed. Try again.';
+
+	/// en: 'Your password needs to be reset. Use Silo's mobile app or website to set a new one, then sign in again.'
+	String get siloPasswordResetOnTv => 'Your password needs to be reset. Use Silo\'s mobile app or website to set a new one, then sign in again.';
 }
 
 // Path: deepLinks
@@ -9564,6 +9657,8 @@ extension on Translations {
 			'errors.reasonServerError' => 'the server reported an error',
 			'errors.reasonCancelled' => 'the request was cancelled',
 			'errors.reasonUnexpected' => 'an unexpected error occurred',
+			'errors.siloTemporaryPassword' => 'An admin set a temporary password for this account. Remove this Silo server in Settings and add it again to choose your own.',
+			'errors.reasonSiloTemporaryPassword' => 'this account has a temporary password; remove the Silo server in Settings and add it again to choose your own',
 			'libraries.title' => 'Libraries',
 			'libraries.fallbackTitle' => 'Library',
 			'libraries.scanLibraryFiles' => 'Scan Library Files',
@@ -9913,10 +10008,10 @@ extension on Translations {
 			'liveTv.whatsOn' => 'What\'s On',
 			'liveTv.watchChannel' => 'Watch Channel',
 			'liveTv.favorites' => 'Favorites',
-			'liveTv.reorderFavorites' => 'Reorder Favorites',
-			'liveTv.noFavoriteChannels' => 'No favorite channels',
 			_ => null,
 		} ?? switch (path) {
+			'liveTv.reorderFavorites' => 'Reorder Favorites',
+			'liveTv.noFavoriteChannels' => 'No favorite channels',
 			'liveTv.noFavoriteChannelsHint' => 'Show all channels, then long-press a channel to add it to your favorites.',
 			'liveTv.showAllChannels' => 'Show All Channels',
 			'liveTv.favoritesLoadFailed' => 'Could not load favorites. Check your connection and try again.',
@@ -10427,10 +10522,10 @@ extension on Translations {
 			'videoSettings.audioOutputSurround' => 'Surround',
 			'videoSettings.audioOutputSpatial' => 'Spatial Audio',
 			'videoSettings.audioOutputStereo' => 'Stereo',
-			'videoSettings.audioNormalization' => 'Normalize Loudness',
-			'videoSettings.audioNormalizationDisablesPassthrough' => 'Decodes audio to PCM; passthrough is off while this is on',
 			_ => null,
 		} ?? switch (path) {
+			'videoSettings.audioNormalization' => 'Normalize Loudness',
+			'videoSettings.audioNormalizationDisablesPassthrough' => 'Decodes audio to PCM; passthrough is off while this is on',
 			'performanceOverlay.color' => 'Color',
 			'performanceOverlay.performance' => 'Performance',
 			'performanceOverlay.buffer' => 'Buffer',
@@ -10773,6 +10868,35 @@ extension on Translations {
 			'addServer.siloQrSemantics' => ({required Object url, required Object code}) => 'Sign-in QR code. Or go to ${url} and enter ${code}.',
 			'addServer.siloProfilePinProtected' => 'PIN protected',
 			'addServer.siloProfileKids' => 'Kids profile',
+			'addServer.siloPasswordChangeTitle' => 'Choose a new password',
+			'addServer.siloPasswordChangeLead' => ({required Object account}) => 'An admin set a temporary password for ${account}. Choose your own to continue.',
+			'addServer.siloPasswordChangeLeadNoName' => 'An admin set a temporary password for your account. Choose your own to continue.',
+			'addServer.siloTemporaryPassword' => 'Temporary password',
+			'addServer.siloNewPassword' => 'New password',
+			'addServer.siloConfirmNewPassword' => 'Confirm new password',
+			'addServer.siloPasswordMinimum' => ({required Object count}) => 'At least ${count} characters',
+			'addServer.siloSavePassword' => 'Save password',
+			'addServer.siloSavingPassword' => 'Saving…',
+			'addServer.siloSignOut' => 'Sign out',
+			'addServer.siloPasswordChangedTitle' => 'Password changed',
+			'addServer.siloPasswordChangedLead' => 'Your new password is saved, but signing you in didn\'t finish.',
+			'addServer.siloTryingAgain' => 'Trying again…',
+			'addServer.siloPasswordNotConfirmedTitle' => 'Password not confirmed',
+			'addServer.siloPasswordNotConfirmedLead' => 'Plezilo couldn\'t check whether your new password was saved. Try again in a moment.',
+			'addServer.siloCheckingPassword' => 'Checking…',
+			'addServer.siloPasswordErrorEnterTemporary' => 'Enter the temporary password.',
+			'addServer.siloPasswordErrorEnterNew' => 'Enter a new password.',
+			'addServer.siloPasswordErrorMismatch' => 'The new passwords don\'t match.',
+			'addServer.siloPasswordErrorTooShort' => ({required Object count}) => 'Use at least ${count} characters.',
+			'addServer.siloPasswordErrorTooLong' => 'That password is too long. Use a shorter one.',
+			'addServer.siloPasswordErrorWrongTemporary' => 'That temporary password is incorrect.',
+			'addServer.siloPasswordErrorRejected' => 'Choose a different password, then try again.',
+			'addServer.siloPasswordErrorRateLimited' => 'Too many attempts. Wait a moment, then try again.',
+			'addServer.siloPasswordErrorNotPasswordAccount' => 'This account doesn\'t sign in with a Silo password. Ask your server admin for help.',
+			'addServer.siloPasswordErrorNotAllowed' => 'This session can\'t change the password. Sign in with your own account and try again.',
+			'addServer.siloPasswordErrorFailed' => 'Couldn\'t change your password. Try again.',
+			'addServer.siloPasswordErrorNotChanged' => 'Your password wasn\'t changed. Try again.',
+			'addServer.siloPasswordResetOnTv' => 'Your password needs to be reset. Use Silo\'s mobile app or website to set a new one, then sign in again.',
 			'deepLinks.invalid' => 'This Plezilo link isn\'t valid.',
 			'deepLinks.profileNotFound' => ({required Object profile}) => 'No profile matches "${profile}".',
 			'deepLinks.serverUnavailable' => 'Couldn\'t reach the server for this link.',

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:plezy/screens/settings/add_silo_screen.dart';
+import 'package:plezy/utils/platform_detector.dart';
 import 'package:plezy/theme/mono_theme.dart';
 
 import '../../test_helpers/prefs.dart';
@@ -145,5 +146,99 @@ void main() {
     expect(find.byType(Dialog), findsOneWidget, reason: 'PIN entry for the bound Kids profile');
 
     await _leave(tester);
+  });
+
+  group('temporary password (Silo Android #790)', () {
+    FakeSiloAuthServer temporary() {
+      final server = FakeSiloAuthServer()
+        ..temporaryPassword = true
+        ..restrictedTokens.add('acc');
+      server.pollAnswer = (_) => FakeSiloAuthServer.approved();
+      return server;
+    }
+
+    Finder field(String label) => find.widgetWithText(TextField, label);
+
+    testWidgets('a phone chooses a new password, then reaches the profiles', (tester) async {
+      final server = temporary();
+      await _openCodePanel(tester, server);
+      await _frames(tester);
+
+      expect(find.text('Choose a new password'), findsOneWidget);
+      expect(find.text('An admin set a temporary password for laura. Choose your own to continue.'), findsOneWidget);
+      expect(find.text('At least 10 characters'), findsOneWidget, reason: "the server's minimum");
+      expect(find.text("Who's watching?"), findsNothing);
+
+      await tester.enterText(field('Temporary password'), 'temp-pass');
+      await tester.enterText(field('New password'), 'a-new-password');
+      await tester.enterText(field('Confirm new password'), 'a-new-password');
+      await tester.ensureVisible(find.text('Save password'));
+      await tester.tap(find.text('Save password'));
+      await _frames(tester);
+
+      expect(find.text("Who's watching?"), findsOneWidget);
+      final change = server.requests.singleWhere((r) => r.url.path == '/api/v2/account/password');
+      expect(change.headers.containsKey('X-Profile-Id'), isFalse);
+      expect(server.countOf('/api/v2/auth/refresh'), 1);
+      final profileReads = server.requests.where((r) => r.url.path == '/api/v2/profiles').toList();
+      expect(profileReads.last.headers['Authorization'], 'Bearer acc-1');
+
+      await _leave(tester);
+      final logout = server.requests.singleWhere((r) => r.url.path == '/api/v2/auth/logout');
+      expect(logout.headers['Authorization'], 'Bearer acc-1', reason: 'the live session is the one logged out');
+    });
+
+    testWidgets('a wrong temporary password stays on the form', (tester) async {
+      final server = temporary();
+      await _openCodePanel(tester, server);
+      await _frames(tester);
+
+      await tester.enterText(field('Temporary password'), 'wrong');
+      await tester.enterText(field('New password'), 'a-new-password');
+      await tester.enterText(field('Confirm new password'), 'a-new-password');
+      await tester.ensureVisible(find.text('Save password'));
+      await tester.tap(find.text('Save password'));
+      await _frames(tester);
+
+      expect(find.text('That temporary password is incorrect.'), findsOneWidget);
+      expect(find.text('Choose a new password'), findsOneWidget);
+      expect(server.countOf('/api/v2/auth/refresh'), 0);
+
+      await tester.ensureVisible(find.text('Sign out'));
+      await tester.tap(find.text('Sign out'));
+      await _frames(tester);
+      expect(server.countOf('/api/v2/auth/logout'), 1);
+      expect(find.text('Sign in with a code'), findsOneWidget);
+      await _leave(tester);
+    });
+
+    testWidgets('a TV says where to change it, with Sign out focused', (tester) async {
+      addTearDown(() => TvDetectionService.debugSetAppleTVOverride(null));
+      final server = temporary();
+      server.pollAnswer = (_) => siloJson({'status': 'pending', 'opened': false});
+      await _openCodePanel(tester, server);
+      TvDetectionService.debugSetAppleTVOverride(true);
+      server.pollAnswer = (_) => FakeSiloAuthServer.approved();
+      for (var i = 0; i < 7; i++) {
+        await tester.pump(const Duration(seconds: 1));
+      }
+      await _frames(tester);
+
+      expect(
+        find.text(
+          "Your password needs to be reset. Use Silo's mobile app or website to set a new one, then sign in again.",
+        ),
+        findsOneWidget,
+      );
+      expect(find.widgetWithText(TextField, 'Temporary password'), findsNothing);
+      final focused = FocusManager.instance.primaryFocus;
+      expect(focused?.debugLabel, 'AddSilo:TvSignOut');
+
+      await tester.tap(find.text('Sign out'));
+      await _frames(tester);
+      expect(server.countOf('/api/v2/auth/logout'), 1);
+      expect(server.countOf('/api/v2/account/password'), 0);
+      await _leave(tester);
+    });
   });
 }

@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../exceptions/media_server_exceptions.dart';
+import '../../i18n/strings.g.dart';
 import '../../utils/app_logger.dart';
 import '../../utils/device_identity.dart';
 import '../../utils/media_server_http_client.dart';
@@ -179,6 +180,31 @@ String? siloProblemDetail(Object? data) {
   return null;
 }
 
+/// The problem code a session holding a temporary password gets (403) from
+/// everything except `GET /account/me`, `GET /account/password/capability`,
+/// `POST /account/password` and sign-out (Silo Android #790).
+const siloPasswordChangeRequiredCode = 'password_change_required';
+
+/// Whether a response is Silo's temporary-password refusal.
+bool isSiloPasswordChangeRequired(int? statusCode, Object? data) =>
+    statusCode == 403 && siloProblemCode(data) == siloPasswordChangeRequiredCode;
+
+/// An admin set a temporary password for the signed-in account, and the
+/// server refuses the request until the account chooses its own.
+///
+/// The server's `detail` is a protocol instruction, so [display] carries copy
+/// a person can act on instead; the sign-in screen hands this refusal off to
+/// "Choose a new password" rather than showing it.
+class SiloPasswordChangeRequiredException extends MediaServerHttpException {
+  SiloPasswordChangeRequiredException({super.requestUri, super.responseData})
+    : super(
+        type: MediaServerHttpErrorType.unknown,
+        statusCode: 403,
+        message: 'Silo: password change required',
+        display: t.errors.siloTemporaryPassword,
+      );
+}
+
 /// Thin HTTP layer over the Silo `/api/v2` contract.
 ///
 /// Adds the device headers, `Authorization: Bearer`, and the profile headers
@@ -285,6 +311,7 @@ class SiloApi {
     bool profile = true,
     Duration? timeout,
     AbortController? abort,
+    bool resendAfterRefresh = true,
   }) async {
     if (!path.startsWith('/api/v2/')) {
       throw ArgumentError.value(path, 'path', 'Silo requests must target /api/v2/');
@@ -299,10 +326,18 @@ class SiloApi {
       // enough. Refreshing again would rotate the pair for nothing.
       final current = _tokens?.accessToken;
       final refreshed = current != usedToken ? _tokens : await refreshTokens();
+      // A request that must go out at most once (the password change) gets
+      // the fresh token for the person's next try, never a resend.
+      if (!resendAfterRefresh) return response;
       if (refreshed != null) {
         response = await _sendTracked(method, path, query, body, auth, profile, timeout, abort);
       }
       if (response.statusCode == 401) onServerUnreachable?.call();
+    }
+    // Nothing but the password change gets past this refusal, so no caller
+    // can use the raw answer: every screen gets the plain message instead.
+    if (auth && isSiloPasswordChangeRequired(response.statusCode, response.data)) {
+      throw SiloPasswordChangeRequiredException(requestUri: response.requestUri, responseData: response.data);
     }
     return response;
   }

@@ -37,7 +37,8 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
 | `lib/services/silo/silo_subtitles.dart`, `silo_client_subtitles.dart` | Subtitle search/download and AI subtitles: models, `SiloSubtitleRules` (stored-track ids, translatable tracks, transcribe kind), the client calls (`part`) |
 | `lib/widgets/video_controls/silo/` | The player's Silo subtitle rows and sheets (`SiloSubtitleFooterTiles`, `SiloSubtitleSearchSheet`, `SiloAiSubtitleSheet`) and `SiloAiSubtitleController` (one per client + item: form, job, polling) |
 | `lib/services/silo/silo_api_cache.dart` | `SiloApiCache`: serialized items (`silo:item/<id>`) and pinned watch detail for downloads |
-| `lib/screens/settings/add_silo_screen.dart` | Add-server UI: address → code or password → Silo profile (+PIN) → persist and bind |
+| `lib/screens/settings/add_silo_screen.dart` | Add-server UI: address → code or password → (temporary password) → Silo profile (+PIN) → persist and bind |
+| `lib/services/silo/silo_password_change.dart`, `lib/screens/settings/silo_password_change_panel.dart` | Temporary passwords (Silo Android #790): capability/limits, change result mapping, `SiloTemporaryPasswordSession`, `SiloPasswordChangeController` (port of `PasswordChangeViewModel`) and the "Choose a new password" form |
 | `lib/media/remote_trailer.dart` | `RemoteTrailer` (YouTube video, never a `MediaItem`), `RemoteTrailerClient`, `buildExtrasRail` (port of Silo's `trailerRailEntries`) |
 | `lib/utils/youtube_trailer_launcher.dart`, `lib/screens/youtube_trailer_screen.dart` | Opening a YouTube trailer per platform; the in-app IFrame player route |
 | `lib/connection/connection.dart` | `SiloConnection` (id `serverId/userId/profileId`) |
@@ -67,6 +68,29 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
   completion failed, approval arriving after the flow was abandoned) is revoked with
   `POST /api/v2/auth/logout` (bearer, best effort, 5 s). The screen marks the session handed off just
   before `persistAndBindConnection`.
+- **Temporary passwords** (Silo Android #790, silo-apple #874): an admin can make an account's
+  password temporary. Until it changes, everything except `GET /account/me`,
+  `GET /account/password/capability`, `POST /account/password` and sign-out answers `403` problem
+  `password_change_required`; `account/me` carries `password_change_required: true` (absent on older
+  servers = unknown, counted as still temporary after a failed change). `SiloApi.request` turns that
+  refusal into `SiloPasswordChangeRequiredException` (a `MediaServerHttpException` whose `display` is
+  plain copy; `localizedLoadErrorText`/`localizedErrorReason`/`classifyPlaybackFailure` use it), so no
+  screen shows the server's protocol detail. The sign-in screen catches it from `fetchProfiles`:
+  phones/tablets/desktops get "Choose a new password" (temporary, new, confirm); the limits come from the
+  capability (`minimum_password_length` in code points, `maximum_password_bytes` in UTF-8; defaults 8/72)
+  and are checked locally. `POST /account/password {current_password, new_password}` goes out **once**
+  with no profile headers (`resendAfterRefresh: false`: a 401 refreshes for the next try, never resends);
+  204 = changed, 422 naming `body.current_password` = wrong temporary password, other 422 = the first
+  `errors[].detail`, 429/409/403 have their own copy. A 4xx keeps the form without reading the account;
+  a lost answer or 5xx re-reads `account/me` to tell a saved change from none, and when that read fails
+  the form stays closed and Try again only re-reads. After the change the session is refreshed through
+  `SiloApi.refreshTokens` (the shared single-flight refresh; the restriction lives in the access token),
+  the rotated pair replaces the sign-in's tokens, and profiles load again; a failed refresh retries only
+  the refresh; an account already changed skips to the refresh. A second refusal after a finished change
+  is not handed off again (no loop). TVs (`PlatformDetector.isTV()`) get no form: a message to use Silo's
+  phone app or website, with Sign out focused (logs the unsaved session out). A saved connection whose
+  password becomes temporary later still binds (`account/me` answers); its screens show the plain
+  message telling the user to remove and re-add the server.
 - **PIN:** `verify-pin` 200 without `valid:true` = wrong PIN ("Wrong PIN. Try again."); 429 →
   `SiloSignInFailure.pinRateLimited`; another 4xx → `pinRefused` with the problem `detail` (shown in
   the PIN dialog, which stays open); 5xx/transport throw `MediaServerHttpException`.
@@ -320,6 +344,12 @@ PIN length (matches Silo's apps). Open follow-ups: an edit screen for an existin
   (pass `authService:`; the code panel has a perpetual spinner, so pump bounded frames, never
   `pumpAndSettle`; unmount at the end so the flow's timers stop). Keep the panel free of intrinsic
   sizing: `QrImageView` is a `LayoutBuilder` and asserts under `SliverFillRemaining(hasScrollBody: false)`.
+- Temporary passwords: `FakeSiloAuthServer.temporaryPassword` / `restrictedTokens` script the
+  restriction (login/refresh issue restricted tokens while it is set; `/account/password`,
+  `/account/password/capability`, `/auth/refresh` and `/account/me` answers are overridable);
+  `test/services/silo/silo_password_change_test.dart` covers the wire, the session and the controller,
+  and `add_silo_screen_test.dart` the phone form and the TV message. Siku's mock server has no
+  temporary-password switch.
 - Manager integration (`test/services/silo/silo_server_manager_test.dart`): `MultiServerManager(
   siloClientFactory: ...)` injects `SiloClient.forTesting` clients over a small fake server with a
   rotating refresh token; status tests run under `fakeAsync` (5 s debounce).

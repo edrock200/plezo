@@ -7,6 +7,7 @@ import '../media/media_version.dart';
 import '../models/audio_quality_preset.dart';
 import '../models/transcode_quality_preset.dart';
 import '../mpv/mpv.dart';
+import 'silo/silo_api.dart';
 import 'subtitle_preference.dart';
 
 /// Inputs for [MediaServerClient.getPlaybackInitialization]. Most fields
@@ -238,6 +239,9 @@ class PlaybackException implements Exception {
 /// Backend-neutral on purpose: Plex and Jellyfin both throw the same
 /// [MediaServerException] hierarchy, so both clients classify identically.
 PlaybackException classifyPlaybackFailure(Object error) {
+  if (error is SiloPasswordChangeRequiredException) {
+    return PlaybackException(t.errors.siloTemporaryPassword, reason: PlaybackFailureReason.playbackNotAllowed);
+  }
   if (error is MediaServerHttpException && error.statusCode == 403) {
     return PlaybackException(t.messages.playbackNotAllowedBody, reason: PlaybackFailureReason.playbackNotAllowed);
   }
