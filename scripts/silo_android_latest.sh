@@ -49,7 +49,7 @@ Direct links (they always fetch the newest preview):
 - ${base}/plezilo-arm64-v8a.apk — 64-bit phones, tablets and newer Android TV / Fire TV devices
 - ${base}/plezilo-x86_64.apk — emulators and x86 devices
 
-Fire TV **Downloader** app codes for these links are coming soon; until then type the link above into Downloader.
+Fire TV **Downloader** app codes (they open these links): **5985619** (32-bit, every Fire TV; http://aftv.news/5985619) and **8032572** (64-bit; http://aftv.news/8032572).
 
 Windows and macOS downloads are on each numbered release.
 EOF

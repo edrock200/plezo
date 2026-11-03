@@ -24,7 +24,7 @@ Plezilo is published as pre-releases on [GitHub Releases](https://github.com/edr
 | Windows 10/11 (x64, ARM) | Installer and portable `.7z` on each [release](https://github.com/edrock200/plezo/releases) |
 | macOS (Apple silicon, Intel) | `.dmg` on each [release](https://github.com/edrock200/plezo/releases) |
 
-Fire TV Downloader codes for the new Plezilo links are coming soon; until then, type the link into Downloader. Plezilo installs as a new app (`com.edrock200.plezilo`) beside Plezy and beside the older "Plezy with Silo" previews: sign in again in Plezilo, then uninstall the old one.
+Fire TV Downloader codes: **5985619** (32-bit, every Fire TV) and **8032572** (64-bit). Plezilo installs as a new app (`com.edrock200.plezilo`) beside Plezy and beside the older "Plezy with Silo" previews: sign in again in Plezilo, then uninstall the old one.
 
 iOS, tvOS and Linux build from this source but are not published.
 
@@ -174,8 +174,8 @@ The newest Android preview is always at the same links, so they can be typed int
 
 | Device | Fire TV Downloader code | Direct link |
 | --- | --- | --- |
-| Every Fire TV, most Android TV sticks (32-bit) | coming soon | [plezilo-armeabi-v7a.apk](https://github.com/edrock200/plezo/releases/download/plezilo-android-latest/plezilo-armeabi-v7a.apk) |
-| 64-bit phones, tablets and newer TV devices | coming soon | [plezilo-arm64-v8a.apk](https://github.com/edrock200/plezo/releases/download/plezilo-android-latest/plezilo-arm64-v8a.apk) |
+| Every Fire TV, most Android TV sticks (32-bit) | **5985619** ([aftv.news/5985619](http://aftv.news/5985619)) | [plezilo-armeabi-v7a.apk](https://github.com/edrock200/plezo/releases/download/plezilo-android-latest/plezilo-armeabi-v7a.apk) |
+| 64-bit phones, tablets and newer TV devices | **8032572** ([aftv.news/8032572](http://aftv.news/8032572)) | [plezilo-arm64-v8a.apk](https://github.com/edrock200/plezo/releases/download/plezilo-android-latest/plezilo-arm64-v8a.apk) |
 | Emulators and x86 devices | | [plezilo-x86_64.apk](https://github.com/edrock200/plezo/releases/download/plezilo-android-latest/plezilo-x86_64.apk) |
 
 The old Downloader codes (7329550, 4196538) and `silo-android-latest` links serve the last "Plezy with Silo" preview and are no longer updated. Windows and macOS builds are on each numbered `silo-preview-*` release.

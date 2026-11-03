@@ -132,10 +132,11 @@ agent needs. The code still says "Plezy" in internal names (Dart package `plezy`
   tag. `[release-android-latest]` in a first line re-points them at the newest numbered preview
   without a build. The old `silo-android-latest` release (`plezy-silo-<abi>.apk`, Downloader codes
   7329550 / 4196538) is frozen at the last "Plezy with Silo" preview: never update it again and never
-  announce those codes for Plezilo. New Downloader codes for the Plezilo links are pending: when the
-  user gives them, put them in `DOWNLOADER_CODES` (`scripts/silo_announce_discord.py`, now empty),
-  the README and the rolling release's notes; until then every announcement shows the direct links
-  (the script does).
+  announce those codes for Plezilo. Plezilo's Downloader codes: **5985619** (armeabi-v7a) and
+  **8032572** (arm64-v8a), in `DOWNLOADER_CODES` (`scripts/silo_announce_discord.py`), the README and
+  the rolling release's notes; every announcement includes them (the script does). The x86_64
+  (emulator) APK is never in the Discord post and has no code (the user's wish); it stays on the
+  release pages and the fixed links.
 - **Every preview is announced on Discord** (the user's standing request, like Siku's releases): once
   the Android, Windows and macOS files are all attached, run
   `DISCORD_WEBHOOK_URL=<url> python3 scripts/silo_announce_discord.py silo-preview-<version>`. It posts

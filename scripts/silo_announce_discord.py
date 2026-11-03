@@ -25,10 +25,13 @@ def release(repo: str, tag: str) -> dict:
 
 
 # Fire TV "Downloader" app codes (aftv.news short links) for the rolling plezilo-android-latest
-# release, whose fixed-name APKs every preview replaces. Empty until the user makes codes for the
-# new Plezilo links (the old codes 7329550 / 4196538 point at the retired silo-android-latest
-# release and must not be announced for Plezilo). Entries: (label, code, abi).
-DOWNLOADER_CODES: list[tuple[str, str, str]] = []
+# release, whose fixed-name APKs every preview replaces, so the codes never change. (The old codes
+# 7329550 / 4196538 point at the retired silo-android-latest release; never announce them.)
+# Entries: (label, code, abi).
+DOWNLOADER_CODES: list[tuple[str, str, str]] = [
+    ("Fire TV and Android TV sticks; 32-bit, also runs on 64-bit", "5985619", "armeabi-v7a"),
+    ("Android phones, tablets and newer Android TV / Fire TV; 64-bit", "8032572", "arm64-v8a"),
+]
 LATEST_ABIS = [
     ("Fire TV and Android TV sticks; 32-bit, also runs on 64-bit", "armeabi-v7a"),
     ("Android phones, tablets and newer Android TV / Fire TV; 64-bit", "arm64-v8a"),
@@ -50,6 +53,8 @@ def downloads(assets: list) -> str:
     groups = {"Android": [], "Windows": [], "macOS": []}
     for a in assets:
         name, url = a["name"], a["browser_download_url"]
+        if name.endswith("-x86_64.apk"):
+            continue  # emulator build: on the release page, not in the post (the user's wish)
         if name.endswith(".apk"):
             label = name.rsplit("-", 1)[-1].removesuffix(".apk")  # arm64-v8a, armeabi-v7a, x86_64
             groups["Android"].append(f"[{label}]({url})")
