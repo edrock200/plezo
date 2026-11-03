@@ -56,7 +56,8 @@ def downloads(assets: list) -> str:
         if name.endswith("-x86_64.apk"):
             continue  # emulator build: on the release page, not in the post (the user's wish)
         if name.endswith(".apk"):
-            label = name.rsplit("-", 1)[-1].removesuffix(".apk")  # arm64-v8a, armeabi-v7a, x86_64
+            stem = name.removesuffix(".apk")
+            label = next((abi for abi in ("arm64-v8a", "armeabi-v7a") if stem.endswith("-" + abi)), stem.rsplit("-", 1)[-1])
             groups["Android"].append(f"[{label}]({url})")
         elif name.endswith(".exe"):
             groups["Windows"].append(f"[installer]({url})")
