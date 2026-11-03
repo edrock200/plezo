@@ -19,8 +19,9 @@ run-name: Silo preview desktop ${{ github.sha }}
 # Plezilo (their own app ids), so they install beside Plezy. Neither is
 # signed with a vendor certificate (SmartScreen / Gatekeeper warn once).
 #
-# Like upstream's GitHub builds: SUPPORTER_MODE=unlocked on macOS, msstore on
-# Windows, and the Flutter SDK upstream's build.yml pins
+# SUPPORTER_MODE=unlocked on macOS and Windows (msstore would sell the Plezy
+# project's own Microsoft Store product, which a fork must not), and the Flutter
+# SDK upstream's build.yml pins
 # (scripts/silo_flutter_version.sh; Windows arm64 uses setup-flutter-git,
 # which pins the same release).
 
@@ -185,7 +186,7 @@ jobs:
           --build-number=${{ needs.resolve.outputs.build }}
           --dart-define=GIT_COMMIT=${{ needs.resolve.outputs.ref }}
           --dart-define=SENTRY_ENVIRONMENT=silo-preview
-          --dart-define=SUPPORTER_MODE=msstore
+          --dart-define=SUPPORTER_MODE=unlocked
 
       - name: Verify Windows bundle contents
         shell: pwsh

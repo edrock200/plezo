@@ -12,6 +12,13 @@ What changed in each preview (Android, and Windows and macOS where the release h
 - **Switched off for now:** Trakt, MyAnimeList, AniList, Simkl and MDBList sync, Discord status, log upload and crash reports. They used the Plezy project's own services, which other apps aren't allowed to use. Copying your logs still works.
 - **Links:** links that open the app now start with `plezilo://` instead of `plezy://`. Update any Home Assistant automations, shortcuts or NFC tags that used the old links.
 
+**Also new**
+
+- **From upstream Plezy:** shuffle a whole movie or TV library, a Genres tab in libraries (Silo libraries too), an offer to let the server convert a file when it reports its limit, a choice of copy when Continue Watching merges the same title from several places, display refresh-rate matching on macOS, and fixes for Android TV remotes, Dolby Vision letterboxing and servers showing offline by mistake.
+- **Silo box sets:** in a library with box sets turned on, each film collection shows as one card, opens to its films in release order with Play for the next unwatched one, comes first in Search, and a movie's page shows the rest of its set.
+- **Silo subtitles:** subtitle tracks an older Silo server can't play are no longer offered, so picking one can't leave you without subtitles. On current servers nothing changes.
+- **Silo collections:** Delete and Add/Remove, which Silo servers always refuse, are no longer offered.
+
 ## silo-preview-2.25.2
 
 **Subtitle search and AI subtitles for Silo** — released October 30, 2026. Installs over 2.25.1 as an update.
