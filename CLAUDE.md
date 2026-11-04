@@ -143,7 +143,7 @@ agent needs. The code still says "Plezy" in internal names (Dart package `plezy`
   the release's notes and download links. The webhook URL is a secret the user gave in the session:
   never commit, print or log it (Discord revokes webhooks found on GitHub); ask for it if you don't have it.
 - macOS jobs can sit without a runner: from 2026-11-03 ~16:50 UTC every macOS job (`macos-26` and
-  `macos-latest`) queued 15 minutes and was cancelled, with no GitHub incident. Android and Windows still
+  `macos-latest`) queued 15 minutes and was cancelled, with no GitHub incident (it worked again on 2026-11-04). Android and Windows still
   release; add the Mac app later with `[release-macos]` in a commit's first line, and say on the release
   page and in the Discord post when a release has no Mac version yet.
 - The preview workflow cancels an in-progress build when anything else is pushed to the same
