@@ -142,6 +142,10 @@ agent needs. The code still says "Plezy" in internal names (Dart package `plezy`
   `DISCORD_WEBHOOK_URL=<url> python3 scripts/silo_announce_discord.py silo-preview-<version>`. It posts
   the release's notes and download links. The webhook URL is a secret the user gave in the session:
   never commit, print or log it (Discord revokes webhooks found on GitHub); ask for it if you don't have it.
+- macOS jobs can sit without a runner: from 2026-11-03 ~16:50 UTC every macOS job (`macos-26` and
+  `macos-latest`) queued 15 minutes and was cancelled, with no GitHub incident. Android and Windows still
+  release; add the Mac app later with `[release-macos]` in a commit's first line, and say on the release
+  page and in the Discord post when a release has no Mac version yet.
 - The preview workflow cancels an in-progress build when anything else is pushed to the same
   branch. After a `[release-apk]` push, wait for the release before pushing docs or fixes.
 - `dart`/`flutter` live in `/opt/flutter/bin` (add it to `PATH`). Silo's server and Android repos
