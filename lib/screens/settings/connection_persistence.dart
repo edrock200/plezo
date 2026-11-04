@@ -21,6 +21,10 @@ import '../../utils/app_logger.dart';
 /// and the exact prior active-profile marker are restored before the original
 /// error is rethrown.
 ///
+/// With [activateFirstRunProfile] false, [firstRunProfile] is only created
+/// (with its binding) and the active profile stays as it was: a second Silo
+/// account on a server the active profile already uses gets its own profile.
+///
 /// All durable collaborators are captured before the first await, so a route
 /// unmount cannot interrupt the command between artifacts. Runtime pickup is
 /// left to the active-profile binder on the next switch or rebind. The helper
@@ -30,6 +34,7 @@ Future<void> persistAndBindConnection({
   required Connection connection,
   required ProfileConnection? bindToProfile,
   Profile? firstRunProfile,
+  bool activateFirstRunProfile = true,
 }) async {
   final db = context.read<AppDatabase>();
   final profiles = context.read<ProfileRegistry>();
@@ -53,7 +58,7 @@ Future<void> persistAndBindConnection({
     }),
   );
 
-  if (firstRunProfile != null) {
+  if (firstRunProfile != null && activateFirstRunProfile) {
     try {
       final activated = await activeProfiles.activate(firstRunProfile);
       if (!activated) {

@@ -462,7 +462,83 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump();
   });
+
+  testWidgets('a second Silo account on one server gets its own profile; the active one keeps the first', (
+    tester,
+  ) async {
+    final owner = _profile('fixture-owner', name: 'Laura');
+    final laura = _silo('laura');
+    final sam = _silo('sam');
+    await ProfileRegistry(db).upsert(owner);
+    await storage.setActiveProfileId(owner.id);
+    await mountHost(tester, initializeActive: true);
+
+    Future<Object?> add(SiloConnection connection, Profile profile, {Profile? newProfile}) => _runProvisioning(
+      tester,
+      () => persistAndBindConnection(
+        context: hostContext!,
+        connection: connection,
+        bindToProfile: ProfileConnection(
+          profileId: profile.id,
+          connectionId: connection.id,
+          userIdentifier: connection.userId,
+        ),
+        firstRunProfile: newProfile,
+        activateFirstRunProfile: false,
+      ),
+    );
+
+    expect(await add(laura, owner), isNull);
+    final samProfile = _profile('fixture-sam', name: 'Sam');
+    expect(await add(sam, samProfile, newProfile: samProfile), isNull);
+
+    expect(storage.getActiveProfileId(), owner.id, reason: 'adding the second account does not switch profiles');
+    final registry = ConnectionRegistry(db);
+    final joins = ProfileConnectionRegistry(db);
+    // Reading rows back reveals vault-encrypted tokens, which needs real async.
+    Future<List<Object?>> read() async => (await tester.runAsync(
+      () async => [
+        await registry.get(laura.id),
+        await registry.get(sam.id),
+        (await registry.list()).whereType<SiloConnection>().length,
+        [for (final r in await joins.listForProfile(owner.id)) r.connectionId],
+        [for (final r in await joins.listForProfile(samProfile.id)) r.connectionId],
+      ],
+    ))!;
+
+    var rows = await read();
+    expect((rows[0]! as SiloConnection).refreshToken, 'ref-laura-1');
+    expect((rows[1]! as SiloConnection).refreshToken, 'ref-sam-1');
+    expect(rows[2], 2);
+    expect(rows[3], [laura.id]);
+    expect(rows[4], [sam.id]);
+
+    // Signing in as Laura again (same server user id) updates her row in place.
+    expect(await add(_silo('laura', token: '2'), owner), isNull);
+    rows = await read();
+    expect((rows[0]! as SiloConnection).refreshToken, 'ref-laura-2');
+    expect(rows[2], 2);
+    expect(rows[3], [laura.id]);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+  });
 }
+
+SiloConnection _silo(String user, {String token = '1'}) => SiloConnection(
+  id: SiloConnection.compoundId(serverId: 'fixture-silo', userId: user, profileId: 'p-$user'),
+  baseUrl: 'https://silo.invalid',
+  serverName: 'Fixture Silo',
+  serverId: 'fixture-silo',
+  userId: user,
+  userName: user,
+  accessToken: 'acc-$user-$token',
+  refreshToken: 'ref-$user-$token',
+  deviceId: 'fixture-device',
+  profileId: 'p-$user',
+  profileName: user,
+  createdAt: DateTime.utc(2026, 1, 2),
+);
 
 Future<bool> _hasProfile(AppDatabase db, String id) async =>
     (await ProfileRegistry(db).list()).any((profile) => profile.id == id);

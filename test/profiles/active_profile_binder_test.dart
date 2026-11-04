@@ -681,6 +681,44 @@ void main() {
     expect(multiServerProvider.expectedServerIds.toSet(), {'srv-1', 'jf-machine'});
   });
 
+  test('a profile holding two Silo accounts on one server binds only its default one', () async {
+    binder.dispose();
+    multiServerProvider.dispose();
+    final siloManager = _RecordingSiloManager();
+    manager = siloManager;
+    multiServerProvider = testMultiServerProvider(manager);
+    binder = ActiveProfileBinder(
+      activeProfile: activeProfile,
+      connections: connections,
+      profileConnections: profileConnections,
+      serverManager: manager,
+      multiServerProvider: multiServerProvider,
+      pinPrompt: (_, {String? errorMessage}) async => null,
+      shouldDeferInitialBind: (_) async => false,
+    );
+
+    final profile = await createActiveLocalProfile('local-silo');
+    final first = _siloConnection('laura');
+    final second = _siloConnection('sam');
+    for (final c in [first, second]) {
+      await connections.upsert(c);
+      // The first row a profile gets is its default.
+      await profileConnections.upsert(
+        ProfileConnection(profileId: profile.id, connectionId: c.id, userIdentifier: c.userId),
+      );
+    }
+
+    await binder.rebindActive();
+    expect(siloManager.added, [first.id], reason: 'the account the profile already had keeps working');
+    expect(activeProfile.lastBindingSucceeded, isTrue);
+    expect(multiServerProvider.expectedServerIds.toSet(), {'silo-srv'});
+
+    await profileConnections.setDefault(profile.id, second.id);
+    siloManager.added.clear();
+    await binder.rebindActive();
+    expect(siloManager.added, [second.id]);
+  });
+
   group('Plex Home token cache policy', () {
     test('cold start uses cached token instead of forcing PIN revalidation', () {
       expect(shouldUsePlexHomeTokenCache(preVerified: false, hasBoundOnce: false), isTrue);
@@ -1694,6 +1732,32 @@ class _RecordingPlexManager extends MultiServerManager {
       updateServerStatus(ServerId(id), true);
     }
     return ids;
+  }
+}
+
+SiloConnection _siloConnection(String user) => SiloConnection(
+  id: SiloConnection.compoundId(serverId: 'silo-srv', userId: user, profileId: 'p-$user'),
+  baseUrl: 'https://silo.example.com',
+  serverName: 'Home Silo',
+  serverId: 'silo-srv',
+  userId: user,
+  userName: user,
+  accessToken: 'acc-$user',
+  refreshToken: 'ref-$user',
+  deviceId: 'dev-1',
+  profileId: 'p-$user',
+  profileName: user,
+  createdAt: DateTime(2026, 1, 1),
+);
+
+class _RecordingSiloManager extends MultiServerManager {
+  final added = <String>[];
+
+  @override
+  Future<bool> addSiloConnection(SiloConnection connection) async {
+    added.add(connection.id);
+    updateServerStatus(ServerId(connection.serverId), true);
+    return true;
   }
 }
 

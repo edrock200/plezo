@@ -18,6 +18,7 @@ import '../../profiles/profile_connection.dart';
 import '../../profiles/profile_connection_registry.dart';
 import '../../profiles/profile_merge.dart';
 import '../../profiles/profile_registry.dart';
+import '../../profiles/silo_accounts.dart';
 import '../../utils/snackbar_helper.dart';
 import '../../focus/focusable_button.dart';
 import '../../widgets/app_icon.dart';
@@ -522,6 +523,11 @@ class _ConnectionSubtitle {
         final user = users.where((u) => u.uuid == pc.userIdentifier).firstOrNull;
         if (user != null) parts.add(t.profiles.connectionAs(displayName: user.displayName));
       }
+    }
+    // Two Silo accounts on one server share the server name; name the account.
+    if (conn is SiloConnection) {
+      final who = siloAccountLabel(conn);
+      if (who.isNotEmpty) parts.add(t.profiles.connectionAs(displayName: who));
     }
     if (pc.isDefault) parts.add(t.profiles.connectionDefault);
     if (parts.isEmpty) return null;

@@ -17,6 +17,7 @@ import '../../profiles/profile_connection.dart';
 import '../../profiles/profile_connection_registry.dart';
 import '../../profiles/profile_merge.dart';
 import '../../profiles/profile_registry.dart';
+import '../../profiles/silo_accounts.dart';
 import '../../services/storage_service.dart';
 import '../../theme/mono_tokens.dart';
 import '../../utils/app_logger.dart';
@@ -155,11 +156,18 @@ class _BorrowConnectionScreenState extends State<BorrowConnectionScreen> {
     // Pass 2: persisted ProfileConnection rows from any other profile
     // (local profiles' own connections + already-borrowed rows on plex_home
     // profiles). Skipped when (conn, user) already surfaced via pass 1.
+    // A profile uses one Silo account per server: another account on a Silo
+    // server the target already uses is not offered.
+    final targetSiloServerIds = {
+      for (final id in targetConnIds)
+        if (connById[id] case SiloConnection(:final serverId)) serverId,
+    };
     for (final pc in allPcs) {
       if (pc.profileId == widget.targetProfile.id) continue;
       if (targetConnIds.contains(pc.connectionId)) continue;
       final conn = connById[pc.connectionId];
       if (conn == null) continue;
+      if (conn is SiloConnection && targetSiloServerIds.contains(conn.serverId)) continue;
       final source = allProfiles.firstWhere(
         (p) => p.id == pc.profileId,
         orElse: () => widget.targetProfile, // sentinel — skipped below
@@ -447,6 +455,15 @@ class _BorrowTile extends StatelessWidget {
                       padding: const EdgeInsets.only(top: 4),
                       child: Text(
                         t.profiles.connectionAs(displayName: candidate.source.displayName),
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ),
+                  // Two Silo accounts on one server share the server name.
+                  if (candidate.connection case final SiloConnection silo)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        t.profiles.connectionAs(displayName: siloAccountLabel(silo)),
                         style: theme.textTheme.bodySmall,
                       ),
                     ),

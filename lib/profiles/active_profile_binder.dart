@@ -15,6 +15,7 @@ import 'plex_home_switch.dart';
 import 'profile.dart';
 import 'profile_connection.dart';
 import 'profile_connection_registry.dart';
+import 'silo_accounts.dart';
 
 /// Callback invoked when a Plex Home user PIN is required mid-activation.
 /// Returns the entered PIN, or `null` to abort. The implementation
@@ -418,9 +419,11 @@ class ActiveProfileBinder {
       // profile. Always set the filter to the bound set (even when empty) so
       // a profile with no connections shows nothing — falling back to "all
       // visible" on empty would leak servers attached to other profiles.
+      final shadowedSilo = shadowedSiloConnectionIds(joinRows, connectionsById);
       final jellyfinConnectionIds = <String>{
         for (final pc in joinRows)
-          if (connectionsById[pc.connectionId] case JellyfinConnection(:final id) || SiloConnection(:final id)) id,
+          if (connectionsById[pc.connectionId] case JellyfinConnection(:final id) || SiloConnection(:final id))
+            if (!shadowedSilo.contains(id)) id,
       };
       for (final serverId in serverManager.registeredServerIds) {
         final belongs = visibleServerIds.contains(serverId) || expectedServerIds.contains(serverId);
@@ -633,6 +636,10 @@ class ActiveProfileBinder {
     final visible = <String>{};
     final expected = <String>{};
     final futures = <Future<_ProfileBindResult>>[];
+    // One active client per server: when the profile holds two Silo accounts
+    // on one server, bind one chosen in a stable order rather than letting
+    // the faster sign-in win.
+    final shadowedSilo = shadowedSiloConnectionIds(joinRows, connectionsById);
     for (final pc in joinRows) {
       if (parentId != null && pc.connectionId == parentId) continue;
       final conn = connectionsById[pc.connectionId];
@@ -658,6 +665,13 @@ class ActiveProfileBinder {
           futures.add(_bindMediaBrowser(conn, profileId: profile.id, generation: generation));
         case SiloConnection():
           expected.add(conn.serverId);
+          if (shadowedSilo.contains(conn.id)) {
+            appLogger.i(
+              'ActiveProfileBinder: ${profile.displayName} holds another Silo account on ${conn.serverName}; '
+              'skipping ${conn.id}',
+            );
+            continue;
+          }
           futures.add(_bindSilo(conn, profileId: profile.id, generation: generation));
       }
     }

@@ -19,6 +19,8 @@ import '../../profiles/active_profile_binder.dart';
 import '../../profiles/active_profile_provider.dart';
 import '../../profiles/profile.dart';
 import '../../profiles/profile_connection.dart';
+import '../../profiles/profile_connection_registry.dart';
+import '../../profiles/silo_accounts.dart';
 import '../../services/silo/pairing/silo_pairing_flow.dart';
 import '../../services/silo/pairing/silo_pairing_host.dart';
 import '../../services/silo/pairing/silo_pairing_protocol.dart';
@@ -31,7 +33,9 @@ import '../../services/storage_service.dart';
 import '../../theme/mono_tokens.dart';
 import '../../utils/app_logger.dart';
 import '../../utils/device_identity.dart';
+import '../../utils/layout_constants.dart';
 import '../../utils/platform_detector.dart';
+import '../../utils/snackbar_helper.dart';
 import '../../widgets/app_icon.dart';
 import '../../widgets/focused_scroll_scaffold.dart';
 import '../../widgets/loading_indicator_box.dart';
@@ -864,6 +868,35 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
       boundProfile = firstRunProfile;
     }
 
+    final registry = context.read<ConnectionRegistry>();
+    // One Plezilo profile uses one account per Silo server (one active client
+    // per server). Another account on a server the chosen profile already
+    // uses gets a profile of its own, so both keep working; the active
+    // profile stays as it is.
+    var separateProfile = false;
+    if (firstRunProfile == null && boundProfile != null) {
+      final joinRows = await context.read<ProfileConnectionRegistry>().listForProfile(boundProfile.id);
+      final connectionsById = {for (final c in await registry.list()) c.id: c};
+      if (!mounted) return false;
+      final other = otherSiloConnectionOnServer(
+        incoming: connection,
+        joinRows: joinRows,
+        connectionsById: connectionsById,
+      );
+      if (other != null) {
+        appLogger.i('Silo: ${boundProfile.displayName} already uses another account on this server; new profile');
+        final now = DateTime.now();
+        firstRunProfile = Profile.local(
+          id: 'local-${const Uuid().v4()}',
+          displayName: newProfileNameForSiloConnection(connection, activeProvider.profiles.map((p) => p.displayName)),
+          sortOrder: now.millisecondsSinceEpoch,
+          createdAt: now,
+        );
+        boundProfile = firstRunProfile;
+        separateProfile = true;
+      }
+    }
+
     final bindProfile = boundProfile;
     if (bindProfile == null) {
       setErrorText(t.messages.noProfilesAvailable);
@@ -873,7 +906,6 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
     // From here the session belongs to the saved connection: leaving must
     // not log it out.
     _handedOff = true;
-    final registry = context.read<ConnectionRegistry>();
     try {
       await persistAndBindConnection(
         context: context,
@@ -887,6 +919,7 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
           tokenAcquiredAt: DateTime.now(),
         ),
         firstRunProfile: firstRunProfile,
+        activateFirstRunProfile: !separateProfile,
       );
     } catch (_) {
       // The save is one transaction: when it did not commit, the session is
@@ -895,6 +928,12 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
       rethrow;
     }
 
+    if (separateProfile) {
+      showMainSnackBar(
+        t.addServer.siloAddedAsNewProfile(account: siloAccountLabel(connection), profile: bindProfile.displayName),
+        duration: AppDurations.snackBarLong,
+      );
+    }
     final boundToActive = bindProfile.id == activeProvider.activeId;
     if (!mounted) return true;
     if (boundToActive) {

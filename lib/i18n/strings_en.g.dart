@@ -6273,6 +6273,9 @@ class Translations$addServer$en {
 	/// en: 'Sign out'
 	String get siloSignOut => 'Sign out';
 
+	/// en: 'Added ${account} as a new profile, ${profile}, so the account already on this server keeps working. Switch profiles to use it.'
+	String siloAddedAsNewProfile({required Object account, required Object profile}) => 'Added ${account} as a new profile, ${profile}, so the account already on this server keeps working. Switch profiles to use it.';
+
 	/// en: 'Password changed'
 	String get siloPasswordChangedTitle => 'Password changed';
 
@@ -10984,6 +10987,7 @@ extension on Translations {
 			'addServer.siloSavePassword' => 'Save password',
 			'addServer.siloSavingPassword' => 'Saving…',
 			'addServer.siloSignOut' => 'Sign out',
+			'addServer.siloAddedAsNewProfile' => ({required Object account, required Object profile}) => 'Added ${account} as a new profile, ${profile}, so the account already on this server keeps working. Switch profiles to use it.',
 			'addServer.siloPasswordChangedTitle' => 'Password changed',
 			'addServer.siloPasswordChangedLead' => 'Your new password is saved, but signing you in didn\'t finish.',
 			'addServer.siloTryingAgain' => 'Trying again…',

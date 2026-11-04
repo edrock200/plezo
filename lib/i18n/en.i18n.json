@@ -2643,6 +2643,7 @@
     "siloSavePassword": "Save password",
     "siloSavingPassword": "Saving…",
     "siloSignOut": "Sign out",
+    "siloAddedAsNewProfile": "Added ${account} as a new profile, ${profile}, so the account already on this server keeps working. Switch profiles to use it.",
     "siloPasswordChangedTitle": "Password changed",
     "siloPasswordChangedLead": "Your new password is saved, but signing you in didn't finish.",
     "siloTryingAgain": "Trying again…",

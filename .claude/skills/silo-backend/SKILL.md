@@ -327,6 +327,19 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
   them); presigned URLs may point at object storage on another host.
 - **Downloads scope:** a profile's Silo downloads use its own Silo connection as the cache scope
   even on a cold start (`DownloadManagerService._siloProfileScopeId`).
+- **Several accounts on one server** (Silo Android #795): already supported by identity, since a
+  `SiloConnection` id is `server/user/profile` (user id from `account/me`). Each has its own row,
+  encrypted tokens, client (`_jellyfinByCompoundId`), cache scope (`cacheServerId` = connection id),
+  download owner scope and logout. Re-signing in as the same user and Silo profile yields the same id,
+  so it updates in place. Limit: the manager keeps **one active client per server id**, so a Plezilo
+  profile uses one account per server. `lib/profiles/silo_accounts.dart` enforces it:
+  `add_silo_screen` puts a second account on a server the chosen profile already uses into a new,
+  non-activated local profile (`persistAndBindConnection(activateFirstRunProfile: false)`, snackbar
+  names it); the binder binds one Silo connection per server (`shadowedSiloConnectionIds`: default,
+  then last used, then lowest id, the same order as `_siloProfileScopeId`); Borrow hides another
+  account on a server the target already uses. Profile detail and Borrow name the account
+  (`siloAccountLabel`). Tests: `test/services/silo/silo_multi_account_test.dart`,
+  `test/profiles/silo_accounts_test.dart`.
 
 ## Known review findings (October 2026)
 Fixed: page-size-bound cursors and `seek`; synthetic-season writes hitting the series; stop retry;
