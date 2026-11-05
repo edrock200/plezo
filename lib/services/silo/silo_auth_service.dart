@@ -1,6 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:clock/clock.dart';
+import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
 
 import '../../connection/connection.dart';
@@ -26,6 +30,11 @@ class SiloServerInfo {
   /// Whether the server offers username/password sign-in.
   final bool passwordLoginAvailable;
 
+  /// Whether the device capability reports `session_binding` (Silo Android
+  /// #810): the server checks a phone session's binding on device start and
+  /// poll. False when the capability could not be read.
+  final bool deviceSessionBinding;
+
   const SiloServerInfo({
     required this.baseUrl,
     required this.serverId,
@@ -33,8 +42,52 @@ class SiloServerInfo {
     this.serverVersion,
     this.deviceLoginAvailable = false,
     this.passwordLoginAvailable = true,
+    this.deviceSessionBinding = false,
   });
 }
+
+/// A phone sign-in session's binding (Silo Android #810,
+/// `PairingSessionBinding.kt`): [binding] goes on every `device/start` and
+/// [secret] on every poll of that session, so only this device can collect
+/// the tokens of a request the phone approved after checking another bound
+/// request. Both are base64url without padding; [binding] is SHA-256 of the
+/// 32-byte secret. Sent only to an https server whose capability reports
+/// `session_binding` ([siloSessionBindingFor]). Never logged.
+class SiloDeviceLoginBinding {
+  final String binding;
+  final String secret;
+  const SiloDeviceLoginBinding._(this.binding, this.secret);
+
+  static const secretBytes = 32;
+
+  /// A fresh secret from a secure random source.
+  factory SiloDeviceLoginBinding.generate([Random? random]) {
+    final source = random ?? Random.secure();
+    return SiloDeviceLoginBinding.of(Uint8List.fromList(List.generate(secretBytes, (_) => source.nextInt(256))));
+  }
+
+  /// The binding for [secret] (exactly [secretBytes] bytes).
+  factory SiloDeviceLoginBinding.of(List<int> secret) {
+    if (secret.length != secretBytes) throw ArgumentError.value(secret.length, 'secret', 'must be $secretBytes bytes');
+    String encode(List<int> bytes) => base64Url.encode(bytes).replaceAll('=', '');
+    return SiloDeviceLoginBinding._(encode(sha256.convert(secret).bytes), encode(secret));
+  }
+
+  @override
+  String toString() => 'SiloDeviceLoginBinding(<redacted>)';
+}
+
+/// [binding] when a device login at [server] may carry it: the address is
+/// https and the server reports `session_binding`. Over plain HTTP the secret
+/// would reach the on-path attacker the binding defends against.
+SiloDeviceLoginBinding? siloSessionBindingFor(SiloServerInfo server, SiloDeviceLoginBinding? binding) {
+  if (binding == null || !server.deviceSessionBinding) return null;
+  return Uri.tryParse(server.baseUrl)?.scheme.toLowerCase() == 'https' ? binding : null;
+}
+
+/// The problem a poll gets (403) when its `binding_secret` does not match the
+/// start request's `binding`.
+const siloDeviceBindingMismatchCode = 'device_binding_mismatch';
 
 /// The signed-in account, from `/auth/login`, the device poll or `/account/me`.
 class SiloAccount {
@@ -164,6 +217,10 @@ enum SiloDevicePollStatus {
   /// An answer retrying won't fix: `approved` without tokens, or a status
   /// this build does not know.
   failed,
+
+  /// 403 `device_binding_mismatch`: the server refused this phone session's
+  /// binding. Final; the request is withdrawn.
+  bindingRefused,
 }
 
 class SiloDevicePollResult {
@@ -361,9 +418,9 @@ class SiloAuthService {
       if (serverId.isEmpty) throw const SiloSignInException(SiloSignInFailure.notSiloServer);
       // Independent, decorative or optional reads: in parallel, each bounded
       // like the probe itself so a stalled route cannot hang "Find server".
-      final (name, deviceLogin, passwordLogin) = await (
+      final (name, (deviceLogin, sessionBinding), passwordLogin) = await (
         _serverName(api, baseUrl),
-        _deviceLoginAvailable(api),
+        _deviceCapability(api),
         _passwordLoginAvailable(api),
       ).wait;
       return SiloServerInfo(
@@ -373,6 +430,7 @@ class SiloAuthService {
         serverVersion: data['server_version']?.toString(),
         deviceLoginAvailable: deviceLogin,
         passwordLoginAvailable: passwordLogin,
+        deviceSessionBinding: deviceLogin && sessionBinding,
       );
     } finally {
       api.close();
@@ -430,13 +488,16 @@ class SiloAuthService {
     return Uri.tryParse(baseUrl)?.host ?? 'Silo';
   }
 
-  Future<bool> _deviceLoginAvailable(SiloApi api) async {
+  /// Whether device sign-in is available, and whether the server checks a
+  /// phone session's binding (`session_binding`).
+  Future<(bool, bool)> _deviceCapability(SiloApi api) async {
     try {
       final response = await api.request('GET', '/api/v2/auth/device/capability', auth: false, timeout: probeTimeout);
       final data = response.data;
-      return response.statusCode == 200 && data is Map && data['state'] == 'available';
+      if (response.statusCode != 200 || data is! Map || data['state'] != 'available') return (false, false);
+      return (true, data['session_binding'] == true);
     } catch (_) {
-      return false;
+      return (false, false);
     }
   }
 
@@ -494,15 +555,20 @@ class SiloAuthService {
     }
   }
 
-  /// `POST /api/v2/auth/device/start`.
-  Future<SiloDeviceCode> startDeviceLogin(SiloServerInfo server) async {
+  /// `POST /api/v2/auth/device/start`, carrying [binding] (`binding`) when
+  /// given; pass one only when [siloSessionBindingFor] allows it.
+  Future<SiloDeviceCode> startDeviceLogin(SiloServerInfo server, {SiloDeviceLoginBinding? binding}) async {
     final api = await _api(server.baseUrl);
     try {
       final response = await api.send(
         'POST',
         '/api/v2/auth/device/start',
         auth: false,
-        body: {'device_name': api.device.deviceName, 'device_platform': api.device.platform},
+        body: {
+          'device_name': api.device.deviceName,
+          'device_platform': api.device.platform,
+          'binding': ?binding?.binding,
+        },
       );
       final data = response.data;
       if (data is! Map || data['device_code'] is! String || data['user_code'] is! String) {
@@ -532,18 +598,28 @@ class SiloAuthService {
   /// `POST /api/v2/auth/device/poll`. Transport failures, 5xx and 429 throw so
   /// the caller can back off; a vanished request (404 or another 4xx,
   /// `expired`/`consumed`/`canceled`) reports [SiloDevicePollStatus.gone], a
-  /// declined one [SiloDevicePollStatus.denied].
-  Future<SiloDevicePollResult> pollDeviceLogin(SiloServerInfo server, SiloDeviceCode code) async {
+  /// declined one [SiloDevicePollStatus.denied]. With [binding] the poll
+  /// carries its `binding_secret`; a 403 `device_binding_mismatch` is
+  /// [SiloDevicePollStatus.bindingRefused].
+  Future<SiloDevicePollResult> pollDeviceLogin(
+    SiloServerInfo server,
+    SiloDeviceCode code, {
+    SiloDeviceLoginBinding? binding,
+  }) async {
     final api = await _api(server.baseUrl);
     try {
       final response = await api.request(
         'POST',
         '/api/v2/auth/device/poll',
         auth: false,
-        body: {'device_code': code.deviceCode},
+        body: {'device_code': code.deviceCode, 'binding_secret': ?binding?.secret},
       );
       if (response.statusCode == 429 || response.statusCode >= 500) throwIfHttpError(response);
       final data = response.data;
+      if (response.statusCode == 403 && siloProblemCode(data) == siloDeviceBindingMismatchCode) {
+        appLogger.i('[silo-pair] the server refused the session binding');
+        return const SiloDevicePollResult(status: SiloDevicePollStatus.bindingRefused);
+      }
       if (response.statusCode != 200 || data is! Map) {
         return const SiloDevicePollResult(status: SiloDevicePollStatus.gone);
       }

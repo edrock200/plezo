@@ -1,6 +1,7 @@
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
+import 'package:plezy/services/silo/silo_auth_service.dart';
 import 'package:plezy/services/silo/silo_device_sign_in.dart';
 
 import '../../test_helpers/silo_auth_fake.dart';
@@ -85,6 +86,30 @@ void main() {
       async.flushMicrotasks();
       expect(flow.state.value.status, SiloDeviceSignInStatus.waiting);
       expect(flow.state.value.code?.deviceCode, 'dev-2');
+      flow.dispose();
+      async.flushMicrotasks();
+    });
+  });
+
+  test('a bound flow sends its binding on renewed codes too; a refused binding fails and withdraws', () {
+    server = FakeSiloAuthServer(expiresIn: 12, interval: 5);
+    final binding = SiloDeviceLoginBinding.of(List.generate(32, (i) => i));
+    fakeAsync((async) {
+      final flow = SiloDeviceSignIn(auth: server.service(), server: siloTestServer, binding: binding);
+      flow.start();
+      async.elapse(const Duration(seconds: 14));
+      final starts = server.bodiesFor('/api/v2/auth/device/start');
+      expect(starts, hasLength(2), reason: 'the code was renewed');
+      expect(starts, everyElement(contains(binding.binding)));
+      expect(server.bodiesFor('/api/v2/auth/device/poll'), everyElement(contains(binding.secret)));
+
+      server.pollAnswer = (_) => siloCodedProblem(403, 'device_binding_mismatch');
+      async.elapse(const Duration(seconds: 5));
+      expect(flow.state.value.status, SiloDeviceSignInStatus.failed);
+      expect(server.bodiesFor('/api/v2/auth/device/cancel').last, contains('dev-2'));
+      final polls = server.countOf('/api/v2/auth/device/poll');
+      async.elapse(const Duration(minutes: 1));
+      expect(server.countOf('/api/v2/auth/device/poll'), polls, reason: 'no polling after the refusal');
       flow.dispose();
       async.flushMicrotasks();
     });

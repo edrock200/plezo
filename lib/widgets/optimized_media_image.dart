@@ -706,6 +706,45 @@ class ClearLogoImage extends StatelessWidget {
   }
 }
 
+/// The text title shown in place of a clear logo that is still loading:
+/// nothing for [grace], then [child] (Silo Android #813, the Home marquee's
+/// `logoGraceTimer`). A logo that loads within the grace replaces this before
+/// the title ever shows, so the title does not flash ahead of the logo; one
+/// that fails shows the title at once through the error builder instead.
+class LogoTitleGrace extends StatefulWidget {
+  const LogoTitleGrace({super.key, required this.child, this.grace = defaultGrace});
+
+  static const defaultGrace = Duration(milliseconds: 700);
+
+  final Widget child;
+  final Duration grace;
+
+  @override
+  State<LogoTitleGrace> createState() => _LogoTitleGraceState();
+}
+
+class _LogoTitleGraceState extends State<LogoTitleGrace> {
+  Timer? _timer;
+  bool _shown = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer(widget.grace, () {
+      if (mounted) setState(() => _shown = true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => _shown ? widget.child : const SizedBox.shrink();
+}
+
 /// Fades a network image in by animating the image paint's alpha
 /// (`Image.opacity` → `RawImage`), not by wrapping it in an opacity widget:
 /// a widget-opacity fade is a tile-sized saveLayer per in-flight image, and

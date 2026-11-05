@@ -271,21 +271,130 @@ void main() {
       expect(port.abandoned, ['dev-1']);
     });
 
-    test('Plezilo adds one server per sign-in: a later push fails at once', () async {
-      unawaited(run());
-      await phone.next<SiloPairingHello>();
-      phone.phoneSends(const SiloPairingPushServer(serverUrl: _url, serverIdentity: 'srv-1'));
-      await _status<SiloPairingConsentRequested>(receiver);
-      receiver.allowPendingServer();
-      await phone.next<SiloPairingDeviceStarted>();
-      port.outcomeCompleter.complete(null);
-      await phone.next<SiloPairingServerResult>();
-      phone.phoneSends(const SiloPairingPushServer(serverUrl: 'https://second.example', serverIdentity: 'srv-2'));
-      final result = await phone.next<SiloPairingServerResult>();
-      expect(result.serverUrl, 'https://second.example');
-      expect(result.status, SiloPairingServerStatus.failed);
-      expect(result.error, 'auth_failed');
-      expect(port.setupTargets, hasLength(1));
+    group('several accounts in one session (Silo Android #810)', () {
+      const cabin = 'https://cabin.example';
+
+      setUp(() {
+        identities[cabin] = const SiloIdentityAnswer('srv-2');
+        port.nextCodes.addAll(const [
+          SiloPairingCode(deviceCode: 'dev-1', userCode: '48217731', matchCode: 'brave-otter'),
+          SiloPairingCode(deviceCode: 'dev-2', userCode: '48217732', matchCode: 'quiet-fox'),
+          SiloPairingCode(deviceCode: 'dev-3', userCode: '48217733', matchCode: 'calm-wren'),
+        ]);
+        for (final code in ['dev-1', 'dev-2', 'dev-3']) {
+          port.outcomesByCode[code] = Completer();
+        }
+      });
+
+      test('two accounts on two servers: each signs in, consent asked once, one binding', () async {
+        var ended = 0;
+        receiver.onSessionEnd = () => ended++;
+        final session = run();
+        await phone.next<SiloPairingHello>();
+        final results = await phone.signInAccounts(
+          const [
+            SiloPairingPushServer(serverUrl: _url, serverName: 'Home', serverIdentity: 'srv-1', accountName: 'laura'),
+            SiloPairingPushServer(serverUrl: cabin, serverName: 'Cabin', serverIdentity: 'srv-2', accountName: 'sam'),
+          ],
+          onPushed: (i) async {
+            if (i == 0) {
+              await _status<SiloPairingConsentRequested>(receiver);
+              receiver.allowPendingServer();
+            }
+          },
+          approve: (i, started) {
+            if (i == 1) {
+              final working = receiver.status.value;
+              expect(working, isA<SiloPairingAwaitingApproval>());
+            }
+            port.outcomesByCode[i == 0 ? 'dev-1' : 'dev-2']!.complete(null);
+          },
+        );
+        expect(results.map((r) => r.status), [SiloPairingServerStatus.signedIn, SiloPairingServerStatus.signedIn]);
+        expect(results.map((r) => r.serverUrl), [_url, cabin]);
+        await session;
+        expect((receiver.status.value as SiloPairingCompleted).serverNames, ['Home', 'Cabin']);
+        expect(port.setupTargets.map((t) => t.verifiedServerId), ['srv-1', 'srv-2']);
+        // One binding for the whole session, handed to every attempt.
+        expect(port.setupBindings, hasLength(2));
+        expect(port.setupBindings.first, isNotNull);
+        expect(identical(port.setupBindings.first, port.setupBindings.last), isTrue);
+        expect(receiver.signedInCount, 2);
+        expect(ended, 1);
+      });
+
+      test('the same server again is another account; the status counts them', () async {
+        final session = run();
+        await phone.next<SiloPairingHello>();
+        phone.phoneSends(const SiloPairingPushServer(serverUrl: _url, serverName: 'Home', serverIdentity: 'srv-1'));
+        await _status<SiloPairingConsentRequested>(receiver);
+        receiver.allowPendingServer();
+        await phone.next<SiloPairingDeviceStarted>();
+        port.outcomesByCode['dev-1']!.complete(null);
+        await phone.next<SiloPairingServerResult>();
+        expect((receiver.status.value as SiloPairingSignedIn).count, 1);
+
+        phone.phoneSends(
+          const SiloPairingPushServer(serverUrl: _url, serverName: 'Home', serverIdentity: 'srv-1', accountName: 'sam'),
+        );
+        await phone.next<SiloPairingDeviceStarted>();
+        port.outcomesByCode['dev-2']!.complete(null);
+        expect((await phone.next<SiloPairingServerResult>()).status, SiloPairingServerStatus.signedIn);
+        expect((receiver.status.value as SiloPairingSignedIn).count, 2);
+
+        // Continue on the TV ends the session with both kept.
+        receiver.finishSession();
+        await session;
+        expect((receiver.status.value as SiloPairingCompleted).serverNames, ['Home', 'Home']);
+      });
+
+      test('a failed account does not end the session; the next one signs in', () async {
+        final session = run();
+        await phone.next<SiloPairingHello>();
+        final results = await phone.signInAccounts(
+          const [
+            SiloPairingPushServer(serverUrl: _url, serverName: 'Home', serverIdentity: 'srv-1'),
+            SiloPairingPushServer(serverUrl: cabin, serverName: 'Cabin', serverIdentity: 'srv-2'),
+          ],
+          onPushed: (i) async {
+            if (i == 0) {
+              await _status<SiloPairingConsentRequested>(receiver);
+              receiver.allowPendingServer();
+            }
+          },
+          approve: (i, started) => port.outcomesByCode[started.userCode == '48217731' ? 'dev-1' : 'dev-2']!.complete(
+            i == 0 ? SiloPairingFailureCode.denied : null,
+          ),
+        );
+        expect(results.map((r) => r.error), ['denied', null]);
+        expect(results.last.status, SiloPairingServerStatus.signedIn);
+        await session;
+        expect((receiver.status.value as SiloPairingCompleted).serverNames, ['Cabin']);
+        expect(port.abandoned, ['dev-1']);
+      });
+
+      test('each phone session gets its own binding', () async {
+        final first = run();
+        await phone.next<SiloPairingHello>();
+        phone.phoneSends(const SiloPairingPushServer(serverUrl: _url, serverIdentity: 'srv-1'));
+        await _status<SiloPairingConsentRequested>(receiver);
+        receiver.allowPendingServer();
+        await phone.next<SiloPairingDeviceStarted>();
+        phone.phoneHangsUp();
+        await first;
+
+        phone = FakePairingTransport();
+        final second = run();
+        await phone.next<SiloPairingHello>();
+        phone.phoneSends(const SiloPairingPushServer(serverUrl: _url, serverIdentity: 'srv-1'));
+        await _status<SiloPairingConsentRequested>(receiver);
+        receiver.allowPendingServer();
+        await phone.next<SiloPairingDeviceStarted>();
+        expect(port.setupBindings, hasLength(2));
+        expect(port.setupBindings.first!.binding, isNot(port.setupBindings.last!.binding));
+        phone.phoneHangsUp();
+        await second;
+      });
     });
 
     test('a plain-HTTP address is flagged unencrypted on the consent screen', () async {
@@ -335,6 +444,22 @@ void main() {
       phone.phoneSends(const SiloPairingDone());
       await session;
       expect(receiver.status.value, isA<SiloPairingCompleted>());
+    });
+
+    test('the sign-in screen keeps one account: a later push is limit_reached', () async {
+      unawaited(run());
+      await phone.next<SiloPairingHello>();
+      phone.phoneSends(const SiloPairingPushServer(serverUrl: _url, serverIdentity: 'srv-1'));
+      await _status<SiloPairingConsentRequested>(receiver);
+      receiver.allowPendingServer();
+      await phone.next<SiloPairingDeviceStarted>();
+      port.outcomeCompleter.complete(null);
+      await phone.next<SiloPairingServerResult>();
+      phone.phoneSends(const SiloPairingPushServer(serverUrl: _url, serverIdentity: 'srv-1', accountName: 'sam'));
+      final result = await phone.next<SiloPairingServerResult>();
+      expect(result.status, SiloPairingServerStatus.failed);
+      expect(result.error, 'limit_reached');
+      expect(port.outcomeCodes, ['dev-9']);
     });
 
     test('another server, or one without an identity, is identity_mismatch', () async {

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -55,6 +56,9 @@ void main() {
     expect(txt['id'], 'tv-1');
     expect(txt['sid'], isNotEmpty);
     expect(txt.containsKey('srv'), isFalse);
+    // Several accounts per session (Silo Android #810); no limit, as Android TV.
+    expect(txt['acct'], '1');
+    expect(txt.containsKey('lim'), isFalse);
     expect(txt['_service'], 'Living Room');
     expect(receiver.status.value, isA<SiloPairingAdvertising>());
   });
@@ -89,6 +93,35 @@ void main() {
     await phone.send(const SiloPairingDone());
     expect(await phone.closedByTv(), isTrue);
     await _until(() => receiver.status.value is SiloPairingCompleted);
+    await phone.close();
+  });
+
+  test('a phone signs two accounts in over the bridge, then sends done', () async {
+    port.nextCodes.addAll(const [
+      SiloPairingCode(deviceCode: 'dev-1', userCode: '48217731', matchCode: 'brave-otter'),
+      SiloPairingCode(deviceCode: 'dev-2', userCode: '48217732', matchCode: 'quiet-fox'),
+    ]);
+    port.outcomesByCode['dev-1'] = Completer();
+    port.outcomesByCode['dev-2'] = Completer();
+    final phone = await SiloPairingPhone.dial(host);
+    await phone.next<SiloPairingHello>();
+    final results = await phone.signInAccounts(
+      const [
+        SiloPairingPushServer(serverUrl: _url, serverName: 'Home', serverIdentity: 'srv-1', accountName: 'laura'),
+        SiloPairingPushServer(serverUrl: _url, serverName: 'Home', serverIdentity: 'srv-1', accountName: 'sam'),
+      ],
+      onPushed: (i) async {
+        if (i == 0) {
+          await _until(() => receiver.status.value is SiloPairingConsentRequested);
+          receiver.allowPendingServer();
+        }
+      },
+      approve: (i, started) => port.outcomesByCode[i == 0 ? 'dev-1' : 'dev-2']!.complete(null),
+    );
+    expect(results.map((r) => r.status), everyElement(SiloPairingServerStatus.signedIn));
+    expect(await phone.closedByTv(), isTrue);
+    await _until(() => receiver.status.value is SiloPairingCompleted);
+    expect((receiver.status.value as SiloPairingCompleted).serverNames, ['Home', 'Home']);
     await phone.close();
   });
 
@@ -146,6 +179,7 @@ void main() {
     await _until(() => advertiser.started.length == 2);
     expect(advertiser.started.last['st'], 'login');
     expect(advertiser.started.last['srv'], 'srv-1');
+    expect(advertiser.started.last.containsKey('acct'), isFalse, reason: 'the sign-in screen keeps one account');
     expect(advertiser.started.last['sid'], isNot(advertiser.started.first['sid']));
 
     await host.advertise(null);

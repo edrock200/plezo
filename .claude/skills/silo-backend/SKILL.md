@@ -71,7 +71,8 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
   the device advertises **`_silopair._tcp`** like Silo's Android TV app (`TvPairingAdvertiser.kt`;
   never `_silopair-roku._tcp`, which makes the phone treat it as a Roku). TXT: `v=1`, `name` (device
   name cut to 63 UTF-8 bytes, else "Plezilo"), `id` (the `X-Silo-Device-Id`), `sid` (fresh UUID per
-  advertisement), `st`, `srv`. Transport: **TLS-PSK**, key `silo-companion-pairing-v1`, identity
+  advertisement), `st`, `srv`, and on `setup` only `acct=1` (several accounts per session, below). No
+  `lim`: only Silo's Roku sends one (storage), Android TV does not. Transport: **TLS-PSK**, key `silo-companion-pairing-v1`, identity
   `silo-pairing`, TLS 1.3 `TLS_AES_128_GCM_SHA256` / TLS 1.2 `TLS_PSK_WITH_AES_128_GCM_SHA256`,
   BouncyCastle 1.84 in non-blocking server mode (`SiloPairingTls.kt`, copied from
   `TlsPskPairingTransport.kt`; the TV writes first). Dart has no PSK, so Kotlin terminates TLS and
@@ -88,8 +89,40 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
   then runs the screen's own probe + device-code flow; login only accepts `serverIdentity == srv` and
   lends the code on screen. `serverResult signedIn` goes out once the approval became a session
   (`completeDeviceLogin`), before the profile is picked. 180 s of silence (nothing in flight) drops the
-  phone. **Plezilo signs in to one server per session**: a push after a sign-in answers `failed
-  auth_failed` (Silo's TVs take several). Tokens never cross the LAN. Golden frames are those of
+  phone. Tokens never cross the LAN. `pushServer.accountName` (optional, display only, ≤64 chars) titles
+  the working panel ("Signing in sam on Home"); it is never matched.
+- **Several accounts in one phone session** (Silo Android #810, `PairingReceiver.kt`,
+  `PairingSessionBinding.kt`, `TvPairedSession.kt`; Siku's `PairSession.brs`): on `setup` the phone may
+  push again after each `serverResult`, any server, the same one included; consent is asked once per
+  session (again per plain-HTTP origin). A failed account (`denied`, `identity_mismatch`, …) does not end
+  the session. `login` keeps its one account: a later push answers `failed limit_reached` (Siku does the
+  same; older phones read unknown codes as `auth_failed`). The screen (`add_silo_screen.dart`) holds each
+  approved setup sign-in in `_pairedSignIns` instead of opening its profiles, returns to the address step
+  and shows "Signed in [N accounts]" with **Continue** (`receiver.finishSession()`, the same end as
+  `done`). When the session is over (`receiver.onSessionEnd`, after `_transport` is cleared) `_PairedRun`
+  takes the accounts first to last: each goes through `_onSignedIn` (auto-pick of a bound or lone
+  unlocked Silo profile, else the picker, whose "Change server" becomes "Skip this account") and
+  `_persistAndExit` with the usual rules (`otherSiloConnectionOnServer` → a new, non-activated Plezilo
+  profile; other servers join the chosen profile). The next account starts with `Timer.run` so two
+  `runAsync`s never overlap. One account ends like any sign-in (snackbar, pop); several (or a failure)
+  end on `_Step.pairedSummary` ("2 accounts added", "<account> on <server>, in the profile <P>" / "in a
+  new profile" / "was not added", Done → pop(true), or back to the address step when none saved).
+  Plezilo has no Change Account screen; the first account is processed first, like Silo's TV opening
+  the first. No advertising while a run is saved (`_wantedAdvertisement` null; `_pairingStartSetup`
+  refuses). Leaving the screen logs out held, unsaved sign-ins (`_discardPairedSignIns`).
+- **Session binding** (Silo Android #810, contract §B.1/§B.2): `SiloDeviceLoginBinding`
+  (`silo_auth_service.dart`): 32 secure-random bytes per phone session (`receiver.run`), `binding` =
+  base64url(SHA-256(secret)), `secret` = base64url(secret), no padding (vector: bytes 0..31 →
+  `Yw3NKWbEM2aRElRIu7JbT_QSpJxzLbLIq8G4WBvXEN0`). The receiver hands it to `port.startSetup(target,
+  binding:)`; `siloSessionBindingFor(server, binding)` sends it only when the probed address is **https**
+  and `GET /auth/device/capability` says `session_binding: true` (`SiloServerInfo.deviceSessionBinding`).
+  `SiloDeviceSignIn(binding:)` puts `binding` on every `device/start` (renewed codes too) and
+  `binding_secret` on every poll. A poll answering 403 problem `device_binding_mismatch` is
+  `SiloDevicePollStatus.bindingRefused`: the code is withdrawn (`/device/cancel`) and the flow fails, so the
+  phone gets `auth_failed`. The sign-in screen's own code (`login`) carries no binding. Log:
+  `[silo-pair] binding sent=yes|no reason=no_session_binding|http`, `the server refused the session
+  binding`; the binding itself is never logged (`toString` redacted). Plezilo does not show Silo's
+  "automatic" (no-compare) state for later bound codes. Golden frames are those of
   silo-android `PairingProtocolGoldenFramesTest`.
 - **Abandoned sessions:** a sign-in that is not saved (screen left, Change server, no profiles,
   completion failed, approval arriving after the flow was abandoned) is revoked with
@@ -363,7 +396,9 @@ PIN length (matches Silo's apps). Open follow-ups: an edit screen for an existin
   artwork routes need auth headers). Plezy's downloads therefore do not show in Silo's download list.
 - No OIDC/browser or network-identity ("Continue as") sign-in, no cleartext-HTTP consent prompt —
   Plezy's other backends have none either. Phones may also start a device code.
-- Sign in from a phone: one server per session (see above); the add-server screen advertises only
+- Sign in from a phone: several accounts per session are saved only after the session ends, each with
+  a Silo profile picked on the TV (Silo's TVs save accounts at once and pick a profile later on "Who's
+  watching?"); no Change Account screen, a summary instead; the add-server screen advertises only
   on Android TV / Fire TV (`SiloPairingHost.supported`; phones and tablets would be listed as TVs
   by Silo's phone app, and they can scan the QR code); no cleartext-consent store (each plain-HTTP push is flagged on the consent screen instead).
 - Remote Stop (Silo Android #809): `isPlayerStopKey` in `lib/focus/transport_keys.dart`; the player screen's key handler exits with `_exitPlayerRoute(stop: true)` on the first down and swallows repeats/up (TV navigation only, not Apple TV).
@@ -409,7 +444,14 @@ PIN length (matches Silo's apps). Open follow-ups: an edit screen for an existin
   `test/test_helpers/silo_pairing_phone.dart`), the flow glue and `probeIdentity`, and
   `silo_pairing_host_test.dart` plays Silo's phone (`SiloPairingPhone`) over real loopback sockets
   against `SiloPairingHost` (secret, one phone at a time, malformed frames, advertisement between
-  sessions). `add_silo_screen_test.dart` drives the screen end to end (consent, code, approval,
+  sessions). `siloPhoneSignInAccounts` (`SiloPairingPhone.signInAccounts`,
+  `FakePairingTransport.signInAccounts`) plays the #810 phone: push after push, `approve` per
+  `deviceStarted`, then `done`; `FakePairingPort.nextCodes` / `outcomesByCode` / `setupBindings` script
+  several attempts. `FakeSiloAuthServer.hostIdentities` / `hostNames` / `profilesByToken` /
+  `sessionBinding` and `approved(userId:, username:, accessToken:)` serve two servers and accounts.
+  `test/screens/settings/add_silo_pairing_accounts_test.dart` saves accounts with the real persistence
+  (in-memory drift, `_Binder implements ActiveProfileBinder`); read the database in the test zone while
+  interleaving `runAsync` delays and pumps (a plain `runAsync` read deadlocks behind the screen's save). `add_silo_screen_test.dart` drives the screen end to end (consent, code, approval,
   profiles). The TLS-PSK handshake and NSD need a real Android device and Silo's phone app.
 - Manager integration (`test/services/silo/silo_server_manager_test.dart`): `MultiServerManager(
   siloClientFactory: ...)` injects `SiloClient.forTesting` clients over a small fake server with a

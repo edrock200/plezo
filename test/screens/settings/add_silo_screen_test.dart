@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -305,15 +306,18 @@ void main() {
       for (var i = 0; i < 8; i++) {
         await tester.pump(const Duration(seconds: 1));
       }
-      expect(find.text("Who's watching?"), findsOneWidget);
       final result = phone.sent.whereType<SiloPairingServerResult>().single;
       expect(result.status, SiloPairingServerStatus.signedIn);
+      // The phone may push another account (Silo Android #810): the TV waits.
+      expect(find.text('Signed in'), findsOneWidget);
+      expect(find.text('Continue'), findsOneWidget);
+      expect(find.text("Who's watching?"), findsNothing);
 
       phone.phoneSends(const SiloPairingDone());
       await _frames(tester, count: 2);
       // The session's teardown finishes outside fake time.
       await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
-      await _frames(tester, count: 2);
+      await _frames(tester, count: 4);
       expect(phone.closed, isTrue);
       expect(find.text("Who's watching?"), findsOneWidget);
       await _leave(tester);
@@ -359,6 +363,73 @@ void main() {
       expect(find.text('4821 7731'), findsNothing);
       expect(find.text('Find server'), findsOneWidget);
       expect(server.bodiesFor('/api/v2/auth/device/cancel'), [contains('dev-1')]);
+      await _leave(tester);
+    });
+
+    testWidgets('the session binding goes only to an https server that checks it', (tester) async {
+      final server = FakeSiloAuthServer()
+        ..sessionBinding = true
+        ..hostIdentities = {'silo.example.com': 'srv-1', '192.168.1.5': 'srv-2'};
+      final host = await openWithPairing(tester, server);
+      final phone = FakePairingTransport();
+      unawaited(host.receiver.run(phone));
+      await _frames(tester, count: 2);
+      phone.phoneSends(
+        const SiloPairingPushServer(serverUrl: 'https://silo.example.com', serverName: 'Home', serverIdentity: 'srv-1'),
+      );
+      await _frames(tester, count: 2);
+      await tester.tap(find.text('Allow'));
+      await _frames(tester);
+      final bound = jsonDecode(server.bodiesFor('/api/v2/auth/device/start').single) as Map;
+      expect(bound['binding'], matches(RegExp(r'^[A-Za-z0-9_-]{43}$')));
+      expect(server.bodiesFor('/api/v2/auth/device/poll').last, contains('"binding_secret"'));
+
+      // The same server over plain HTTP reports session_binding too, but gets none.
+      phone.phoneSends(
+        const SiloPairingPushServer(serverUrl: 'http://192.168.1.5:8090', serverName: 'NAS', serverIdentity: 'srv-2'),
+      );
+      await _frames(tester, count: 2);
+      await tester.tap(find.text('Allow'));
+      await _frames(tester);
+      final starts = server.bodiesFor('/api/v2/auth/device/start');
+      expect(starts, hasLength(2));
+      expect((jsonDecode(starts.last) as Map).containsKey('binding'), isFalse);
+      expect(server.bodiesFor('/api/v2/auth/device/poll').last, isNot(contains('binding_secret')));
+
+      // A server without session_binding gets none either.
+      server.sessionBinding = false;
+      phone.phoneSends(
+        const SiloPairingPushServer(serverUrl: 'https://silo.example.com', serverName: 'Home', serverIdentity: 'srv-1'),
+      );
+      await _frames(tester);
+      expect((jsonDecode(server.bodiesFor('/api/v2/auth/device/start').last) as Map).containsKey('binding'), isFalse);
+      await _leave(tester);
+    });
+
+    testWidgets('a refused binding fails the account and withdraws its code', (tester) async {
+      final server = FakeSiloAuthServer()..sessionBinding = true;
+      final host = await openWithPairing(tester, server);
+      final phone = FakePairingTransport();
+      unawaited(host.receiver.run(phone));
+      await _frames(tester, count: 2);
+      phone.phoneSends(
+        const SiloPairingPushServer(serverUrl: 'https://silo.example.com', serverName: 'Home', serverIdentity: 'srv-1'),
+      );
+      await _frames(tester, count: 2);
+      await tester.tap(find.text('Allow'));
+      await _frames(tester);
+      expect(find.text('4821 7731'), findsOneWidget);
+
+      server.pollAnswer = (_) => siloCodedProblem(403, 'device_binding_mismatch');
+      for (var i = 0; i < 6; i++) {
+        await tester.pump(const Duration(seconds: 1));
+      }
+      final result = phone.sent.whereType<SiloPairingServerResult>().single;
+      expect(result.status, SiloPairingServerStatus.failed);
+      expect(result.error, 'auth_failed');
+      expect(server.bodiesFor('/api/v2/auth/device/cancel'), [contains('dev-1')]);
+      expect(find.text("Setup didn't finish"), findsOneWidget);
+      expect(phone.closed, isFalse, reason: 'a failed account does not end the session');
       await _leave(tester);
     });
 

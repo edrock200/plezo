@@ -179,9 +179,28 @@ void main() {
 
   group('advertisement', () {
     test('setup and login TXT', () {
-      expect(SiloPairingAdvertisement.setup.txt(), {'v': '1', 'st': 'setup'});
+      // acct=1: several accounts per session (Silo Android #810); no lim, as Android TV.
+      expect(SiloPairingAdvertisement.setup.txt(), {'v': '1', 'st': 'setup', 'acct': '1'});
       expect(const SiloPairingAdvertisement.login('srv-1').txt(), {'v': '1', 'st': 'login', 'srv': 'srv-1'});
       expect(SiloPairingProtocol.serviceType, '_silopair._tcp');
+    });
+
+    test('pushServer carries an optional accountName, shown trimmed and bounded', () {
+      final push = SiloPairingMessage.decode(
+        '{"type":"pushServer","v":1,"serverURL":"https://s.example","accountName":"  sam  "}',
+      );
+      expect(push, isA<SiloPairingPushServer>());
+      expect((push as SiloPairingPushServer).accountName, '  sam  ');
+      expect(push.accountLabel, 'sam');
+      expect(push.toJson()['accountName'], '  sam  ');
+      expect(const SiloPairingPushServer(serverUrl: 'https://s.example').toJson().containsKey('accountName'), isFalse);
+      expect(const SiloPairingPushServer(serverUrl: 'https://s.example', accountName: ' ').accountLabel, isNull);
+      expect(SiloPairingPushServer(serverUrl: 'https://s.example', accountName: 'é' * 80).accountLabel, 'é' * 64);
+    });
+
+    test('limit_reached is a known failure code', () {
+      expect(SiloPairingFailureCode.fromWire('limit_reached'), SiloPairingFailureCode.limitReached);
+      expect(SiloPairingFailureCode.fromWire('something_new'), SiloPairingFailureCode.authFailed);
     });
 
     test('service names are cut to 63 UTF-8 bytes without splitting a character', () {

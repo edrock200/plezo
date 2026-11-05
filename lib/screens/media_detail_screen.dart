@@ -4265,7 +4265,9 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
       logoToneRemapMixed: false,
       // Both replace the image under Align's loose constraints below, so they
       // take the whole title slot rather than the logo's.
-      placeholder: (context, url) => SizedBox.expand(child: titleFallback(context)),
+      // The title waits briefly while the logo loads, so it does not flash
+      // ahead of it (Silo Android #813); a failed logo shows it at once.
+      placeholder: (context, url) => SizedBox.expand(child: LogoTitleGrace(child: titleFallback(context))),
       errorWidget: (context, url, error) => SizedBox.expand(child: titleFallback(context)),
     );
     if (localArtwork != null) {

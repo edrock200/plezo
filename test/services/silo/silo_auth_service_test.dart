@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -121,6 +123,74 @@ void main() {
         server.service().pollDeviceLogin(siloTestServer, code),
         throwsA(isA<MediaServerHttpException>()),
       );
+    });
+  });
+
+  group('session binding (Silo Android #810)', () {
+    final code = SiloDeviceCode(
+      deviceCode: 'dev-1',
+      userCode: '48217730',
+      verificationUri: 'https://silo.example.com/activate',
+      expiresAt: DateTime(2030),
+      interval: const Duration(seconds: 5),
+    );
+    final binding = SiloDeviceLoginBinding.of(List.generate(32, (i) => i));
+
+    test('the binding is the unpadded base64url SHA-256 of the 32-byte secret', () {
+      // silo-android PairingSessionBindingTest's secret (bytes 0..31).
+      expect(binding.secret, 'AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8');
+      expect(binding.binding, 'Yw3NKWbEM2aRElRIu7JbT_QSpJxzLbLIq8G4WBvXEN0');
+      expect(binding.toString(), isNot(contains(binding.secret)));
+      expect(() => SiloDeviceLoginBinding.of(const [1, 2, 3]), throwsArgumentError);
+      final fresh = SiloDeviceLoginBinding.generate();
+      expect(fresh.secret, matches(RegExp(r'^[A-Za-z0-9_-]{43}$')));
+      expect(fresh.secret, isNot(SiloDeviceLoginBinding.generate().secret));
+    });
+
+    test('it goes only to an https server whose capability says session_binding', () {
+      const https = SiloServerInfo(baseUrl: 'https://s.example', serverId: 's', serverName: 'S');
+      const httpsBound = SiloServerInfo(
+        baseUrl: 'https://s.example',
+        serverId: 's',
+        serverName: 'S',
+        deviceSessionBinding: true,
+      );
+      const plainBound = SiloServerInfo(
+        baseUrl: 'http://192.168.1.5:8090',
+        serverId: 's',
+        serverName: 'S',
+        deviceSessionBinding: true,
+      );
+      expect(siloSessionBindingFor(httpsBound, binding), same(binding));
+      expect(siloSessionBindingFor(https, binding), isNull);
+      expect(siloSessionBindingFor(plainBound, binding), isNull);
+      expect(siloSessionBindingFor(httpsBound, null), isNull);
+    });
+
+    test('the probe reads session_binding from the device capability', () async {
+      expect((await server.service().probe('https://silo.example.com')).deviceSessionBinding, isFalse);
+      server.sessionBinding = true;
+      expect((await server.service().probe('https://silo.example.com')).deviceSessionBinding, isTrue);
+    });
+
+    test('start sends binding and poll binding_secret only when given', () async {
+      final auth = server.service();
+      await auth.startDeviceLogin(siloTestServer);
+      await auth.startDeviceLogin(siloTestServer, binding: binding);
+      await auth.pollDeviceLogin(siloTestServer, code);
+      await auth.pollDeviceLogin(siloTestServer, code, binding: binding);
+      final starts = [for (final b in server.bodiesFor('/api/v2/auth/device/start')) jsonDecode(b) as Map];
+      final polls = [for (final b in server.bodiesFor('/api/v2/auth/device/poll')) jsonDecode(b) as Map];
+      expect(starts.first.containsKey('binding'), isFalse);
+      expect(starts.last['binding'], binding.binding);
+      expect(polls.first.containsKey('binding_secret'), isFalse);
+      expect(polls.last['binding_secret'], binding.secret);
+    });
+
+    test('a 403 device_binding_mismatch poll is bindingRefused', () async {
+      server.pollAnswer = (_) => siloCodedProblem(403, 'device_binding_mismatch');
+      final result = await server.service().pollDeviceLogin(siloTestServer, code, binding: binding);
+      expect(result.status, SiloDevicePollStatus.bindingRefused);
     });
   });
 

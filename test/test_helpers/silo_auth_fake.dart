@@ -66,8 +66,20 @@ class FakeSiloAuthServer {
   /// Answers `/auth/device/start`; defaults to a fresh code.
   http.Response Function()? startAnswer;
 
-  /// Answers `GET /system/identity`; defaults to `srv-1`.
+  /// Answers `GET /system/identity`; defaults to [hostIdentities] for the
+  /// request's host, else `srv-1`.
   http.Response Function()? identityAnswer;
+
+  /// Several servers behind one fake: the `server_id` and branding name each
+  /// host answers with (Silo Android #810 tests sign in on two servers).
+  Map<String, String> hostIdentities = {};
+  Map<String, String> hostNames = {};
+
+  /// The device capability reports `session_binding`.
+  bool sessionBinding = false;
+
+  /// The Silo profiles each access token lists; [profiles] for the others.
+  Map<String, List<Map<String, dynamic>>> profilesByToken = {};
 
   /// Answers `/profiles/{id}/verify-pin`.
   http.Response Function(String pin) verifyPinAnswer = (_) => siloJson({'valid': false});
@@ -122,13 +134,19 @@ class FakeSiloAuthServer {
 
   int countOf(String path) => paths().where((p) => p == path).length;
 
-  static http.Response approved({String? profileId, String? profileToken}) => siloJson({
+  static http.Response approved({
+    String? profileId,
+    String? profileToken,
+    String userId = '1',
+    String username = 'laura',
+    String accessToken = 'acc',
+  }) => siloJson({
     'status': 'approved',
     'tokens': {
-      'access_token': 'acc',
-      'refresh_token': 'ref',
+      'access_token': accessToken,
+      'refresh_token': 'ref-$accessToken',
       'expires_in': 3600,
-      'user': {'id': '1', 'username': 'laura', 'role': 'user'},
+      'user': {'id': userId, 'username': username, 'role': 'user'},
     },
     'profile_id': profileId ?? '',
     'profile_token': profileToken ?? '',
@@ -178,11 +196,11 @@ class FakeSiloAuthServer {
       case '/api/v2/system/info':
         return siloJson({'api_major': 2, 'server_version': '1.2.3'});
       case '/api/v2/system/identity':
-        return identityAnswer?.call() ?? siloJson({'server_id': 'srv-1'});
+        return identityAnswer?.call() ?? siloJson({'server_id': hostIdentities[request.url.host] ?? 'srv-1'});
       case '/api/v2/theme/branding':
-        return siloJson({'server_name': 'Home Silo'});
+        return siloJson({'server_name': hostNames[request.url.host] ?? 'Home Silo'});
       case '/api/v2/auth/device/capability':
-        return siloJson({'state': 'available', 'cancel': true});
+        return siloJson({'state': 'available', 'cancel': true, if (sessionBinding) 'session_binding': true});
       case '/api/v2/auth/providers':
         return siloJson({'password_login': true, 'items': []});
       case '/api/v2/auth/device/start':
@@ -211,7 +229,7 @@ class FakeSiloAuthServer {
         return siloJson({'id': '1', 'username': 'laura', 'password_change_required': temporaryPassword});
       case '/api/v2/profiles':
         if (restricted) return siloPasswordChangeRequired();
-        return siloJson({'items': profiles});
+        return siloJson({'items': profilesByToken[_bearer(request)] ?? profiles});
     }
     if (restricted) return siloPasswordChangeRequired();
     if (path.startsWith('/api/v2/profiles/') && path.endsWith('/verify-pin')) {

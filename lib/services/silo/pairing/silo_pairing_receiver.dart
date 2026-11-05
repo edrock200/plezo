@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../../../utils/app_logger.dart';
+import '../silo_auth_service.dart';
 import 'silo_pairing_protocol.dart';
 import 'silo_pairing_transport.dart';
 
@@ -63,8 +64,9 @@ class SiloPairingTarget {
 abstract interface class SiloPairingSignInPort {
   /// `setup`: start device sign-in at [target] (the screen shows the code)
   /// and return the code once the server issued it. Throws
-  /// [SiloPairingAttemptFailure].
-  Future<SiloPairingCode> startSetup(SiloPairingTarget target);
+  /// [SiloPairingAttemptFailure]. [binding] is this phone session's binding;
+  /// the screen sends it only where [siloSessionBindingFor] allows.
+  Future<SiloPairingCode> startSetup(SiloPairingTarget target, {SiloDeviceLoginBinding? binding});
 
   /// `login`: the code the sign-in screen shows, waiting briefly while one is
   /// fetched; null when there is none.
@@ -93,10 +95,13 @@ class SiloPairingAdvertisement {
 
   const SiloPairingAdvertisement.login(String serverIdentity) : this._(SiloPairingReceiverState.login, serverIdentity);
 
-  /// TXT attributes besides `name`, `id` and `sid`.
+  /// TXT attributes besides `name`, `id` and `sid`. `setup` says `acct=1`
+  /// (several accounts per session, Silo Android #810) and, like Silo's
+  /// Android TV, no `lim`; the sign-in screen keeps one account.
   Map<String, String> txt() => {
     'v': '${SiloPairingProtocol.version}',
     'st': state.wire,
+    if (state == SiloPairingReceiverState.setup) SiloPairingProtocol.txtAcceptsAccounts: '1',
     if (state == SiloPairingReceiverState.login && serverIdentity != null) 'srv': serverIdentity!,
   };
 
@@ -152,10 +157,12 @@ class SiloPairingConsentRequested extends SiloPairingStatus {
   bool get isSession => true;
 }
 
-/// Checking the address and getting a code.
+/// Checking the address and getting a code. [accountName]: who the phone
+/// says it will approve as (display only).
 class SiloPairingWorking extends SiloPairingStatus {
   final String serverName;
-  const SiloPairingWorking(this.serverName);
+  final String? accountName;
+  const SiloPairingWorking(this.serverName, {this.accountName});
 
   @override
   bool get isSession => true;
@@ -189,10 +196,12 @@ class SiloPairingAwaitingApproval extends SiloPairingStatus {
   bool get isSession => true;
 }
 
-/// A pushed server signed in; the phone may still send `done`.
+/// A pushed account signed in ([count] so far this session); the phone may
+/// push another or send `done`.
 class SiloPairingSignedIn extends SiloPairingStatus {
   final String serverName;
-  const SiloPairingSignedIn(this.serverName);
+  final int count;
+  const SiloPairingSignedIn(this.serverName, {this.count = 1});
 
   @override
   bool get isSession => true;
@@ -266,8 +275,12 @@ enum _AlternateChoice { useAlternate, retry }
 ///    one in flight.
 /// 3. `done` / `cancel` / EOF / error end the session.
 ///
-/// Plezilo keeps one server per sign-in, so once a server signed in, a
-/// further push in the same session answers `failed` at once.
+/// `setup` (TXT `acct=1`, Silo Android #810): the phone may push again after
+/// each sign-in, on any server, the same one included; each sign-in is its
+/// own account, and a failed one does not end the session. Every device
+/// login of a session carries that session's binding where the server
+/// checks it ([SiloDeviceLoginBinding]). `login` signs in the one account
+/// on screen: a later push answers `limit_reached`.
 class SiloPairingReceiver {
   SiloPairingReceiver({
     required this.port,
@@ -275,7 +288,8 @@ class SiloPairingReceiver {
     required this.deviceName,
     required this.deviceId,
     this.idleTimeout = const Duration(seconds: 180),
-  });
+    SiloDeviceLoginBinding Function()? newSessionBinding,
+  }) : _newSessionBinding = newSessionBinding ?? SiloDeviceLoginBinding.generate;
 
   final SiloPairingSignInPort port;
   final SiloIdentityProbe identityProbe;
@@ -290,6 +304,15 @@ class SiloPairingReceiver {
 
   /// What is advertised; read when a session starts and a push arrives.
   SiloPairingAdvertisement advertisement = SiloPairingAdvertisement.setup;
+
+  /// Called once a phone's session is over and the receiver is free again
+  /// (after the end status is set). The screen saves the session's accounts.
+  VoidCallback? onSessionEnd;
+
+  final SiloDeviceLoginBinding Function() _newSessionBinding;
+
+  /// This session's binding: every bound start and poll uses it.
+  SiloDeviceLoginBinding? _sessionBinding;
 
   bool _listening = false;
   bool _disposed = false;
@@ -325,6 +348,20 @@ class SiloPairingReceiver {
   }
 
   void _restingStatus() => _set(_listening ? const SiloPairingAdvertising() : const SiloPairingIdle());
+
+  /// Accounts signed in during the current (or last) session.
+  int get signedInCount => _signedInNames.length;
+
+  /// "Continue" after a sign-in: end the session as if the phone sent `done`
+  /// (the accounts signed in so far are kept).
+  void finishSession() {
+    final transport = _transport;
+    if (transport == null || _signedInNames.isEmpty) return;
+    appLogger.i('[silo-pair] finishing the session here');
+    _cancelAttempt();
+    _pendingPush = null;
+    unawaited(transport.close());
+  }
 
   /// Cancel / Back / OK on the pairing panel: end the session, or close a
   /// failure left on screen.
@@ -397,6 +434,7 @@ class SiloPairingReceiver {
     _sessionClosing = false;
     _approvedHttpOrigins.clear();
     _signedInNames.clear();
+    _sessionBinding = _newSessionBinding();
     var preserveTerminal = false;
     try {
       await transport.send(SiloPairingHello(tvName: deviceName, tvDeviceId: deviceId, state: advertisement.state));
@@ -443,9 +481,12 @@ class SiloPairingReceiver {
         _alternateDecision = null;
         if (decision != null && !decision.isCompleted) decision.complete(_AlternateChoice.retry);
         _transport = null;
+        _sessionBinding = null;
         if (!preserveTerminal) _restingStatus();
+        appLogger.i('[silo-pair] session ended with ${_signedInNames.length} account(s)');
       }
       await transport.close();
+      if (_transport == null && !_disposed) onSessionEnd?.call();
     }
   }
 
@@ -477,12 +518,13 @@ class SiloPairingReceiver {
 
   void _onPush(SiloPairingPushServer push, SiloPairingTransport transport) {
     if (_sessionDenied) return;
-    appLogger.i('[silo-pair] phone pushed a server');
+    appLogger.i('[silo-pair] phone pushed a server (accounts so far ${_signedInNames.length})');
     // One server at a time: a newer push means the phone gave up on the last.
     _cancelAttempt();
-    if (_signedInNames.isNotEmpty) {
-      // Plezilo adds one server per sign-in; the first is already signed in.
-      unawaited(_sendResult(transport, push.serverUrl, SiloPairingFailureCode.authFailed));
+    if (_signedInNames.isNotEmpty && advertisement.state == SiloPairingReceiverState.login) {
+      // The sign-in screen signs in its one account.
+      appLogger.i('[silo-pair] push refused: limit_reached (sign-in screen)');
+      unawaited(_sendResult(transport, push.serverUrl, SiloPairingFailureCode.limitReached));
       return;
     }
     final origin = _httpOrigin(push.serverUrl);
@@ -531,7 +573,7 @@ class SiloPairingReceiver {
       if (expected == null || pushed == null || pushed.isEmpty || pushed != expected) {
         throw const SiloPairingAttemptFailure(SiloPairingFailureCode.identityMismatch);
       }
-      _set(SiloPairingWorking(name));
+      _set(SiloPairingWorking(name, accountName: push.accountLabel));
       final code = await attempt.guard(port.currentCode());
       if (code == null) throw const SiloPairingAttemptFailure(SiloPairingFailureCode.expired);
       await _sendStarted(attempt, transport, code);
@@ -552,9 +594,9 @@ class SiloPairingReceiver {
     final push = attempt.push;
     var settled = false;
     try {
-      _set(SiloPairingWorking(push.displayName));
+      _set(SiloPairingWorking(push.displayName, accountName: push.accountLabel));
       final target = await _resolveTarget(attempt);
-      final code = await attempt.guard(port.startSetup(target));
+      final code = await attempt.guard(port.startSetup(target, binding: _sessionBinding));
       attempt.deviceCode = code.deviceCode;
       await _sendStarted(attempt, transport, code);
       final failure = await attempt.guard(port.outcome(code.deviceCode));
@@ -640,7 +682,7 @@ class SiloPairingReceiver {
       } finally {
         if (identical(_alternateDecision, decision)) _alternateDecision = null;
       }
-      _set(SiloPairingWorking(name));
+      _set(SiloPairingWorking(name, accountName: push.accountLabel));
       if (choice == _AlternateChoice.useAlternate && alternate != null) {
         return SiloPairingTarget(url: alternate.url, serverName: name, verifiedServerId: pushedIdentity);
       }
@@ -650,8 +692,8 @@ class SiloPairingReceiver {
   Future<void> _reportSignedIn(_Attempt attempt, SiloPairingTransport transport) async {
     if (!identical(_transport, transport)) return;
     _signedInNames.add(attempt.push.displayName);
-    _set(SiloPairingSignedIn(attempt.push.displayName));
-    appLogger.i('[silo-pair] signed in; sending serverResult');
+    _set(SiloPairingSignedIn(attempt.push.displayName, count: _signedInNames.length));
+    appLogger.i('[silo-pair] signed in (accounts this session ${_signedInNames.length}); sending serverResult');
     // Best effort: the session is ours now, a lost frame does not undo it.
     try {
       await transport.send(

@@ -6420,8 +6420,8 @@ class Translations$siloPairing$en {
 	/// en: 'Continue on your phone'
 	String get connectedTitle => 'Continue on your phone';
 
-	/// en: 'On your phone or tablet, choose the server to sign in to.'
-	String get connectedBody => 'On your phone or tablet, choose the server to sign in to.';
+	/// en: 'On your phone or tablet, choose the accounts to sign in.'
+	String get connectedBody => 'On your phone or tablet, choose the accounts to sign in.';
 
 	/// en: 'Allow this setup?'
 	String get consentTitle => 'Allow this setup?';
@@ -6456,8 +6456,56 @@ class Translations$siloPairing$en {
 	/// en: 'Signing in to ${server}'
 	String workingTitle({required Object server}) => 'Signing in to ${server}';
 
+	/// en: 'Signing in ${account} on ${server}'
+	String workingTitleAccount({required Object account, required Object server}) => 'Signing in ${account} on ${server}';
+
 	/// en: 'Getting this device's sign-in code.'
 	String get workingBody => 'Getting this device\'s sign-in code.';
+
+	/// en: 'Signed in'
+	String get signedInTitle => 'Signed in';
+
+	/// en: 'Signed in ${n} accounts'
+	String signedInCount({required Object n}) => 'Signed in ${n} accounts';
+
+	/// en: 'Signed in to ${server}. Choose another account on your phone or tablet, or continue here.'
+	String signedInBody({required Object server}) => 'Signed in to ${server}. Choose another account on your phone or tablet, or continue here.';
+
+	/// en: 'Continue'
+	String get continueHere => 'Continue';
+
+	/// en: 'You're all set'
+	String get completedTitle => 'You\'re all set';
+
+	/// en: 'Setting up the accounts from your phone or tablet…'
+	String get savingAccounts => 'Setting up the accounts from your phone or tablet…';
+
+	/// en: 'Skip this account'
+	String get skipAccount => 'Skip this account';
+
+	/// en: '(one) {${n} account added} (other) {${n} accounts added}'
+	String summaryTitle({required num n}) => (_root.$meta.cardinalResolver ?? PluralResolvers.cardinal('en'))(n,
+		one: '${n} account added',
+		other: '${n} accounts added',
+	);
+
+	/// en: 'No accounts were added'
+	String get summaryNoneTitle => 'No accounts were added';
+
+	/// en: '${account} on ${server}, in the profile ${profile}'
+	String summaryAdded({required Object account, required Object server, required Object profile}) => '${account} on ${server}, in the profile ${profile}';
+
+	/// en: '${account} on ${server}, in a new profile, ${profile}'
+	String summaryAddedNewProfile({required Object account, required Object server, required Object profile}) => '${account} on ${server}, in a new profile, ${profile}';
+
+	/// en: '${account} on ${server} was not added'
+	String summaryNotAdded({required Object account, required Object server}) => '${account} on ${server} was not added';
+
+	/// en: 'Switch profiles to use an account that is in another profile.'
+	String get summarySwitchHint => 'Switch profiles to use an account that is in another profile.';
+
+	/// en: 'Done'
+	String get done => 'Done';
 
 	/// en: 'Can't reach ${server}'
 	String unreachableTitle({required Object server}) => 'Can\'t reach ${server}';
@@ -11030,7 +11078,7 @@ extension on Translations {
 			'siloPairing.codeHint' => ({required Object product}) => 'Have the ${product} app on your phone? Open it on the same Wi‑Fi to sign this device in.',
 			'siloPairing.confirmOnPhone' => 'Check that your phone or tablet shows this code, then approve it there.',
 			'siloPairing.connectedTitle' => 'Continue on your phone',
-			'siloPairing.connectedBody' => 'On your phone or tablet, choose the server to sign in to.',
+			'siloPairing.connectedBody' => 'On your phone or tablet, choose the accounts to sign in.',
 			'siloPairing.consentTitle' => 'Allow this setup?',
 			'siloPairing.consentTitleSignIn' => 'Allow this sign-in?',
 			'siloPairing.consentBody' => ({required Object server}) => 'A nearby phone or tablet wants to sign Plezilo in to ${server}.',
@@ -11042,7 +11090,22 @@ extension on Translations {
 			'siloPairing.ok' => 'OK',
 			'siloPairing.tryAgain' => 'Try again',
 			'siloPairing.workingTitle' => ({required Object server}) => 'Signing in to ${server}',
+			'siloPairing.workingTitleAccount' => ({required Object account, required Object server}) => 'Signing in ${account} on ${server}',
 			'siloPairing.workingBody' => 'Getting this device\'s sign-in code.',
+			'siloPairing.signedInTitle' => 'Signed in',
+			'siloPairing.signedInCount' => ({required Object n}) => 'Signed in ${n} accounts',
+			'siloPairing.signedInBody' => ({required Object server}) => 'Signed in to ${server}. Choose another account on your phone or tablet, or continue here.',
+			'siloPairing.continueHere' => 'Continue',
+			'siloPairing.completedTitle' => 'You\'re all set',
+			'siloPairing.savingAccounts' => 'Setting up the accounts from your phone or tablet…',
+			'siloPairing.skipAccount' => 'Skip this account',
+			'siloPairing.summaryTitle' => ({required num n}) => (_root.$meta.cardinalResolver ?? PluralResolvers.cardinal('en'))(n, one: '${n} account added', other: '${n} accounts added', ), 
+			'siloPairing.summaryNoneTitle' => 'No accounts were added',
+			'siloPairing.summaryAdded' => ({required Object account, required Object server, required Object profile}) => '${account} on ${server}, in the profile ${profile}',
+			'siloPairing.summaryAddedNewProfile' => ({required Object account, required Object server, required Object profile}) => '${account} on ${server}, in a new profile, ${profile}',
+			'siloPairing.summaryNotAdded' => ({required Object account, required Object server}) => '${account} on ${server} was not added',
+			'siloPairing.summarySwitchHint' => 'Switch profiles to use an account that is in another profile.',
+			'siloPairing.done' => 'Done',
 			'siloPairing.unreachableTitle' => ({required Object server}) => 'Can\'t reach ${server}',
 			'siloPairing.unreachableProvider' => ({required Object server, required Object provider}) => 'This device can\'t reach ${server} through ${provider}. Install or open the ${provider} app on this device and make sure it can reach the server\'s network, then try again.',
 			'siloPairing.unreachablePublic' => ({required Object server, required Object url}) => 'This device can\'t reach ${server} at ${url}. Check its network connection and try again.',

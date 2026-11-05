@@ -63,6 +63,12 @@ const _silo = 'Silo';
 /// advertises itself to Silo's phone app on the LAN ("sign in from your
 /// phone", [SiloPairingHost]): the phone pushes a server (address step) or
 /// approves the code on screen (code step), after the person here allows it.
+/// From the address step one phone session can sign in several accounts, on
+/// any servers (Silo Android #810): each signs in with its own code and is
+/// held until the session ends; then each picks its Silo profile in turn and
+/// is saved with the usual rules (another account on a server the chosen
+/// Plezilo profile already uses gets a new profile), and a summary names
+/// where each went.
 class AddSiloScreen extends StatefulWidget {
   final Profile? targetProfile;
 
@@ -111,6 +117,31 @@ enum _Step {
 
   /// A TV's "change it on your phone or the web" message.
   passwordOnTv,
+
+  /// Where the accounts of a phone session went (several, or one that failed).
+  pairedSummary,
+}
+
+/// One account of a finished phone session: saved into [profile], or not
+/// added (null).
+class _PairedOutcome {
+  final String account;
+  final String server;
+  final String? profile;
+  final bool newProfile;
+  const _PairedOutcome({required this.account, required this.server, this.profile, this.newProfile = false});
+}
+
+/// Saving the accounts a phone session signed in, one after another.
+class _PairedRun {
+  _PairedRun(List<SiloSignIn> signIns) : queue = List.of(signIns), total = signIns.length;
+
+  final List<SiloSignIn> queue;
+  final int total;
+  final List<_PairedOutcome> outcomes = [];
+
+  /// One account and nothing else: it ends like any sign-in (saved and left).
+  bool get single => total == 1;
 }
 
 /// The message for a failed `verify-pin`, shown in the PIN dialog. A wrong PIN
@@ -143,6 +174,7 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
   final _pairingPrimaryFocus = FocusNode(debugLabel: 'AddSilo:PairingPrimary');
   final _pairingSecondaryFocus = FocusNode(debugLabel: 'AddSilo:PairingSecondary');
   final _pairingCancelFocus = FocusNode(debugLabel: 'AddSilo:PairingCancel');
+  final _pairedDoneFocus = FocusNode(debugLabel: 'AddSilo:PairedDone');
   final _formKey = GlobalKey<FormState>();
 
   _Step _step = _Step.address;
@@ -184,6 +216,13 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
   /// (true) or could not (false); a phone attempt relays it.
   Completer<bool>? _pairingApproval;
 
+  /// Accounts the current phone session signed in (`setup`), held until the
+  /// session ends; logged out if the screen is left first.
+  final List<SiloSignIn> _pairedSignIns = [];
+
+  /// The ended session's accounts being saved, one at a time.
+  _PairedRun? _pairedRun;
+
   @override
   void initState() {
     super.initState();
@@ -202,6 +241,7 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
     _disposeDeviceFlow();
     _closePasswordChange();
     _discardSignIn();
+    _discardPairedSignIns();
     for (final node in [
       _urlFocus,
       _findServerFocus,
@@ -217,6 +257,7 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
       _pairingPrimaryFocus,
       _pairingSecondaryFocus,
       _pairingCancelFocus,
+      _pairedDoneFocus,
     ]) {
       node.dispose();
     }
@@ -253,6 +294,18 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
     if (signIn != null && !_handedOff && auth != null) unawaited(auth.logout(signIn.server, signIn.tokens));
   }
 
+  /// Log out a phone session's accounts that were never saved.
+  void _discardPairedSignIns() {
+    final auth = _auth;
+    final pending = [..._pairedSignIns, ...?_pairedRun?.queue];
+    _pairedSignIns.clear();
+    _pairedRun?.queue.clear();
+    if (auth == null) return;
+    for (final signIn in pending) {
+      unawaited(auth.logout(signIn.server, signIn.tokens));
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Sign in from a phone (Silo companion pairing)
   // ---------------------------------------------------------------------------
@@ -278,6 +331,7 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
     );
     _pairing = host;
     receiver.status.addListener(_onPairingStatus);
+    receiver.onSessionEnd = _onPairingSessionEnd;
     widget.onPairingHost?.call(host);
     _syncPairingAdvertisement();
   }
@@ -286,6 +340,8 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
   /// for the server whose code is on screen, nothing elsewhere.
   SiloPairingAdvertisement? _wantedAdvertisement() {
     final server = _server;
+    // Saving a finished session's accounts: no new phone meanwhile.
+    if (_pairedRun != null) return null;
     return switch (_step) {
       _Step.address => SiloPairingAdvertisement.setup,
       _Step.deviceCode when server != null && !_completingApproval && server.serverId.isNotEmpty =>
@@ -316,8 +372,11 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
 
   /// Statuses that replace the screen's own content with the pairing panel.
   bool _pairingTakesOver(SiloPairingStatus status) => switch (status) {
-    SiloPairingConsentRequested() || SiloPairingUnreachable() || SiloPairingFailed() => true,
+    SiloPairingConsentRequested() || SiloPairingUnreachable() || SiloPairingFailed() => _pairedRun == null,
     SiloPairingConnected() || SiloPairingWorking() => _step != _Step.deviceCode,
+    // Between the accounts of one session, and while the session ends.
+    SiloPairingSignedIn() => _pairedSignIns.isNotEmpty && _step == _Step.address,
+    SiloPairingCompleted() => _pairedRun != null && _step == _Step.address,
     _ => false,
   };
 
@@ -348,6 +407,8 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
         requestFocusAfterFrame(_cancelCodeFocus);
       case _Step.signIn:
         _focusSignInStep();
+      case _Step.pairedSummary:
+        requestFocusAfterFrame(_pairedDoneFocus);
       case _Step.profile || _Step.passwordChange || _Step.passwordOnTv:
         break;
     }
@@ -360,9 +421,11 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
   }
 
   /// A phone pushed [target] and the person allowed it: check the server,
-  /// start a device code there and return it once the server issued it.
-  Future<SiloPairingCode> _pairingStartSetup(SiloPairingTarget target) async {
-    if (!mounted) throw const SiloPairingAttemptFailure(SiloPairingFailureCode.authFailed);
+  /// start a device code there and return it once the server issued it. The
+  /// code carries the session's [binding] where the server checks one.
+  Future<SiloPairingCode> _pairingStartSetup(SiloPairingTarget target, {SiloDeviceLoginBinding? binding}) async {
+    // Saving an earlier session's accounts: nothing new starts meanwhile.
+    if (!mounted || _pairedRun != null) throw const SiloPairingAttemptFailure(SiloPairingFailureCode.authFailed);
     final auth = await _authService();
     final SiloServerInfo server;
     try {
@@ -391,7 +454,11 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
       _completingApproval = false;
       _step = _Step.signIn;
     });
-    await _startDeviceLogin();
+    final bound = siloSessionBindingFor(server, binding);
+    appLogger.i(
+      '[silo-pair] binding sent=${bound != null ? 'yes' : 'no reason=${server.deviceSessionBinding ? 'http' : 'no_session_binding'}'}',
+    );
+    await _startDeviceLogin(binding: bound);
     final flow = _deviceFlow;
     if (flow == null || !mounted) throw const SiloPairingAttemptFailure(SiloPairingFailureCode.authFailed);
     _pairingSetupFlow = true;
@@ -490,14 +557,14 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
     if (signIn != null && mounted) await _onSignedIn(signIn);
   }
 
-  Future<void> _startDeviceLogin() async {
+  Future<void> _startDeviceLogin({SiloDeviceLoginBinding? binding}) async {
     final server = _server;
     if (server == null || busy) return;
     setErrorText(null);
     final auth = await _authService();
     if (!mounted || !identical(server, _server)) return;
     _disposeDeviceFlow();
-    final flow = SiloDeviceSignIn(auth: auth, server: server, config: widget.deviceSignInConfig);
+    final flow = SiloDeviceSignIn(auth: auth, server: server, config: widget.deviceSignInConfig, binding: binding);
     _pairingApproval = Completer<bool>();
     _deviceFlow = flow;
     flow.state.addListener(() => _onDeviceState(flow));
@@ -562,6 +629,20 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
     }
     // A phone approving this code hears that this device is signed in; the
     // profile is picked here afterwards.
+    if (_pairingSetupFlow && (_pairing?.receiver.hasSession ?? false)) {
+      // One of possibly several accounts from this phone session: keep it
+      // until the session ends, and wait for the phone's next push.
+      _pairedSignIns.add(signIn);
+      _completePairingApproval(true);
+      _disposeDeviceFlow();
+      setState(() {
+        _server = null;
+        _profiles = const [];
+        _completingApproval = false;
+        _step = _Step.address;
+      });
+      return;
+    }
     _completePairingApproval(true);
     await _onSignedIn(signIn);
     // Still on the code panel means a later step failed (profiles, saving):
@@ -621,6 +702,8 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
     if (!identical(_signIn, signIn)) {
       _discardSignIn();
       _passwordChanged = false;
+      // A new session is not saved yet: leaving must log it out.
+      _handedOff = false;
     }
     _signIn = signIn;
     var passwordChangeRequired = false;
@@ -641,6 +724,11 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
       return;
     }
     if (passwordChangeRequired) setErrorText(t.addServer.siloDeviceCouldntFinish);
+    if ((profiles == null || profiles.isEmpty) && _pairedRun != null) {
+      // One of a phone session's accounts: note it and go on with the next.
+      _pairedNotAdded(signIn);
+      return;
+    }
     if (profiles == null || profiles.isEmpty) {
       // Nothing to pick: this session will not be used.
       _discardSignIn();
@@ -783,6 +871,11 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
   /// back to the sign-in methods.
   void _signOutTemporaryPassword() {
     _closePasswordChange();
+    final signIn = _signIn;
+    if (_pairedRun != null && signIn != null) {
+      _pairedNotAdded(signIn);
+      return;
+    }
     _discardSignIn();
     _passwordController.clear();
     setState(() => _step = _Step.signIn);
@@ -928,7 +1021,17 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
       rethrow;
     }
 
-    if (separateProfile) {
+    final run = _pairedRun;
+    run?.outcomes.add(
+      _PairedOutcome(
+        account: siloAccountLabel(connection),
+        server: connection.serverName,
+        profile: bindProfile.displayName,
+        newProfile: separateProfile,
+      ),
+    );
+    // Several accounts from a phone: the summary names the new profiles.
+    if (separateProfile && (run == null || run.single)) {
       showMainSnackBar(
         t.addServer.siloAddedAsNewProfile(account: siloAccountLabel(connection), profile: bindProfile.displayName),
         duration: AppDurations.snackBarLong,
@@ -940,8 +1043,78 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
       await context.read<ActiveProfileBinder>().rebindIfActive(bindProfile.id);
     }
     if (!mounted) return true;
+    if (run != null && !run.single) {
+      // After this save's busy state clears.
+      Timer.run(_advancePairedRun);
+      return true;
+    }
     Navigator.of(context).pop(true);
     return true;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Several accounts from one phone session (Silo Android #810)
+  // ---------------------------------------------------------------------------
+
+  /// The phone's session is over: save the accounts it signed in, first to
+  /// last (Silo's TVs open the first).
+  void _onPairingSessionEnd() {
+    if (!mounted || _pairedRun != null || _pairedSignIns.isEmpty) return;
+    appLogger.i('[silo-pair] saving ${_pairedSignIns.length} account(s) from the phone session');
+    _pairedRun = _PairedRun(_pairedSignIns);
+    _pairedSignIns.clear();
+    _advancePairedRun();
+  }
+
+  /// The next account of [_pairedRun]: its profiles (picked automatically
+  /// when the approval bound one or there is a single unlocked one), or the
+  /// summary once none is left.
+  void _advancePairedRun() {
+    final run = _pairedRun;
+    if (run == null || !mounted) return;
+    if (busy) {
+      Timer.run(_advancePairedRun);
+      return;
+    }
+    if (run.queue.isEmpty) {
+      setErrorText(null);
+      setState(() {
+        _server = null;
+        _profiles = const [];
+        _step = _Step.pairedSummary;
+      });
+      requestFocusAfterFrame(_pairedDoneFocus);
+      return;
+    }
+    final next = run.queue.removeAt(0);
+    setErrorText(null);
+    setState(() {
+      _server = next.server;
+      _profiles = const [];
+      _step = _Step.address;
+    });
+    unawaited(_onSignedIn(next));
+  }
+
+  /// [signIn] could not be saved (no profiles, a temporary password) or the
+  /// person skipped it: log it out and go on.
+  void _pairedNotAdded(SiloSignIn signIn) {
+    _pairedRun?.outcomes.add(_PairedOutcome(account: signIn.account.username, server: signIn.server.serverName));
+    if (identical(_signIn, signIn)) _discardSignIn();
+    Timer.run(_advancePairedRun);
+  }
+
+  /// "Done" on the summary: leave when an account was saved, else back to
+  /// the address step.
+  void _closePairedSummary() {
+    final run = _pairedRun;
+    _pairedRun = null;
+    if (run != null && run.outcomes.any((o) => o.profile != null)) {
+      Navigator.of(context).pop(true);
+      return;
+    }
+    setState(() => _step = _Step.address);
+    requestFocusAfterFrame(_urlFocus);
   }
 
   // ---------------------------------------------------------------------------
@@ -998,6 +1171,7 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
                   crossAxisAlignment: .stretch,
                   children: switch (_step) {
                     _Step.profile => _buildProfileStep(theme),
+                    _Step.pairedSummary => _buildPairedSummary(theme),
                     _Step.passwordOnTv => _buildPasswordOnTvStep(theme),
                     _Step.passwordChange when _passwordChange != null => [
                       SiloPasswordChangePanel(controller: _passwordChange!, onSignOut: _signOutTemporaryPassword),
@@ -1335,7 +1509,8 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
             ? t.siloPairing.failedIdentitySignIn(server: server)
             : t.siloPairing.failedIdentity(server: server),
       SiloPairingFailureCode.updateRequired => t.siloPairing.failedUpdate(server: server),
-      SiloPairingFailureCode.authFailed => t.siloPairing.failedGeneric(server: server),
+      SiloPairingFailureCode.authFailed ||
+      SiloPairingFailureCode.limitReached => t.siloPairing.failedGeneric(server: server),
     };
   }
 
@@ -1447,11 +1622,28 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
             onPressed: () => receiver?.cancelActiveSession(),
           ),
         );
-      case SiloPairingWorking(:final serverName):
-        title = t.siloPairing.workingTitle(server: serverName);
+      case SiloPairingWorking(:final serverName, :final accountName):
+        title = accountName != null
+            ? t.siloPairing.workingTitleAccount(account: accountName, server: serverName)
+            : t.siloPairing.workingTitle(server: serverName);
         lines.add((t.siloPairing.workingBody, false));
         working = true;
         cancelButton();
+      case SiloPairingSignedIn(:final serverName, :final count):
+        title = count > 1 ? t.siloPairing.signedInCount(n: count) : t.siloPairing.signedInTitle;
+        lines.add((t.siloPairing.signedInBody(server: serverName), false));
+        buttons.add(
+          _pairingButton(
+            focusNode: _pairingPrimaryFocus,
+            label: t.siloPairing.continueHere,
+            primary: true,
+            onPressed: () => receiver?.finishSession(),
+          ),
+        );
+      case SiloPairingCompleted():
+        title = t.siloPairing.completedTitle;
+        lines.add((t.siloPairing.savingAccounts, false));
+        working = true;
       case _:
         title = t.siloPairing.connectedTitle;
         lines.add((t.siloPairing.connectedBody, false));
@@ -1561,18 +1753,93 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
       ],
       ...buildInlineError(theme),
       const SizedBox(height: 16),
-      // Leaving here logs out the session that was just signed in.
+      // Leaving here logs out the session that was just signed in (one of a
+      // phone session's accounts: skips it).
       Align(
         alignment: AlignmentDirectional.centerStart,
         child: FocusableButton(
           focusNode: _profileChangeServerFocus,
           useBackgroundFocus: true,
-          onPressed: busy ? null : _changeServer,
+          onPressed: busy ? null : _leaveProfileStep,
           child: TextButton.icon(
-            onPressed: busy ? null : _changeServer,
-            icon: const AppIcon(Symbols.swap_horiz_rounded, fill: 1),
-            label: Text(t.addServer.siloChangeServer),
+            onPressed: busy ? null : _leaveProfileStep,
+            icon: AppIcon(_pairedRun != null ? Symbols.skip_next_rounded : Symbols.swap_horiz_rounded, fill: 1),
+            label: Text(_pairedRun != null ? t.siloPairing.skipAccount : t.addServer.siloChangeServer),
           ),
+        ),
+      ),
+    ];
+  }
+
+  void _leaveProfileStep() {
+    final signIn = _signIn;
+    if (_pairedRun != null && signIn != null) {
+      _pairedNotAdded(signIn);
+    } else {
+      _changeServer();
+    }
+  }
+
+  /// Where a phone session's accounts went, with Done focused.
+  List<Widget> _buildPairedSummary(ThemeData theme) {
+    final outcomes = _pairedRun?.outcomes ?? const <_PairedOutcome>[];
+    final added = outcomes.where((o) => o.profile != null).length;
+    final muted = theme.colorScheme.onSurface.withValues(alpha: 0.7);
+    return [
+      Semantics(
+        header: true,
+        liveRegion: true,
+        child: Text(
+          added == 0 ? t.siloPairing.summaryNoneTitle : t.siloPairing.summaryTitle(n: added),
+          style: theme.textTheme.titleLarge,
+        ),
+      ),
+      const SizedBox(height: 12),
+      for (final outcome in outcomes) ...[
+        Row(
+          crossAxisAlignment: .start,
+          children: [
+            AppIcon(
+              outcome.profile != null ? Symbols.check_circle_rounded : Symbols.error_rounded,
+              fill: 1,
+              color: outcome.profile != null ? null : theme.colorScheme.error,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                outcome.profile != null
+                    ? (outcome.newProfile
+                          ? t.siloPairing.summaryAddedNewProfile(
+                              account: outcome.account,
+                              server: outcome.server,
+                              profile: outcome.profile!,
+                            )
+                          : t.siloPairing.summaryAdded(
+                              account: outcome.account,
+                              server: outcome.server,
+                              profile: outcome.profile!,
+                            ))
+                    : t.siloPairing.summaryNotAdded(account: outcome.account, server: outcome.server),
+                style: theme.textTheme.bodyLarge,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+      ],
+      if (outcomes.any((o) => o.newProfile)) ...[
+        const SizedBox(height: 4),
+        Text(t.siloPairing.summarySwitchHint, style: theme.textTheme.bodyMedium?.copyWith(color: muted)),
+      ],
+      const SizedBox(height: 24),
+      Align(
+        alignment: AlignmentDirectional.centerStart,
+        child: FocusableButton(
+          focusNode: _pairedDoneFocus,
+          autofocus: true,
+          useBackgroundFocus: true,
+          onPressed: _closePairedSummary,
+          child: FilledButton(onPressed: _closePairedSummary, child: Text(t.siloPairing.done)),
         ),
       ),
     ];
@@ -1678,7 +1945,8 @@ class _ScreenPairingPort implements SiloPairingSignInPort {
   final _AddSiloScreenState _state;
 
   @override
-  Future<SiloPairingCode> startSetup(SiloPairingTarget target) => _state._pairingStartSetup(target);
+  Future<SiloPairingCode> startSetup(SiloPairingTarget target, {SiloDeviceLoginBinding? binding}) =>
+      _state._pairingStartSetup(target, binding: binding);
 
   @override
   Future<SiloPairingCode?> currentCode() => _state._pairingCurrentCode();

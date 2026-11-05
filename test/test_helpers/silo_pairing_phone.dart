@@ -6,6 +6,40 @@ import 'package:plezy/services/silo/pairing/silo_pairing_host.dart';
 import 'package:plezy/services/silo/pairing/silo_pairing_protocol.dart';
 import 'package:plezy/services/silo/pairing/silo_pairing_receiver.dart';
 import 'package:plezy/services/silo/pairing/silo_pairing_transport.dart';
+import 'package:plezy/services/silo/silo_auth_service.dart';
+
+/// Silo's phone signing a TV in to several accounts in one session (Silo
+/// Android #810, `CompanionPairingCoordinator`): pushes each of [pushes]
+/// after the previous one's `serverResult`, calls [onPushed] after each push
+/// (the TV person allowing it, say), [approve] for each `deviceStarted` (the
+/// phone approving that code on the server), and sends `done` at the end
+/// unless [sendDone] is false. Returns every `serverResult`, in order.
+Future<List<SiloPairingServerResult>> siloPhoneSignInAccounts({
+  required void Function(SiloPairingMessage message) send,
+  required Future<SiloPairingMessage?> Function() next,
+  required List<SiloPairingPushServer> pushes,
+  required FutureOr<void> Function(int index, SiloPairingDeviceStarted started) approve,
+  FutureOr<void> Function(int index)? onPushed,
+  bool sendDone = true,
+}) async {
+  final results = <SiloPairingServerResult>[];
+  for (final (i, push) in pushes.indexed) {
+    send(push);
+    await onPushed?.call(i);
+    while (true) {
+      final message = await next();
+      if (message == null) throw StateError('the TV ended the session during push $i');
+      if (message is SiloPairingDeviceStarted) {
+        await approve(i, message);
+      } else if (message is SiloPairingServerResult) {
+        results.add(message);
+        break;
+      }
+    }
+  }
+  if (sendDone) send(const SiloPairingDone());
+  return results;
+}
 
 /// Plays Silo's phone app (`CompanionPairingCoordinator`) against a
 /// [SiloPairingHost]: dials the loopback bridge the platform relays to, sends
@@ -31,6 +65,21 @@ class SiloPairingPhone {
   static Future<SiloPairingPhone> dial(SiloPairingHost host) => connect(host.bridgePort!, host.bridgeSecret!);
 
   Future<void> send(SiloPairingMessage message) => _transport.send(message);
+
+  /// [siloPhoneSignInAccounts] over this connection.
+  Future<List<SiloPairingServerResult>> signInAccounts(
+    List<SiloPairingPushServer> pushes, {
+    required FutureOr<void> Function(int index, SiloPairingDeviceStarted started) approve,
+    FutureOr<void> Function(int index)? onPushed,
+    bool sendDone = true,
+  }) => siloPhoneSignInAccounts(
+    send: (m) => unawaited(send(m)),
+    next: _queue.next,
+    pushes: pushes,
+    approve: approve,
+    onPushed: onPushed,
+    sendDone: sendDone,
+  );
 
   /// The next message from the TV, which must be a [T].
   Future<T> next<T extends SiloPairingMessage>({Duration timeout = const Duration(seconds: 5)}) async {
@@ -97,6 +146,21 @@ class FakePairingTransport implements SiloPairingTransport {
     if (message is! T) throw StateError('expected $T, got ${message?.encode() ?? 'the end'}');
     return message;
   }
+
+  /// [siloPhoneSignInAccounts] over this transport.
+  Future<List<SiloPairingServerResult>> signInAccounts(
+    List<SiloPairingPushServer> pushes, {
+    required FutureOr<void> Function(int index, SiloPairingDeviceStarted started) approve,
+    FutureOr<void> Function(int index)? onPushed,
+    bool sendDone = true,
+  }) => siloPhoneSignInAccounts(
+    send: phoneSends,
+    next: _phoneQueue.next,
+    pushes: pushes,
+    approve: approve,
+    onPushed: onPushed,
+    sendDone: sendDone,
+  );
 }
 
 /// Messages in arrival order; [next] yields null once the stream ended.
@@ -134,9 +198,17 @@ class MessageQueue {
   }
 }
 
-/// A scripted sign-in screen for the receiver.
+/// A scripted sign-in screen for the receiver. A code's outcome comes from
+/// [outcomesByCode] when scripted there, else [outcomeCompleter].
 class FakePairingPort implements SiloPairingSignInPort {
   final List<SiloPairingTarget> setupTargets = [];
+
+  /// The session binding handed to each [startSetup].
+  final List<SiloDeviceLoginBinding?> setupBindings = [];
+
+  /// Codes for successive [startSetup] calls; [code] once they run out.
+  final List<SiloPairingCode> nextCodes = [];
+  final Map<String, Completer<SiloPairingFailureCode?>> outcomesByCode = {};
   final List<String?> abandoned = [];
   Object? startError;
   SiloPairingCode code = const SiloPairingCode(deviceCode: 'dev-1', userCode: '48217731', matchCode: 'brave-otter');
@@ -149,11 +221,12 @@ class FakePairingPort implements SiloPairingSignInPort {
   final List<String> outcomeCodes = [];
 
   @override
-  Future<SiloPairingCode> startSetup(SiloPairingTarget target) async {
+  Future<SiloPairingCode> startSetup(SiloPairingTarget target, {SiloDeviceLoginBinding? binding}) async {
     setupTargets.add(target);
+    setupBindings.add(binding);
     final error = startError;
     if (error != null) throw error;
-    return code;
+    return nextCodes.isNotEmpty ? nextCodes.removeAt(0) : code;
   }
 
   @override
@@ -162,7 +235,7 @@ class FakePairingPort implements SiloPairingSignInPort {
   @override
   Future<SiloPairingFailureCode?> outcome(String deviceCode) {
     outcomeCodes.add(deviceCode);
-    return outcomeCompleter.future;
+    return (outcomesByCode[deviceCode] ?? outcomeCompleter).future;
   }
 
   @override

@@ -130,11 +130,20 @@ _ErrorKind _classify(Object error) {
 /// (`/auth/device/cancel`). An approved code is consumed, so it is never
 /// cancelled; if an approval lands after [abandon], its session is logged out.
 class SiloDeviceSignIn {
-  SiloDeviceSignIn({required this.auth, required this.server, this.config = const SiloDeviceSignInConfig()});
+  SiloDeviceSignIn({
+    required this.auth,
+    required this.server,
+    this.config = const SiloDeviceSignInConfig(),
+    this.binding,
+  });
 
   final SiloAuthService auth;
   final SiloServerInfo server;
   final SiloDeviceSignInConfig config;
+
+  /// A phone sign-in session's binding, sent on every start and poll of this
+  /// flow (renewed codes included). Only one [siloSessionBindingFor] allowed.
+  final SiloDeviceLoginBinding? binding;
 
   final ValueNotifier<SiloDeviceSignInState> state = ValueNotifier(
     const SiloDeviceSignInState(SiloDeviceSignInStatus.gettingCode),
@@ -226,7 +235,7 @@ class SiloDeviceSignIn {
         }
         final SiloDeviceCode started;
         try {
-          started = await auth.startDeviceLogin(server);
+          started = await auth.startDeviceLogin(server, binding: binding);
         } catch (e) {
           if (mine != _run) return;
           final kind = _classify(e);
@@ -262,7 +271,7 @@ class SiloDeviceSignIn {
 
       final SiloDevicePollResult result;
       try {
-        result = await auth.pollDeviceLogin(server, code);
+        result = await auth.pollDeviceLogin(server, code, binding: binding);
       } catch (e) {
         if (mine != _run) return;
         final kind = _classify(e);
@@ -322,6 +331,13 @@ class SiloDeviceSignIn {
           return;
         case SiloDevicePollStatus.failed:
           _code = null;
+          _publish(const SiloDeviceSignInState(SiloDeviceSignInStatus.failed));
+          return;
+        case SiloDevicePollStatus.bindingRefused:
+          // The server will not hand this request's tokens to this session:
+          // withdraw it so nobody can approve it, and stop.
+          _code = null;
+          unawaited(auth.cancelDeviceLogin(server, code));
           _publish(const SiloDeviceSignInState(SiloDeviceSignInStatus.failed));
           return;
         case SiloDevicePollStatus.gone:

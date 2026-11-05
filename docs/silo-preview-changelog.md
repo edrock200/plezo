@@ -4,6 +4,10 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **Sign in several Silo accounts from your phone at once (Android TV and Google TV):** with Silo's phone app (a version that lists your accounts on the TV card), pick several accounts, on one server or several, and send them to the TV in one go. Each account is approved with its own code on your phone. If one doesn't work, the others still sign in. When your phone is done (or you press Continue on the TV), Plezilo asks which Silo profile to use for each account, then shows where each one went. A second account on a server your Plezilo profile already uses gets a new Plezilo profile of its own, as before; accounts on different servers share your profile. Accounts you didn't finish setting up are signed out again if you leave the screen.
+- **Safer phone sign-in on servers that support it:** on an HTTPS server that checks it, each sign-in from your phone is tied to that phone session, so only this TV can collect the sign-in your phone approved.
+- **No more title flashing before a show's logo on downloaded items:** when you open a downloaded movie or show offline, its name now waits a moment for the logo instead of flashing up first (it still shows if the logo is missing or slow).
+
 ## silo-preview-2.25.11
 
 Released November 5, 2026.

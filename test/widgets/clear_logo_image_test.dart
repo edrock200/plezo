@@ -116,4 +116,23 @@ void main() {
     // A phone clamps the logo to the column already; the title matches it.
     expect(ClearLogoImage.fallbackWidthFor(logoWidth: 358, available: 358), 358);
   });
+
+  testWidgets('a loading logo holds the title back for the grace, then shows it (Silo Android #813)', (tester) async {
+    await tester.pumpWidget(const MaterialApp(home: LogoTitleGrace(child: Text('Fallback Title'))));
+    await tester.pump(const Duration(milliseconds: 650));
+    expect(find.text('Fallback Title'), findsNothing);
+    await tester.pump(const Duration(milliseconds: 60));
+    expect(find.text('Fallback Title'), findsOneWidget);
+
+    // A logo that arrives within the grace replaces it: the title never shows.
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: LogoTitleGrace(key: Key('g2'), child: Text('Fallback Title')),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pumpWidget(const MaterialApp(home: Text('Logo')));
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.text('Fallback Title'), findsNothing);
+  });
 }

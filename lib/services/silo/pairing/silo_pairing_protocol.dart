@@ -21,6 +21,18 @@ abstract final class SiloPairingProtocol {
   /// Largest frame encoded or accepted (1 MiB, as Silo's apps).
   static const maxFrameBytes = 1 << 20;
 
+  /// TXT `acct=1` (Silo Android #810): on the `setup` screen this device
+  /// takes any number of `pushServer` messages in one session (the same
+  /// server again included) and keeps each sign-in as its own account.
+  static const txtAcceptsAccounts = 'acct';
+
+  /// TXT `lim=<n>`: the most sign-ins a TV keeps from one session. Only
+  /// Silo's Roku sends it (storage limits); Android TV, and so Plezilo, does not.
+  static const txtSignInLimit = 'lim';
+
+  /// The longest phone-sent account name shown (display only).
+  static const maxAccountLabel = 64;
+
   /// A DNS-SD instance name holds at most 63 UTF-8 bytes (Silo's `TvDeviceName`).
   static const maxServiceNameBytes = 63;
 
@@ -143,7 +155,12 @@ enum SiloPairingFailureCode {
   expired('expired'),
   unreachable('unreachable'),
   identityMismatch('identity_mismatch'),
-  updateRequired('update_required');
+  updateRequired('update_required'),
+
+  /// The TV keeps no more sign-ins from this session. Plezilo sends it for a
+  /// further push on the sign-in screen (`login`, one account), as Siku
+  /// does; older phones read it as [authFailed].
+  limitReached('limit_reached');
 
   const SiloPairingFailureCode(this.wire);
   final String wire;
@@ -236,6 +253,7 @@ sealed class SiloPairingMessage {
         serverName: _optionalString(obj, 'serverName'),
         serverIdentity: _optionalString(obj, 'serverIdentity'),
         endpoints: _endpoints(obj['endpoints']),
+        accountName: _optionalString(obj, 'accountName'),
       ),
       'deviceStarted' => SiloPairingDeviceStarted(
         serverUrl: _requireString(obj, 'serverURL'),
@@ -317,21 +335,40 @@ class SiloPairingHello extends SiloPairingMessage {
   };
 }
 
-/// Phone → TV, one per chosen server. [serverIdentity] is the deployment
+/// Phone → TV, one per chosen account. [serverIdentity] is the deployment
 /// identity the phone verified at [serverUrl]; [endpoints] the other
-/// addresses it offers. Older phones send neither.
+/// addresses it offers. Older phones send neither. [accountName] (Silo
+/// Android #810) is the username the phone will approve with: an unverified
+/// LAN claim, only shown ("Signing in sam on Home"), never matched.
 class SiloPairingPushServer extends SiloPairingMessage {
   final String serverUrl;
   final String? serverName;
   final String? serverIdentity;
   final List<SiloPairingEndpoint>? endpoints;
+  final String? accountName;
 
-  const SiloPairingPushServer({required this.serverUrl, this.serverName, this.serverIdentity, this.endpoints});
+  const SiloPairingPushServer({
+    required this.serverUrl,
+    this.serverName,
+    this.serverIdentity,
+    this.endpoints,
+    this.accountName,
+  });
 
   /// What the TV calls the server: its name, else its address.
   String get displayName {
     final name = serverName?.trim();
     return name == null || name.isEmpty ? normalizeSiloPairingUrl(serverUrl) : name;
+  }
+
+  /// [accountName] trimmed and cut for the screen; null when none was sent.
+  String? get accountLabel {
+    final name = accountName?.trim();
+    if (name == null || name.isEmpty) return null;
+    final runes = name.runes;
+    return runes.length <= SiloPairingProtocol.maxAccountLabel
+        ? name
+        : String.fromCharCodes(runes.take(SiloPairingProtocol.maxAccountLabel));
   }
 
   @override
@@ -343,6 +380,7 @@ class SiloPairingPushServer extends SiloPairingMessage {
     'serverName': ?serverName,
     'serverIdentity': ?serverIdentity,
     if (endpoints case final list?) 'endpoints': [for (final e in list) e.toJson()],
+    'accountName': ?accountName,
   };
 }
 
