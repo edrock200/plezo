@@ -54,12 +54,14 @@ jobs:
         run: |
           subject="${MESSAGE%%$'\n'*}"
           mode=none; windows=false; macos=false
+          # macOS is built only on request ([release-macos]): the user stopped
+          # automatic Mac builds on 2026-11-05 after GitHub's macOS runners
+          # kept going unassigned.
           if [[ "$subject" == *"[release-apk]"* || "$subject" == *"[release-desktop]"* ]]; then
-            windows=true; macos=true
-          else
-            [[ "$subject" == *"[release-windows]"* ]] && windows=true
-            [[ "$subject" == *"[release-macos]"* ]] && macos=true
+            windows=true
           fi
+          [[ "$subject" == *"[release-windows]"* ]] && windows=true
+          [[ "$subject" == *"[release-macos]"* ]] && macos=true
           if [[ "$subject" == *"[release-apk]"* ]]; then mode=apk
           elif [[ "$windows" == true || "$macos" == true ]]; then mode=latest; fi
           {

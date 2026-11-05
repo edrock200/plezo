@@ -109,8 +109,10 @@ agent needs. The code still says "Plezy" in internal names (Dart package `plezy`
   Android emulator cannot run; verify APKs with `apksigner` / `aapt2` and test on a device.
 - `gh` is installed but has no valid token; use the GitHub MCP tools. Releases are created by the preview workflow, not
   from the session.
-- Desktop: `silo-preview-desktop.yml` builds Windows and macOS with every `[release-apk]` push, or
-  adds them to the latest release with `[release-desktop]` / `[release-windows]` / `[release-macos]`.
+- Desktop: `silo-preview-desktop.yml` builds Windows with every `[release-apk]` push, or adds it to the
+  latest release with `[release-desktop]` / `[release-windows]`. **macOS is built only when the user asks**
+  (their decision, 2026-11-05): `[release-macos]` in a first line adds it to the latest release. Never
+  push `[release-macos]` on your own, and don't retry failed Mac builds.
   Release markers only count in a commit's **first line**. Never enable `ENABLE_UPDATE_CHECK`.
 - Android preview signing: without the `ANDROID_*` secrets the key lives in the Actions cache and
   is lost after 7 days without a build (it was, for 2.22.5); a `PREVIEW_KEYSTORE_PASSPHRASE` secret
@@ -138,14 +140,12 @@ agent needs. The code still says "Plezy" in internal names (Dart package `plezy`
   (emulator) APK is never in the Discord post and has no code (the user's wish); it stays on the
   release pages and the fixed links.
 - **Every preview is announced on Discord** (the user's standing request, like Siku's releases): once
-  the Android, Windows and macOS files are all attached, run
+  the Android and Windows files are attached (macOS only when the user asked for it), run
   `DISCORD_WEBHOOK_URL=<url> python3 scripts/silo_announce_discord.py silo-preview-<version>`. It posts
   the release's notes and download links. The webhook URL is a secret the user gave in the session:
   never commit, print or log it (Discord revokes webhooks found on GitHub); ask for it if you don't have it.
-- macOS jobs can sit without a runner: from 2026-11-03 ~16:50 UTC every macOS job (`macos-26` and
-  `macos-latest`) queued 15 minutes and was cancelled, with no GitHub incident (it worked again on 2026-11-04). Android and Windows still
-  release; add the Mac app later with `[release-macos]` in a commit's first line, and say on the release
-  page and in the Discord post when a release has no Mac version yet.
+- macOS runners: from 2026-11-03 GitHub often left macOS jobs unassigned (queued 15 minutes, then
+  cancelled). That is why Mac builds are now on request only (see Desktop above).
 - The preview workflow cancels an in-progress build when anything else is pushed to the same
   branch. After a `[release-apk]` push, wait for the release before pushing docs or fixes.
 - `dart`/`flutter` live in `/opt/flutter/bin` (add it to `PATH`). Silo's server and Android repos
