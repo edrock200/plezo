@@ -12,13 +12,13 @@ class TextInputDiagnostics {
   static bool _platformEnabled = false;
 
   /// On in a release build too once Android reports
-  /// `adb shell setprop log.tag.PlezyTextInput DEBUG` (read by PlezyActivity at
+  /// `adb shell setprop log.tag.PleziloTextInput DEBUG` (read by PlezyActivity at
   /// start; see [loadPlatformSetting]). Lines go to logcat tag `flutter`.
   static bool get enabled => _compiledIn || _platformEnabled;
 
   /// Asks PlezyActivity whether text-input diagnostics were switched on with
   /// adb, so one logcat capture shows both the IME's InputConnection calls
-  /// (tag `PlezyTextInput`) and what the Flutter field did with them.
+  /// (tag `PleziloTextInput`) and what the Flutter field did with them.
   static Future<void> loadPlatformSetting() async {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
     try {
@@ -29,7 +29,7 @@ class TextInputDiagnostics {
     } on PlatformException {
       // Best effort.
     }
-    if (_platformEnabled) appLogger.i('TextInputDiag diagnostics enabled from log.tag.PlezyTextInput');
+    if (_platformEnabled) appLogger.i('TextInputDiag diagnostics enabled from log.tag.PleziloTextInput');
   }
 
   @visibleForTesting

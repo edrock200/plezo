@@ -35,7 +35,7 @@ void main() {
     });
   }
 
-  testWidgets('stays off unless the Android activity reports log.tag.PlezyTextInput', (tester) async {
+  testWidgets('stays off unless the Android activity reports log.tag.PleziloTextInput', (tester) async {
     mockPlatform(diagnostics: false);
     await TextInputDiagnostics.loadPlatformSetting();
     expect(TextInputDiagnostics.enabled, isFalse);

@@ -137,7 +137,7 @@ class PlezyActivity : FlutterActivity() {
   private val siloPairingChannel by lazy { SiloPairingChannel(this) }
   private val exitDiagnosticsRequested = AtomicBoolean(false)
 
-  // Off unless `adb shell setprop log.tag.PlezyTextInput DEBUG` was set before the app
+  // Off unless `adb shell setprop log.tag.PleziloTextInput DEBUG` was set before the app
   // started; see TextInputDiagnostics.
   private inline fun logTextInputDiag(message: () -> String) = TextInputDiagnostics.log(message)
 

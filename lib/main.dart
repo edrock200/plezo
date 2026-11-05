@@ -164,7 +164,7 @@ void main() {
   // Android: skip the per-frame semantics pass when the only bound
   // accessibility service cannot read it (launcher hooks, key remappers).
   AssistiveTechnologyService.instance.ensureStarted();
-  // Text-input logging switched on with `adb shell setprop log.tag.PlezyTextInput DEBUG`.
+  // Text-input logging switched on with `adb shell setprop log.tag.PleziloTextInput DEBUG`.
   unawaited(TextInputDiagnostics.loadPlatformSetting());
   _installZeroOffsetPointerGuard(); // Workaround for iPadOS 26.1+ modal dismissal bug
 

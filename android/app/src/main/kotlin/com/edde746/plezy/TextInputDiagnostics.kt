@@ -16,20 +16,20 @@ import androidx.annotation.RequiresApi
  * Text-input diagnostics that a release build can switch on from adb, so a user's
  * TV can show where IME edits (typed or dictated) go:
  *
- *   adb shell setprop log.tag.PlezyTextInput DEBUG
+ *   adb shell setprop log.tag.PleziloTextInput DEBUG
  *   adb shell am force-stop com.edrock200.plezilo
- *   adb logcat -s PlezyTextInput:V flutter:V
+ *   adb logcat -s PleziloTextInput:V flutter:V
  *
- * `adb shell setprop log.tag.PlezyTextInput ""` (and a restart) turns it off.
+ * `adb shell setprop log.tag.PleziloTextInput ""` (and a restart) turns it off.
  * Only lengths, offsets and flags are logged, never the text itself.
  */
 object TextInputDiagnostics {
-  const val TAG = "PlezyTextInput"
+  const val TAG = "PleziloTextInput"
 
   @Volatile var enabled: Boolean = false
     private set
 
-  /** Re-reads the `log.tag.PlezyTextInput` property; called when the activity is created. */
+  /** Re-reads the `log.tag.PleziloTextInput` property; called when the activity is created. */
   fun refresh(): Boolean {
     enabled = try {
       Log.isLoggable(TAG, Log.DEBUG)
