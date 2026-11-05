@@ -4,6 +4,8 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **Voice typing on Google TV and Android TV:** the keyboard's microphone can now type into Plezilo's search and other text fields. The first time you open the keyboard in Plezilo on a TV, it asks for permission to use the microphone; choose Allow. If you said no, you can turn it on later in the TV's Settings › Apps › Plezilo › Permissions.
+
 ## silo-preview-2.25.10
 
 Released November 5, 2026.

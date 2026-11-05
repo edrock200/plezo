@@ -6,13 +6,14 @@ import android.app.PictureInPictureParams
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ActivityInfo
-import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.media.AudioManager
 import android.os.Build
 import android.os.Bundle
 import android.os.Process
 import android.os.SystemClock
+import android.Manifest
+import android.content.pm.PackageManager
 import android.provider.Settings
 import android.util.Log
 import android.util.Rational
@@ -60,6 +61,9 @@ class PlezyActivity : FlutterActivity() {
 
   companion object {
     private const val TAG = "PlezyActivity"
+    private const val KEYBOARD_MIC_PREFS = "keyboard_microphone"
+    private const val KEYBOARD_MIC_ASKED = "asked"
+    private const val KEYBOARD_MIC_REQUEST = 4801
 
     // Safety net for a device where the text-editor proxy (see
     // TextEditorProxyView) still leaves the IME without a key session: a
@@ -211,6 +215,21 @@ class PlezyActivity : FlutterActivity() {
     val forward = !nativeTextInputFocused && !isImeVisible() && !imm.isAcceptingText
     logTextInputDiag { "shouldForwardDpadBeforeIme=$forward ${describeImeState()}" }
     return forward
+  }
+
+  // Gboard on Google TV dictates into the focused app's field only when that
+  // app holds RECORD_AUDIO: without it the mic listens (the green indicator
+  // shows) and nothing is typed. Ask once per install, the first time a text
+  // field opens the keyboard on a TV; a refusal is respected and never asked
+  // again (the system Settings can still grant it).
+  private fun askForKeyboardMicrophoneOnce() {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M || !isAndroidTvDevice()) return
+    if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) return
+    val prefs = getSharedPreferences(KEYBOARD_MIC_PREFS, Context.MODE_PRIVATE)
+    if (prefs.getBoolean(KEYBOARD_MIC_ASKED, false)) return
+    prefs.edit().putBoolean(KEYBOARD_MIC_ASKED, true).apply()
+    logTextInputDiag { "asking for RECORD_AUDIO for keyboard voice input" }
+    requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), KEYBOARD_MIC_REQUEST)
   }
 
   private fun inputMethodManager(): InputMethodManager = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
@@ -997,6 +1016,7 @@ class PlezyActivity : FlutterActivity() {
           }
           if (nativeTextInputFocused && !oldValue) {
             imeLeakRestartBudget = IME_LEAK_RESTART_BUDGET
+            askForKeyboardMicrophoneOnce()
           }
           result.success(null)
         }
