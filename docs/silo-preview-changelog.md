@@ -4,13 +4,17 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+## silo-preview-2.25.9
+
+Released November 5, 2026. Android, Windows and Mac. Mac users coming from 2.25.7 also get everything new in 2.25.8 (more than one Silo account per server, and Plezy's download fixes).
+
 - **The remote's Stop button leaves the player (Android TV and Fire TV):** pressing Stop now ends playback and closes the player from anywhere, even with a menu open or while loading, like Silo's own TV app. Before, the picture just froze and Play couldn't start it again.
 
 ## silo-preview-2.25.8
 
 Released November 4, 2026.
 
-*No Mac version yet: GitHub's Mac build machines weren't available for this build. It will be added to this release later; Android and Windows are complete.*
+*No Mac version of 2.25.8: GitHub's Mac build machines weren't available. On a Mac, install 2.25.9 instead, which includes everything below.*
 
 - **More than one Silo account on the same server:** you can now add a second account (or a second Silo profile) on a Silo server you already use, as Silo's own apps now allow. If the Plezilo profile you are adding it to already uses another account on that server, Plezilo puts the new account in a Plezilo profile of its own and tells you its name, so both accounts keep working; switch profiles to change account. Each account keeps its own sign-in, watched marks, Continue Watching and downloads, signing in again as the same account updates it instead of adding it twice, and removing one account signs out only that one. Profile settings and "Borrow from another profile" now show which account a Silo server signs in as.
 - **From upstream Plezy:** downloads on Windows, macOS and Linux are no longer slowed down by the free-space check, and on iPhone and iPad downloaded videos are no longer copied into your iCloud backup.
