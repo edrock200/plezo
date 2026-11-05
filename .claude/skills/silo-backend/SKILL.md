@@ -366,6 +366,7 @@ PIN length (matches Silo's apps). Open follow-ups: an edit screen for an existin
 - Sign in from a phone: one server per session (see above); the add-server screen advertises only
   on Android TV / Fire TV (`SiloPairingHost.supported`; phones and tablets would be listed as TVs
   by Silo's phone app, and they can scan the QR code); no cleartext-consent store (each plain-HTTP push is flagged on the consent screen instead).
+- Remote Stop (Silo Android #809): `isPlayerStopKey` in `lib/focus/transport_keys.dart`; the player screen's key handler exits with `_exitPlayerRoute(stop: true)` on the first down and swallows repeats/up (TV navigation only, not Apple TV).
 - YouTube trailers: Silo's apps always hand them to the YouTube app; Plezy plays them in YouTube's
   embedded player on phones, tablets, Android TV / Fire TV and macOS (falling back to the app).
   The TV detail rail holds playable `MediaItem`s only, so on TV a YouTube trailer is reached

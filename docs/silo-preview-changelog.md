@@ -4,6 +4,8 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **The remote's Stop button leaves the player (Android TV and Fire TV):** pressing Stop now ends playback and closes the player from anywhere, even with a menu open or while loading, like Silo's own TV app. Before, the picture just froze and Play couldn't start it again.
+
 ## silo-preview-2.25.8
 
 Released November 4, 2026.

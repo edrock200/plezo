@@ -18,6 +18,11 @@ TransportCommand? classifyTransportKey(LogicalKeyboardKey key) {
   return null;
 }
 
+/// The remote's Stop key, which leaves the player (Silo Android TV #809):
+/// left to the platform it reaches the media session, which stops the player
+/// in place, so the picture freezes and Play cannot resume it.
+bool isPlayerStopKey(LogicalKeyboardKey key) => key == LogicalKeyboardKey.mediaStop;
+
 /// Which way a hardware seek or track key points.
 enum MediaSeekDirection { forward, backward }
 
