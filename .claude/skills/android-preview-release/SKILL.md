@@ -63,7 +63,10 @@ description: Build, publish and verify Plezilo's Android preview APKs (the Silo-
     `plezilo-<v>-macos.dmg` (`Plezilo.app`) + `SHA256SUMS-macos.txt`. Users must allow it once in
     System Settings › Privacy & Security › Open Anyway (or `xattr -dr com.apple.quarantine`).
     With an Apple Developer account, port upstream `build.yml`'s import/sign/notarize steps.
-- `[release-apk]` builds both from the same commit with the same version and build number, and
+- **macOS is on request only** (the user's decision, 2026-11-05, after GitHub's macOS runners kept going
+  unassigned): `[release-apk]` and `[release-desktop]` build Windows only; push `[release-macos]` only when
+  the user asks, and never retry a failed Mac build on your own.
+- `[release-apk]` builds Windows with the same version and build number, and
   waits for the Android release to attach; it stops at once if the APK run for that commit failed
   or was cancelled, and checks the release's commit and recorded build before uploading.
   `[release-desktop]`, `[release-windows]` or `[release-macos]` builds from the commit of the
