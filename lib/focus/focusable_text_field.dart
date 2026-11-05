@@ -888,6 +888,7 @@ class _FocusableTextInputHostState extends State<_FocusableTextInputHost> with W
   ui.FlutterView? _nativeTextInputView;
   bool _hasSeenNativeTextInputFocus = false;
   bool _suppressNativeTextInputForCurrentFocus = false;
+  TextEditingController? _diagnosticsController;
 
   bool get _nativeTextInputActivated => _nativeTextInputSession?.isActive == true;
 
@@ -898,6 +899,30 @@ class _FocusableTextInputHostState extends State<_FocusableTextInputHost> with W
     super.initState();
     _focusNodeBinding.bind(externalNode: widget.input.focusNode, debugLabel: 'FocusableTextInput');
     widget.input.tvTextInputController?._attach(this);
+    _syncDiagnosticsController();
+  }
+
+  /// With text-input diagnostics on, log every value the field's controller
+  /// takes while it has focus, so a capture shows whether IME edits (typed or
+  /// dictated) reached the field. Lengths and ranges only, never the text.
+  void _syncDiagnosticsController() {
+    final controller = TextInputDiagnostics.enabled ? widget.input.controller : null;
+    if (identical(controller, _diagnosticsController)) return;
+    _diagnosticsController?.removeListener(_logControllerValue);
+    _diagnosticsController = controller;
+    controller?.addListener(_logControllerValue);
+  }
+
+  void _logControllerValue() {
+    final controller = _diagnosticsController;
+    if (controller == null || _installedFocusNode?.hasFocus != true) return;
+    final value = controller.value;
+    _logTvTextInput(
+      'Host.controllerValue node=${_installedFocusNode?.debugLabel} textLength=${value.text.length} '
+      'selection=${value.selection.baseOffset}-${value.selection.extentOffset} '
+      'composing=${value.composing.start}-${value.composing.end} activated=$_nativeTextInputActivated '
+      'readOnly=${widget.input._usesNativeTvKeyboard && !_nativeTextInputActivated}',
+    );
   }
 
   @override
@@ -927,6 +952,7 @@ class _FocusableTextInputHostState extends State<_FocusableTextInputHost> with W
     if (view.viewInsets.bottom > 0) {
       session.keyboardWasVisible = true;
     } else if (session.keyboardWasVisible) {
+      _logTvTextInput('Host.didChangeMetrics IME inset fell to 0 after being visible; ending as dismissed');
       // Leanback can consume Back and hide without closing the connection or
       // sending performAction. Zero before any visible metrics is not a hide:
       // the IME may still be opening, or this may be a hardware keyboard.
@@ -937,6 +963,7 @@ class _FocusableTextInputHostState extends State<_FocusableTextInputHost> with W
   @override
   void didUpdateWidget(_FocusableTextInputHost oldWidget) {
     super.didUpdateWidget(oldWidget);
+    _syncDiagnosticsController();
     if (!identical(oldWidget.input.tvTextInputController, widget.input.tvTextInputController)) {
       oldWidget.input.tvTextInputController?._detach(this);
       widget.input.tvTextInputController?._attach(this);
@@ -972,6 +999,8 @@ class _FocusableTextInputHostState extends State<_FocusableTextInputHost> with W
   @override
   void dispose() {
     widget.input.tvTextInputController?._detach(this);
+    _diagnosticsController?.removeListener(_logControllerValue);
+    _diagnosticsController = null;
     _endNativeTextInput(_NativeTextInputEndReason.disposed, rebuild: false);
     _restoreInstalledHandler();
     // The keyboard is a navigator route — it must not outlive the field that
@@ -1067,6 +1096,7 @@ class _FocusableTextInputHostState extends State<_FocusableTextInputHost> with W
     if (_nativeTextInputActivated || node == null || !node.hasFocus) return;
     _nativeTextInputGeneration++;
     _nativeTextInputSession = _NativeTextInputSession(node);
+    _logTvTextInput('Host.beginNativeTextInput node=${node.debugLabel} generation=$_nativeTextInputGeneration');
     if (!PlatformDetector.isAppleTV() && defaultTargetPlatform == TargetPlatform.android) {
       // Observe the owning view, not MediaQuery: Scaffold removes the bottom
       // inset before building its body. A focus handoff can keep the same IME
@@ -1091,6 +1121,10 @@ class _FocusableTextInputHostState extends State<_FocusableTextInputHost> with W
     }
     if (session.endReason == reason) return;
     final wasActive = session.isActive;
+    _logTvTextInput(
+      'Host.endNativeTextInput reason=${reason.name} wasActive=$wasActive '
+      'previousReason=${session.endReason?.name} node=${session.focusNode.debugLabel}',
+    );
     session.endReason = reason;
     session.keyboardWasVisible = false;
     _nativeTextInputGeneration++;

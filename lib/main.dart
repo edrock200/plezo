@@ -47,6 +47,7 @@ import 'widgets/agent_control_scope.dart';
 import 'widgets/settings_builder.dart';
 import 'utils/iphone_duo.dart';
 import 'utils/platform_detector.dart';
+import 'utils/text_input_diagnostics.dart';
 import 'utils/pointer_scroll_axis.dart';
 import 'services/apple_tv_remote_touch_service.dart';
 import 'services/discord_rpc_service.dart';
@@ -163,6 +164,8 @@ void main() {
   // Android: skip the per-frame semantics pass when the only bound
   // accessibility service cannot read it (launcher hooks, key remappers).
   AssistiveTechnologyService.instance.ensureStarted();
+  // Text-input logging switched on with `adb shell setprop log.tag.PlezyTextInput DEBUG`.
+  unawaited(TextInputDiagnostics.loadPlatformSetting());
   _installZeroOffsetPointerGuard(); // Workaround for iPadOS 26.1+ modal dismissal bug
 
   // On tvOS, Flutter's generated plugin registrant doesn't run (no tvOS

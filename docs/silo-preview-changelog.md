@@ -4,6 +4,8 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **Finding out why voice typing types nothing (Android TV and Google TV):** speaking into Gboard's microphone in a Plezilo text field still doesn't type anything; this preview isn't the fix yet. It adds a log you can switch on with a computer (`adb shell setprop log.tag.PlezyTextInput DEBUG`, then restart Plezilo) that records what the keyboard sends to the field and whether the field took it, so one capture shows where the words go. It records only lengths, never what you typed or said.
+
 ## silo-preview-2.25.9
 
 Released November 5, 2026. Android, Windows and Mac. Mac users coming from 2.25.7 also get everything new in 2.25.8 (more than one Silo account per server, and Plezy's download fixes).

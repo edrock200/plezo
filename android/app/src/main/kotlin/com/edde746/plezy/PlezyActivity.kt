@@ -60,7 +60,6 @@ class PlezyActivity : FlutterActivity() {
 
   companion object {
     private const val TAG = "PlezyActivity"
-    private const val TEXT_INPUT_DIAGNOSTICS_ENABLED = false
 
     // Safety net for a device where the text-editor proxy (see
     // TextEditorProxyView) still leaves the IME without a key session: a
@@ -138,11 +137,12 @@ class PlezyActivity : FlutterActivity() {
   private val siloPairingChannel by lazy { SiloPairingChannel(this) }
   private val exitDiagnosticsRequested = AtomicBoolean(false)
 
-  private inline fun logTextInputDiag(message: () -> String) {
-    if (TEXT_INPUT_DIAGNOSTICS_ENABLED) {
-      Log.i(TAG, "TextInputDiag ${message()}")
-    }
-  }
+  // Off unless `adb shell setprop log.tag.PlezyTextInput DEBUG` was set before the app
+  // started; see TextInputDiagnostics.
+  private inline fun logTextInputDiag(message: () -> String) = TextInputDiagnostics.log(message)
+
+  private var textInputConnectionCount = 0
+  private var lastLoggedImeVisible: Boolean? = null
 
   private var autoPipReady = false
   private var autoPipWidth: Int = 16
@@ -241,9 +241,21 @@ class PlezyActivity : FlutterActivity() {
       importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
     }
 
-    override fun onCheckIsTextEditor(): Boolean = nativeTextInputFocused
+    override fun onCheckIsTextEditor(): Boolean {
+      logTextInputDiag { "proxy.onCheckIsTextEditor -> $nativeTextInputFocused" }
+      return nativeTextInputFocused
+    }
 
-    override fun onCreateInputConnection(outAttrs: EditorInfo): InputConnection? = flutterView.onCreateInputConnection(outAttrs)
+    override fun onCreateInputConnection(outAttrs: EditorInfo): InputConnection? {
+      val connection = flutterView.onCreateInputConnection(outAttrs)
+      if (!TextInputDiagnostics.enabled) return connection
+      val id = ++textInputConnectionCount
+      logTextInputDiag {
+        "proxy.onCreateInputConnection ic#$id connection=${connection?.javaClass?.simpleName} " +
+          "${TextInputDiagnostics.describeEditorInfo(outAttrs)} ${describeImeState()}"
+      }
+      return connection?.let { LoggingInputConnection(it, id) }
+    }
 
     override fun checkInputConnectionProxy(view: View): Boolean = view === flutterView
   }
@@ -499,6 +511,7 @@ class PlezyActivity : FlutterActivity() {
   }
 
   override fun onCreate(savedInstanceState: Bundle?) {
+    if (TextInputDiagnostics.refresh()) Log.i(TextInputDiagnostics.TAG, "text input diagnostics on")
     // Snapshot the previous process phase before this launch can overwrite it.
     initializeStartupPhaseStore()
     // Apply persisted theme color to the window background before anything
@@ -578,6 +591,16 @@ class PlezyActivity : FlutterActivity() {
     // keeps its color-view handling; insets are never consumed so FlutterView
     // still receives them.
     wrapper.setOnApplyWindowInsetsListener { v, insets ->
+      if (TextInputDiagnostics.enabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        val imeVisible = insets.isVisible(WindowInsets.Type.ime())
+        if (imeVisible != lastLoggedImeVisible) {
+          lastLoggedImeVisible = imeVisible
+          logTextInputDiag {
+            "insets imeVisible=$imeVisible imeBottom=${insets.getInsets(WindowInsets.Type.ime()).bottom} " +
+              "nativeTextInputFocused=$nativeTextInputFocused"
+          }
+        }
+      }
       if (systemBarsReassertPending) {
         systemBarsReassertPending = false
         v.post { reassertHiddenSystemBars() }
@@ -743,6 +766,21 @@ class PlezyActivity : FlutterActivity() {
       ) { surface ->
         flutterTextureView.isAvailable && flutterTextureView.surfaceTexture === surface
       }
+  }
+
+  override fun onWindowFocusChanged(hasFocus: Boolean) {
+    super.onWindowFocusChanged(hasFocus)
+    logTextInputDiag { "activity.onWindowFocusChanged hasFocus=$hasFocus ${describeImeState()}" }
+  }
+
+  override fun onPause() {
+    logTextInputDiag { "activity.onPause ${describeImeState()}" }
+    super.onPause()
+  }
+
+  override fun onResume() {
+    super.onResume()
+    logTextInputDiag { "activity.onResume ${describeImeState()}" }
   }
 
   override fun onStop() {
@@ -950,6 +988,7 @@ class PlezyActivity : FlutterActivity() {
 
     MethodChannel(flutterEngine.dartExecutor.binaryMessenger, TEXT_INPUT_CHANNEL).setMethodCallHandler { call, result ->
       when (call.method) {
+        "isDiagnosticsEnabled" -> result.success(TextInputDiagnostics.enabled)
         "setNativeTextInputFocused" -> {
           val oldValue = nativeTextInputFocused
           nativeTextInputFocused = call.arguments as? Boolean ?: false
