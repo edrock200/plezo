@@ -4,6 +4,8 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **Hold OK on the remote for more options (Android TV and Fire TV), from upstream Plezy:** list rows that have a second action, such as choosing a secondary subtitle track in the player's subtitle menu, now open it when you hold OK (or press the remote's menu key). Before, that action only worked with touch.
+
 ## silo-preview-2.25.12
 
 Released November 5, 2026.
