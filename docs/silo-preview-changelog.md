@@ -8,7 +8,7 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 Released November 5, 2026.
 
-*No Mac version yet: GitHub's Mac build machines weren't available for this build. It will be added to this release later; Android and Windows are complete.*
+*The Mac version was added a little later (GitHub's Mac build machines were busy when it was first built).*
 
 - **Voice typing on Google TV and Android TV:** the keyboard's microphone can now type into Plezilo's search and other text fields. The first time you open the keyboard in Plezilo on a TV, it asks for permission to use the microphone; choose Allow. If you said no, you can turn it on later in the TV's Settings › Apps › Plezilo › Permissions.
 
