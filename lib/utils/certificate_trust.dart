@@ -39,7 +39,6 @@ abstract final class CertificateTrust {
     'anilist.co',
     'simkl.com',
     'simkl.in',
-    'jsdelivr.net',
     'github.com',
     'image.tmdb.org',
     'ytimg.com',
