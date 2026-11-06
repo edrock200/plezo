@@ -131,14 +131,33 @@ val prepareMpvFfmpegDevelopment = tasks.register("prepareMpvFfmpegDevelopment") 
       val includeDir = File(staging, "include")
       val nativeDir = File(staging, "native")
       staging.mkdirs()
-      try {
-        providers.exec {
-          commandLine("curl", "-sfL", mpvFfmpegSourceUrl, "-o", sourceArchive.absolutePath)
-        }.result.get().assertNormalExitValue()
-      } catch (error: Exception) {
-        throw GradleException("Failed to download FFmpeg $mpvFfmpegVersion headers", error)
+      // ffmpeg.org intermittently refuses CI runners, so keep a verified copy in
+      // ~/.cache/plezilo-ffmpeg (the preview workflow caches that directory) and
+      // retry the download with pauses before giving up.
+      val cachedArchive = File(System.getProperty("user.home"), ".cache/plezilo-ffmpeg/ffmpeg-$mpvFfmpegVersion.tar.xz")
+      val cachedOk = cachedArchive.isFile && runCatching {
+        verifySha256(cachedArchive, mpvFfmpegSourceSha256, "cached FFmpeg $mpvFfmpegVersion source")
+      }.isSuccess
+      if (cachedOk) {
+        cachedArchive.copyTo(sourceArchive, overwrite = true)
+      } else {
+        try {
+          providers.exec {
+            commandLine(
+              "curl", "-sfL", "--retry", "6", "--retry-all-errors", "--retry-delay", "20",
+              "--connect-timeout", "30", "--max-time", "900",
+              mpvFfmpegSourceUrl, "-o", sourceArchive.absolutePath
+            )
+          }.result.get().assertNormalExitValue()
+        } catch (error: Exception) {
+          throw GradleException("Failed to download FFmpeg $mpvFfmpegVersion headers", error)
+        }
       }
       verifySha256(sourceArchive, mpvFfmpegSourceSha256, "FFmpeg $mpvFfmpegVersion source")
+      if (!cachedOk) runCatching {
+        cachedArchive.parentFile.mkdirs()
+        sourceArchive.copyTo(cachedArchive, overwrite = true)
+      }
 
       val extractedSource = File(staging, "source").apply { mkdirs() }
       try {

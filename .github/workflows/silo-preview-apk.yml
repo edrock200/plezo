@@ -107,6 +107,15 @@ jobs:
             ~/.gradle/wrapper
           key: silo-preview-${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
 
+      # ffmpeg.org intermittently refuses runners; android/app/build.gradle.kts
+      # keeps a checksum-verified copy of the FFmpeg source here.
+      - name: Cache FFmpeg source
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: ~/.cache/plezilo-ffmpeg
+          key: silo-preview-ffmpeg-${{ hashFiles('android/app/build.gradle.kts') }}
+          restore-keys: silo-preview-ffmpeg-
+
       - name: Check for a keystore passphrase
         id: keystore-mode
         env:

@@ -152,4 +152,4 @@ There is no `/dev/kvm`, so an emulator cannot run; on-device testing is the user
 - Kotlin compile in cloud sessions: `ANDROID_HOME=/opt/android-sdk ./gradlew -q :app:compileDebugKotlin -x
   :app:prepareMpvFfmpegDevelopment -x :app:downloadLibdovi -Pkotlin.compiler.execution.strategy=in-process`, then
   `rm -rf android/build`.
-
+- FFmpeg source for the Media3 JNI headers: ffmpeg.org intermittently refuses GitHub runners (2.25.15 and 2.25.16 failed at `prepareMpvFfmpegDevelopment`). The Gradle task now retries with pauses and keeps a checksum-verified copy in `~/.cache/plezilo-ffmpeg`, which the `Cache FFmpeg source` step in silo-preview-apk.yml restores. There is no independent mirror (www.ffmpeg.org is the same host; Debian has no 8.0.1 orig).
