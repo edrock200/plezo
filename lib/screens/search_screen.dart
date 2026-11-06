@@ -21,6 +21,7 @@ import '../providers/libraries_provider.dart';
 import '../providers/multi_server_provider.dart';
 import '../services/data_aggregation_service.dart';
 import '../services/settings_service.dart';
+import '../services/voice_search_service.dart';
 import '../utils/app_logger.dart';
 import '../utils/platform_detector.dart';
 import '../utils/snackbar_helper.dart';
@@ -75,11 +76,36 @@ class _SearchScreenState extends State<SearchScreen>
   HiddenLibrariesProvider? _hiddenLibraries;
   Set<String> _lastSeenHiddenKeys = const {};
 
+  /// Android TV with a speech recogniser installed: the field gets a mic.
+  bool _voiceAvailable = false;
+
   @override
   void initState() {
     super.initState();
     FocusUtils.requestFocusAfterBuild(this, searchFocusNode);
     unawaited(_bindHiddenLibraries());
+    unawaited(_checkVoiceSearch());
+  }
+
+  Future<void> _checkVoiceSearch() async {
+    final available = await VoiceSearchService.instance.isAvailable();
+    if (mounted && available != _voiceAvailable) setState(() => _voiceAvailable = available);
+  }
+
+  /// The mic beside the field (Silo Android #830): the system recogniser
+  /// listens, and a spoken query is a submitted one, results taking focus
+  /// as they land. A cancelled or empty recognition keeps the typed query.
+  Future<void> _startVoiceSearch() async {
+    final outcome = await VoiceSearchService.instance.listen(prompt: t.search.voicePrompt);
+    if (!mounted) return;
+    switch (outcome) {
+      case VoiceSearchText(:final text):
+        submitSearchQuery(text);
+      case VoiceSearchUnavailable():
+        showErrorSnackBar(context, t.search.voiceUnavailable);
+      case VoiceSearchCancelled():
+        break;
+    }
   }
 
   @override
@@ -555,6 +581,8 @@ class _SearchScreenState extends State<SearchScreen>
                 debugLabel: searchDebugLabel,
                 hintText: t.search.hint,
                 tvTextInputController: _tvTextInputController,
+                onVoiceSearch: _voiceAvailable ? () => unawaited(_startVoiceSearch()) : null,
+                voiceSearchLabel: t.search.voiceSearch,
                 onNavigateLeft: _navigateToSidebar,
                 onNavigateDown: searchResults.isNotEmpty && !isSearching
                     ? (_showFilterChips ? _focusFilterChips : firstResultFocusNode.requestFocus)

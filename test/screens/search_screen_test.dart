@@ -27,6 +27,7 @@ import 'package:plezy/screens/search_screen.dart';
 import 'package:plezy/services/multi_server_manager.dart';
 import 'package:plezy/services/storage_service.dart';
 import 'package:plezy/services/settings_service.dart';
+import 'package:plezy/services/voice_search_service.dart';
 import 'package:plezy/theme/mono_theme.dart';
 import 'package:plezy/utils/platform_detector.dart';
 import 'package:plezy/utils/media_server_http_client.dart';
@@ -694,6 +695,136 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
     await tester.pumpAndSettle();
     expect(FocusManager.instance.primaryFocus?.debugLabel, 'SearchKindChip_movie');
+  });
+
+  group('voice search on Android TV (Silo Android #830)', () {
+    const channel = MethodChannel('com.plezy/voice_search');
+    late List<MethodCall> calls;
+    late bool recogniserInstalled;
+    late Map<String, Object?> answer;
+
+    setUp(() {
+      calls = [];
+      recogniserInstalled = true;
+      answer = {'status': 'cancelled'};
+      VoiceSearchService.instance = VoiceSearchService()..debugIsAndroid = true;
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(channel, (call) async {
+        calls.add(call);
+        return switch (call.method) {
+          'isAvailable' => recogniserInstalled,
+          'recognize' => answer,
+          _ => null,
+        };
+      });
+    });
+
+    tearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(channel, null);
+      VoiceSearchService.instance = VoiceSearchService();
+    });
+
+    Finder mic() => find.byTooltip(t.search.voiceSearch);
+
+    testWidgets('the mic shows on Android TV with a recogniser installed', (tester) async {
+      await _pumpTvSearchScreen(tester);
+      await tester.pumpAndSettle();
+      expect(mic(), findsOneWidget);
+      expect(calls.map((c) => c.method), ['isAvailable']);
+    });
+
+    testWidgets('no mic without a recogniser', (tester) async {
+      recogniserInstalled = false;
+      await _pumpTvSearchScreen(tester);
+      await tester.pumpAndSettle();
+      expect(mic(), findsNothing);
+    });
+
+    testWidgets('no mic off TV, and the recogniser is not asked', (tester) async {
+      await _pumpTvSearchScreen(tester, tv: false);
+      await tester.pumpAndSettle();
+      expect(mic(), findsNothing);
+      expect(calls, isEmpty);
+    });
+
+    testWidgets('no mic on a TV that is not Android', (tester) async {
+      VoiceSearchService.instance = VoiceSearchService()..debugIsAndroid = false;
+      await _pumpTvSearchScreen(tester);
+      await tester.pumpAndSettle();
+      expect(mic(), findsNothing);
+      expect(calls, isEmpty);
+    });
+
+    testWidgets('a spoken title fills the query, searches and focuses the results', (tester) async {
+      final (client, _) = await _pumpTvSearchScreen(tester);
+      await tester.pumpAndSettle();
+      answer = {'status': 'ok', 'text': ' movie '};
+
+      await tester.tap(mic());
+      await tester.pumpAndSettle();
+
+      final recognise = calls.lastWhere((c) => c.method == 'recognize');
+      expect(recognise.arguments, {'prompt': t.search.voicePrompt});
+      expect(_searchController(tester).text, 'movie');
+      expect(client.queries, ['movie'], reason: 'searched at once, not after the debounce');
+      expect(find.text('Movie 1'), findsOneWidget);
+      expect(FocusManager.instance.primaryFocus?.debugLabel, 'SearchFirstResult');
+      expect(find.byKey(const Key('tv_virtual_keyboard_panel')), findsNothing);
+
+      await tester.pump(const Duration(milliseconds: 600));
+      await tester.pumpAndSettle();
+      expect(client.queries, ['movie'], reason: 'no second search');
+    });
+
+    testWidgets('a cancelled recognition keeps the typed query; an unavailable one says so', (tester) async {
+      final (client, _) = await _pumpTvSearchScreen(tester);
+      await tester.pumpAndSettle();
+      _searchController(tester).text = 'mov';
+      await tester.pumpAndSettle();
+      final queries = [...client.queries];
+
+      await tester.tap(mic());
+      await tester.pumpAndSettle();
+      expect(_searchController(tester).text, 'mov');
+      expect(client.queries, queries);
+
+      answer = {'status': 'unavailable'};
+      await tester.tap(mic());
+      await tester.pumpAndSettle();
+      expect(find.text(t.search.voiceUnavailable), findsOneWidget);
+      expect(_searchController(tester).text, 'mov');
+    });
+
+    testWidgets('D-pad: RIGHT walks field, mic, clear; LEFT walks back', (tester) async {
+      final (_, key) = await _pumpTvSearchScreen(tester);
+      await tester.pumpAndSettle();
+      final searchInput = key.currentState! as SearchInputFocusable;
+      searchInput.submitSearchQuery('movie');
+      await tester.pumpAndSettle();
+      searchInput.focusSearchInput();
+      await tester.pumpAndSettle();
+      String? focused() => FocusManager.instance.primaryFocus?.debugLabel;
+      expect(focused(), 'SearchInput');
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pumpAndSettle();
+      expect(focused(), 'Search.voice');
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pumpAndSettle();
+      expect(focused(), 'Search.clear');
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.pumpAndSettle();
+      expect(focused(), 'Search.voice');
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      await tester.pumpAndSettle();
+      expect(focused(), 'SearchInput');
+
+      // Select on the mic starts listening.
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      await tester.pumpAndSettle();
+      await tester.sendKeyEvent(LogicalKeyboardKey.select);
+      await tester.pumpAndSettle();
+      expect(calls.where((c) => c.method == 'recognize'), hasLength(1));
+    });
   });
 
   testWidgets('a query that matches only a person shows the person instead of No results', (tester) async {

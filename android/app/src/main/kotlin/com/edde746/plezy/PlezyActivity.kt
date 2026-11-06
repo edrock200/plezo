@@ -137,6 +137,7 @@ class PlezyActivity : FlutterActivity() {
   private var flutterSurfaceReconnectPending = false
   private var activityStarted = false
   private val externalPlayerChannel = ExternalPlayerChannel(this)
+  private val voiceSearchChannel = VoiceSearchChannel(this)
   private val userCertificateChannel = UserCertificateChannel()
   private val appIconChannel = AppIconChannel(this)
   private val siloPairingChannel by lazy { SiloPairingChannel(this) }
@@ -680,13 +681,16 @@ class PlezyActivity : FlutterActivity() {
   }
 
   override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-    if (!externalPlayerChannel.onActivityResult(requestCode, resultCode, data)) {
+    if (!externalPlayerChannel.onActivityResult(requestCode, resultCode, data) &&
+      !voiceSearchChannel.onActivityResult(requestCode, resultCode, data)
+    ) {
       super.onActivityResult(requestCode, resultCode, data)
     }
   }
 
   override fun onDestroy() {
     externalPlayerChannel.dispose()
+    voiceSearchChannel.dispose()
     siloPairingChannel.dispose()
     systemBarsInsetsHost?.setOnApplyWindowInsetsListener(null)
     systemBarsInsetsHost = null
@@ -1056,6 +1060,7 @@ class PlezyActivity : FlutterActivity() {
     }
 
     externalPlayerChannel.attach(flutterEngine.dartExecutor.binaryMessenger)
+    voiceSearchChannel.attach(flutterEngine.dartExecutor.binaryMessenger)
     userCertificateChannel.attach(flutterEngine.dartExecutor.binaryMessenger)
     appIconChannel.attach(flutterEngine.dartExecutor.binaryMessenger)
     siloPairingChannel.attach(flutterEngine.dartExecutor.binaryMessenger)
