@@ -54,8 +54,10 @@ import 'silo_api_cache.dart';
 import 'silo_card_overlay_store.dart';
 import 'silo_card_overlays.dart';
 import 'silo_mappers.dart';
+import 'silo_calendar.dart';
 import 'silo_playback_caps.dart';
 import 'silo_series_track_choices.dart';
+import 'silo_requests.dart';
 import 'silo_subtitles.dart';
 import 'silo_track_prefs.dart';
 import 'silo_trickplay.dart';
@@ -64,6 +66,7 @@ import '../source_track_pick_sink.dart';
 part 'silo_client_playback.dart';
 part 'silo_client_subtitles.dart';
 part 'silo_client_track_prefs.dart';
+part 'silo_client_requests.dart';
 
 /// [MediaServerClient] for a Silo server, spoken over the `/api/v2` REST
 /// contract only (the same surface Silo's Android TV app and the Siku Roku

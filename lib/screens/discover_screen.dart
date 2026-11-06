@@ -34,6 +34,7 @@ import '../widgets/clickable_cursor.dart';
 import '../widgets/loading_indicator_box.dart';
 import '../widgets/profile_switching_overlay.dart';
 import 'profile/profile_switch_screen.dart';
+import 'silo/silo_feature_entries.dart';
 import 'profile/profile_teardown.dart';
 import '../profiles/active_profile_provider.dart';
 import '../profiles/profile.dart';
@@ -372,6 +373,9 @@ class _DiscoverScreenState extends State<DiscoverScreen>
 
   void _onDiscoverChanged() {
     if (!mounted) return;
+    // A Home load is when Silo servers come online: learn whether their
+    // profile menu rows (Requests) apply before the menu opens.
+    warmSiloFeatureEntries(Provider.of<MultiServerProvider?>(context, listen: false));
     final generation = _discover.loadGeneration;
     final isNewLoad = generation != _seenLoadGeneration;
     _seenLoadGeneration = generation;
@@ -716,6 +720,9 @@ class _DiscoverScreenState extends State<DiscoverScreen>
     final activeProvider = context.watch<ActiveProfileProvider>();
     final active = activeProvider.active;
     final profiles = activeProvider.profiles;
+    // Silo's Calendar and Requests rows: ask the Silo servers now so the menu
+    // knows whether requests are on when it opens.
+    warmSiloFeatureEntries(Provider.of<MultiServerProvider?>(context, listen: false));
 
     return FocusableAction(
       onPressed: _switchingProfile ? null : () => _userMenuKey.currentState?.showButtonMenu(focusFirstItem: true),
@@ -755,6 +762,7 @@ class _DiscoverScreenState extends State<DiscoverScreen>
               : null,
         ),
       if (switchable.isNotEmpty) const AppMenuDivider(),
+      ...siloFeatureMenuEntries(context.read<MultiServerProvider?>()),
       AppMenuItem<String>(value: 'manage_profiles', icon: Symbols.group_rounded, label: t.profiles.sectionTitle),
       AppMenuItem<String>(value: 'settings', icon: Symbols.settings_rounded, label: t.common.settings),
       AppMenuItem<String>(value: 'logout', icon: Symbols.logout_rounded, label: t.common.logout),
@@ -775,6 +783,7 @@ class _DiscoverScreenState extends State<DiscoverScreen>
       _handleOpenSettings(context);
       return;
     }
+    if (handleSiloFeatureMenuValue(context, context.read<MultiServerProvider?>(), value)) return;
     if (value.startsWith('profile:')) {
       final id = value.substring('profile:'.length);
       final active = context.read<ActiveProfileProvider>();

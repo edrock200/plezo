@@ -35,6 +35,7 @@ import '../widgets/person_search_row.dart';
 import '../utils/focus_utils.dart';
 import 'libraries/state_messages.dart';
 import 'main_screen.dart';
+import 'silo/silo_request_search_section.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -583,7 +584,9 @@ class _SearchScreenState extends State<SearchScreen>
               SliverFillRemaining(
                 child: StateMessageWidget(message: t.explore.searchFailed, icon: Symbols.error_rounded, iconSize: 80),
               )
-            else if (searchResults.isEmpty)
+            else if (searchResults.isEmpty) ...[
+              // Silo: titles the server can request (Silo Android #773).
+              SiloRequestSearchSection(query: lastSearchedQuery, onNavigateLeft: _navigateToSidebar),
               SliverFillRemaining(
                 child: StateMessageWidget(
                   message: t.messages.noResultsFound,
@@ -591,10 +594,11 @@ class _SearchScreenState extends State<SearchScreen>
                   icon: Symbols.search_off_rounded,
                   iconSize: 80,
                 ),
-              )
-            else ...[
+              ),
+            ] else ...[
               if (_showFilterChips) _buildFilterChips(),
               _buildResultsList(context),
+              SiloRequestSearchSection(query: lastSearchedQuery, onNavigateLeft: _navigateToSidebar),
             ],
           ],
         ),

@@ -98,6 +98,8 @@ class Translations with BaseTranslations<AppLocale, Translations> {
 	late final Translations$siloPairing$en siloPairing = Translations$siloPairing$en.internal(_root);
 	late final Translations$siloCardOverlays$en siloCardOverlays = Translations$siloCardOverlays$en.internal(_root);
 	late final Translations$siloEditConnection$en siloEditConnection = Translations$siloEditConnection$en.internal(_root);
+	late final Translations$siloRequests$en siloRequests = Translations$siloRequests$en.internal(_root);
+	late final Translations$siloCalendar$en siloCalendar = Translations$siloCalendar$en.internal(_root);
 }
 
 // Path: app
@@ -6648,6 +6650,264 @@ class Translations$siloEditConnection$en {
 	String get signInAgain => 'Sign in again';
 }
 
+// Path: siloRequests
+class Translations$siloRequests$en {
+	Translations$siloRequests$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Requests'
+	String get title => 'Requests';
+
+	/// en: 'Requests'
+	String get menuEntry => 'Requests';
+
+	/// en: 'Requests · ${server}'
+	String menuEntryOnServer({required Object server}) => 'Requests · ${server}';
+
+	/// en: 'My requests'
+	String get myRequests => 'My requests';
+
+	/// en: 'Search for a movie or series to request'
+	String get searchHint => 'Search for a movie or series to request';
+
+	/// en: 'Titles to request'
+	String get searchResults => 'Titles to request';
+
+	/// en: 'Available to request'
+	String get availableToRequest => 'Available to request';
+
+	/// en: 'Available to request on ${server}'
+	String availableToRequestOnServer({required Object server}) => 'Available to request on ${server}';
+
+	/// en: 'You haven't requested anything yet'
+	String get noRequests => 'You haven\'t requested anything yet';
+
+	/// en: 'Search for a movie or series to request it.'
+	String get noRequestsSubtitle => 'Search for a movie or series to request it.';
+
+	/// en: 'No titles found'
+	String get noResults => 'No titles found';
+
+	/// en: 'Couldn't load your requests'
+	String get loadFailed => 'Couldn\'t load your requests';
+
+	/// en: 'Couldn't search for titles to request'
+	String get searchFailed => 'Couldn\'t search for titles to request';
+
+	/// en: 'Couldn't load this title'
+	String get detailLoadFailed => 'Couldn\'t load this title';
+
+	/// en: 'Couldn't open this title'
+	String get openFailed => 'Couldn\'t open this title';
+
+	/// en: 'Movie'
+	String get movie => 'Movie';
+
+	/// en: 'Series'
+	String get series => 'Series';
+
+	/// en: 'Pending'
+	String get pending => 'Pending';
+
+	/// en: 'On the way'
+	String get onTheWay => 'On the way';
+
+	/// en: 'In library'
+	String get inLibrary => 'In library';
+
+	/// en: 'Needs attention'
+	String get needsAttention => 'Needs attention';
+
+	/// en: 'Unavailable'
+	String get unavailable => 'Unavailable';
+
+	/// en: 'Declined'
+	String get declined => 'Declined';
+
+	/// en: 'Request failed'
+	String get failed => 'Request failed';
+
+	/// en: 'Requested · Pending'
+	String get detailPending => 'Requested · Pending';
+
+	/// en: 'In your library'
+	String get detailInLibrary => 'In your library';
+
+	/// en: 'Waiting for approval'
+	String get waitingForApproval => 'Waiting for approval';
+
+	/// en: 'Queued for download'
+	String get queued => 'Queued for download';
+
+	/// en: 'Downloading'
+	String get downloading => 'Downloading';
+
+	/// en: 'Adding to your library'
+	String get addingToLibrary => 'Adding to your library';
+
+	/// en: 'Partly in your library'
+	String get partlyInLibrary => 'Partly in your library';
+
+	/// en: 'Already requested'
+	String get reasonAlreadyRequested => 'Already requested';
+
+	/// en: 'Already in your library'
+	String get reasonAlreadyAvailable => 'Already in your library';
+
+	/// en: 'Request limit reached'
+	String get reasonQuotaExceeded => 'Request limit reached';
+
+	/// en: 'Requests are turned off'
+	String get reasonRequestsDisabled => 'Requests are turned off';
+
+	/// en: 'You can't request media right now'
+	String get reasonBlocked => 'You can\'t request media right now';
+
+	/// en: 'That request couldn't be submitted'
+	String get reasonInvalid => 'That request couldn\'t be submitted';
+
+	/// en: 'This title is no longer available'
+	String get reasonNotFound => 'This title is no longer available';
+
+	/// en: 'Request'
+	String get request => 'Request';
+
+	/// en: 'Cancel request'
+	String get cancelRequest => 'Cancel request';
+
+	/// en: 'Open in library'
+	String get openInLibrary => 'Open in library';
+
+	/// en: 'Requested'
+	String get requested => 'Requested';
+
+	/// en: 'Request cancelled'
+	String get requestCancelled => 'Request cancelled';
+
+	/// en: 'We couldn't confirm the request. Check My requests before trying again.'
+	String get unconfirmedSubmit => 'We couldn\'t confirm the request. Check My requests before trying again.';
+
+	/// en: 'We couldn't confirm the cancellation. Refresh your requests to check it.'
+	String get unconfirmedCancel => 'We couldn\'t confirm the cancellation. Refresh your requests to check it.';
+
+	/// en: 'Couldn't submit the request'
+	String get submitFailed => 'Couldn\'t submit the request';
+
+	/// en: 'Couldn't cancel the request'
+	String get cancelFailed => 'Couldn\'t cancel the request';
+
+	/// en: 'Requested ${date}'
+	String requestedOn({required Object date}) => 'Requested ${date}';
+
+	/// en: '${count} seasons'
+	String seasonCount({required Object count}) => '${count} seasons';
+
+	/// en: 'Directed by ${name}'
+	String directedBy({required Object name}) => 'Directed by ${name}';
+
+	/// en: 'Starring ${names}'
+	String starring({required Object names}) => 'Starring ${names}';
+
+	/// en: 'TMDB ${rating}'
+	String tmdbRating({required Object rating}) => 'TMDB ${rating}';
+}
+
+// Path: siloCalendar
+class Translations$siloCalendar$en {
+	Translations$siloCalendar$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Calendar'
+	String get title => 'Calendar';
+
+	/// en: 'Calendar'
+	String get menuEntry => 'Calendar';
+
+	/// en: 'Calendar · ${server}'
+	String menuEntryOnServer({required Object server}) => 'Calendar · ${server}';
+
+	/// en: 'Following'
+	String get following => 'Following';
+
+	/// en: 'Trending'
+	String get trending => 'Trending';
+
+	/// en: 'All'
+	String get all => 'All';
+
+	/// en: 'Today'
+	String get today => 'Today';
+
+	/// en: 'This week'
+	String get thisWeek => 'This week';
+
+	/// en: 'Previous week'
+	String get previousWeek => 'Previous week';
+
+	/// en: 'Next week'
+	String get nextWeek => 'Next week';
+
+	/// en: 'Nothing scheduled'
+	String get nothingScheduled => 'Nothing scheduled';
+
+	/// en: 'Nothing from shows you follow'
+	String get emptyFollowingTitle => 'Nothing from shows you follow';
+
+	/// en: 'No upcoming releases this week from shows you watch, favorite, or watchlist. Try Trending or All.'
+	String get emptyFollowingBody => 'No upcoming releases this week from shows you watch, favorite, or watchlist. Try Trending or All.';
+
+	/// en: 'Nothing trending this week'
+	String get emptyTrendingTitle => 'Nothing trending this week';
+
+	/// en: 'No trending releases this week. Try Following or All.'
+	String get emptyTrendingBody => 'No trending releases this week. Try Following or All.';
+
+	/// en: 'Nothing scheduled this week'
+	String get emptyAllTitle => 'Nothing scheduled this week';
+
+	/// en: 'No movie releases or episode airings this week. Try another week.'
+	String get emptyAllBody => 'No movie releases or episode airings this week. Try another week.';
+
+	/// en: 'Couldn't load the calendar'
+	String get loadFailed => 'Couldn\'t load the calendar';
+
+	/// en: 'Try again, or look at another week.'
+	String get loadFailedBody => 'Try again, or look at another week.';
+
+	/// en: 'Movie'
+	String get movie => 'Movie';
+
+	/// en: 'S${season} · E${episode}'
+	String episodeCode({required Object season, required Object episode}) => 'S${season} · E${episode}';
+
+	/// en: 'Watched'
+	String get watched => 'Watched';
+
+	/// en: 'Couldn't open this title'
+	String get openFailed => 'Couldn\'t open this title';
+
+	/// en: 'PREMIERE'
+	String get badgePremiere => 'PREMIERE';
+
+	/// en: 'NEW SEASON'
+	String get badgeNewSeason => 'NEW SEASON';
+
+	/// en: 'FINALE'
+	String get badgeFinale => 'FINALE';
+
+	/// en: 'DIGITAL'
+	String get badgeDigital => 'DIGITAL';
+
+	/// en: 'PHYSICAL'
+	String get badgePhysical => 'PHYSICAL';
+}
+
 // Path: appIcon.names
 class Translations$appIcon$names$en {
 	Translations$appIcon$names$en.internal(this._root);
@@ -11247,6 +11507,88 @@ extension on Translations {
 			'siloEditConnection.back' => 'Choose again',
 			'siloEditConnection.edit' => 'Edit address',
 			'siloEditConnection.signInAgain' => 'Sign in again',
+			'siloRequests.title' => 'Requests',
+			'siloRequests.menuEntry' => 'Requests',
+			'siloRequests.menuEntryOnServer' => ({required Object server}) => 'Requests · ${server}',
+			'siloRequests.myRequests' => 'My requests',
+			'siloRequests.searchHint' => 'Search for a movie or series to request',
+			'siloRequests.searchResults' => 'Titles to request',
+			'siloRequests.availableToRequest' => 'Available to request',
+			'siloRequests.availableToRequestOnServer' => ({required Object server}) => 'Available to request on ${server}',
+			'siloRequests.noRequests' => 'You haven\'t requested anything yet',
+			'siloRequests.noRequestsSubtitle' => 'Search for a movie or series to request it.',
+			'siloRequests.noResults' => 'No titles found',
+			'siloRequests.loadFailed' => 'Couldn\'t load your requests',
+			'siloRequests.searchFailed' => 'Couldn\'t search for titles to request',
+			'siloRequests.detailLoadFailed' => 'Couldn\'t load this title',
+			'siloRequests.openFailed' => 'Couldn\'t open this title',
+			'siloRequests.movie' => 'Movie',
+			'siloRequests.series' => 'Series',
+			'siloRequests.pending' => 'Pending',
+			'siloRequests.onTheWay' => 'On the way',
+			'siloRequests.inLibrary' => 'In library',
+			'siloRequests.needsAttention' => 'Needs attention',
+			'siloRequests.unavailable' => 'Unavailable',
+			'siloRequests.declined' => 'Declined',
+			'siloRequests.failed' => 'Request failed',
+			'siloRequests.detailPending' => 'Requested · Pending',
+			'siloRequests.detailInLibrary' => 'In your library',
+			'siloRequests.waitingForApproval' => 'Waiting for approval',
+			'siloRequests.queued' => 'Queued for download',
+			'siloRequests.downloading' => 'Downloading',
+			'siloRequests.addingToLibrary' => 'Adding to your library',
+			'siloRequests.partlyInLibrary' => 'Partly in your library',
+			'siloRequests.reasonAlreadyRequested' => 'Already requested',
+			'siloRequests.reasonAlreadyAvailable' => 'Already in your library',
+			'siloRequests.reasonQuotaExceeded' => 'Request limit reached',
+			'siloRequests.reasonRequestsDisabled' => 'Requests are turned off',
+			'siloRequests.reasonBlocked' => 'You can\'t request media right now',
+			'siloRequests.reasonInvalid' => 'That request couldn\'t be submitted',
+			'siloRequests.reasonNotFound' => 'This title is no longer available',
+			'siloRequests.request' => 'Request',
+			'siloRequests.cancelRequest' => 'Cancel request',
+			'siloRequests.openInLibrary' => 'Open in library',
+			'siloRequests.requested' => 'Requested',
+			'siloRequests.requestCancelled' => 'Request cancelled',
+			'siloRequests.unconfirmedSubmit' => 'We couldn\'t confirm the request. Check My requests before trying again.',
+			'siloRequests.unconfirmedCancel' => 'We couldn\'t confirm the cancellation. Refresh your requests to check it.',
+			'siloRequests.submitFailed' => 'Couldn\'t submit the request',
+			'siloRequests.cancelFailed' => 'Couldn\'t cancel the request',
+			_ => null,
+		} ?? switch (path) {
+			'siloRequests.requestedOn' => ({required Object date}) => 'Requested ${date}',
+			'siloRequests.seasonCount' => ({required Object count}) => '${count} seasons',
+			'siloRequests.directedBy' => ({required Object name}) => 'Directed by ${name}',
+			'siloRequests.starring' => ({required Object names}) => 'Starring ${names}',
+			'siloRequests.tmdbRating' => ({required Object rating}) => 'TMDB ${rating}',
+			'siloCalendar.title' => 'Calendar',
+			'siloCalendar.menuEntry' => 'Calendar',
+			'siloCalendar.menuEntryOnServer' => ({required Object server}) => 'Calendar · ${server}',
+			'siloCalendar.following' => 'Following',
+			'siloCalendar.trending' => 'Trending',
+			'siloCalendar.all' => 'All',
+			'siloCalendar.today' => 'Today',
+			'siloCalendar.thisWeek' => 'This week',
+			'siloCalendar.previousWeek' => 'Previous week',
+			'siloCalendar.nextWeek' => 'Next week',
+			'siloCalendar.nothingScheduled' => 'Nothing scheduled',
+			'siloCalendar.emptyFollowingTitle' => 'Nothing from shows you follow',
+			'siloCalendar.emptyFollowingBody' => 'No upcoming releases this week from shows you watch, favorite, or watchlist. Try Trending or All.',
+			'siloCalendar.emptyTrendingTitle' => 'Nothing trending this week',
+			'siloCalendar.emptyTrendingBody' => 'No trending releases this week. Try Following or All.',
+			'siloCalendar.emptyAllTitle' => 'Nothing scheduled this week',
+			'siloCalendar.emptyAllBody' => 'No movie releases or episode airings this week. Try another week.',
+			'siloCalendar.loadFailed' => 'Couldn\'t load the calendar',
+			'siloCalendar.loadFailedBody' => 'Try again, or look at another week.',
+			'siloCalendar.movie' => 'Movie',
+			'siloCalendar.episodeCode' => ({required Object season, required Object episode}) => 'S${season} · E${episode}',
+			'siloCalendar.watched' => 'Watched',
+			'siloCalendar.openFailed' => 'Couldn\'t open this title',
+			'siloCalendar.badgePremiere' => 'PREMIERE',
+			'siloCalendar.badgeNewSeason' => 'NEW SEASON',
+			'siloCalendar.badgeFinale' => 'FINALE',
+			'siloCalendar.badgeDigital' => 'DIGITAL',
+			'siloCalendar.badgePhysical' => 'PHYSICAL',
 			_ => null,
 		};
 	}
