@@ -3,6 +3,11 @@ import 'url_utils.dart';
 class LogRedactionManager {
   // Size limits for bounded sets (FIFO eviction when exceeded)
   static const int _maxTokens = 50;
+
+  /// Tokens that rotate (Silo access/refresh pairs) live in their own ring,
+  /// so a backend that refreshes often can never push a long-lived token
+  /// (Plex account, Jellyfin access token) out of [_tokens].
+  static const int _maxRotatingTokens = 40;
   // Each server registers up to 8 literals (slash/origin/mpv-escaped
   // variants), so keep headroom for several servers before FIFO eviction.
   static const int _maxUrls = 40;
@@ -10,6 +15,7 @@ class LogRedactionManager {
 
   // Set literals are insertion-ordered, so the oldest entry is evicted first.
   static final Set<String> _tokens = <String>{};
+  static final Set<String> _rotatingTokens = <String>{};
   static final Set<String> _urls = <String>{};
   static final Set<String> _customValues = <String>{};
 
@@ -56,6 +62,22 @@ class LogRedactionManager {
     }
 
     _rebuildCombinedPattern();
+  }
+
+  /// Register a token that is replaced on refresh (a Silo access or refresh
+  /// token). It is kept in a separate bounded ring: the oldest rotated token
+  /// falls out of that ring, never a token registered with [registerToken].
+  static void registerRotatingToken(String? token) {
+    final normalized = _normalize(token);
+    if (normalized == null) return;
+    final encoded = Uri.encodeQueryComponent(normalized);
+    var changed = false;
+    for (final value in {normalized, encoded}) {
+      if (_tokens.contains(value) || _rotatingTokens.contains(value)) continue;
+      _addWithLimit(_rotatingTokens, value, _maxRotatingTokens);
+      changed = true;
+    }
+    if (changed) _rebuildCombinedPattern();
   }
 
   /// Register the server/base URL currently in use.
@@ -123,6 +145,7 @@ class LogRedactionManager {
   /// Reset any tracked sensitive values (e.g., on logout).
   static void clearTrackedValues() {
     _tokens.clear();
+    _rotatingTokens.clear();
     _urls.clear();
     _customValues.clear();
     _combinedPattern = null;
@@ -138,7 +161,7 @@ class LogRedactionManager {
     if (_combinedPattern != null) {
       redacted = redacted.replaceAllMapped(_combinedPattern!, (match) {
         final value = match.group(0)!;
-        if (_tokens.contains(value)) return '[REDACTED_TOKEN]';
+        if (_tokens.contains(value) || _rotatingTokens.contains(value)) return '[REDACTED_TOKEN]';
         if (_urls.contains(value)) return '[REDACTED_URL]';
         return '[REDACTED]';
       });
@@ -403,6 +426,7 @@ class LogRedactionManager {
   static void _rebuildCombinedPattern() {
     final allLiterals = [
       ..._tokens.map(RegExp.escape),
+      ..._rotatingTokens.map(RegExp.escape),
       ..._urls.map(RegExp.escape),
       ..._customValues.map(RegExp.escape),
     ];
