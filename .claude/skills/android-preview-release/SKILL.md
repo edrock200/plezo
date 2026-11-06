@@ -144,3 +144,12 @@ There is no `/dev/kvm`, so an emulator cannot run; on-device testing is the user
 - `arm64-v8a`: most phones, tablets, Nvidia Shield, recent Fire TV and Google TV devices.
 - `armeabi-v7a`: 32-bit devices, including Chromecast with Google TV and many TV sticks.
 - `x86_64`: emulators and x86 devices.
+
+## Workflow notes (2.25.15)
+- Publishing and the fixed-link refresh run in the non-cancelling `publish-android` job (concurrency group
+  `silo-preview-apk-publish-<ref>`); a push during the build still cancels the build, a push during publishing waits.
+- `scripts/silo_announce_discord.py --self-test` checks the webhook URL handling.
+- Kotlin compile in cloud sessions: `ANDROID_HOME=/opt/android-sdk ./gradlew -q :app:compileDebugKotlin -x
+  :app:prepareMpvFfmpegDevelopment -x :app:downloadLibdovi -Pkotlin.compiler.execution.strategy=in-process`, then
+  `rm -rf android/build`.
+

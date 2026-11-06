@@ -4,6 +4,19 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **Audiobooks from your Silo server:** Silo audiobook libraries now show in Plezilo. Each book has a page with its authors, narrators, parts and chapters, and Play, Resume or Start over. The player saves your place on the server, moves by chapter or 30 seconds, plays at 0.75× to 2×, and works from the lock screen and notifications. If the server drops the session it picks up where it was; if an administrator stops it, Plezilo says so. (Silo has no music libraries yet, so there's nothing to show for music.)
+- **Requests and Calendar for Silo:** your profile menu has a Calendar with the week's new episodes and movie releases (Following, Trending or All) and badges like PREMIERE and FINALE, and — when your Silo server has requests on — a Requests page to search, request and follow movies and series. Search also shows titles "Available to request".
+- **Series remember your audio and subtitles:** the audio and subtitle tracks you pick for a show on a Silo server carry over to its next episodes on any device, and episodes follow your Silo profile's subtitle setting (Off, Auto or Always).
+- **Silo's download list:** downloads from a Silo server now show in the server's download list and count toward its limits; deleting one removes it there too, and if an administrator removes a download, Plezilo deletes your copy and tells you. Where the server can convert downloads, you can pick a smaller copy (for example "5 Mbps · up to 1080p").
+- **Fix a Silo server without removing it:** the Silo server on a profile's page has "Sign in again" and "Edit address", and the "Session expired" banner signs you in again directly. Your profiles and downloads stay, and the old session is signed out on the server.
+- **Safer sign-in:** if a Silo server only answers over plain HTTP, Plezilo asks before sending your password or code, and marks the server "Not encrypted".
+- **Fixes:**
+  - A Silo server that's down is no longer checked every few seconds; Plezilo checks less and less often (up to every 10 minutes) and notices when it's back.
+  - Signing in again signs the old session out on the server instead of leaving it in the device list.
+  - Copied logs keep hiding your Plex, Jellyfin and Emby sign-ins however often Silo renews its own.
+  - On Android TV the microphone question only appears when Gboard is the keyboard; Fire TV and other keyboards aren't asked.
+  - Plezy's update-feed details are gone from the Mac and Windows apps.
+
 ## silo-preview-2.25.14
 
 Released November 6, 2026. Android and Windows.

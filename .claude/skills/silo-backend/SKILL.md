@@ -543,3 +543,36 @@ PIN length (matches Silo's apps). Open follow-ups: an edit screen for an existin
 - **Playback refused:** read the `Silo playback plan: delivery=… reason=…` log line; a
   `terminal.message` from `outcome: adaptation_unavailable` is shown to the user verbatim.
 - **Download "needs a newer server":** the server lacks `/direct-download/links`.
+
+## Added in 2.25.15 (review fixes + five features)
+- **Edit / Sign in again** (`silo_connection_edit.dart`, part `add_silo_screen_edit.dart`): the edit address must answer
+  `/system/identity` with the saved `serverId`; the same id (server/user/profile) replaces the row in place (id, bindings and
+  download scope kept) and revokes the old session with the old tokens only (via `removeSiloConnection` before saving, so the
+  old client can't write its rotated pair over the new row); an address-only save re-reads the row and saves only if unchanged
+  (3 tries); another id gets a confirmation step, then the multi-account rule.
+- **Series track memory** (`silo_track_prefs.dart`, `silo_series_track_choices.dart`, part `silo_client_track_prefs.dart`):
+  `PUT /audio-prefs/{series_id}` `{audio_track_index (position in audio_tracks), audio_language?, track_signature?}` and
+  `PUT /subtitle-prefs/{series_id}` `{subtitle_language, subtitle_track_index (= combined_index), subtitle_mode,
+  track_signature?}` (Off = `"", -1, "off"`); episodes only; start applies the server's effective choice (direct play audio;
+  subtitles via a port of `resolveAutoSubtitle`, Off reaches the player as `defaultSubtitleStreamIndex: -1`); manual picks are
+  debounced 1.5 s, one in flight per series/kind, retried once, held in memory only; no DELETE (no Auto row).
+- **Audiobooks** (`silo_audiobook.dart`, `silo_audiobook_player.dart`, part `silo_client_audiobooks.dart`,
+  `lib/screens/silo/silo_audiobook_*`): mapped as `MediaKind.album` + `raw['type']=='audiobook'`, opened from
+  `navigateToAlbum`; one session per part (`progress_persistence: client`), whole-book `/sync/progress`; #708 rules in
+  `SiloAudiobookSessionRules`. Music stays hidden: the v2 contract has no music kinds. No mini-player/bookmarks/sleep timer.
+- **Requests & Calendar** (`silo_requests.dart`, `silo_calendar.dart`, part `silo_client_requests.dart`,
+  `lib/screens/silo/silo_feature_entries.dart`): profile-menu rows; requests gated by `/requests/status`
+  (`SiloRequestsApi.enabled`, 30 s fresh, keeps the last answer on failure); creates/cancels never resent ("uncertain" holds
+  the action); calendar regroups by device-local day, time zone sent is a best guess (`siloCalendarTimeZone`). Never add Silo
+  reads to `_homeSections` (the request-counting tests in silo_client_test break).
+- **Managed downloads** (`silo_download_registry.dart`, `silo_managed_downloads.dart`, part `silo_client_downloads.dart`):
+  used when `/capabilities/downloads` lists `bounded_creation` + `ordered_status`; reconcile then `POST /downloads` with
+  `expected_revision`; PATCH status events; DELETE (queued up to 30 days offline); originals keep the header-free direct link,
+  prepared copies use `/downloads/{id}/file` with auth headers on the task (stored in app-private task records); revocation
+  removes local copies when `revoked_removes_local`.
+- **Review fixes**: Silo tokens go through `LogRedactionManager.registerRotatingToken`; plain-HTTP consent in `_probe`;
+  `checkHealth` never calls `onServerUnreachable` (probe `reportUnreachable: false`, backed-off re-check 30 s → 10 min); a
+  re-sign-in that replaces a session logs the old one out; the overlay store is disposed with its client;
+  `sortedBySiloBindingPreference` is the only account-order rule. Open: `removeServer` still closes Silo clients without
+  logout; linux packaging/flatpak metainfo still link edde746/plezy.
+

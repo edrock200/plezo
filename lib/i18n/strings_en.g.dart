@@ -3438,11 +3438,11 @@ class Translations$errors$en {
 	/// en: 'an unexpected error occurred'
 	String get reasonUnexpected => 'an unexpected error occurred';
 
-	/// en: 'An admin set a temporary password for this account. Remove this Silo server in Settings and add it again to choose your own.'
-	String get siloTemporaryPassword => 'An admin set a temporary password for this account. Remove this Silo server in Settings and add it again to choose your own.';
+	/// en: 'An admin set a temporary password for this account. Open this Silo server on your profile page and choose Sign in again to choose your own.'
+	String get siloTemporaryPassword => 'An admin set a temporary password for this account. Open this Silo server on your profile page and choose Sign in again to choose your own.';
 
-	/// en: 'this account has a temporary password; remove the Silo server in Settings and add it again to choose your own'
-	String get reasonSiloTemporaryPassword => 'this account has a temporary password; remove the Silo server in Settings and add it again to choose your own';
+	/// en: 'this account has a temporary password; choose Sign in again on the Silo server in your profile to choose your own'
+	String get reasonSiloTemporaryPassword => 'this account has a temporary password; choose Sign in again on the Silo server in your profile to choose your own';
 }
 
 // Path: libraries
@@ -10338,8 +10338,8 @@ extension on Translations {
 			'errors.reasonServerError' => 'the server reported an error',
 			'errors.reasonCancelled' => 'the request was cancelled',
 			'errors.reasonUnexpected' => 'an unexpected error occurred',
-			'errors.siloTemporaryPassword' => 'An admin set a temporary password for this account. Remove this Silo server in Settings and add it again to choose your own.',
-			'errors.reasonSiloTemporaryPassword' => 'this account has a temporary password; remove the Silo server in Settings and add it again to choose your own',
+			'errors.siloTemporaryPassword' => 'An admin set a temporary password for this account. Open this Silo server on your profile page and choose Sign in again to choose your own.',
+			'errors.reasonSiloTemporaryPassword' => 'this account has a temporary password; choose Sign in again on the Silo server in your profile to choose your own',
 			'libraries.title' => 'Libraries',
 			'libraries.fallbackTitle' => 'Library',
 			'libraries.scanLibraryFiles' => 'Scan Library Files',

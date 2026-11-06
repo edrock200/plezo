@@ -1288,8 +1288,8 @@
     "reasonServerError": "the server reported an error",
     "reasonCancelled": "the request was cancelled",
     "reasonUnexpected": "an unexpected error occurred",
-    "siloTemporaryPassword": "An admin set a temporary password for this account. Remove this Silo server in Settings and add it again to choose your own.",
-    "reasonSiloTemporaryPassword": "this account has a temporary password; remove the Silo server in Settings and add it again to choose your own"
+    "siloTemporaryPassword": "An admin set a temporary password for this account. Open this Silo server on your profile page and choose Sign in again to choose your own.",
+    "reasonSiloTemporaryPassword": "this account has a temporary password; choose Sign in again on the Silo server in your profile to choose your own"
   },
   "libraries": {
     "title": "Libraries",
