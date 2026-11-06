@@ -2849,5 +2849,23 @@
     "badgeFinale": "FINALE",
     "badgeDigital": "DIGITAL",
     "badgePhysical": "PHYSICAL"
+  },
+  "siloManagedDownloads": {
+    "qualityTitle": "Download quality",
+    "qualityOriginal": "Original quality",
+    "qualityBitrate": "${mbps} Mbps",
+    "qualityBitrateUpTo": "${mbps} Mbps · up to ${resolution}",
+    "preparing": "The server is preparing this download",
+    "preparingQueued": "The server is preparing this download (number ${position} in line)",
+    "preparingProgress": "The server is preparing this download (${percent}%)",
+    "errorInvalidAnswer": "The server sent an incomplete answer about this download. Try again.",
+    "errorLimitReached": "You have reached this server's download limit. Try again later.",
+    "errorNotAllowed": "This server does not allow downloads for your account.",
+    "errorChanged": "This download changed on the server. Try again.",
+    "errorQualityUnavailable": "The server can't prepare this title in the chosen quality. Choose another quality.",
+    "errorPreparationFailed": "The server could not prepare this download. Try again or choose another quality.",
+    "errorRevoked": "An administrator removed this download on the server.",
+    "revokedNotice": "An administrator removed \"${title}\" from your downloads. The copy on this device was deleted.",
+    "revokedNoticeUntitled": "An administrator removed a download. The copy on this device was deleted."
   }
 }

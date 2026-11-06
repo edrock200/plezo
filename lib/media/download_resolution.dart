@@ -68,11 +68,74 @@ class DownloadResolution {
   /// stacked across several files. Empty for a single-file version.
   final List<DownloadPartResolution> additionalParts;
 
+  /// HTTP headers the native download task sends with [videoUrl]. Empty for
+  /// self-authorising URLs (the usual case). Silo's prepared downloads are
+  /// served only to an authenticated, profile- and device-scoped request.
+  final Map<String, String> headers;
+
   const DownloadResolution({
     required this.videoUrl,
     this.mediaSourceId,
     this.externalSubtitles = const [],
     this.externalSubtitlesResolved = true,
     this.additionalParts = const [],
+    this.headers = const {},
   });
+}
+
+/// The server accepted the download but its file is not ready yet (Silo
+/// prepares a converted copy first). The download waits [retryAfter] and
+/// asks again; it is not a failure and spends no retry.
+class DownloadNotReadyException implements Exception {
+  /// Shown on the download row while it waits.
+  final String message;
+  final Duration retryAfter;
+
+  const DownloadNotReadyException(this.message, {this.retryAfter = const Duration(seconds: 30)});
+
+  @override
+  String toString() => 'DownloadNotReadyException: $message';
+}
+
+/// A backend that keeps a server-side record of each download (Silo's
+/// managed downloads registry) and follows the local copy's life. Registered
+/// once at start-up in [DownloadServerTrackers]; the download manager calls
+/// it with the download's global key and never waits for the server.
+abstract interface class DownloadServerTracker {
+  /// Every file of [globalKey] is stored locally.
+  Future<void> localCopyCompleted(String globalKey);
+
+  /// The local copy of [globalKey] is gone (deleted by the user, revoked,
+  /// cleaned up).
+  Future<void> localCopyRemoved(String globalKey);
+}
+
+/// The registered [DownloadServerTracker]s. Each call is best effort: a
+/// tracker's failure is its own business and never reaches the caller.
+abstract final class DownloadServerTrackers {
+  static final List<DownloadServerTracker> _trackers = [];
+
+  static void register(DownloadServerTracker tracker) {
+    if (!_trackers.contains(tracker)) _trackers.add(tracker);
+  }
+
+  static void unregister(DownloadServerTracker tracker) => _trackers.remove(tracker);
+
+  static void notifyCompleted(String globalKey) {
+    for (final tracker in List.of(_trackers)) {
+      _guard(() => tracker.localCopyCompleted(globalKey));
+    }
+  }
+
+  static void notifyRemoved(String globalKey) {
+    for (final tracker in List.of(_trackers)) {
+      _guard(() => tracker.localCopyRemoved(globalKey));
+    }
+  }
+
+  static void _guard(Future<void> Function() call) {
+    try {
+      call().catchError((Object _) {});
+    } catch (_) {}
+  }
 }

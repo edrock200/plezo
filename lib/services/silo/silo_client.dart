@@ -40,6 +40,7 @@ import '../../models/transcode_quality_preset.dart';
 import '../../mpv/mpv.dart';
 import '../../utils/app_logger.dart';
 import '../../utils/external_ids.dart';
+import '../../utils/global_key_utils.dart';
 import '../../utils/log_redaction_manager.dart';
 import '../../utils/media_server_http_client.dart';
 import '../../utils/url_utils.dart';
@@ -53,6 +54,8 @@ import 'silo_api.dart';
 import 'silo_api_cache.dart';
 import 'silo_card_overlay_store.dart';
 import 'silo_card_overlays.dart';
+import 'silo_download_registry.dart';
+import 'silo_managed_downloads.dart';
 import 'silo_mappers.dart';
 import 'silo_calendar.dart';
 import 'silo_playback_caps.dart';
@@ -67,6 +70,7 @@ part 'silo_client_playback.dart';
 part 'silo_client_subtitles.dart';
 part 'silo_client_track_prefs.dart';
 part 'silo_client_requests.dart';
+part 'silo_client_downloads.dart';
 
 /// [MediaServerClient] for a Silo server, spoken over the `/api/v2` REST
 /// contract only (the same surface Silo's Android TV app and the Siku Roku
@@ -80,7 +84,7 @@ part 'silo_client_requests.dart';
 /// client remembers the cursor that reaches each offset of a query and walks
 /// forward when asked for one it has not seen.
 class SiloClient
-    with MediaServerCacheMixin, _SiloPlaybackMethods, _SiloSubtitleMethods, _SiloTrackPrefsMethods
+    with MediaServerCacheMixin, _SiloPlaybackMethods, _SiloSubtitleMethods, _SiloTrackPrefsMethods, _SiloDownloadMethods
     implements MediaServerClient, ScopedMediaServerClient, GracefullyCloseable, RemoteTrailerClient {
   SiloClient._({required this._connection, required this._api});
 
@@ -116,6 +120,11 @@ class SiloClient
     api.onTokensRefreshed = client._handleTokensRefreshed;
     api.onSessionExpired = () => client._sessionExpired = true;
     api.onServerUnreachable = () => client.onServerUnreachable?.call();
+    SiloManagedDownloads.instance.attach(
+      connection.id,
+      client._downloadRegistry,
+      isOffline: () => client._offlineMode || client._sessionExpired,
+    );
     return client;
   }
 
@@ -249,12 +258,15 @@ class SiloClient
   @override
   void close() {
     _trackChoices.close();
+    SiloManagedDownloads.instance.detach(connection.id, _downloadRegistry);
     _api.close();
   }
 
   @override
-  Future<void> closeGracefully({Duration drainTimeout = const Duration(seconds: 2)}) =>
-      _api.closeGracefully(drainTimeout: drainTimeout);
+  Future<void> closeGracefully({Duration drainTimeout = const Duration(seconds: 2)}) {
+    SiloManagedDownloads.instance.detach(connection.id, _downloadRegistry);
+    return _api.closeGracefully(drainTimeout: drainTimeout);
+  }
 
   @override
   bool get isOfflineMode => _offlineMode;
