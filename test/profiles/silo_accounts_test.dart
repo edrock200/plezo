@@ -80,6 +80,18 @@ void main() {
     });
   });
 
+  test('sortedBySiloBindingPreference: default, then most recently used, then lowest id', () {
+    final rows = [('c', false, 300), ('b', false, null), ('a', false, null), ('d', true, 100), ('e', false, 500)];
+    final sorted = sortedBySiloBindingPreference(
+      rows,
+      isDefault: (r) => r.$2,
+      lastUsedMs: (r) => r.$3,
+      connectionId: (r) => r.$1,
+    );
+    expect(sorted.map((r) => r.$1), ['d', 'e', 'c', 'a', 'b']);
+    expect(rows.first.$1, 'c', reason: 'the input is left as it was');
+  });
+
   test('siloAccountLabel names the Silo profile and, when different, the username', () {
     expect(siloAccountLabel(laura), 'Laura (laura)');
     expect(siloAccountLabel(_silo(profileName: 'laura')), 'laura');
