@@ -1141,6 +1141,10 @@ class TrackSelectionService {
             return TrackSelectionResult(matchedMpvTrack, TrackSelectionPriority.serverSelected);
           }
         }
+      } else if (metadata.backend == MediaBackend.silo && info.defaultSubtitleStreamIndex == -1) {
+        // Silo: the series' remembered choice (or the profile's cascade)
+        // resolved to Off for this episode (SiloTrackPrefs).
+        return TrackSelectionResult(SubtitleTrack.off, TrackSelectionPriority.serverSelected);
       } else if (metadata.backend == MediaBackend.plex && info.subtitleTracks.isNotEmpty) {
         if (availableTracks.isEmpty && waitForPendingSource) return null;
         // Native tracks exist and none maps to a server-selected stream.

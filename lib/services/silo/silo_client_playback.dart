@@ -10,6 +10,7 @@ class _SiloPlaybackSession {
     this.subtitleInventory = const [],
     this.audioTracks = const [],
     this.selectedAudioIndex,
+    this.seriesKey,
   });
 
   final String sessionId;
@@ -21,6 +22,10 @@ class _SiloPlaybackSession {
   final List<Map<dynamic, dynamic>> subtitleInventory;
   final List<Map<dynamic, dynamic>> audioTracks;
   final int? selectedAudioIndex;
+
+  /// The series an episode's track picks are remembered under (Silo Android
+  /// #680); null for movies and extras.
+  final String? seriesKey;
 
   /// Strictly increasing per session; the server rejects lower values.
   int sequence = 0;
@@ -51,6 +56,22 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
   final Map<String, String> _playingFileIds = {};
 
   static String _watchPath(String id) => SiloApiCache.watchEndpoint(id);
+
+  // Series-wide track memory, implemented in `silo_client_track_prefs.dart`.
+  SiloSeriesTrackChoices get _trackChoices;
+  int? _seriesStartAudio({
+    required String? seriesKey,
+    required Map<String, dynamic> version,
+    required bool isOriginal,
+    required int? planSelected,
+  });
+  SiloSubtitleStart _seriesStartSubtitle({
+    required String? seriesKey,
+    required Map<String, dynamic>? watch,
+    required List<SiloSubtitleCandidate> candidates,
+    required Object? audioLanguage,
+  });
+  MediaSourceInfo _applySubtitleStart(MediaSourceInfo info, SiloSubtitleStart start);
 
   /// Cache key of the watch detail fetched for one file. The plain path stays
   /// the key of the file-less detail that downloads pin.
@@ -205,6 +226,9 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
       // Refresh the access token before handing it to the player: the
       // stream URL and its headers are fixed for the session.
       await _api.refreshTokensIfHalfSpent();
+      // A series pick still queued (made moments ago on the previous
+      // episode) gets a short chance to land first, so this answer has it.
+      await _trackChoices.flush();
       watch = await _watchDetail(metadata.id, forceRefresh: true);
     } catch (error, stackTrace) {
       final missing = error is MediaServerHttpException && (error.statusCode == 404 || error.statusCode == 422);
@@ -271,9 +295,15 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
     final subtitle = plan['subtitle'];
     final inventory = subtitle is Map ? subtitle['inventory'] : null;
     final selected = plan['selected_tracks'];
-    final selectedAudio = selected is Map && selected['audio'] is Map
+    final planAudio = selected is Map && selected['audio'] is Map
         ? ((selected['audio'] as Map)['index'] as num?)?.toInt()
         : audioIndex;
+    // Episodes start with the series' remembered audio (Silo Android #680)
+    // unless the viewer asked for a track.
+    final seriesKey = extraFileId == null ? SiloTrackPrefs.seriesKey(watch) : null;
+    final selectedAudio = audioIndex != null
+        ? planAudio
+        : _seriesStartAudio(seriesKey: seriesKey, version: version, isOriginal: isOriginal, planSelected: planAudio);
     _playingFileIds[metadata.id] = fileId;
     _sessions[sessionId] = _SiloPlaybackSession(
       sessionId: sessionId,
@@ -285,6 +315,7 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
           ? (version['audio_tracks'] as List).whereType<Map>().toList()
           : const [],
       selectedAudioIndex: selectedAudio,
+      seriesKey: seriesKey,
     );
 
     // Sidecars: the original file already carries its embedded subtitles,
@@ -350,7 +381,7 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
     }
 
     final videoUrl = _streamUrl(rawUrl);
-    final mediaInfo = SiloMappers.sourceInfo(
+    var mediaInfo = SiloMappers.sourceInfo(
       version,
       videoUrl: videoUrl,
       mediaIndex: versionIndex,
@@ -360,6 +391,17 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
       unplayableSubtitleIndexes: unplayableIndexes,
       extraSubtitleTracks: storedTracks,
     );
+    if (seriesKey != null && inventory is List) {
+      mediaInfo = _applySubtitleStart(
+        mediaInfo,
+        _seriesStartSubtitle(
+          seriesKey: seriesKey,
+          watch: watch,
+          candidates: _startSubtitleCandidates(inventory, isOriginal: isOriginal, sidecars: sidecars),
+          audioLanguage: _audioLanguage(version, selectedAudio),
+        ),
+      );
+    }
 
     appLogger.i(
       'Silo playback plan: delivery=$delivery reason=${plan['decision_reason']} '
@@ -381,6 +423,35 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
       selectedMediaIndex: versionIndex,
       selectedMediaSourceId: fileId,
     );
+  }
+
+  /// The inventory rows an episode's start may pick: every row the server
+  /// can show on an original file (the player demuxes the file itself), only
+  /// the rows delivered as sidecars otherwise (nothing else reaches the
+  /// player on a remux or transcode).
+  static List<SiloSubtitleCandidate> _startSubtitleCandidates(
+    List<dynamic> inventory, {
+    required bool isOriginal,
+    required List<PlaybackSubtitleSidecar> sidecars,
+  }) {
+    final sidecarIds = {for (final s in sidecars) ?s.sourceStreamId};
+    final candidates = <SiloSubtitleCandidate>[];
+    for (final row in inventory.whereType<Map>()) {
+      if (SiloSubtitleRules.isUnplayable(row)) continue;
+      final id = _SiloTrackPrefsMethods._inventoryTrackId(row);
+      if (id == null) continue;
+      if (!isOriginal && !sidecarIds.contains(id)) continue;
+      candidates.add(SiloSubtitleCandidate.fromInventory(row, id: id));
+    }
+    return candidates;
+  }
+
+  static Object? _audioLanguage(Map<String, dynamic> version, int? ordinal) {
+    final tracks = version['audio_tracks'];
+    if (tracks is! List || tracks.isEmpty) return null;
+    final rows = tracks.whereType<Map>().toList();
+    if (ordinal != null && ordinal >= 0 && ordinal < rows.length) return rows[ordinal]['language'];
+    return (rows.where((t) => t['default'] == true).firstOrNull ?? rows.firstOrNull)?['language'];
   }
 
   // ---------------------------------------------------------------------------
