@@ -158,6 +158,23 @@ class MediaServerHttpClient {
     abort: abort,
   );
 
+  Future<MediaServerResponse> patch(
+    String path, {
+    Map<String, dynamic>? queryParameters,
+    Map<String, String>? headers,
+    Object? body,
+    Duration? timeout,
+    AbortController? abort,
+  }) => _send(
+    'PATCH',
+    path,
+    queryParameters: queryParameters,
+    headers: headers,
+    body: body,
+    timeout: timeout,
+    abort: abort,
+  );
+
   Future<MediaServerResponse> delete(
     String path, {
     Map<String, dynamic>? queryParameters,

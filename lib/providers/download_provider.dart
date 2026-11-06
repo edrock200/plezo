@@ -2092,6 +2092,27 @@ class DownloadProvider extends ChangeNotifier with DisposableChangeNotifierMixin
   Future<void> deleteDownload(String globalKey) =>
       _deleteDownload(globalKey, notify: true, profileGeneration: _profileGeneration);
 
+  /// Remove a download its server revoked (Silo's administrator revocation):
+  /// the file goes for every profile that holds it, not only the active one.
+  /// Returns the title for the notice, or null when nothing was stored.
+  Future<String?> removeRevokedDownload(String globalKey) async {
+    final row = await _database.getDownloadedMedia(globalKey);
+    if (row == null) return null;
+    final meta = _metadata[globalKey];
+    final owners = await _database.getValidDownloadOwnersForKey(globalKey);
+    await _downloadManager.deleteDownload(globalKey);
+    for (final owner in owners) {
+      await _releaseDownloadForProfile(globalKey, owner.profileId, ownerHint: owner);
+    }
+    _downloads.remove(globalKey);
+    _metadata.remove(globalKey);
+    _artworkPaths.remove(globalKey);
+    _downloadLibraries.remove(globalKey);
+    if (meta != null) DeletionNotifier().notifyDeletedItem(item: meta, isDownloadOnly: true);
+    safeNotifyListeners();
+    return meta?.displayTitle ?? '';
+  }
+
   /// Delete every downloaded title of the collection at
   /// [collectionGlobalKey]: a movie's download, a show's episodes.
   Future<void> deleteCollectionDownloads(String collectionGlobalKey) async {

@@ -429,6 +429,14 @@ class SiloApi {
       'GET' => _http.get(path, queryParameters: query, headers: headers, timeout: timeout, abort: abort),
       'POST' => _http.post(path, queryParameters: query, headers: headers, body: body, timeout: timeout, abort: abort),
       'PUT' => _http.put(path, queryParameters: query, headers: headers, body: body, timeout: timeout, abort: abort),
+      'PATCH' => _http.patch(
+        path,
+        queryParameters: query,
+        headers: headers,
+        body: body,
+        timeout: timeout,
+        abort: abort,
+      ),
       'DELETE' => _deleteWithBody(path, query, headers, body, timeout, abort),
       _ => throw ArgumentError.value(method, 'method'),
     };

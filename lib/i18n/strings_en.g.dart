@@ -97,6 +97,7 @@ class Translations with BaseTranslations<AppLocale, Translations> {
 	late final Translations$deepLinks$en deepLinks = Translations$deepLinks$en.internal(_root);
 	late final Translations$siloPairing$en siloPairing = Translations$siloPairing$en.internal(_root);
 	late final Translations$siloCardOverlays$en siloCardOverlays = Translations$siloCardOverlays$en.internal(_root);
+	late final Translations$siloManagedDownloads$en siloManagedDownloads = Translations$siloManagedDownloads$en.internal(_root);
 }
 
 // Path: app
@@ -6584,6 +6585,63 @@ class Translations$siloCardOverlays$en {
 	String get upcoming => 'Upcoming';
 }
 
+// Path: siloManagedDownloads
+class Translations$siloManagedDownloads$en {
+	Translations$siloManagedDownloads$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Download quality'
+	String get qualityTitle => 'Download quality';
+
+	/// en: 'Original quality'
+	String get qualityOriginal => 'Original quality';
+
+	/// en: '${mbps} Mbps'
+	String qualityBitrate({required Object mbps}) => '${mbps} Mbps';
+
+	/// en: '${mbps} Mbps · up to ${resolution}'
+	String qualityBitrateUpTo({required Object mbps, required Object resolution}) => '${mbps} Mbps · up to ${resolution}';
+
+	/// en: 'The server is preparing this download'
+	String get preparing => 'The server is preparing this download';
+
+	/// en: 'The server is preparing this download (number ${position} in line)'
+	String preparingQueued({required Object position}) => 'The server is preparing this download (number ${position} in line)';
+
+	/// en: 'The server is preparing this download (${percent}%)'
+	String preparingProgress({required Object percent}) => 'The server is preparing this download (${percent}%)';
+
+	/// en: 'The server sent an incomplete answer about this download. Try again.'
+	String get errorInvalidAnswer => 'The server sent an incomplete answer about this download. Try again.';
+
+	/// en: 'You have reached this server's download limit. Try again later.'
+	String get errorLimitReached => 'You have reached this server\'s download limit. Try again later.';
+
+	/// en: 'This server does not allow downloads for your account.'
+	String get errorNotAllowed => 'This server does not allow downloads for your account.';
+
+	/// en: 'This download changed on the server. Try again.'
+	String get errorChanged => 'This download changed on the server. Try again.';
+
+	/// en: 'The server can't prepare this title in the chosen quality. Choose another quality.'
+	String get errorQualityUnavailable => 'The server can\'t prepare this title in the chosen quality. Choose another quality.';
+
+	/// en: 'The server could not prepare this download. Try again or choose another quality.'
+	String get errorPreparationFailed => 'The server could not prepare this download. Try again or choose another quality.';
+
+	/// en: 'An administrator removed this download on the server.'
+	String get errorRevoked => 'An administrator removed this download on the server.';
+
+	/// en: 'An administrator removed "${title}" from your downloads. The copy on this device was deleted.'
+	String revokedNotice({required Object title}) => 'An administrator removed "${title}" from your downloads. The copy on this device was deleted.';
+
+	/// en: 'An administrator removed a download. The copy on this device was deleted.'
+	String get revokedNoticeUntitled => 'An administrator removed a download. The copy on this device was deleted.';
+}
+
 // Path: appIcon.names
 class Translations$appIcon$names$en {
 	Translations$appIcon$names$en.internal(this._root);
@@ -11165,6 +11223,22 @@ extension on Translations {
 			'siloCardOverlays.ended' => 'Ended',
 			'siloCardOverlays.cancelled' => 'Cancelled',
 			'siloCardOverlays.upcoming' => 'Upcoming',
+			'siloManagedDownloads.qualityTitle' => 'Download quality',
+			'siloManagedDownloads.qualityOriginal' => 'Original quality',
+			'siloManagedDownloads.qualityBitrate' => ({required Object mbps}) => '${mbps} Mbps',
+			'siloManagedDownloads.qualityBitrateUpTo' => ({required Object mbps, required Object resolution}) => '${mbps} Mbps · up to ${resolution}',
+			'siloManagedDownloads.preparing' => 'The server is preparing this download',
+			'siloManagedDownloads.preparingQueued' => ({required Object position}) => 'The server is preparing this download (number ${position} in line)',
+			'siloManagedDownloads.preparingProgress' => ({required Object percent}) => 'The server is preparing this download (${percent}%)',
+			'siloManagedDownloads.errorInvalidAnswer' => 'The server sent an incomplete answer about this download. Try again.',
+			'siloManagedDownloads.errorLimitReached' => 'You have reached this server\'s download limit. Try again later.',
+			'siloManagedDownloads.errorNotAllowed' => 'This server does not allow downloads for your account.',
+			'siloManagedDownloads.errorChanged' => 'This download changed on the server. Try again.',
+			'siloManagedDownloads.errorQualityUnavailable' => 'The server can\'t prepare this title in the chosen quality. Choose another quality.',
+			'siloManagedDownloads.errorPreparationFailed' => 'The server could not prepare this download. Try again or choose another quality.',
+			'siloManagedDownloads.errorRevoked' => 'An administrator removed this download on the server.',
+			'siloManagedDownloads.revokedNotice' => ({required Object title}) => 'An administrator removed "${title}" from your downloads. The copy on this device was deleted.',
+			'siloManagedDownloads.revokedNoticeUntitled' => 'An administrator removed a download. The copy on this device was deleted.',
 			_ => null,
 		};
 	}

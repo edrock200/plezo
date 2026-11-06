@@ -52,6 +52,9 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
 
   static String _watchPath(String id) => SiloApiCache.watchEndpoint(id);
 
+  /// Register a download with Silo's managed registry (`_SiloDownloadMethods`).
+  Future<_SiloManagedDownload?> _managedDownload(MediaItem item, Map<String, dynamic> watch, String fileId);
+
   /// Cache key of the watch detail fetched for one file. The plain path stays
   /// the key of the file-less detail that downloads pin.
   static String _watchFileKey(String id, String fileId) =>
@@ -423,8 +426,11 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
     final fileId = version['file_id']?.toString();
     if (fileId == null || fileId.isEmpty) return const DownloadResolution(videoUrl: null);
 
-    var url = await _directDownloadUrl(fileId);
-    final container = version['container']?.toString().trim().toLowerCase();
+    // A server with the managed registry gets the download registered
+    // first; it may serve a prepared copy (another quality) instead.
+    final managed = await _managedDownload(item, watch, fileId);
+    var url = managed?.url ?? await _directDownloadUrl(fileId);
+    final container = managed?.container ?? version['container']?.toString().trim().toLowerCase();
     if (container != null && container.isNotEmpty && !url.contains('#')) url = '$url#container=$container';
 
     var subtitles = const <DownloadSubtitleSpec>[];
@@ -444,6 +450,7 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
       mediaSourceId: fileId,
       externalSubtitles: subtitles,
       externalSubtitlesResolved: subtitlesResolved,
+      headers: managed?.headers ?? const {},
     );
   }
 

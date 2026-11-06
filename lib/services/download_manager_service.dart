@@ -233,6 +233,11 @@ class DownloadManagerService {
   // App-level auto-retry timers for downloads that exhausted native retries.
   // Keyed by globalKey; each timer fires a fresh re-enqueue after a delay.
   final Map<String, Timer> _autoRetryTimers = {};
+
+  /// Queued downloads whose server is still preparing the file (Silo's
+  /// converted copies), and when to ask again. The queue skips them until
+  /// then; the row stays queued, so a restart simply asks again.
+  final Map<String, DateTime> _serverPreparingUntil = {};
   final Duration _autoRetryDelay;
 
   // Circuit breaker: consecutive instant failures in _processQueue.
@@ -490,6 +495,7 @@ class DownloadManagerService {
         root = await _safStorage.resolvePersistedPermissionUri(videoUri);
       }
       final deletedRoot = await _database.deleteDownload(globalKey);
+      if (row != null) DownloadServerTrackers.notifyRemoved(globalKey);
       root ??= deletedRoot;
       if (root != null) {
         await _releaseSafRootIfUnowned(root);
@@ -1113,6 +1119,7 @@ class DownloadManagerService {
           if (item.nextMissingPartIndex == null) {
             appLogger.i('Download ${item.globalKey} has video but incomplete post-processing, completing');
             await _database.updateDownloadStatus(item.globalKey, DownloadStatus.completed.index);
+            DownloadServerTrackers.notifyCompleted(item.globalKey);
             _emitProgress(item.globalKey, DownloadStatus.completed, 100);
             continue;
           }
@@ -1688,6 +1695,7 @@ class DownloadManagerService {
   void _cancelDownloadTimers(String key) {
     _progressDebounceTimers.remove(key)?.cancel();
     _autoRetryTimers.remove(key)?.cancel();
+    _serverPreparingUntil.remove(key);
     _storedPartBytes.remove(key);
   }
 
@@ -1929,6 +1937,9 @@ class DownloadManagerService {
         // next lookup so the drain advances instead of re-reading the same row.
         final skippedGlobalKeys = <String>{};
         while (!_queueBlockedByStorageFailure) {
+          // Rows still waiting for their server to prepare the file stay
+          // queued but are not asked again before their time.
+          skippedGlobalKeys.addAll(_keysWaitingForServer());
           if (_consecutiveQueueFailures >= _maxConsecutiveFailures) {
             appLogger.w('Circuit breaker: $_consecutiveQueueFailures consecutive failures, pausing queue');
             break;
@@ -2183,9 +2194,44 @@ class DownloadManagerService {
         showYear: showYear,
       );
       return true;
+    } on DownloadNotReadyException catch (e) {
+      return _waitForServerPreparation(globalKey, client, e);
     } catch (e, st) {
       return _handleEnqueueFailure(globalKey, client, e, st);
     }
+  }
+
+  /// Queued downloads still waiting for their server to prepare the file.
+  Set<String> _keysWaitingForServer() {
+    final now = DateTime.now();
+    _serverPreparingUntil.removeWhere((_, until) => !until.isAfter(now));
+    return _serverPreparingUntil.keys.toSet();
+  }
+
+  /// The server accepted [globalKey] but prepares its file first: keep it
+  /// queued (no failure, no retry spent) and ask again after the wait.
+  Future<bool> _waitForServerPreparation(
+    String globalKey,
+    MediaServerClient client,
+    DownloadNotReadyException e,
+  ) async {
+    if (await _isCancelledOrDeleted(globalKey)) {
+      await _database.removeFromQueue(globalKey);
+      _pendingDownloadContext.remove(globalKey);
+      return true;
+    }
+    appLogger.i('Download $globalKey waits ${e.retryAfter.inSeconds}s for the server to prepare its file');
+    _pendingDownloadContext.remove(globalKey);
+    _serverPreparingUntil[globalKey] = DateTime.now().add(e.retryAfter);
+    await _database.updateDownloadStatus(globalKey, DownloadStatus.queued.index);
+    _emitProgress(globalKey, DownloadStatus.queued, 0, errorMessage: e.message);
+    _autoRetryTimers.remove(globalKey)?.cancel();
+    _autoRetryTimers[globalKey] = Timer(e.retryAfter, () {
+      _autoRetryTimers.remove(globalKey);
+      _serverPreparingUntil.remove(globalKey);
+      if (!_disposed) unawaited(_processQueue(client));
+    });
+    return true;
   }
 
   /// Fail — or schedule an app-level retry of — a download whose next task
@@ -2344,6 +2390,7 @@ class DownloadManagerService {
           allowPause: true,
           metaData: globalKey,
           displayName: displayName,
+          headers: resolution.headers,
         );
         filePath = safDirUri;
         safRootUri = rootUri;
@@ -2389,6 +2436,7 @@ class DownloadManagerService {
           allowPause: true,
           metaData: globalKey,
           displayName: displayName,
+          headers: resolution.headers,
         );
         filePath = downloadFilePath;
         safRootUri = null;
@@ -3466,6 +3514,7 @@ class DownloadManagerService {
   /// Default progress is 0 for most statuses, 100 for completed.
   Future<void> _transitionStatus(String globalKey, DownloadStatus status, {int? progress, String? errorMessage}) async {
     await _database.updateDownloadStatus(globalKey, status.index);
+    if (status == DownloadStatus.completed) DownloadServerTrackers.notifyCompleted(globalKey);
     if (status == DownloadStatus.failed && errorMessage != null) {
       await _database.updateDownloadError(globalKey, errorMessage);
     }
@@ -4534,6 +4583,7 @@ class DownloadManagerService {
       timer.cancel();
     }
     _autoRetryTimers.clear();
+    _serverPreparingUntil.clear();
     _pendingDownloadContext.clear();
     _storedPartBytes.clear();
     _completingKeys.clear();

@@ -14,6 +14,7 @@ import '../providers/download_provider.dart';
 import '../providers/multi_server_provider.dart';
 import '../services/playlist_items_loader.dart';
 import '../services/settings_service.dart';
+import '../services/silo/silo_client.dart';
 import '../services/sync_rule_executor.dart';
 import '../widgets/background_download_warning_banner.dart';
 import 'app_logger.dart';
@@ -173,6 +174,9 @@ Future<DownloadResult?> showDownloadOptionsAndQueue(
   final versionConfig = await resolveDownloadVersion(context, metadata, client);
   if (versionConfig == null || !context.mounted) return null;
 
+  if (client is SiloClient && !await chooseSiloDownloadQuality(context, client, metadata)) return null;
+  if (!context.mounted) return null;
+
   // Create or update sync rule before queueing (so the rule exists even if queue fails)
   bool syncRuleUpdated = false;
   if (keepSynced) {
@@ -211,6 +215,32 @@ Future<DownloadResult?> showDownloadOptionsAndQueue(
     syncRuleUpdated: syncRuleUpdated,
     isMusic: kind.isMusic,
   );
+}
+
+/// Offer the Silo server's download qualities (original, or a prepared copy
+/// at a bitrate cap) when it has more than one for this account, and
+/// remember the pick for [metadata] (and the episodes under a season or
+/// show). False when the user dismissed the picker. Servers without the
+/// managed registry show nothing and download originals as before.
+Future<bool> chooseSiloDownloadQuality(BuildContext context, SiloClient client, MediaItem metadata) async {
+  final choices = await client.downloadQualityChoices();
+  if (choices.isEmpty) return true;
+  if (!context.mounted) return false;
+  final picked = await showOptionPickerDialog<String>(
+    context,
+    title: t.siloManagedDownloads.qualityTitle,
+    options: [
+      for (final quality in choices)
+        (
+          icon: quality.isOriginal ? Symbols.high_quality_rounded : Symbols.compress_rounded,
+          label: quality.label,
+          value: quality.preset,
+        ),
+    ],
+  );
+  if (picked == null) return false;
+  await client.setDownloadQuality(metadata.id, picked);
+  return true;
 }
 
 /// Run [showDownloadOptionsAndQueue] and surface the outcome: a success

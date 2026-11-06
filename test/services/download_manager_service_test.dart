@@ -3578,6 +3578,104 @@ void main() {
     });
   });
 
+  group('server-tracked downloads', () {
+    ({DownloadManagerService manager, StreamIterator<Task> tasks}) startManager(
+      _SupplementaryFixture fixture,
+      MediaServerClient client,
+    ) {
+      final enqueued = StreamController<Task>();
+      final manager = DownloadManagerService(
+        database: fixture.db,
+        storageService: fixture.storage,
+        clientResolver: (serverId, {clientScopeId}) => client,
+        downloadsSupportedOverride: true,
+        fileDownloaderInitializerOverride: () async {},
+        enqueueTaskOverride: (task) async {
+          enqueued.add(task);
+          return true;
+        },
+      );
+      addTearDown(() {
+        manager.dispose();
+        unawaited(enqueued.close());
+      });
+      return (manager: manager, tasks: StreamIterator(enqueued.stream));
+    }
+
+    test('a file the server is still preparing waits queued, spends no retry and is not asked again early', () async {
+      final fixture = await _createSupplementaryFixture();
+      var attempts = 0;
+      final client = _SupplementaryClient(
+        metadata: fixture.metadata,
+        resolution: () {
+          attempts++;
+          throw const DownloadNotReadyException('Preparing on the server', retryAfter: Duration(hours: 1));
+        },
+      );
+      final (:manager, tasks: _) = startManager(fixture, client);
+      final globalKey = fixture.metadata.globalKey;
+      final waiting = manager.progressStream.firstWhere(
+        (event) => event.globalKey == globalKey && event.errorMessage == 'Preparing on the server',
+      );
+
+      await manager.queueDownload(metadata: fixture.metadata, client: client);
+      final event = await waiting.timeout(const Duration(seconds: 10));
+      expect(event.status, DownloadStatus.queued);
+
+      final row = await fixture.db.getDownloadedMedia(globalKey);
+      expect(row?.status, DownloadStatus.queued.index);
+      expect(row?.retryCount, 0);
+      final queue = await fixture.db.select(fixture.db.downloadQueue).get();
+      expect(queue.map((q) => q.mediaGlobalKey), [globalKey], reason: 'a restart asks again');
+
+      manager.resumeQueuedDownloads(client);
+      for (var i = 0; i < 20; i++) {
+        await Future<void>.delayed(Duration.zero);
+      }
+      expect(attempts, 1);
+    });
+
+    test('the resolution headers ride with the native task; completion and deletion reach the trackers', () async {
+      final fixture = await _createSupplementaryFixture();
+      final tracker = _RecordingServerTracker();
+      DownloadServerTrackers.register(tracker);
+      addTearDown(() => DownloadServerTrackers.unregister(tracker));
+      final client = _SupplementaryClient(
+        metadata: fixture.metadata,
+        resolution: () => const DownloadResolution(
+          videoUrl: 'https://example.test/api/v2/downloads/dl-1/file#container=mp4',
+          headers: {'Authorization': 'Bearer t', 'X-Silo-Device-Id': 'dev'},
+        ),
+      );
+      final (:manager, :tasks) = startManager(fixture, client);
+      final globalKey = fixture.metadata.globalKey;
+
+      await manager.queueDownload(metadata: fixture.metadata, client: client);
+      expect(await tasks.moveNext().timeout(const Duration(seconds: 10)), isTrue);
+      final task = tasks.current;
+      expect(task.headers, {'Authorization': 'Bearer t', 'X-Silo-Device-Id': 'dev'});
+      expect(task.filename, endsWith('.mp4'));
+
+      final file = File(p.join(await fixture.storage.baseAppDirectoryPath(), task.directory, task.filename));
+      await file.parent.create(recursive: true);
+      await file.writeAsString('video');
+      await manager.debugHandleTaskStatus(TaskStatusUpdate(task, TaskStatus.complete));
+      expect(tracker.events, contains('completed $globalKey'));
+
+      // A manager without the native downloader deletes without its platform calls.
+      final deleter = DownloadManagerService(
+        database: fixture.db,
+        storageService: fixture.storage,
+        clientResolver: (serverId, {clientScopeId}) => client,
+        downloadsSupportedOverride: false,
+      );
+      addTearDown(deleter.dispose);
+      await deleter.deleteDownload(globalKey);
+      expect(await fixture.db.getDownloadedMedia(globalKey), isNull);
+      expect(tracker.events.last, 'removed $globalKey');
+    });
+  });
+
   group('SAF downloads', () {
     test('a new attempt sweeps every numbered copy of its file and enqueues a pausable task', () async {
       final fixture = await _createSupplementaryFixture(saf: true);
@@ -4715,4 +4813,14 @@ class _DirectCachePlexClient implements MediaServerClient, ScopedMediaServerClie
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _RecordingServerTracker implements DownloadServerTracker {
+  final events = <String>[];
+
+  @override
+  Future<void> localCopyCompleted(String globalKey) async => events.add('completed $globalKey');
+
+  @override
+  Future<void> localCopyRemoved(String globalKey) async => events.add('removed $globalKey');
 }

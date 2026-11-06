@@ -69,6 +69,7 @@ import 'providers/offline_mode_provider.dart';
 import 'providers/offline_watch_provider.dart';
 import 'providers/shader_provider.dart';
 import 'utils/snackbar_helper.dart';
+import 'utils/layout_constants.dart';
 import 'services/multi_server_manager.dart';
 import 'services/library_events/library_event_service.dart';
 import 'services/offline_watch_sync_service.dart';
@@ -82,6 +83,7 @@ import 'services/connectivity_probe.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'services/jellyfin_api_cache.dart';
 import 'services/silo/silo_api_cache.dart';
+import 'services/silo/silo_managed_downloads.dart';
 import 'services/plex_api_cache.dart';
 import 'services/plezy_server.dart';
 import 'database/app_database.dart';
@@ -1840,7 +1842,25 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
         // Download provider. Downloads are shared, but sync rules are scoped to
         // the active profile and reload when the profile changes.
         ChangeNotifierProxyProvider<ActiveProfileProvider, DownloadProvider>(
-          create: (context) => DownloadProvider(downloadManager: _downloadManager, database: _appDatabase),
+          create: (context) {
+            final provider = DownloadProvider(downloadManager: _downloadManager, database: _appDatabase);
+            // Silo's managed downloads: registration, completion and deletion
+            // reports, and removal of downloads an administrator revoked.
+            SiloManagedDownloads.instance.configure(
+              persistence: PrefsSiloManagedDownloadPersistence(),
+              onRevoked: (globalKey) async {
+                final title = await provider.removeRevokedDownload(globalKey);
+                if (title == null) return;
+                showMainSnackBar(
+                  title.isEmpty
+                      ? t.siloManagedDownloads.revokedNoticeUntitled
+                      : t.siloManagedDownloads.revokedNotice(title: title),
+                  duration: AppDurations.snackBarLong,
+                );
+              },
+            );
+            return provider;
+          },
           update: (context, activeProfile, previous) {
             final provider = previous!;
             provider.setActiveProfileId(activeProfile.activeId);
