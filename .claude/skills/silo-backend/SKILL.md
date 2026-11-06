@@ -565,6 +565,19 @@ PIN length (matches Silo's apps). Open follow-ups: an edit screen for an existin
   (`SiloRequestsApi.enabled`, 30 s fresh, keeps the last answer on failure); creates/cancels never resent ("uncertain" holds
   the action); calendar regroups by device-local day, time zone sent is a best guess (`siloCalendarTimeZone`). Never add Silo
   reads to `_homeSections` (the request-counting tests in silo_client_test break).
+  Remove a failed request (Silo Android #792): `SiloMediaRequest.isRemovableFailure` (outcome `failed`, no target
+  `completed`), offered only while `/requests/status` says `remove_failed_supported` (`SiloRequestsApi.removeFailedSupported`,
+  `canRemove`); the confirmation names the title with Keep focused (`confirmSiloRequestRemoval`); `removeFailed` sends one
+  `DELETE /requests/{id}` (204, and 404 = removed elsewhere; both are announced on `requests.removals`, which My requests,
+  the detail page and search's "Available to request" listen to: row dropped, title requestable via `SiloRequestState.without`).
+  409 `conflict` → re-read + "changed since the list loaded"; 409 `capability_*` → status re-read; uncertain → a re-read
+  decides, nothing held (a resend that landed answers 404). The 404 shows "Request removed" too (Silo shows nothing).
+- **TV voice search** (Silo Android #830; not Silo-specific): `VoiceSearchService` (`com.plezy/voice_search`,
+  `VoiceSearchChannel.kt`) hands listening to the system recogniser (`ACTION_RECOGNIZE_SPEECH`, free-form, no language or
+  max-results extras, the assistant/voice-interaction package preferred over the recognition service when several handle
+  it; manifest `<queries>` entry needed). Android TV hardware only (`isTVDevice`, not force-TV), hidden when nothing
+  resolves; the mic sits right of the field (`SearchInputField.onVoiceSearch`, RIGHT field → mic → clear) and a result
+  goes through `submitSearchQuery` (results take focus). No RECORD_AUDIO for it; 2.25.11's Gboard mic request is separate.
 - **Managed downloads** (`silo_download_registry.dart`, `silo_managed_downloads.dart`, part `silo_client_downloads.dart`):
   used when `/capabilities/downloads` lists `bounded_creation` + `ordered_status`; reconcile then `POST /downloads` with
   `expected_revision`; PATCH status events; DELETE (queued up to 30 days offline); originals keep the header-free direct link,

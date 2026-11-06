@@ -4,6 +4,9 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **Remove a failed request:** in Requests, a request of yours that failed without delivering anything now has a Remove button (also on the title's page). Plezilo asks first, naming the title, then removes it and lets you request the title again. A request that delivered one quality before failing keeps its record. If the request changed since the list loaded (an administrator retried it, say), Plezilo shows its current state and says why it wasn't removed. This needs a Silo server that supports removing failed requests; older servers show no button.
+- **Voice search on Android TV and Fire TV:** the search screen has a microphone button right of the search field. Press it and speak a title; your TV's own voice recogniser listens through the remote and Plezilo searches for what you said and moves to the results. This also works on Google TV, where Gboard's mic key didn't type into Plezilo. The button only shows when the TV has a speech recogniser installed.
+
 ## silo-preview-2.25.15
 
 Released November 6, 2026. Android and Windows.
