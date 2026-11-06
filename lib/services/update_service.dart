@@ -15,8 +15,12 @@ import 'base_shared_preferences_service.dart';
 /// via auto_updater for native update dialogs and in-app installs.
 /// On all other platforms: falls back to GitHub API check + browser link dialog.
 class UpdateService {
-  static const String _githubRepo = 'edde746/plezy';
-  static const String _feedUrl = 'https://cdn.jsdelivr.net/gh/edde746/plezy@appcast/appcast.xml';
+  /// Where Plezilo's releases and appcast would live. None is set: Plezilo
+  /// has no update feed of its own yet, and it must never check Plezy's
+  /// (edde746/plezy) — that would offer to install Plezy over Plezilo. With
+  /// either unset the update check stays off even when ENABLE_UPDATE_CHECK is.
+  static const String? _githubRepo = null;
+  static const String? _feedUrl = null;
 
   static const String _keySkippedVersion = 'update_skipped_version';
   static const String _keyLastCheckTime = 'update_last_check_time';
@@ -28,8 +32,12 @@ class UpdateService {
 
   /// Check if update checking is enabled via build flag
   static bool get isUpdateCheckEnabled {
-    return const bool.fromEnvironment('ENABLE_UPDATE_CHECK', defaultValue: false);
+    return const bool.fromEnvironment('ENABLE_UPDATE_CHECK', defaultValue: false) && hasUpdateSource;
   }
+
+  /// Whether a Plezilo release repository and appcast are configured.
+  @visibleForTesting
+  static bool get hasUpdateSource => _githubRepo != null && _feedUrl != null;
 
   /// Whether any in-app update path applies to this install.
   /// False inside a packaged (MSIX/Store) install: the Store owns updates and
@@ -52,8 +60,10 @@ class UpdateService {
   static Future<void> initNativeUpdater() async {
     if (_nativeUpdaterInitialized) return;
 
+    final feedUrl = _feedUrl;
+    if (feedUrl == null) return;
     try {
-      await autoUpdater.setFeedURL(_feedUrl);
+      await autoUpdater.setFeedURL(feedUrl);
       _nativeUpdaterInitialized = true;
     } catch (error, stackTrace) {
       appLogger.e('Failed to initialize native auto updater', error: error, stackTrace: stackTrace);
@@ -135,6 +145,7 @@ class UpdateService {
     MediaServerHttpClient? client,
     bool forceEnabled = false,
     bool throwOnFailure = false,
+    String? repoOverride,
   }) async {
     if (!forceEnabled && !isUpdateCheckAvailable) {
       return null;
@@ -145,6 +156,8 @@ class UpdateService {
       return null;
     }
 
+    final repo = repoOverride ?? _githubRepo;
+    if (repo == null) return null;
     try {
       final packageInfo = await PackageInfo.fromPlatform();
       final currentVersion = packageInfo.version;
@@ -154,7 +167,7 @@ class UpdateService {
       }
 
       final response = await (client ?? httpClient).get(
-        'https://api.github.com/repos/$_githubRepo/releases/latest',
+        'https://api.github.com/repos/$repo/releases/latest',
         headers: {'Accept': 'application/vnd.github+json'},
       );
 
@@ -199,12 +212,14 @@ class UpdateService {
     required bool respectCooldown,
     required MediaServerHttpClient client,
     bool throwOnFailure = false,
+    String repo = 'example/test-repo',
   }) {
     return _performUpdateCheck(
       respectCooldown: respectCooldown,
       client: client,
       forceEnabled: true,
       throwOnFailure: throwOnFailure,
+      repoOverride: repo,
     );
   }
 
