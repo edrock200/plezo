@@ -828,3 +828,14 @@ class SiloAuthService {
     );
   }
 }
+
+/// Whether [baseUrl] is plain HTTP: the password, sign-in and tokens would
+/// travel unencrypted, so the sign-in screen asks first (as Silo's apps do).
+bool siloUsesPlainHttp(String baseUrl) => Uri.tryParse(baseUrl.trim())?.scheme.toLowerCase() == 'http';
+
+/// `host[:port]` of [baseUrl], for messages.
+String siloHostLabel(String baseUrl) {
+  final uri = Uri.tryParse(baseUrl);
+  if (uri == null || uri.host.isEmpty) return baseUrl;
+  return uri.hasPort ? '${uri.host}:${uri.port}' : uri.host;
+}

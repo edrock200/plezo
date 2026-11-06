@@ -97,6 +97,7 @@ class Translations with BaseTranslations<AppLocale, Translations> {
 	late final Translations$deepLinks$en deepLinks = Translations$deepLinks$en.internal(_root);
 	late final Translations$siloPairing$en siloPairing = Translations$siloPairing$en.internal(_root);
 	late final Translations$siloCardOverlays$en siloCardOverlays = Translations$siloCardOverlays$en.internal(_root);
+	late final Translations$reviewFixes$en reviewFixes = Translations$reviewFixes$en.internal(_root);
 }
 
 // Path: app
@@ -6584,6 +6585,27 @@ class Translations$siloCardOverlays$en {
 	String get upcoming => 'Upcoming';
 }
 
+// Path: reviewFixes
+class Translations$reviewFixes$en {
+	Translations$reviewFixes$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Connect without encryption?'
+	String get plainHttpTitle => 'Connect without encryption?';
+
+	/// en: '${server} answered only over plain HTTP. Your password, sign-in code and what you watch will be sent unencrypted. Only do this on a network you trust.'
+	String plainHttpMessage({required Object server}) => '${server} answered only over plain HTTP. Your password, sign-in code and what you watch will be sent unencrypted. Only do this on a network you trust.';
+
+	/// en: 'Connect'
+	String get plainHttpConfirm => 'Connect';
+
+	/// en: 'Not encrypted (HTTP)'
+	String get plainHttpBadge => 'Not encrypted (HTTP)';
+}
+
 // Path: appIcon.names
 class Translations$appIcon$names$en {
 	Translations$appIcon$names$en.internal(this._root);
@@ -11165,6 +11187,10 @@ extension on Translations {
 			'siloCardOverlays.ended' => 'Ended',
 			'siloCardOverlays.cancelled' => 'Cancelled',
 			'siloCardOverlays.upcoming' => 'Upcoming',
+			'reviewFixes.plainHttpTitle' => 'Connect without encryption?',
+			'reviewFixes.plainHttpMessage' => ({required Object server}) => '${server} answered only over plain HTTP. Your password, sign-in code and what you watch will be sent unencrypted. Only do this on a network you trust.',
+			'reviewFixes.plainHttpConfirm' => 'Connect',
+			'reviewFixes.plainHttpBadge' => 'Not encrypted (HTTP)',
 			_ => null,
 		};
 	}
