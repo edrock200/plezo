@@ -121,6 +121,31 @@ void main() {
     expect(indicators(tester).single.showWatchStatus, isTrue);
   });
 
+  testWidgets("a card whose client closed its store switches to the replacement client's store", (tester) async {
+    final old = SiloCardOverlayStore(
+      cacheKey: 'srv/u/old',
+      readConfig: () async => {'enabled': true},
+      readValues: () async => null,
+    );
+    final replacement = SiloCardOverlayStore(
+      cacheKey: 'srv/u/new',
+      readConfig: () async => {'enabled': false},
+      readValues: () async => null,
+    );
+    var current = old;
+    CardArtworkOverlays.debugStoreResolver = (context, item) => current;
+    await tester.pumpWidget(_app(_card(_movie(MediaBackend.silo))));
+    await tester.pumpAndSettle();
+    expect(find.byType(SiloCardOverlayLayer), findsOneWidget);
+
+    // The client is replaced: the old one disposes its store on close.
+    current = replacement;
+    old.dispose();
+    await tester.pumpAndSettle();
+    expect(replacement.value, isNotNull, reason: 'the card loaded the new store');
+    expect(find.byType(SiloCardOverlayLayer), findsNothing, reason: 'it draws what the new store says');
+  });
+
   testWidgets('Plex, Jellyfin and Emby cards are unchanged', (tester) async {
     final store = _store({'enabled': true});
     var asked = 0;

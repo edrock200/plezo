@@ -534,5 +534,39 @@ void main() {
       await Future<void>.delayed(Duration.zero);
       expect(store.value!.prefs.items['resolution']!.image, isNull);
     });
+
+    test('the remembered settings are bounded and forgotten for a removed connection', () async {
+      for (var i = 0; i < SiloCardOverlayStore.maxKnown + 10; i++) {
+        final store = SiloCardOverlayStore(
+          cacheKey: 'srv/u/p$i',
+          readConfig: () async => {'enabled': true},
+          readValues: () async => null,
+        );
+        await store.ensureLoaded();
+        store.dispose();
+      }
+      expect(SiloCardOverlayStore.knownCountForTesting, SiloCardOverlayStore.maxKnown);
+      final last = 'srv/u/p${SiloCardOverlayStore.maxKnown + 9}';
+      SiloCardOverlayStore build(String key) =>
+          SiloCardOverlayStore(cacheKey: key, readConfig: () async => null, readValues: () async => null);
+      expect(build(last).value, isNotNull);
+      expect(build('srv/u/p0').value, isNull, reason: 'the oldest fell out');
+      SiloCardOverlayStore.forget(last);
+      expect(build(last).value, isNull);
+    });
+
+    test('dispose tells listeners once and is idempotent', () {
+      final store = SiloCardOverlayStore(
+        cacheKey: 'srv/u/d',
+        readConfig: () async => null,
+        readValues: () async => null,
+      );
+      var notified = 0;
+      store.addListener(() => notified++);
+      store.dispose();
+      store.dispose();
+      expect(notified, 1);
+      expect(store.isDisposed, isTrue);
+    });
   });
 }

@@ -53,8 +53,10 @@ class _FakeSilo {
   bool refuseRefresh = false;
   Future<void>? refreshGate;
   final logouts = <String?>[];
+  int probes = 0;
 
   Future<http.Response> handle(http.Request request) async {
+    if (request.url.path == '/api/v2/account/me') probes++;
     if (down) throw http.ClientException('connection refused', request.url);
     final path = request.url.path;
     if (path == '/api/v2/auth/refresh') {
@@ -125,8 +127,38 @@ void main() {
         expect(m.isServerOnline(ServerId('srv-1')), isFalse);
 
         server.down = false;
-        async.elapse(const Duration(seconds: 12));
+        async.elapse(SiloClient.offlineRecheckBaseDelay + const Duration(seconds: 12));
         expect(m.isServerOnline(ServerId('srv-1')), isTrue, reason: 'a failed probe re-arms the check');
+        m.dispose();
+      });
+    });
+
+    test('an offline server is re-checked with a growing wait, not every few seconds', () {
+      fakeAsync((async) {
+        final m = manager();
+        m.addSiloConnection(_connection());
+        async.flushMicrotasks();
+        server.down = true;
+        final client = m.getClient(ServerId('srv-1'))! as SiloClient;
+        quietly(client.fetchLibraries);
+        async.flushMicrotasks();
+        quietly(client.fetchLibraries);
+        async.flushMicrotasks();
+        async.elapse(const Duration(seconds: 6));
+        expect(m.isServerOnline(ServerId('srv-1')), isFalse);
+        server.probes = 0;
+
+        // Ten minutes down: the waits are 30 s, 60 s, 120 s, 240 s, … and
+        // each re-check is the manager's verify probe plus its reconnect.
+        async.elapse(const Duration(minutes: 10));
+        expect(server.probes, lessThanOrEqualTo(10), reason: 'the old loop probed about every 5 s (~120 times)');
+        expect(server.probes, greaterThanOrEqualTo(4), reason: 'it is still re-checked');
+        expect(client.offlineRecheckDelay, greaterThan(SiloClient.offlineRecheckBaseDelay));
+
+        server.down = false;
+        async.elapse(SiloClient.offlineRecheckMaxDelay + const Duration(seconds: 10));
+        expect(m.isServerOnline(ServerId('srv-1')), isTrue);
+        expect(client.offlineRecheckDelay, SiloClient.offlineRecheckBaseDelay, reason: 'back online resets the wait');
         m.dispose();
       });
     });
@@ -246,6 +278,18 @@ void main() {
       await m.addSiloConnection(_connection(accessToken: 'acc-new', refreshToken: 'ref-new'));
       expect(built.last.connection.refreshToken, 'ref-new');
       expect(built.last.ownsRefreshToken('ref-1'), isFalse);
+      await pumpEventQueue();
+      expect(server.logouts, ['Bearer acc-1'], reason: 'the replaced session is revoked with its own token');
+    });
+
+    test('a changed row of the same login session does not log out', () async {
+      final m = manager();
+      addTearDown(m.dispose);
+      await m.addSiloConnection(_connection());
+      await m.addSiloConnection(_connection(profileToken: 'pin-2'));
+      await pumpEventQueue();
+      expect(built, hasLength(2));
+      expect(server.logouts, isEmpty);
     });
   });
 

@@ -34,8 +34,27 @@ class SiloCardOverlayStore extends ValueNotifier<SiloCardOverlaySettings?> {
   static bool _never() => false;
 
   /// Settled values by [cacheKey] (the Silo connection id), for clients
-  /// rebuilt in this process.
+  /// rebuilt in this process. Bounded (least recently written first out) and
+  /// pruned when a connection is removed ([forget]).
   static final _known = <String, SiloCardOverlaySettings>{};
+
+  /// The most connections [_known] remembers.
+  @visibleForTesting
+  static const maxKnown = 32;
+
+  static void _remember(String key, SiloCardOverlaySettings settings) {
+    _known.remove(key);
+    _known[key] = settings;
+    while (_known.length > maxKnown) {
+      _known.remove(_known.keys.first);
+    }
+  }
+
+  /// Forget the remembered settings of a removed connection.
+  static void forget(String cacheKey) => _known.remove(cacheKey);
+
+  @visibleForTesting
+  static int get knownCountForTesting => _known.length;
 
   @visibleForTesting
   static void resetKnownForTesting() => _known.clear();
@@ -105,7 +124,7 @@ class SiloCardOverlayStore extends ValueNotifier<SiloCardOverlaySettings?> {
       settled = settled.withoutImage(ref);
     }
     _signature = signature;
-    _known[cacheKey] = settled;
+    _remember(cacheKey, settled);
     value = settled;
   }
 
@@ -126,14 +145,22 @@ class SiloCardOverlayStore extends ValueNotifier<SiloCardOverlaySettings?> {
       if (_disposed || current == null) return;
       final next = current.withoutImage(ref);
       if (identical(next, current)) return;
-      _known[cacheKey] = next;
+      _remember(cacheKey, next);
       value = next;
     });
   }
 
+  /// Whether the client that owned this store closed it. Cards holding it
+  /// look up their item's live client again.
+  bool get isDisposed => _disposed;
+
+  /// Disposed with its client. Listeners hear one last notification first,
+  /// so a card still showing this store switches to its replacement's.
   @override
   void dispose() {
+    if (_disposed) return;
     _disposed = true;
+    notifyListeners();
     super.dispose();
   }
 }
