@@ -61,6 +61,7 @@ Map<String, dynamic> _record(
   String outcome = 'active',
   String? state,
   String created = '2026-01-02T03:04:05.000Z',
+  List<Map<String, dynamic>> targets = const [],
 }) => {
   'id': id,
   'provider': 'tmdb',
@@ -70,7 +71,7 @@ Map<String, dynamic> _record(
   'status': status,
   'outcome': outcome,
   'state': ?state,
-  'targets': [],
+  'targets': targets,
   'created_at': created,
   'updated_at': created,
 };
@@ -416,6 +417,161 @@ void main() {
         }),
       );
       await expectLater(missing.requests.mine(), throwsFormatException);
+    });
+  });
+
+  group('removing a failed request (#792)', () {
+    SiloMediaRequest failed({List<Map<String, dynamic>> targets = const []}) => SiloMediaRequest.fromJson(
+      _record('31', status: 'failed', outcome: 'failed', state: 'failed', targets: targets),
+    )!;
+
+    test('only a failed request that delivered nothing is removable', () {
+      expect(failed().isRemovableFailure, isTrue);
+      expect(
+        failed(
+          targets: [
+            {'quality': '1080p', 'status': 'failed'},
+          ],
+        ).isRemovableFailure,
+        isTrue,
+      );
+      expect(
+        failed(
+          targets: [
+            {'quality': '1080p', 'status': 'completed'},
+            {'quality': '4k', 'status': 'failed'},
+          ],
+        ).isRemovableFailure,
+        isFalse,
+        reason: 'it delivered one quality before failing',
+      );
+      for (final (outcome, state) in [('active', 'pending'), ('declined', 'declined'), ('completed', 'available')]) {
+        final record = SiloMediaRequest.fromJson(_record('1', outcome: outcome, state: state))!;
+        expect(record.isRemovableFailure, isFalse, reason: outcome);
+      }
+    });
+
+    test('Remove is offered only while the status reports remove_failed_supported', () async {
+      var supported = false;
+      final c = client(
+        (_) => _json({
+          'requests_enabled': true,
+          'allowed': true,
+          'state': 'available',
+          'remove_failed_supported': ?(supported ? true : null),
+        }),
+      );
+      await c.requests.refreshStatus();
+      expect(c.requests.removeFailedSupported.value, isFalse, reason: 'older servers send nothing');
+      expect(c.requests.canRemove(failed()), isFalse);
+      supported = true;
+      await c.requests.refreshStatus(force: true);
+      expect(c.requests.removeFailedSupported.value, isTrue);
+      expect(c.requests.canRemove(failed()), isTrue);
+      expect(
+        c.requests.canRemove(
+          failed(
+            targets: [
+              {'quality': '1080p', 'status': 'completed'},
+            ],
+          ),
+        ),
+        isFalse,
+      );
+      expect(
+        SiloRequestsStatus.fromJson({
+          'requests_enabled': true,
+          'allowed': false,
+          'state': 'available',
+          'remove_failed_supported': true,
+        }).removeFailedSupported,
+        isTrue,
+      );
+    });
+
+    test('sends one DELETE /requests/{id} and announces the removal', () async {
+      final c = client((_) => http.Response('', 204));
+      final removed = <String>[];
+      final sub = c.requests.removals.listen((r) => removed.add(r.id));
+      addTearDown(sub.cancel);
+      await c.requests.removeFailed(failed());
+      await Future<void>.delayed(Duration.zero);
+      expect(requests.single.method, 'DELETE');
+      expect(requests.single.url.path, '/api/v2/requests/31');
+      expect(requests.single.headers['X-Profile-Id'], 'p-owner');
+      expect(removed, ['31']);
+    });
+
+    test('a 404 means it was removed elsewhere: it counts as removed', () async {
+      final c = client((_) => _problem(404, 'not_found'));
+      final removed = <String>[];
+      final sub = c.requests.removals.listen((r) => removed.add(r.id));
+      addTearDown(sub.cancel);
+      await c.requests.removeFailed(failed());
+      await Future<void>.delayed(Duration.zero);
+      expect(removed, ['31']);
+    });
+
+    test('a 409 conflict, a capability 409, a gateway error and a reset are failures, never resent', () async {
+      Future<SiloRequestFailure> failWith(FutureOr<http.Response> Function() answer) async {
+        final c = client((_) => answer());
+        final removed = <SiloMediaRequest>[];
+        final sub = c.requests.removals.listen(removed.add);
+        try {
+          await c.requests.removeFailed(failed());
+        } on SiloRequestFailure catch (f) {
+          await Future<void>.delayed(Duration.zero);
+          expect(removed, isEmpty);
+          await sub.cancel();
+          return f;
+        }
+        fail('expected a failure');
+      }
+
+      final conflict = await failWith(() => _problem(409, 'conflict', detail: 'Retried'));
+      expect(conflict.kind, SiloRequestFailureKind.refused);
+      expect(conflict.statusCode, 409);
+      expect((await failWith(() => _problem(409, 'capability_disabled'))).kind, SiloRequestFailureKind.disabled);
+      expect((await failWith(() => http.Response('Bad gateway', 502))).kind, SiloRequestFailureKind.uncertain);
+      expect((await failWith(() => throw http.ClientException('reset'))).kind, SiloRequestFailureKind.uncertain);
+      expect(requests.where((r) => r.method == 'DELETE'), hasLength(4), reason: 'one DELETE each');
+    });
+
+    test('a removal leaves the title requestable in results and details', () {
+      final record = failed();
+      final results = [
+        SiloRequestMediaResult.fromJson(
+          _result(
+            949,
+            request: <String, dynamic>{'requestable': false, 'status': 'failed', 'state': 'failed', 'request_id': '31'},
+          ),
+        )!,
+        SiloRequestMediaResult.fromJson(_result(950))!,
+      ];
+      expect(results.first.display!.kind, SiloRequestDisplayKind.attention);
+      final patched = siloResultsApplyingRemoval(results, record);
+      expect(patched.first.request.requestable, isTrue);
+      expect(patched.first.display, isNull);
+      expect(identical(patched[1], results[1]), isTrue);
+      expect(identical(siloResultsApplyingRemoval(patched, record), patched), isTrue, reason: 'nothing to change');
+
+      final other = SiloRequestMediaResult.fromJson(
+        _result(
+          949,
+          request: <String, dynamic>{'requestable': false, 'status': 'pending', 'state': 'pending', 'request_id': '77'},
+        ),
+      )!;
+      expect(siloResultsApplyingRemoval([other], record).single.request.requestId, '77', reason: 'another request');
+
+      final detail = SiloRequestMediaDetail.fromJson({
+        'media_type': 'movie',
+        'tmdb_id': 949,
+        'title': 'Heat',
+        'availability': 'missing',
+        'request': {'requestable': false, 'state': 'failed', 'request_id': '31'},
+      })!;
+      expect(detail.withoutRecord(record).request.requestable, isTrue);
+      expect(detail.withoutRecord(record).display, isNull);
     });
   });
 

@@ -6,6 +6,7 @@ import '../../media/media_item.dart';
 import '../../services/silo/silo_client.dart';
 import '../../services/silo/silo_requests.dart';
 import '../../utils/app_logger.dart';
+import '../../utils/dialogs.dart';
 import '../../utils/media_navigation_helper.dart';
 import '../../utils/snackbar_helper.dart';
 import '../../widgets/optimized_media_image.dart';
@@ -85,6 +86,33 @@ String siloRequestRecordStatus(SiloMediaRequest record) {
   return siloRequestLabel(display);
 }
 
+/// Copy for a failed create, cancel or removal (Silo's `RequestActionCopy`):
+/// [unconfirmed] when no usable answer came back, the server's own detail
+/// for anything it refused, else [fallback].
+String siloRequestFailureText(SiloRequestFailure failure, {required String unconfirmed, required String fallback}) =>
+    switch (failure.kind) {
+      SiloRequestFailureKind.uncertain => unconfirmed,
+      SiloRequestFailureKind.disabled => t.siloRequests.reasonRequestsDisabled,
+      SiloRequestFailureKind.invalid => t.siloRequests.reasonInvalid,
+      SiloRequestFailureKind.refused => failure.detail ?? fallback,
+    };
+
+/// A 409 on removal: an admin retried the request, or the library completed
+/// it, since the list loaded (`capability_*` 409s are [SiloRequestFailureKind.disabled]).
+bool siloRemovalConflict(SiloRequestFailure failure) =>
+    failure.kind == SiloRequestFailureKind.refused && failure.statusCode == 409;
+
+/// Asks before removing a failed request, naming its title. "Keep request"
+/// comes first and takes focus, so a stray Select on a remote deletes nothing.
+Future<bool> confirmSiloRequestRemoval(BuildContext context, String title) => showConfirmDialog(
+  context,
+  title: t.siloRequests.removeConfirmTitle,
+  message: t.siloRequests.removeConfirmMessage(title: title),
+  confirmText: t.siloRequests.removeRequest,
+  cancelText: t.siloRequests.keepRequest,
+  isDestructive: true,
+);
+
 String siloRequestMediaTypeLabel(String mediaType) =>
     mediaType == 'series' ? t.siloRequests.series : t.siloRequests.movie;
 
@@ -129,6 +157,8 @@ class SiloRequestRow extends StatelessWidget {
     this.onNavigateUp,
     this.onNavigateDown,
     this.onNavigateLeft,
+    this.onNavigateRight,
+    this.trailing,
   });
 
   final String title;
@@ -143,65 +173,85 @@ class SiloRequestRow extends StatelessWidget {
   final VoidCallback? onNavigateUp;
   final VoidCallback? onNavigateDown;
   final VoidCallback? onNavigateLeft;
+  final VoidCallback? onNavigateRight;
+
+  /// An action beside the row (My requests' Remove), outside its focus
+  /// target: the caller wires RIGHT to it through [onNavigateRight].
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
+    final row = _buildRow(context);
+    final trailing = this.trailing;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: trailing == null
+          ? row
+          : Row(
+              children: [
+                Expanded(child: row),
+                const SizedBox(width: 8),
+                trailing,
+              ],
+            ),
+    );
+  }
+
+  Widget _buildRow(BuildContext context) {
     final theme = Theme.of(context);
     final muted = theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurfaceVariant);
     final display = this.display;
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: FocusableWrapper(
-        focusNode: focusNode,
-        autofocus: autofocus,
-        onSelect: onSelect,
-        onNavigateUp: onNavigateUp,
-        onNavigateDown: onNavigateDown,
-        onNavigateLeft: onNavigateLeft,
-        disableScale: true,
-        borderRadius: 12,
-        descendantsAreFocusable: false,
-        semanticLabel: [title, if (display != null) siloRequestLabel(display)].join(', '),
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: onSelect,
-          child: Padding(
-            padding: const EdgeInsets.all(8),
-            child: Row(
-              children: [
-                ClipRRect(
-                  borderRadius: const BorderRadius.all(Radius.circular(6)),
-                  child: OptimizedMediaImage.poster(imagePath: siloRequestImageUrl(posterPath), width: 60, height: 90),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: theme.textTheme.titleMedium),
-                      const SizedBox(height: 2),
-                      Text(
-                        [siloRequestMediaTypeLabel(mediaType), if (year != null && year! > 0) '$year'].join(' · '),
-                        style: muted,
+    return FocusableWrapper(
+      focusNode: focusNode,
+      autofocus: autofocus,
+      onSelect: onSelect,
+      onNavigateUp: onNavigateUp,
+      onNavigateDown: onNavigateDown,
+      onNavigateLeft: onNavigateLeft,
+      onNavigateRight: onNavigateRight,
+      disableScale: true,
+      borderRadius: 12,
+      descendantsAreFocusable: false,
+      semanticLabel: [title, if (display != null) siloRequestLabel(display)].join(', '),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onSelect,
+        child: Padding(
+          padding: const EdgeInsets.all(8),
+          child: Row(
+            children: [
+              ClipRRect(
+                borderRadius: const BorderRadius.all(Radius.circular(6)),
+                child: OptimizedMediaImage.poster(imagePath: siloRequestImageUrl(posterPath), width: 60, height: 90),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: theme.textTheme.titleMedium),
+                    const SizedBox(height: 2),
+                    Text(
+                      [siloRequestMediaTypeLabel(mediaType), if (year != null && year! > 0) '$year'].join(' · '),
+                      style: muted,
+                    ),
+                    if (display != null || statusText != null) ...[
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 4,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          if (display != null) SiloRequestStatusPill(display: display),
+                          if (statusText != null) Text(statusText!, style: muted),
+                        ],
                       ),
-                      if (display != null || statusText != null) ...[
-                        const SizedBox(height: 6),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 4,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            if (display != null) SiloRequestStatusPill(display: display),
-                            if (statusText != null) Text(statusText!, style: muted),
-                          ],
-                        ),
-                      ],
                     ],
-                  ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),

@@ -42,6 +42,7 @@ class _SiloRequestSearchSectionState extends State<SiloRequestSearchSection> {
   int _seq = 0;
   List<SiloClient> _clients = const [];
   Listenable? _gates;
+  List<StreamSubscription<SiloMediaRequest>> _removals = const [];
 
   @override
   void didChangeDependencies() {
@@ -52,6 +53,10 @@ class _SiloRequestSearchSectionState extends State<SiloRequestSearchSection> {
       _gates?.removeListener(_onGateChanged);
       _clients = clients;
       _gates = Listenable.merge([for (final c in clients) c.requests.enabled])..addListener(_onGateChanged);
+      for (final sub in _removals) {
+        unawaited(sub.cancel());
+      }
+      _removals = [for (final c in clients) c.requests.removals.listen((record) => _onRemoved(c, record))];
       for (final c in clients) {
         unawaited(c.requests.refreshStatus());
       }
@@ -71,7 +76,20 @@ class _SiloRequestSearchSectionState extends State<SiloRequestSearchSection> {
   @override
   void dispose() {
     _gates?.removeListener(_onGateChanged);
+    for (final sub in _removals) {
+      unawaited(sub.cancel());
+    }
     super.dispose();
+  }
+
+  /// The viewer removed a failed request on [client] (Silo Android #792): its
+  /// card here is requestable again.
+  void _onRemoved(SiloClient client, SiloMediaRequest record) {
+    final results = _results[client];
+    if (!mounted || results == null) return;
+    final patched = siloResultsApplyingRemoval(results, record);
+    if (identical(patched, results)) return;
+    setState(() => _results = {..._results, client: patched});
   }
 
   void _onGateChanged() {
@@ -159,7 +177,8 @@ class _SiloRequestSearchSectionState extends State<SiloRequestSearchSection> {
             ),
           ),
           SizedBox(
-            height: 250,
+            // Poster, title and a status pill (a pill overflowed 250 by 12 px).
+            height: 264,
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 16),

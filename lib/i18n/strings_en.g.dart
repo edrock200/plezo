@@ -1615,6 +1615,15 @@ class Translations$search$en {
 
 	/// en: 'People'
 	String get people => 'People';
+
+	/// en: 'Search by voice'
+	String get voiceSearch => 'Search by voice';
+
+	/// en: 'Speak a title'
+	String get voicePrompt => 'Speak a title';
+
+	/// en: 'Voice search isn't available on this device.'
+	String get voiceUnavailable => 'Voice search isn\'t available on this device.';
 }
 
 // Path: hotkeys
@@ -6802,6 +6811,30 @@ class Translations$siloRequests$en {
 	/// en: 'Couldn't cancel the request'
 	String get cancelFailed => 'Couldn\'t cancel the request';
 
+	/// en: 'Remove request'
+	String get removeRequest => 'Remove request';
+
+	/// en: 'Keep request'
+	String get keepRequest => 'Keep request';
+
+	/// en: 'Remove this request?'
+	String get removeConfirmTitle => 'Remove this request?';
+
+	/// en: 'Your failed request for "${title}" will be deleted. You can request the title again later.'
+	String removeConfirmMessage({required Object title}) => 'Your failed request for "${title}" will be deleted. You can request the title again later.';
+
+	/// en: 'Request removed'
+	String get requestRemoved => 'Request removed';
+
+	/// en: 'This request changed since the list loaded, so it wasn't removed.'
+	String get removeConflict => 'This request changed since the list loaded, so it wasn\'t removed.';
+
+	/// en: 'We couldn't confirm the removal. Refresh your requests to check it.'
+	String get unconfirmedRemove => 'We couldn\'t confirm the removal. Refresh your requests to check it.';
+
+	/// en: 'Couldn't remove the request'
+	String get removeFailed => 'Couldn\'t remove the request';
+
 	/// en: 'Requested ${date}'
 	String requestedOn({required Object date}) => 'Requested ${date}';
 
@@ -9687,6 +9720,9 @@ extension on Translations {
 			'search.searchYourMedia' => 'Search your media',
 			'search.enterTitleActorOrKeyword' => 'Enter a title, actor, or keyword',
 			'search.people' => 'People',
+			'search.voiceSearch' => 'Search by voice',
+			'search.voicePrompt' => 'Speak a title',
+			'search.voiceUnavailable' => 'Voice search isn\'t available on this device.',
 			'hotkeys.setShortcutFor' => ({required Object actionName}) => 'Set Shortcut for ${actionName}',
 			'hotkeys.clearShortcut' => 'Clear shortcut',
 			'hotkeys.noShortcutSet' => 'No shortcut set',
@@ -10171,11 +10207,11 @@ extension on Translations {
 			'profiles.setPin' => 'Set PIN',
 			'profiles.setPinTitle' => 'Set PIN',
 			'profiles.confirmPinTitle' => 'Confirm PIN',
+			_ => null,
+		} ?? switch (path) {
 			'profiles.pinSet' => 'PIN set',
 			'profiles.changePin' => 'Change',
 			'profiles.removePin' => 'Remove',
-			_ => null,
-		} ?? switch (path) {
 			'profiles.connectionsLabel' => 'Connections',
 			'profiles.add' => 'Add',
 			'profiles.deleteProfileButton' => 'Delete profile',
@@ -10685,11 +10721,11 @@ extension on Translations {
 			'liveTv.morning' => 'Morning',
 			'liveTv.daytime' => 'Daytime',
 			'liveTv.evening' => 'Evening',
+			_ => null,
+		} ?? switch (path) {
 			'liveTv.lateNight' => 'Late Night',
 			'liveTv.whatsOn' => 'What\'s On',
 			'liveTv.watchChannel' => 'Watch Channel',
-			_ => null,
-		} ?? switch (path) {
 			'liveTv.favorites' => 'Favorites',
 			'liveTv.reorderFavorites' => 'Reorder Favorites',
 			'liveTv.noFavoriteChannels' => 'No favorite channels',
@@ -11199,11 +11235,11 @@ extension on Translations {
 			'videoSettings.audioOutput' => 'Audio Output',
 			'videoSettings.performanceOverlay' => 'Performance Overlay',
 			'videoSettings.audioOutputDolbyAtmos' => 'Dolby Atmos',
+			_ => null,
+		} ?? switch (path) {
 			'videoSettings.audioOutputDolbyAudio' => 'Dolby Audio',
 			'videoSettings.audioOutputSurround' => 'Surround',
 			'videoSettings.audioOutputSpatial' => 'Spatial Audio',
-			_ => null,
-		} ?? switch (path) {
 			'videoSettings.audioOutputStereo' => 'Stereo',
 			'videoSettings.audioNormalization' => 'Normalize Loudness',
 			'videoSettings.audioNormalizationDisablesPassthrough' => 'Decodes audio to PCM; passthrough is off while this is on',
@@ -11713,11 +11749,19 @@ extension on Translations {
 			'siloRequests.requested' => 'Requested',
 			'siloRequests.requestCancelled' => 'Request cancelled',
 			'siloRequests.unconfirmedSubmit' => 'We couldn\'t confirm the request. Check My requests before trying again.',
+			_ => null,
+		} ?? switch (path) {
 			'siloRequests.unconfirmedCancel' => 'We couldn\'t confirm the cancellation. Refresh your requests to check it.',
 			'siloRequests.submitFailed' => 'Couldn\'t submit the request',
 			'siloRequests.cancelFailed' => 'Couldn\'t cancel the request',
-			_ => null,
-		} ?? switch (path) {
+			'siloRequests.removeRequest' => 'Remove request',
+			'siloRequests.keepRequest' => 'Keep request',
+			'siloRequests.removeConfirmTitle' => 'Remove this request?',
+			'siloRequests.removeConfirmMessage' => ({required Object title}) => 'Your failed request for "${title}" will be deleted. You can request the title again later.',
+			'siloRequests.requestRemoved' => 'Request removed',
+			'siloRequests.removeConflict' => 'This request changed since the list loaded, so it wasn\'t removed.',
+			'siloRequests.unconfirmedRemove' => 'We couldn\'t confirm the removal. Refresh your requests to check it.',
+			'siloRequests.removeFailed' => 'Couldn\'t remove the request',
 			'siloRequests.requestedOn' => ({required Object date}) => 'Requested ${date}',
 			'siloRequests.seasonCount' => ({required Object count}) => '${count} seasons',
 			'siloRequests.directedBy' => ({required Object name}) => 'Directed by ${name}',

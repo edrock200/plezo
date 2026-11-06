@@ -18,7 +18,7 @@ import 'silo_request_widgets.dart';
 
 /// A title from Silo's request provider: what it is, whether it is in the
 /// library or requested, and the actions the viewer has (Request, Cancel
-/// request, Open in library). Port of Silo's `TvRequestDetailScreen` /
+/// request, Remove request on a failed one, Open in library). Port of Silo's `TvRequestDetailScreen` /
 /// `RequestDetailViewModel` without the season picker and following: a series
 /// request names no seasons, so the server requests every aired season the
 /// library does not have complete.
@@ -59,20 +59,42 @@ class _SiloRequestDetailScreenState extends State<SiloRequestDetailScreen> {
 
   SiloRequestsApi get _requests => widget.client.requests;
 
+  StreamSubscription<SiloMediaRequest>? _removals;
+
   @override
   void initState() {
     super.initState();
+    _requests.removeFailedSupported.addListener(_onCapabilityChanged);
+    _removals = _requests.removals.listen(_onRemoved);
     unawaited(_load());
   }
 
   @override
   void dispose() {
+    _requests.removeFailedSupported.removeListener(_onCapabilityChanged);
+    unawaited(_removals?.cancel());
     _primaryFocus.dispose();
     _secondaryFocus.dispose();
     super.dispose();
   }
 
+  void _onCapabilityChanged() {
+    if (mounted) setState(() {});
+  }
+
+  /// A removal of this title's request, here or on another page: requestable again.
+  void _onRemoved(SiloMediaRequest record) {
+    final detail = _detail;
+    if (!mounted || detail == null || record.mediaType != widget.mediaType || record.tmdbId != widget.tmdbId) return;
+    setState(() {
+      _detail = detail.withoutRecord(record);
+      if (_ownRecord?.id == record.id) _ownRecord = null;
+    });
+  }
+
   Future<void> _load() async {
+    // Remove is offered only where the server takes it.
+    unawaited(_requests.refreshStatus());
     setState(() {
       _loading = _detail == null;
       _loadFailed = false;
@@ -150,14 +172,55 @@ class _SiloRequestDetailScreenState extends State<SiloRequestDetailScreen> {
     }
   }
 
+  /// Removes the viewer's failed request after a confirmation naming the
+  /// title (Silo Android #792). Sent once; an uncertain answer re-reads the
+  /// title and holds nothing (a resend of a removal that landed answers 404).
+  Future<void> _remove() async {
+    final record = _ownRecord;
+    if (record == null || _busy || !_requests.canRemove(record)) return;
+    final hadFocus = _primaryFocus.hasFocus || _secondaryFocus.hasFocus;
+    final confirmed = await confirmSiloRequestRemoval(context, _detail?.title ?? record.title);
+    if (!confirmed || !mounted) return;
+    setState(() {
+      _busy = true;
+      _message = null;
+    });
+    try {
+      // The removals listener makes the title requestable again.
+      await _requests.removeFailed(record);
+      if (!mounted) return;
+      showSuccessSnackBar(context, t.siloRequests.requestRemoved);
+    } on SiloRequestFailure catch (failure) {
+      if (!mounted) return;
+      if (failure.kind == SiloRequestFailureKind.uncertain) {
+        await _load();
+        if (!mounted) return;
+        if (_ownRecord?.id != record.id) {
+          showSuccessSnackBar(context, t.siloRequests.requestRemoved);
+        } else {
+          setState(() => _message = t.siloRequests.unconfirmedRemove);
+        }
+      } else if (siloRemovalConflict(failure)) {
+        setState(() => _message = t.siloRequests.removeConflict);
+        unawaited(_load());
+      } else {
+        _onFailure(failure, unconfirmed: t.siloRequests.unconfirmedRemove, fallback: t.siloRequests.removeFailed);
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+    // The button that had focus may be gone: the first action takes it.
+    if (hadFocus && mounted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _primaryFocus.hasFocus || _secondaryFocus.hasFocus) return;
+        if (_primaryFocus.context != null) _primaryFocus.requestFocus();
+      });
+    }
+  }
+
   void _onFailure(SiloRequestFailure failure, {required String unconfirmed, required String fallback}) {
     setState(() {
-      _message = switch (failure.kind) {
-        SiloRequestFailureKind.uncertain => unconfirmed,
-        SiloRequestFailureKind.disabled => t.siloRequests.reasonRequestsDisabled,
-        SiloRequestFailureKind.invalid => t.siloRequests.reasonInvalid,
-        SiloRequestFailureKind.refused => failure.detail ?? fallback,
-      };
+      _message = siloRequestFailureText(failure, unconfirmed: unconfirmed, fallback: fallback);
       if (failure.kind == SiloRequestFailureKind.uncertain) _held = true;
     });
     if (failure.kind == SiloRequestFailureKind.disabled) {
@@ -290,6 +353,7 @@ class _SiloRequestDetailScreenState extends State<SiloRequestDetailScreen> {
     final canRequest = detail.request.requestable && !_held;
     final record = _ownRecord;
     final canCancel = record != null && record.canCancel && !_held;
+    final canRemove = record != null && _requests.canRemove(record);
 
     final buttons = <Widget>[];
     void add({required String label, required IconData icon, required VoidCallback? onPressed, bool tonal = false}) {
@@ -322,6 +386,9 @@ class _SiloRequestDetailScreenState extends State<SiloRequestDetailScreen> {
     }
     if (canCancel && buttons.length < 2) {
       add(label: t.siloRequests.cancelRequest, icon: Symbols.close_rounded, onPressed: _cancel, tonal: true);
+    }
+    if (canRemove && buttons.length < 2) {
+      add(label: t.siloRequests.removeRequest, icon: Symbols.delete_rounded, onPressed: _remove, tonal: true);
     }
     if (buttons.isEmpty) return const SizedBox.shrink();
     return Wrap(spacing: 12, runSpacing: 12, children: buttons);

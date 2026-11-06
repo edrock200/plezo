@@ -566,7 +566,10 @@
     "tryDifferentTerm": "Try a different search term",
     "searchYourMedia": "Search your media",
     "enterTitleActorOrKeyword": "Enter a title, actor, or keyword",
-    "people": "People"
+    "people": "People",
+    "voiceSearch": "Search by voice",
+    "voicePrompt": "Speak a title",
+    "voiceUnavailable": "Voice search isn't available on this device."
   },
   "hotkeys": {
     "setShortcutFor": "Set Shortcut for ${actionName}",
@@ -2814,6 +2817,14 @@
     "unconfirmedCancel": "We couldn't confirm the cancellation. Refresh your requests to check it.",
     "submitFailed": "Couldn't submit the request",
     "cancelFailed": "Couldn't cancel the request",
+    "removeRequest": "Remove request",
+    "keepRequest": "Keep request",
+    "removeConfirmTitle": "Remove this request?",
+    "removeConfirmMessage": "Your failed request for \"${title}\" will be deleted. You can request the title again later.",
+    "requestRemoved": "Request removed",
+    "removeConflict": "This request changed since the list loaded, so it wasn't removed.",
+    "unconfirmedRemove": "We couldn't confirm the removal. Refresh your requests to check it.",
+    "removeFailed": "Couldn't remove the request",
     "requestedOn": "Requested ${date}",
     "seasonCount": "${count} seasons",
     "directedBy": "Directed by ${name}",

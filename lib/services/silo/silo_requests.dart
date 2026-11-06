@@ -38,6 +38,7 @@ class SiloRequestsStatus {
     this.state,
     this.followSupported = false,
     this.seasonRequestsSupported = false,
+    this.removeFailedSupported = false,
   });
 
   factory SiloRequestsStatus.fromJson(Map<String, dynamic> json) => SiloRequestsStatus(
@@ -46,6 +47,7 @@ class SiloRequestsStatus {
     state: _str(json['state']),
     followSupported: json['follow_supported'] == true,
     seasonRequestsSupported: json['season_requests_supported'] == true,
+    removeFailedSupported: json['remove_failed_supported'] == true,
   );
 
   final bool requestsEnabled;
@@ -53,6 +55,10 @@ class SiloRequestsStatus {
   final String? state;
   final bool followSupported;
   final bool seasonRequestsSupported;
+
+  /// The server takes `DELETE /api/v2/requests/{id}` for the viewer's own
+  /// failed request (Silo Android #792); absent (false) on older servers.
+  final bool removeFailedSupported;
 
   /// The feature is on and this profile may use it (a blocked account sees
   /// `allowed: false`).
@@ -89,6 +95,11 @@ class SiloRequestState {
   final String? requestId;
   final bool following;
   final bool requestedByViewer;
+
+  /// This state once the server deleted [record]: requestable again, unless
+  /// it shows a different request (Silo's `RequestState.without`).
+  SiloRequestState without(SiloMediaRequest record) =>
+      requestId == record.id ? const SiloRequestState(requestable: true) : this;
 }
 
 /// One title from the request provider (`/requests/search`, recommendations).
@@ -147,6 +158,34 @@ class SiloRequestMediaResult {
   String get key => '$mediaType:$tmdbId';
 
   SiloRequestDisplay? get display => SiloRequestDisplay.ofAnnotation(availability, request);
+
+  SiloRequestMediaResult withRequest(SiloRequestState request) => SiloRequestMediaResult(
+    mediaType: mediaType,
+    tmdbId: tmdbId,
+    title: title,
+    year: year,
+    overview: overview,
+    posterPath: posterPath,
+    backdropPath: backdropPath,
+    releaseDate: releaseDate,
+    voteAverage: voteAverage,
+    availability: availability,
+    libraryContentId: libraryContentId,
+    request: request,
+  );
+}
+
+/// [results] once the server deleted [record]: its title is requestable again
+/// (Silo's `applyingRemoval`). Returns [results] itself when nothing changed.
+List<SiloRequestMediaResult> siloResultsApplyingRemoval(List<SiloRequestMediaResult> results, SiloMediaRequest record) {
+  List<SiloRequestMediaResult>? patched;
+  for (final (i, result) in results.indexed) {
+    if (result.mediaType != record.mediaType || result.tmdbId != record.tmdbId) continue;
+    final request = result.request.without(record);
+    if (identical(request, result.request)) continue;
+    (patched ??= List.of(results))[i] = result.withRequest(request);
+  }
+  return patched ?? results;
 }
 
 /// `GET /requests/detail/{media_type}/{tmdb_id}`.
@@ -248,7 +287,14 @@ class SiloRequestMediaDetail {
 
   /// The detail as the server's answer to the viewer's own create or cancel
   /// leaves it (Silo's `MediaRequest.toRequestState`).
-  SiloRequestMediaDetail withRecord(SiloMediaRequest record) => SiloRequestMediaDetail(
+  SiloRequestMediaDetail withRecord(SiloMediaRequest record) =>
+      _withRequest(record.toRequestState(), libraryContentId ?? record.libraryContentId);
+
+  /// The detail once the server deleted [record]: requestable again.
+  SiloRequestMediaDetail withoutRecord(SiloMediaRequest record) =>
+      _withRequest(request.without(record), libraryContentId);
+
+  SiloRequestMediaDetail _withRequest(SiloRequestState request, String? libraryContentId) => SiloRequestMediaDetail(
     mediaType: mediaType,
     tmdbId: tmdbId,
     title: title,
@@ -268,8 +314,8 @@ class SiloRequestMediaDetail {
     director: director,
     cast: cast,
     availability: availability,
-    libraryContentId: libraryContentId ?? record.libraryContentId,
-    request: record.toRequestState(),
+    libraryContentId: libraryContentId,
+    request: request,
   );
 }
 
@@ -359,6 +405,11 @@ class SiloMediaRequest {
 
   /// Only a pending request can still be withdrawn by its requester.
   bool get canCancel => isActive && display.kind == SiloRequestDisplayKind.pending;
+
+  /// The server's rule for removing a request (Silo's `isRemovableFailure`,
+  /// #792): it failed and delivered nothing. One that delivered a quality
+  /// before failing stays as the record of that copy.
+  bool get isRemovableFailure => outcome == 'failed' && !targets.any((target) => target.status == 'completed');
 
   /// The compact annotation a record implies (Silo's `toRequestState`):
   /// active requests block re-requesting, closed ones re-open it.
@@ -529,7 +580,7 @@ String? siloRequestImageUrl(String? path, {bool backdrop = false}) {
   return path;
 }
 
-/// Why a create or cancel failed.
+/// Why a create, cancel or removal failed.
 enum SiloRequestFailureKind {
   /// The call may have reached the server but no usable answer came back:
   /// never resend it; a fresh read shows what happened.
@@ -595,6 +646,22 @@ class SiloRequestsApi {
   /// visible entry point (Silo's `RequestsFeatureStore`).
   final ValueNotifier<bool> enabled = ValueNotifier(false);
 
+  /// The server lets the viewer remove their own failed requests
+  /// (`remove_failed_supported`); false while requests are off. Kept through a
+  /// failed read like [enabled].
+  final ValueNotifier<bool> removeFailedSupported = ValueNotifier(false);
+
+  final StreamController<SiloMediaRequest> _removals = StreamController.broadcast();
+
+  /// Each of the viewer's requests this client removed (or found already
+  /// removed), so every request surface can drop it and make its title
+  /// requestable again.
+  Stream<SiloMediaRequest> get removals => _removals.stream;
+
+  /// Whether [record] may offer Remove: a failed request that delivered
+  /// nothing, on a server that takes removals.
+  bool canRemove(SiloMediaRequest record) => removeFailedSupported.value && record.isRemovableFailure;
+
   /// A status read has answered (or failed) at least once.
   bool get resolved => _resolvedAt != null;
   DateTime? _resolvedAt;
@@ -611,7 +678,9 @@ class SiloRequestsApi {
     return _statusInFlight ??= () async {
       try {
         final data = await _api.getJson('/api/v2/requests/status', timeout: const Duration(seconds: 8));
-        enabled.value = SiloRequestsStatus.fromJson(data).isAvailable;
+        final status = SiloRequestsStatus.fromJson(data);
+        enabled.value = status.isAvailable;
+        removeFailedSupported.value = status.isAvailable && status.removeFailedSupported;
       } catch (e) {
         appLogger.d('Silo requests: status unavailable; keeping enabled=${enabled.value}', error: e.runtimeType);
       } finally {
@@ -653,7 +722,31 @@ class SiloRequestsApi {
   Future<SiloMediaRequest> cancel(String id) =>
       _mutate('POST', '/api/v2/requests/${Uri.encodeComponent(id)}/cancel', const <String, dynamic>{});
 
+  /// `DELETE /api/v2/requests/{id}`: deletes one of the viewer's failed
+  /// requests that delivered nothing (Silo Android #792). Answers 204, or 409
+  /// once the request was retried, completed or delivered a copy. A 404 means
+  /// another device removed it already, so it counts as removed. Sent once,
+  /// like [create] and [cancel]; failures come as [SiloRequestFailure]. A
+  /// removal (204 or 404) is announced on [removals].
+  Future<void> removeFailed(SiloMediaRequest record) async {
+    try {
+      await _send('DELETE', '/api/v2/requests/${Uri.encodeComponent(record.id)}', null);
+    } on SiloRequestFailure catch (failure) {
+      if (failure.kind != SiloRequestFailureKind.refused || failure.statusCode != 404) rethrow;
+    }
+    if (!_removals.isClosed) _removals.add(record);
+  }
+
   Future<SiloMediaRequest> _mutate(String method, String path, Map<String, dynamic> body) async {
+    final response = await _send(method, path, body);
+    final record = SiloMediaRequest.fromJson(response.data);
+    if (record == null) throw const SiloRequestFailure(SiloRequestFailureKind.uncertain);
+    return record;
+  }
+
+  /// One mutation, never resent; a non-2xx answer or a transport failure
+  /// becomes a [SiloRequestFailure].
+  Future<MediaServerResponse> _send(String method, String path, Map<String, dynamic>? body) async {
     final MediaServerResponse response;
     try {
       response = await _api.request(method, path, body: body);
@@ -670,9 +763,7 @@ class SiloRequestsApi {
         ),
       );
     }
-    final record = SiloMediaRequest.fromJson(response.data);
-    if (record == null) throw const SiloRequestFailure(SiloRequestFailureKind.uncertain);
-    return record;
+    return response;
   }
 
   /// `GET /requests/mine`, following `page.next_cursor` (50 a page). A failed
@@ -697,5 +788,9 @@ class SiloRequestsApi {
     throw const FormatException('The request list exceeded the page limit.');
   }
 
-  void dispose() => enabled.dispose();
+  void dispose() {
+    enabled.dispose();
+    removeFailedSupported.dispose();
+    unawaited(_removals.close());
+  }
 }
