@@ -62,6 +62,7 @@ class PlezyActivity : FlutterActivity() {
   companion object {
     private const val TAG = "PlezyActivity"
     private const val KEYBOARD_MIC_PREFS = "keyboard_microphone"
+    private const val GBOARD_PACKAGE_PREFIX = "com.google.android.inputmethod."
     private const val KEYBOARD_MIC_ASKED = "asked"
     private const val KEYBOARD_MIC_REQUEST = 4801
 
@@ -220,17 +221,35 @@ class PlezyActivity : FlutterActivity() {
   // Gboard on Google TV dictates into the focused app's field only when that
   // app holds RECORD_AUDIO: without it the mic listens (the green indicator
   // shows) and nothing is typed. Ask once per install, the first time a text
-  // field opens the keyboard on a TV; a refusal is respected and never asked
-  // again (the system Settings can still grant it).
+  // field opens the keyboard on a TV whose keyboard is Gboard; a refusal is
+  // respected and never asked again (the system Settings can still grant it).
+  // Other keyboards (Fire TV's, Leanback, vendor IMEs) dictate without the
+  // app's permission, so nothing is asked there, and nothing is recorded as
+  // asked: switching to Gboard later still gets the one question.
   private fun askForKeyboardMicrophoneOnce() {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M || !isAndroidTvDevice()) return
     if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) return
     val prefs = getSharedPreferences(KEYBOARD_MIC_PREFS, Context.MODE_PRIVATE)
     if (prefs.getBoolean(KEYBOARD_MIC_ASKED, false)) return
+    val ime = currentInputMethodPackage()
+    if (!isGboardPackage(ime)) {
+      logTextInputDiag { "keyboard $ime is not Gboard; not asking for RECORD_AUDIO" }
+      return
+    }
     prefs.edit().putBoolean(KEYBOARD_MIC_ASKED, true).apply()
     logTextInputDiag { "asking for RECORD_AUDIO for keyboard voice input" }
     requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), KEYBOARD_MIC_REQUEST)
   }
+
+  /** Package of the current keyboard (`Settings.Secure.DEFAULT_INPUT_METHOD` is `package/service`). */
+  private fun currentInputMethodPackage(): String? = runCatching {
+    Settings.Secure.getString(contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD)
+      ?.substringBefore('/')
+      ?.takeIf { it.isNotBlank() }
+  }.getOrNull()
+
+  /** Gboard, on phones and on Google TV / Android TV (`com.google.android.inputmethod.latin`). */
+  private fun isGboardPackage(pkg: String?): Boolean = pkg != null && pkg.startsWith(GBOARD_PACKAGE_PREFIX)
 
   private fun inputMethodManager(): InputMethodManager = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
 

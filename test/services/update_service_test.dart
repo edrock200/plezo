@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -126,4 +127,28 @@ void main() {
       );
     });
   }
+
+  group('Plezilo has no update feed (never Plezy\'s)', () {
+    test('no update source is configured, so the check stays off', () {
+      expect(UpdateService.hasUpdateSource, isFalse);
+      expect(UpdateService.isUpdateCheckEnabled, isFalse);
+      expect(UpdateService.useNativeUpdater, isFalse);
+    });
+
+    test('an update check with no source sends nothing', () async {
+      expect(await UpdateService.checkForUpdates(), isNull);
+      expect(await UpdateService.checkForUpdatesOnStartup(), isNull);
+    });
+
+    test("nothing in the app or the desktop runners names Plezy's feed, key or releases", () {
+      const plezyKey = 'q7t6eu1txRrqv1PeWDCRV95rFxnmD/D3GZWbUPMwUyU=';
+      for (final path in ['lib/services/update_service.dart', 'macos/Runner/Info.plist', 'windows/runner/Runner.rc']) {
+        final text = File(path).readAsStringSync();
+        expect(text, isNot(contains("'edde746/plezy'")), reason: path);
+        expect(text, isNot(contains('edde746/plezy@appcast')), reason: path);
+        expect(text, isNot(contains(plezyKey)), reason: path);
+      }
+      expect(File('macos/Runner/Info.plist').readAsStringSync(), isNot(contains('SUFeedURL')));
+    });
+  });
 }

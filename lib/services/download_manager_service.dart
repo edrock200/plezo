@@ -28,6 +28,7 @@ import 'settings_service.dart';
 import 'saf_storage_service.dart';
 import 'package:saf_util/saf_util_platform_interface.dart' show SafDocumentFile;
 import '../models/download_models.dart';
+import '../profiles/silo_accounts.dart' show sortedBySiloBindingPreference;
 import '../services/offline_mode_source.dart';
 import '../services/download_storage_service.dart';
 import '../i18n/strings.g.dart';
@@ -705,18 +706,19 @@ class DownloadManagerService {
     }
   }
 
-  /// The Silo connection [profileId] has bound for [serverId], preferring
-  /// the default binding, then the most recently used: its id is the Silo
-  /// cache namespace.
+  /// The Silo connection [profileId] has bound for [serverId], in the order
+  /// of [sortedBySiloBindingPreference] (as browsing binds it): its id is the
+  /// Silo cache namespace.
   Future<String?> _siloProfileScopeId(ServerId serverId, String profileId) async {
-    final bindings = await (_database.select(
+    final rows = await (_database.select(
       _database.profileConnections,
     )..where((t) => t.profileId.equals(profileId))).get();
-    bindings.sort((a, b) {
-      if (a.isDefault != b.isDefault) return a.isDefault ? -1 : 1;
-      final used = (b.lastUsedAt ?? 0).compareTo(a.lastUsedAt ?? 0);
-      return used != 0 ? used : a.connectionId.compareTo(b.connectionId);
-    });
+    final bindings = sortedBySiloBindingPreference(
+      rows,
+      isDefault: (row) => row.isDefault,
+      lastUsedMs: (row) => row.lastUsedAt,
+      connectionId: (row) => row.connectionId,
+    );
     final prefix = '$serverId/';
     final siloIds = {
       for (final row in await _siloConnectionRows())

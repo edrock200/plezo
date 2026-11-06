@@ -43,6 +43,52 @@ Future<void> _leave(WidgetTester tester) async {
 }
 
 void main() {
+  group('plain HTTP', () {
+    Future<void> enter(WidgetTester tester, FakeSiloAuthServer server, String address) async {
+      resetSharedPreferencesForTest();
+      await tester.pumpWidget(_testApp(AddSiloScreen(authService: server.service())));
+      await tester.pump();
+      await tester.enterText(find.byType(TextField).first, address);
+      await tester.testTextInput.receiveAction(TextInputAction.go);
+      await _frames(tester);
+    }
+
+    testWidgets('a server that answers only over HTTP asks first, and Cancel keeps the address form', (tester) async {
+      final server = FakeSiloAuthServer();
+      await enter(tester, server, 'http://silo.lan:8090');
+      expect(find.text('Connect without encryption?'), findsOneWidget);
+      expect(find.textContaining('silo.lan:8090 answered only over plain HTTP'), findsOneWidget);
+      expect(find.text('Sign in with a code'), findsNothing, reason: 'nothing past the address step yet');
+
+      await tester.tap(find.text('Cancel'));
+      await _frames(tester);
+      expect(find.text('Connect without encryption?'), findsNothing);
+      expect(find.text('Sign in with a code'), findsNothing);
+      expect(server.countOf('/api/v2/auth/login'), 0);
+      expect(server.countOf('/api/v2/auth/device/start'), 0);
+      await _leave(tester);
+    });
+
+    testWidgets('Connect goes on to sign-in, and the server card says it is not encrypted', (tester) async {
+      final server = FakeSiloAuthServer();
+      await enter(tester, server, 'http://silo.lan:8090');
+      await tester.tap(find.text('Connect'));
+      await _frames(tester);
+      expect(find.text('Sign in with a code'), findsOneWidget);
+      expect(find.text('Not encrypted (HTTP)'), findsOneWidget);
+      await _leave(tester);
+    });
+
+    testWidgets('an https server is not asked about', (tester) async {
+      final server = FakeSiloAuthServer();
+      await enter(tester, server, 'https://silo.example.com');
+      expect(find.text('Connect without encryption?'), findsNothing);
+      expect(find.text('Not encrypted (HTTP)'), findsNothing);
+      expect(find.text('Sign in with a code'), findsOneWidget);
+      await _leave(tester);
+    });
+  });
+
   testWidgets('shows the code with spoken and QR labels for screen readers', (tester) async {
     final semantics = tester.ensureSemantics();
     final server = FakeSiloAuthServer();

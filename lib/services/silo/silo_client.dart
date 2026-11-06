@@ -131,9 +131,11 @@ class SiloClient
   }
 
   static void _registerDiagnostics(SiloConnection connection) {
-    for (final token in [connection.accessToken, connection.refreshToken, connection.profileToken]) {
-      if (token != null && token.isNotEmpty) LogRedactionManager.registerToken(token);
-    }
+    // The pair rotates on every refresh: its own ring, so it never evicts
+    // another server's long-lived token (see registerRotatingToken).
+    LogRedactionManager.registerRotatingToken(connection.accessToken);
+    LogRedactionManager.registerRotatingToken(connection.refreshToken);
+    LogRedactionManager.registerToken(connection.profileToken);
     LogRedactionManager.registerServerUrl(connection.baseUrl);
   }
 
@@ -175,8 +177,8 @@ class SiloClient
   /// session obtained by refreshing (Silo refresh tokens are single-use, so
   /// the pair this client holds is dead). Does not call [onConnectionUpdated].
   void adoptTokens(SiloConnection rotated) {
-    LogRedactionManager.registerToken(rotated.accessToken);
-    LogRedactionManager.registerToken(rotated.refreshToken);
+    LogRedactionManager.registerRotatingToken(rotated.accessToken);
+    LogRedactionManager.registerRotatingToken(rotated.refreshToken);
     _knownRefreshTokens.add(rotated.refreshToken);
     _sessionExpired = false;
     _api.replaceTokens(
@@ -184,21 +186,59 @@ class SiloClient
         accessToken: rotated.accessToken,
         refreshToken: rotated.refreshToken,
         expiresAt: rotated.accessTokenExpiresAt,
+        lifetimeSeconds: rotated.accessTokenLifetimeSeconds,
       ),
     );
     _connection = _connection.copyWith(
       accessToken: rotated.accessToken,
       refreshToken: rotated.refreshToken,
       accessTokenExpiresAt: rotated.accessTokenExpiresAt,
+      accessTokenLifetimeSeconds: rotated.accessTokenLifetimeSeconds,
     );
   }
 
   /// Called when requests suggest the server is down or the login is gone
-  /// (see [SiloApi.onServerUnreachable]) and when [checkHealth] finds the
-  /// server offline. `MultiServerManager` confirms it with [checkHealth];
-  /// a failed probe re-arms that check, which is how an offline server is
-  /// noticed coming back (as with a MediaBrowser server's lone endpoint).
+  /// (see [SiloApi.onServerUnreachable]), and on a backed-off schedule while
+  /// [checkHealth] keeps finding the server offline. `MultiServerManager`
+  /// confirms it with [checkHealth]; the schedule is how an offline server is
+  /// noticed coming back. The probe itself never calls this directly: the
+  /// manager starts it and reads its answer, and calling back at once made
+  /// the manager probe again every few seconds for as long as the server was
+  /// down.
   void Function()? onServerUnreachable;
+
+  /// First wait before an offline server is checked again; doubles after
+  /// each re-check up to [offlineRecheckMaxDelay].
+  static const offlineRecheckBaseDelay = Duration(seconds: 30);
+  static const offlineRecheckMaxDelay = Duration(minutes: 10);
+
+  Timer? _offlineRecheck;
+  int _offlineRechecks = 0;
+  bool _closed = false;
+
+  /// The wait before the next offline re-check.
+  @visibleForTesting
+  Duration get offlineRecheckDelay {
+    final seconds = offlineRecheckBaseDelay.inSeconds * (1 << math.min(_offlineRechecks, 10));
+    return Duration(seconds: math.min(seconds, offlineRecheckMaxDelay.inSeconds));
+  }
+
+  void _scheduleOfflineRecheck() {
+    if (_closed) return;
+    _offlineRecheck?.cancel();
+    _offlineRecheck = Timer(offlineRecheckDelay, () {
+      _offlineRecheck = null;
+      if (_closed || _offlineMode) return;
+      _offlineRechecks++;
+      onServerUnreachable?.call();
+    });
+  }
+
+  void _cancelOfflineRecheck() {
+    _offlineRecheck?.cancel();
+    _offlineRecheck = null;
+    _offlineRechecks = 0;
+  }
 
   /// Revoke this login session on the server (`POST /auth/logout`). Best
   /// effort: used when the connection is removed, so it never throws and
@@ -215,8 +255,8 @@ class SiloClient
   }
 
   Future<void> _handleTokensRefreshed(SiloTokens tokens) async {
-    LogRedactionManager.registerToken(tokens.accessToken);
-    LogRedactionManager.registerToken(tokens.refreshToken);
+    LogRedactionManager.registerRotatingToken(tokens.accessToken);
+    LogRedactionManager.registerRotatingToken(tokens.refreshToken);
     _sessionExpired = false;
     _knownRefreshTokens.add(tokens.refreshToken);
     _connection = _connection.copyWith(
@@ -261,13 +301,21 @@ class SiloClient
   void close() {
     _trackChoices.close();
     SiloManagedDownloads.instance.detach(connection.id, _downloadRegistry);
+    _markClosed();
     _api.close();
   }
 
   @override
   Future<void> closeGracefully({Duration drainTimeout = const Duration(seconds: 2)}) {
     SiloManagedDownloads.instance.detach(connection.id, _downloadRegistry);
+    _markClosed();
     return _api.closeGracefully(drainTimeout: drainTimeout);
+  }
+
+  void _markClosed() {
+    _closed = true;
+    _cancelOfflineRecheck();
+    if (_cardOverlaysCreated) cardOverlays.dispose();
   }
 
   @override
@@ -293,7 +341,11 @@ class SiloClient
   @override
   Future<HealthStatus> checkHealth() async {
     final status = await _probeHealth();
-    if (status == HealthStatus.offline) onServerUnreachable?.call();
+    if (status == HealthStatus.offline) {
+      _scheduleOfflineRecheck();
+    } else {
+      _cancelOfflineRecheck();
+    }
     return status;
   }
 
@@ -304,6 +356,7 @@ class SiloClient
         '/api/v2/account/me',
         profile: false,
         timeout: const Duration(seconds: 10),
+        reportUnreachable: false,
       );
       if (response.statusCode == 200) {
         _sessionExpired = false;
@@ -1222,17 +1275,24 @@ class SiloClient
 
   /// The badges this profile's cards draw (Silo's card overlays): read on the
   /// first Silo card and again on Home loads, one read in flight at a time.
-  late final SiloCardOverlayStore cardOverlays = SiloCardOverlayStore(
-    cacheKey: connection.id,
-    readConfig: () => _readOptionalJson('/api/v2/settings/overlay-config'),
-    readValues: () => _readOptionalJson(
-      '/api/v2/settings/values/effective',
-      query: {
-        'keys': const [SiloCardOverlays.documentKey, SiloCardOverlays.enabledKey],
-      },
-    ),
-    isOffline: () => isOfflineMode,
-  );
+  bool _cardOverlaysCreated = false;
+
+  late final SiloCardOverlayStore cardOverlays = _createCardOverlays();
+
+  SiloCardOverlayStore _createCardOverlays() {
+    _cardOverlaysCreated = true;
+    return SiloCardOverlayStore(
+      cacheKey: connection.id,
+      readConfig: () => _readOptionalJson('/api/v2/settings/overlay-config'),
+      readValues: () => _readOptionalJson(
+        '/api/v2/settings/values/effective',
+        query: {
+          'keys': const [SiloCardOverlays.documentKey, SiloCardOverlays.enabledKey],
+        },
+      ),
+      isOffline: () => isOfflineMode,
+    );
+  }
 
   /// The URL of an uploaded overlay image: a public, immutable API read under
   /// the server's base URL, loaded without any credentials.

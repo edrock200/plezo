@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart' show visibleForTesting;
@@ -312,13 +311,14 @@ class SiloApi {
     Duration? timeout,
     AbortController? abort,
     bool resendAfterRefresh = true,
+    bool reportUnreachable = true,
   }) async {
     if (!path.startsWith('/api/v2/')) {
       throw ArgumentError.value(path, 'path', 'Silo requests must target /api/v2/');
     }
     if (auth) await _refreshIfExpiring();
     final usedToken = _tokens?.accessToken;
-    var response = await _sendTracked(method, path, query, body, auth, profile, timeout, abort);
+    var response = await _sendTracked(method, path, query, body, auth, profile, timeout, abort, reportUnreachable);
     // (A missing profile PIN token is a 403, not a 401.)
     if (auth && response.statusCode == 401 && _tokens != null) {
       // Another request may already have refreshed while this one was in
@@ -330,9 +330,9 @@ class SiloApi {
       // the fresh token for the person's next try, never a resend.
       if (!resendAfterRefresh) return response;
       if (refreshed != null) {
-        response = await _sendTracked(method, path, query, body, auth, profile, timeout, abort);
+        response = await _sendTracked(method, path, query, body, auth, profile, timeout, abort, reportUnreachable);
       }
-      if (response.statusCode == 401) onServerUnreachable?.call();
+      if (response.statusCode == 401 && reportUnreachable) onServerUnreachable?.call();
     }
     // Nothing but the password change gets past this refusal, so no caller
     // can use the raw answer: every screen gets the plain message instead.
@@ -344,7 +344,9 @@ class SiloApi {
 
   /// [_send], counting consecutive connection failures for
   /// [onServerUnreachable]. A slow answer (receive timeout) or a cancelled
-  /// request says nothing about reachability and is not counted.
+  /// request says nothing about reachability and is not counted. A health
+  /// probe ([reportUnreachable] false) is not counted either: its owner reads
+  /// the answer itself, and reporting it would start another probe.
   Future<MediaServerResponse> _sendTracked(
     String method,
     String path,
@@ -354,12 +356,14 @@ class SiloApi {
     bool profile,
     Duration? timeout,
     AbortController? abort,
+    bool reportUnreachable,
   ) async {
     try {
       final response = await _send(method, path, query, body, auth, profile, timeout, abort);
       _consecutiveTransportFailures = 0;
       return response;
     } on MediaServerHttpException catch (e) {
+      if (!reportUnreachable) rethrow;
       if (e.type == MediaServerHttpErrorType.connectionError || e.type == MediaServerHttpErrorType.connectionTimeout) {
         if (++_consecutiveTransportFailures >= unreachableAfterFailures) {
           _consecutiveTransportFailures = 0;
@@ -437,61 +441,16 @@ class SiloApi {
         timeout: timeout,
         abort: abort,
       ),
-      'DELETE' => _deleteWithBody(path, query, headers, body, timeout, abort),
+      'DELETE' => _http.delete(
+        path,
+        queryParameters: query,
+        headers: headers,
+        body: body,
+        timeout: timeout,
+        abort: abort,
+      ),
       _ => throw ArgumentError.value(method, 'method'),
     };
-  }
-
-  /// `DELETE /playback/{session}` carries a JSON body, which the shared
-  /// client's `delete` does not take; route it through a raw request.
-  Future<MediaServerResponse> _deleteWithBody(
-    String path,
-    Map<String, dynamic>? query,
-    Map<String, String> headers,
-    Object? body,
-    Duration? timeout,
-    AbortController? abort,
-  ) async {
-    if (body == null) {
-      return _http.delete(path, queryParameters: query, headers: headers, timeout: timeout, abort: abort);
-    }
-    final uri = _http.buildUri(path, queryParameters: query);
-    final request = http.Request('DELETE', uri)
-      ..headers.addAll(_http.defaultHeaders)
-      ..headers.addAll(headers)
-      ..headers['Content-Type'] = 'application/json'
-      ..body = jsonEncode(body);
-    try {
-      final streamed = await _http.inner.send(request).timeout(timeout ?? MediaServerTimeouts.receive);
-      final response = await http.Response.fromStream(streamed);
-      Object? data;
-      if (response.body.isNotEmpty && (response.headers['content-type'] ?? '').contains('json')) {
-        try {
-          data = jsonDecode(response.body);
-        } catch (_) {
-          data = response.body;
-        }
-      }
-      return MediaServerResponse(
-        statusCode: response.statusCode,
-        data: data,
-        headers: response.headers,
-        requestUri: uri,
-      );
-    } on TimeoutException {
-      throw MediaServerHttpException(
-        type: MediaServerHttpErrorType.receiveTimeout,
-        requestUri: uri,
-        message: 'Timeout',
-      );
-    } catch (e) {
-      if (e is MediaServerHttpException) rethrow;
-      throw MediaServerHttpException(
-        type: MediaServerHttpErrorType.connectionError,
-        requestUri: uri,
-        message: e.runtimeType.toString(),
-      );
-    }
   }
 
   /// Refresh before a request when the token's remaining life is at most

@@ -116,9 +116,17 @@ internal class SiloPairingChannel(context: Context) {
         Log.w(TAG, "pairing service unregistration failed: $errorCode")
       }
     }
-    registration = listener
-    nsdManager?.registerService(info, NsdManager.PROTOCOL_DNS_SD, listener)
-    thread(isDaemon = true, name = "silo-pairing-accept") { acceptLoop(socket, bridgePort, secret.copyOf()) }
+    try {
+      nsdManager?.registerService(info, NsdManager.PROTOCOL_DNS_SD, listener)
+      registration = listener
+      thread(isDaemon = true, name = "silo-pairing-accept") { acceptLoop(socket, bridgePort, secret.copyOf()) }
+    } catch (t: Throwable) {
+      // Nothing listens without the advertisement: close the socket (which
+      // also ends an accept loop that did start) rather than keep it open
+      // until the next start or stop.
+      stopNow()
+      throw t
+    }
     Log.i(TAG, "pairing listener on port ${socket.localPort}")
     return socket.localPort
   }

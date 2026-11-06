@@ -14,6 +14,7 @@ import '../exceptions/media_server_exceptions.dart';
 import 'connectivity_probe.dart';
 import 'jellyfin_client.dart';
 import 'jellyfin_endpoint_discovery.dart';
+import 'silo/silo_card_overlay_store.dart';
 import 'silo/silo_client.dart';
 import 'plex_client.dart';
 import '../models/plex/plex_config.dart';
@@ -1090,7 +1091,13 @@ class MultiServerManager {
       final machineId = connection.serverId;
       _wireSiloClient(client, compoundId: compoundId, machineId: machineId);
       final oldClient = _jellyfinByCompoundId[compoundId];
-      if (oldClient != null) unawaited(_closeClientGracefully(oldClient));
+      if (oldClient is SiloClient && !oldClient.ownsRefreshToken(connection.refreshToken)) {
+        // A new sign-in replaces this login session: revoke the old one on
+        // the server with the old client's own tokens, then close it.
+        unawaited(_logOutAndCloseSilo(oldClient, oldClient.connection));
+      } else if (oldClient != null) {
+        unawaited(_closeClientGracefully(oldClient));
+      }
       _jellyfinByCompoundId[compoundId] = client;
       _clients[machineId] = client;
       _activeJellyfinMachine[machineId] = compoundId;
@@ -1174,6 +1181,7 @@ class MultiServerManager {
   /// revoked on the server (best effort, in the background), as Silo's apps
   /// do on sign-out; removal never waits for it.
   void removeSiloConnection(SiloConnection connection) {
+    SiloCardOverlayStore.forget(connection.id);
     final client = _jellyfinByCompoundId.remove(connection.id);
     _jellyfinHealthByCompoundId.remove(connection.id);
     unawaited(_logOutAndCloseSilo(client, connection));

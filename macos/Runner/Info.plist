@@ -61,9 +61,5 @@
 	<false/>
 	<key>SUEnableAutomaticChecks</key>
 	<false/>
-	<key>SUFeedURL</key>
-	<string>https://cdn.jsdelivr.net/gh/edde746/plezy@appcast/appcast.xml</string>
-	<key>SUPublicEDKey</key>
-	<string>q7t6eu1txRrqv1PeWDCRV95rFxnmD/D3GZWbUPMwUyU=</string>
 </dict>
 </plist>

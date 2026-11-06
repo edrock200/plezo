@@ -374,6 +374,13 @@ void main() {
       expect(c.cardOverlays.value!.prefs.preset, 'classic');
     });
 
+    test('closing the client disposes its overlay store', () async {
+      final c = client((request) async => http.Response('', 404));
+      await c.cardOverlays.ensureLoaded();
+      c.close();
+      expect(c.cardOverlays.isDisposed, isTrue);
+    });
+
     test('uploaded images load from the base URL with no credentials in the URL', () {
       final c = client((_) async => _json({}));
       final ref = '${'c' * 64}.webp';
@@ -1292,6 +1299,29 @@ void main() {
       requests.clear();
       await c.fetchRelatedHubs('series:s1');
       expect(requests.where((r) => r.url.path.endsWith('/box-set')), isEmpty);
+    });
+  });
+
+  group('adopted tokens keep their lifetime', () {
+    test('adoptTokens carries the access token lifetime to the connection and the half-life refresh', () async {
+      final c = client((request) async => _json({}, 404));
+      final rotated = _connection(accessToken: 'acc-2', refreshToken: 'ref-2').copyWith(
+        accessTokenExpiresAt: DateTime.now().add(const Duration(seconds: 600)),
+        accessTokenLifetimeSeconds: 900,
+      );
+      c.adoptTokens(rotated);
+      expect(c.connection.accessTokenLifetimeSeconds, 900);
+      expect(c.connection.refreshToken, 'ref-2');
+
+      // 600 s of a 900 s token left: more than half, so a play does not
+      // rotate the pair (with the 3600 s default it would).
+      final metadata = MediaItem.silo(id: 'movie:m1', kind: MediaKind.movie, serverId: 'srv-1');
+      try {
+        await c.getPlaybackInitialization(PlaybackInitializationOptions(metadata: metadata, selectedMediaIndex: 0));
+      } catch (_) {
+        // No watch detail in this stub; only the refresh decision matters.
+      }
+      expect(requests.where((r) => r.url.path.endsWith('/auth/refresh')), isEmpty);
     });
   });
 }

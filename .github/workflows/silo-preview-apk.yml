@@ -38,15 +38,19 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: silo-preview-apk-${{ github.ref }}
-  cancel-in-progress: true
-
+# Any later push to the branch still cancels a build in progress: the gate and
+# the build share one cancelling group. Publishing (the numbered release and
+# the fixed-name links) runs in its own group that is never cancelled, so a
+# push that lands mid-publish cannot leave a new release whose fixed links
+# (the Fire TV Downloader codes) still serve the previous preview.
 jobs:
   # Release markers count only in the commit's first line, so a message body
   # may mention them without starting a build.
   gate:
     runs-on: ubuntu-latest
+    concurrency:
+      group: silo-preview-apk-build-${{ github.ref }}
+      cancel-in-progress: true
     outputs:
       mode: ${{ steps.marker.outputs.mode }}
     steps:
@@ -65,8 +69,14 @@ jobs:
     needs: gate
     if: ${{ needs.gate.outputs.mode == 'apk' }}
     runs-on: ubuntu-latest
+    concurrency:
+      group: silo-preview-apk-build-${{ github.ref }}
+      cancel-in-progress: true
     permissions:
-      contents: write
+      contents: read
+    outputs:
+      tag: ${{ steps.apks.outputs.tag }}
+      version: ${{ steps.apks.outputs.version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -226,13 +236,44 @@ jobs:
           python3 scripts/silo_release_notes.py docs/silo-preview-changelog.md "Next preview" release-notes.md \
             "${GITHUB_REF_NAME}" "${GITHUB_SHA}"
 
+      - name: Keep the APKs for publishing
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: silo-preview-apks
+          path: |
+            dist/
+            release-notes.md
+          if-no-files-found: error
+          retention-days: 3
+
+  # Not cancelled by later pushes (its own group, cancel-in-progress false):
+  # the release and the fixed-name links are updated together or not at all.
+  publish-android:
+    needs: build-android
+    runs-on: ubuntu-latest
+    concurrency:
+      group: silo-preview-apk-publish-${{ github.ref }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Fetch the APKs
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: silo-preview-apks
+          path: .
+
       # The tag must still be free: another build may have taken the number
       # since it was picked, and the release action would add to its release.
       - name: Check the tag is unused
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
-          TAG: ${{ steps.apks.outputs.tag }}
+          TAG: ${{ needs.build-android.outputs.tag }}
         run: |
           set -euo pipefail
           if gh api "repos/${GH_REPO}/git/ref/tags/${TAG}" > /dev/null 2>&1; then
@@ -246,8 +287,8 @@ jobs:
           files: dist/*
           draft: false
           prerelease: true
-          name: Plezilo ${{ steps.apks.outputs.version }} (Silo preview)
-          tag_name: ${{ steps.apks.outputs.tag }}
+          name: Plezilo ${{ needs.build-android.outputs.version }} (Silo preview)
+          tag_name: ${{ needs.build-android.outputs.tag }}
           target_commitish: ${{ github.sha }}
           body_path: release-notes.md
         env:
@@ -259,7 +300,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
-        run: bash scripts/silo_android_latest.sh "${{ steps.apks.outputs.tag }}"
+        run: bash scripts/silo_android_latest.sh "${{ needs.build-android.outputs.tag }}"
 
   # "[release-android-latest]" in a commit's first line re-points the fixed-name links at the
   # newest numbered preview without building anything.
@@ -267,6 +308,9 @@ jobs:
     needs: gate
     if: ${{ needs.gate.outputs.mode == 'latest' }}
     runs-on: ubuntu-latest
+    concurrency:
+      group: silo-preview-apk-publish-${{ github.ref }}
+      cancel-in-progress: false
     permissions:
       contents: write
     steps:

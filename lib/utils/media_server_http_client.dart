@@ -175,13 +175,24 @@ class MediaServerHttpClient {
     abort: abort,
   );
 
+  /// [body], when given, is encoded as for [post] (Silo's
+  /// `DELETE /playback/{session}` carries one).
   Future<MediaServerResponse> delete(
     String path, {
     Map<String, dynamic>? queryParameters,
     Map<String, String>? headers,
+    Object? body,
     Duration? timeout,
     AbortController? abort,
-  }) => _send('DELETE', path, queryParameters: queryParameters, headers: headers, timeout: timeout, abort: abort);
+  }) => _send(
+    'DELETE',
+    path,
+    queryParameters: queryParameters,
+    headers: headers,
+    body: body,
+    timeout: timeout,
+    abort: abort,
+  );
 
   /// Fetch raw bytes (e.g. images, BIF files, subtitles).
   ///

@@ -2893,5 +2893,11 @@
     "nextChapter": "Next chapter",
     "playPause": "Play or pause",
     "speed": "Speed"
+  },
+  "reviewFixes": {
+    "plainHttpTitle": "Connect without encryption?",
+    "plainHttpMessage": "${server} answered only over plain HTTP. Your password, sign-in code and what you watch will be sent unencrypted. Only do this on a network you trust.",
+    "plainHttpConfirm": "Connect",
+    "plainHttpBadge": "Not encrypted (HTTP)"
   }
 }

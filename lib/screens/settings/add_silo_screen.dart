@@ -36,6 +36,7 @@ import '../../services/storage_service.dart';
 import '../../theme/mono_tokens.dart';
 import '../../utils/app_logger.dart';
 import '../../utils/device_identity.dart';
+import '../../utils/dialogs.dart';
 import '../../utils/layout_constants.dart';
 import '../../utils/platform_detector.dart';
 import '../../utils/snackbar_helper.dart';
@@ -539,6 +540,21 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
       errorMapper: _errorFor,
     );
     if (server == null || !mounted || !_editAcceptsServer(server)) return;
+    // https is always tried first; only plain HTTP answered. Nothing is sent
+    // with a credential until the person accepts that, as in Silo's apps.
+    if (siloUsesPlainHttp(server.baseUrl)) {
+      final accepted = await showConfirmDialog(
+        context,
+        title: t.reviewFixes.plainHttpTitle,
+        message: t.reviewFixes.plainHttpMessage(server: siloHostLabel(server.baseUrl)),
+        confirmText: t.reviewFixes.plainHttpConfirm,
+      );
+      if (!mounted) return;
+      if (!accepted) {
+        requestFocusAfterFrame(_urlFocus);
+        return;
+      }
+    }
     setState(() {
       _server = server;
       _urlController.text = server.baseUrl;
@@ -1347,7 +1363,10 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
       ),
       child: Row(
         children: [
-          const AppIcon(Symbols.cloud_done_rounded, fill: 1),
+          AppIcon(
+            siloUsesPlainHttp(server.baseUrl) ? Symbols.no_encryption_rounded : Symbols.cloud_done_rounded,
+            fill: 1,
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -1360,6 +1379,11 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
                   overflow: .ellipsis,
                   style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.7)),
                 ),
+                if (siloUsesPlainHttp(server.baseUrl))
+                  Text(
+                    t.reviewFixes.plainHttpBadge,
+                    style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error),
+                  ),
               ],
             ),
           ),

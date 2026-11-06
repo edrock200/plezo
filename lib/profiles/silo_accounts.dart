@@ -57,11 +57,30 @@ String newProfileNameForSiloConnection(SiloConnection connection, Iterable<Strin
   }
 }
 
+/// [bindings] in the order a profile binds a Silo server's account: the
+/// default binding first, then the most recently used ([lastUsedMs], epoch
+/// milliseconds; null counts as never), then the lowest connection id. The one
+/// place this order lives: browsing ([shadowedSiloConnectionIds]) and the
+/// offline cache scope (`DownloadManagerService`) must agree on the account.
+List<T> sortedBySiloBindingPreference<T>(
+  Iterable<T> bindings, {
+  required bool Function(T binding) isDefault,
+  required int? Function(T binding) lastUsedMs,
+  required String Function(T binding) connectionId,
+}) {
+  final sorted = bindings.toList();
+  sorted.sort((a, b) {
+    final aDefault = isDefault(a);
+    if (aDefault != isDefault(b)) return aDefault ? -1 : 1;
+    final used = (lastUsedMs(b) ?? 0).compareTo(lastUsedMs(a) ?? 0);
+    return used != 0 ? used : connectionId(a).compareTo(connectionId(b));
+  });
+  return sorted;
+}
+
 /// Connection ids among one Plezilo profile's [joinRows] that are *not* bound
-/// because another Silo connection to the same server wins: the default
-/// binding first, then the most recently used, then the lowest id (the order
-/// `DownloadManagerService._siloProfileScopeId` uses for the cache scope, so
-/// browsing and offline data agree on the account).
+/// because another Silo connection to the same server wins, in the order of
+/// [sortedBySiloBindingPreference].
 Set<String> shadowedSiloConnectionIds(Iterable<ProfileConnection> joinRows, Map<String, Connection> connectionsById) {
   final byServer = <String, List<ProfileConnection>>{};
   for (final row in joinRows) {
@@ -72,12 +91,13 @@ Set<String> shadowedSiloConnectionIds(Iterable<ProfileConnection> joinRows, Map<
   final shadowed = <String>{};
   for (final rows in byServer.values) {
     if (rows.length < 2) continue;
-    rows.sort((a, b) {
-      if (a.isDefault != b.isDefault) return a.isDefault ? -1 : 1;
-      final used = (b.lastUsedAt?.millisecondsSinceEpoch ?? 0).compareTo(a.lastUsedAt?.millisecondsSinceEpoch ?? 0);
-      return used != 0 ? used : a.connectionId.compareTo(b.connectionId);
-    });
-    shadowed.addAll(rows.skip(1).map((row) => row.connectionId));
+    final ordered = sortedBySiloBindingPreference(
+      rows,
+      isDefault: (row) => row.isDefault,
+      lastUsedMs: (row) => row.lastUsedAt?.millisecondsSinceEpoch,
+      connectionId: (row) => row.connectionId,
+    );
+    shadowed.addAll(ordered.skip(1).map((row) => row.connectionId));
   }
   return shadowed;
 }

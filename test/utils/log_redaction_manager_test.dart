@@ -430,4 +430,46 @@ void main() {
       expect(result, 'TOK VAL https://example.com');
     });
   });
+
+  group('rotating tokens', () {
+    test('rotating tokens never evict long-lived tokens', () {
+      LogRedactionManager.registerToken('plex-account-token-long-lived');
+      LogRedactionManager.registerToken('jellyfin-access-token-long-lived');
+      // A day of Silo refreshes: far more pairs than either bound.
+      for (var i = 0; i < 200; i++) {
+        LogRedactionManager.registerRotatingToken('silo-access-$i-abcdef');
+        LogRedactionManager.registerRotatingToken('silo-refresh-$i-abcdef');
+      }
+      final result = LogRedactionManager.redact(
+        'h1 plex-account-token-long-lived h2 jellyfin-access-token-long-lived now silo-access-199-abcdef silo-refresh-199-abcdef',
+      );
+      expect(result, isNot(contains('long-lived')));
+      expect(result, isNot(contains('silo-access-199')));
+      expect(result, isNot(contains('silo-refresh-199')));
+      expect('[REDACTED_TOKEN]'.allMatches(result).length, 4);
+    });
+
+    test('the ring keeps recent rotations and drops the oldest', () {
+      for (var i = 0; i < 200; i++) {
+        LogRedactionManager.registerRotatingToken('silo-access-$i-abcdef');
+      }
+      expect(LogRedactionManager.redact('silo-access-198-abcdef'), '[REDACTED_TOKEN]');
+      expect(LogRedactionManager.redact('silo-access-0-abcdef'), 'silo-access-0-abcdef');
+    });
+
+    test('a rotating token already registered as long-lived stays long-lived', () {
+      LogRedactionManager.registerToken('shared-token-value');
+      LogRedactionManager.registerRotatingToken('shared-token-value');
+      for (var i = 0; i < 200; i++) {
+        LogRedactionManager.registerRotatingToken('silo-access-$i-abcdef');
+      }
+      expect(LogRedactionManager.redact('shared-token-value'), '[REDACTED_TOKEN]');
+    });
+
+    test('clearTrackedValues forgets rotating tokens', () {
+      LogRedactionManager.registerRotatingToken('silo-access-x-abcdef');
+      LogRedactionManager.clearTrackedValues();
+      expect(LogRedactionManager.redact('silo-access-x-abcdef'), 'silo-access-x-abcdef');
+    });
+  });
 }

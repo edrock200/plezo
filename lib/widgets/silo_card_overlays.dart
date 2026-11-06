@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:provider/provider.dart';
 
@@ -85,9 +86,33 @@ class _CardArtworkOverlaysState extends State<CardArtworkOverlays> {
 
   void _resolveStore() {
     final store = CardArtworkOverlays.storeFor(context, widget.item);
+    if (!identical(store, _store)) {
+      _store?.removeListener(_onStoreChanged);
+      // A store its client already closed is not listened to.
+      if (store != null && !store.isDisposed) store.addListener(_onStoreChanged);
+    }
     _store = store;
     // Never notifies synchronously: the read lands in a later frame.
-    store?.ensureLoaded();
+    if (store != null && !store.isDisposed) store.ensureLoaded();
+  }
+
+  /// The store changed, or its client closed it (the client was replaced or
+  /// removed): rebuild, and in the second case look the client up again.
+  void _onStoreChanged() {
+    if (!mounted) return;
+    if (SchedulerBinding.instance.schedulerPhase == SchedulerPhase.persistentCallbacks) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _onStoreChanged());
+      return;
+    }
+    setState(() {
+      if (_store?.isDisposed ?? false) _resolveStore();
+    });
+  }
+
+  @override
+  void dispose() {
+    _store?.removeListener(_onStoreChanged);
+    super.dispose();
   }
 
   String? _imageUrl(String ref) {
@@ -100,9 +125,9 @@ class _CardArtworkOverlaysState extends State<CardArtworkOverlays> {
   Widget build(BuildContext context) {
     final store = _store;
     if (store == null) return WatchedIndicator(item: widget.item, size: widget.size);
-    return ValueListenableBuilder<SiloCardOverlaySettings?>(
-      valueListenable: store,
-      builder: (context, settings, _) {
+    return Builder(
+      builder: (context) {
+        final settings = store.value;
         if (settings == null || !settings.enabled) return WatchedIndicator(item: widget.item, size: widget.size);
         final item = widget.item;
         final showWatched = SettingsService.instance.read(SettingsService.showWatchedIndicators);

@@ -2,6 +2,7 @@
 """Posts a Plezilo (Silo preview) release to a Discord channel webhook.
 
   DISCORD_WEBHOOK_URL=<url> python3 scripts/silo_announce_discord.py <tag> [<repo>]
+  python3 scripts/silo_announce_discord.py --self-test
 
 The message is the release's own notes (the plain-language section of
 docs/silo-preview-changelog.md that silo-release-notes.yml puts on the release)
@@ -12,6 +13,8 @@ secret: it comes from the environment and is never committed or printed.
 import json
 import os
 import sys
+import urllib.error
+import urllib.parse
 import urllib.request
 
 
@@ -68,7 +71,29 @@ def downloads(assets: list) -> str:
     return "\n".join(f"**{k}:** " + " · ".join(v) for k, v in groups.items() if v)
 
 
+def with_wait(url: str) -> str:
+    """The webhook URL with `wait=true` merged into its query, keeping what it already
+    carries (e.g. `thread_id=` for a forum thread) and replacing an existing `wait`."""
+    parts = urllib.parse.urlsplit(url)
+    query = [(k, v) for k, v in urllib.parse.parse_qsl(parts.query, keep_blank_values=True) if k != "wait"]
+    query.append(("wait", "true"))
+    return urllib.parse.urlunsplit(parts._replace(query=urllib.parse.urlencode(query)))
+
+
+def self_test() -> int:
+    base = "https://discord.com/api/webhooks/1/abc"
+    assert with_wait(base) == base + "?wait=true"
+    assert with_wait(base + "?thread_id=42") == base + "?thread_id=42&wait=true"
+    assert with_wait(base + "?wait=false&thread_id=42") == base + "?thread_id=42&wait=true"
+    assert with_wait(base + "?") == base + "?wait=true"
+    assert with_wait(base + "#frag") == base + "?wait=true#frag"
+    print("silo_announce_discord self-test passed.")
+    return 0
+
+
 def main() -> int:
+    if sys.argv[1:2] == ["--self-test"]:
+        return self_test()
     url = os.environ.get("DISCORD_WEBHOOK_URL", "").strip()
     if not url:
         print("DISCORD_WEBHOOK_URL is not set; nothing posted.")
@@ -89,10 +114,18 @@ def main() -> int:
                     "description": notes + links, "color": 0x4F46E5}],
         "allowed_mentions": {"parse": []},
     }
-    req = urllib.request.Request(url + "?wait=true", data=json.dumps(payload).encode(),
+    req = urllib.request.Request(with_wait(url), data=json.dumps(payload).encode(),
                                  headers={"Content-Type": "application/json", "User-Agent": "plezo-release"})
-    with urllib.request.urlopen(req, timeout=30) as resp:
-        print(f"Posted {tag} to Discord (HTTP {resp.status}).")
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            print(f"Posted {tag} to Discord (HTTP {resp.status}).")
+    except urllib.error.HTTPError as e:
+        # Never print the request (its URL is the webhook secret); the status says enough.
+        print(f"Discord refused the post for {tag} (HTTP {e.code}).", file=sys.stderr)
+        return 1
+    except urllib.error.URLError as e:
+        print(f"Could not reach Discord for {tag} ({type(e.reason).__name__}).", file=sys.stderr)
+        return 1
     return 0
 
 
