@@ -20,6 +20,7 @@ import 'package:plezy/services/playback_initialization_types.dart';
 import 'package:plezy/services/plex_api_cache.dart';
 import 'package:plezy/services/silo/silo_api.dart';
 import 'package:plezy/services/silo/silo_api_cache.dart';
+import 'package:plezy/services/silo/silo_card_overlay_store.dart';
 import 'package:plezy/services/silo/silo_client.dart';
 import 'package:plezy/services/silo/silo_mappers.dart';
 
@@ -329,6 +330,57 @@ void main() {
     expect(query['scope'], 'home');
   });
 
+  group('card overlays', () {
+    setUp(SiloCardOverlayStore.resetKnownForTesting);
+
+    test('Home loads read the overlay config and the profile values once, together', () async {
+      final c = client((request) async {
+        final path = request.url.path;
+        if (path.endsWith('/settings/overlay-config')) {
+          return _json({
+            'enabled': true,
+            'defaults': jsonEncode({'version': 2, 'preset': 'plate', 'items': {}}),
+          });
+        }
+        if (path.endsWith('/settings/values/effective')) {
+          return _json({
+            'items': [
+              {'key': 'ui.card_overlays_enabled', 'source': 'profile', 'value': false},
+            ],
+            'revision': 3,
+          });
+        }
+        if (path.endsWith('/home/capabilities')) return _json({});
+        return _json({'sections': []});
+      });
+      await Future.wait([c.fetchGlobalHubs(), c.fetchGlobalHubs(), c.cardOverlays.ensureLoaded()]);
+      await c.cardOverlays.ensureLoaded();
+      final reads = requests.where((r) => r.url.path.contains('/settings/')).toList();
+      expect(reads.map((r) => r.url.path), [
+        '/base/api/v2/settings/overlay-config',
+        '/base/api/v2/settings/values/effective',
+      ]);
+      expect(reads.last.url.queryParametersAll['keys'], ['ui.card_overlays', 'ui.card_overlays_enabled']);
+      expect(reads.every((r) => r.headers['X-Profile-Id'] == 'p-owner'), isTrue);
+      final settings = c.cardOverlays.value!;
+      expect(settings.enabled, isFalse);
+      expect(settings.prefs.preset, 'plate');
+    });
+
+    test('a server without the routes draws the built-in document', () async {
+      final c = client((request) async => http.Response('', 404));
+      await c.cardOverlays.ensureLoaded();
+      expect(c.cardOverlays.value!.enabled, isTrue);
+      expect(c.cardOverlays.value!.prefs.preset, 'classic');
+    });
+
+    test('uploaded images load from the base URL with no credentials in the URL', () {
+      final c = client((_) async => _json({}));
+      final ref = '${'c' * 64}.webp';
+      expect(c.cardOverlayImageUrl(ref), 'https://silo.example.com/base/api/v2/overlay-images/$ref');
+    });
+  });
+
   group('section rows item_limit', () {
     final sections = {
       'sections': [
@@ -401,6 +453,8 @@ void main() {
           capabilityReads++;
           return _json({'section_item_limit_max': 50});
         }
+        // Home loads also read the card overlay settings.
+        if (request.url.path.contains('/api/v2/settings/')) return http.Response('', 404);
         final limit = request.url.queryParameters['item_limit'];
         limits.add(limit);
         if (limit != null) {

@@ -96,6 +96,7 @@ class Translations with BaseTranslations<AppLocale, Translations> {
 	late final Translations$addServer$en addServer = Translations$addServer$en.internal(_root);
 	late final Translations$deepLinks$en deepLinks = Translations$deepLinks$en.internal(_root);
 	late final Translations$siloPairing$en siloPairing = Translations$siloPairing$en.internal(_root);
+	late final Translations$siloCardOverlays$en siloCardOverlays = Translations$siloCardOverlays$en.internal(_root);
 }
 
 // Path: app
@@ -6550,6 +6551,39 @@ class Translations$siloPairing$en {
 	String failedUpdate({required Object server}) => '${server} or Plezilo needs an update before this device can sign in.';
 }
 
+// Path: siloCardOverlays
+class Translations$siloCardOverlays$en {
+	Translations$siloCardOverlays$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Multi-Audio'
+	String get multiAudio => 'Multi-Audio';
+
+	/// en: 'CC'
+	String get subtitles => 'CC';
+
+	/// en: '${hours}h ${minutes}m'
+	String runtimeHoursMinutes({required Object hours, required Object minutes}) => '${hours}h ${minutes}m';
+
+	/// en: '${minutes}m'
+	String runtimeMinutes({required Object minutes}) => '${minutes}m';
+
+	/// en: 'Returning'
+	String get returning => 'Returning';
+
+	/// en: 'Ended'
+	String get ended => 'Ended';
+
+	/// en: 'Cancelled'
+	String get cancelled => 'Cancelled';
+
+	/// en: 'Upcoming'
+	String get upcoming => 'Upcoming';
+}
+
 // Path: appIcon.names
 class Translations$appIcon$names$en {
 	Translations$appIcon$names$en.internal(this._root);
@@ -11123,6 +11157,14 @@ extension on Translations {
 			'siloPairing.failedIdentity' => ({required Object server}) => 'The phone or tablet sent an address for ${server} that answered as a different server. Check the server on your phone or tablet, or add it here.',
 			'siloPairing.failedIdentitySignIn' => ({required Object server}) => 'The phone or tablet offered ${server}, which isn\'t the server this sign-in is for. Choose the same server on your phone or tablet.',
 			'siloPairing.failedUpdate' => ({required Object server}) => '${server} or Plezilo needs an update before this device can sign in.',
+			'siloCardOverlays.multiAudio' => 'Multi-Audio',
+			'siloCardOverlays.subtitles' => 'CC',
+			'siloCardOverlays.runtimeHoursMinutes' => ({required Object hours, required Object minutes}) => '${hours}h ${minutes}m',
+			'siloCardOverlays.runtimeMinutes' => ({required Object minutes}) => '${minutes}m',
+			'siloCardOverlays.returning' => 'Returning',
+			'siloCardOverlays.ended' => 'Ended',
+			'siloCardOverlays.cancelled' => 'Cancelled',
+			'siloCardOverlays.upcoming' => 'Upcoming',
 			_ => null,
 		};
 	}

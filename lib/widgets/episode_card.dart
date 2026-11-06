@@ -17,6 +17,7 @@ import '../media/media_item.dart';
 import '../media/media_item_types.dart';
 import '../widgets/collapsible_text.dart';
 import '../widgets/download_status_icon.dart';
+import '../widgets/silo_card_overlays.dart';
 import '../widgets/watched_indicator.dart';
 import '../widgets/optimized_media_image.dart';
 import '../utils/platform_detector.dart';
@@ -214,7 +215,11 @@ class _EpisodeCardState extends State<EpisodeCard> with ContextMenuTapMixin<Epis
                           ),
 
                           Positioned.fill(
-                            child: WatchedIndicator(item: episode, size: WatchedIndicatorSize.compact),
+                            child: CardArtworkOverlays(
+                              item: episode,
+                              shape: SiloOverlayCardShape.wide,
+                              size: WatchedIndicatorSize.compact,
+                            ),
                           ),
                         ],
                       ),

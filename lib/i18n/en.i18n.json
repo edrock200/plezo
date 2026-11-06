@@ -2735,5 +2735,15 @@
     "failedIdentity": "The phone or tablet sent an address for ${server} that answered as a different server. Check the server on your phone or tablet, or add it here.",
     "failedIdentitySignIn": "The phone or tablet offered ${server}, which isn't the server this sign-in is for. Choose the same server on your phone or tablet.",
     "failedUpdate": "${server} or Plezilo needs an update before this device can sign in."
+  },
+  "siloCardOverlays": {
+    "multiAudio": "Multi-Audio",
+    "subtitles": "CC",
+    "runtimeHoursMinutes": "${hours}h ${minutes}m",
+    "runtimeMinutes": "${minutes}m",
+    "returning": "Returning",
+    "ended": "Ended",
+    "cancelled": "Cancelled",
+    "upcoming": "Upcoming"
   }
 }

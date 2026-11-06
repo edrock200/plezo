@@ -1,6 +1,6 @@
 ---
 name: silo-backend
-description: How Plezilo's (this Plezy fork's) Silo media-server backend works and how to change, test and debug it. Use whenever you touch lib/services/silo/, the Silo sign-in screen (lib/screens/settings/add_silo_screen.dart), SiloConnection, SiloMediaItem or SiloApiCache; when a Silo user reports sign-in, browsing, playback, subtitle, download or progress problems; when checking Plezy against Silo's API contract or its Android/Android TV apps; or when running the Silo mock server.
+description: How Plezilo's (this Plezy fork's) Silo media-server backend works and how to change, test and debug it. Use whenever you touch lib/services/silo/, the Silo sign-in screen (lib/screens/settings/add_silo_screen.dart), SiloConnection, SiloMediaItem, SiloApiCache or Silo's card overlays (badges on Silo posters); when a Silo user reports sign-in, browsing, playback, subtitle, download or progress problems; when checking Plezy against Silo's API contract or its Android/Android TV apps; or when running the Silo mock server.
 ---
 
 # Silo backend for Plezilo
@@ -45,6 +45,9 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
 | `android/app/src/main/kotlin/com/edde746/plezy/silopairing/` | `SiloPairingChannel.kt` (`com.plezy/silo_pairing`: NsdManager registration, LAN listener, one phone at a time, relay to Dart) and `SiloPairingTls.kt` (BouncyCastle TLS-PSK server) |
 | `lib/connection/connection.dart` | `SiloConnection` (id `serverId/userId/profileId`) |
 | `lib/services/cached_playback_metadata_service.dart` | Offline markers/tracks for downloaded Silo items |
+| `lib/services/silo/silo_card_overlays.dart` | Card overlays, pure: registry, `ui.card_overlays` parsing (v1/v2, style), settle with the overlay config, labels, placement/caps/suppression, looks and colours, `SiloOverlayData` (from a card's raw JSON) |
+| `lib/services/silo/silo_card_overlay_store.dart` | `SiloCardOverlayStore` (`SiloClient.cardOverlays`): the two settings reads under one in-flight future, known value per connection |
+| `lib/widgets/silo_card_overlays.dart` | `CardArtworkOverlays` (Plezy's `WatchedIndicator`, or Silo's layer on Silo items), `SiloCardOverlayLayer` and the cached `SiloOverlayLayout` |
 
 ## Contract rules the code depends on
 - **Headers:** every request sends `Accept: application/json` and `X-Silo-Device-Id/-Name/-Platform`,
@@ -353,6 +356,36 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
   sheets, a refused one (4xx other than 429, unusable) withdraws the previews. Unlike Android, a
   manifest that fails at open is not retried later in that playback (the player builds the seek
   bar's thumbnail hook only for an available source). Offline playback never asks.
+- **Card overlays** (Silo's profile-chosen badges; silo-server `docs/architecture/card-overlays.md`, the web
+  renderer, ported from Silo's Roku app e8244ee `overlays.bs`/`overlayDraw.bs` and Silo Android's
+  `OverlayRegistry` incl. #816's `resolution_hdr_audio`): `SiloClient.cardOverlays` reads
+  `GET /settings/overlay-config` (`enabled`, `defaults` = the document as **JSON text**, `images[]` {ref,
+  width, height}) and `GET /settings/values/effective?keys=ui.card_overlays&keys=ui.card_overlays_enabled`
+  together (one in-flight future; first Silo card, then every Home load via `_homeSections`, at most every
+  30 s). A value counts only with `source: profile` (or no source). The profile's document wins, else the
+  config's `defaults`, else the built-in one (classic, registry defaults); `ui.card_overlays_enabled` wins,
+  else the config's `enabled`, else on. A 404 on either route counts as "nothing there"; any other failure
+  keeps what applies, and before the first answer cards draw Plezy's own indicator. The document: v2
+  (`version: 2` or `preset`+`items`) or v1 (badges by id, migrated); seven presets (minimal, classic,
+  vibrant, pill, square, plate, band; unknown = classic); `style` overrides (size 0.75–2, shape, 8-digit
+  background/border, 6-digit text colour, integer borderWidth 0–3, fontWeight, uppercase, shadow); per badge
+  `enabled`, `position` (`top-left`, `bottom-left`, `bottom-right`, `left-edge`, `right-edge`; a stored
+  `top-right` moves to the right rail, the corner belongs to the watch status), `accentColor`, `showIcon`,
+  `image` and `valueImages` (refs `<64 hex>.webp`, only those the config lists; loaded from
+  `<base>/api/v2/overlay-images/<ref>` through `MediaImageHelper.serverArtworkProvider`, no credentials; a
+  failed one is dropped and its badge draws without it). Caps: 3 a corner, 4 a rail; a badge without a
+  value takes no slot. An enabled `resolution_hdr_audio` hides resolution, hdr, audio and resolution_hdr;
+  `resolution_hdr` hides resolution and hdr (the document is untouched). Data comes from the card's raw JSON
+  (`SiloOverlayData.ofRaw(item.raw)`, cached per JSON object): `overlay_summary` (also on season episode
+  rows), the four ratings, `content_rating`, `advisory_age`, `year`, `runtime`, `original_language`, first
+  `studios`/`networks`, `show_status`; no new `MediaItem` fields (raw already round-trips). A poster scales
+  the web lengths by width/185; wide cards (landscape, episode stills) draw at 1 and a wide card with progress
+  lifts its bottom row by one inset. The top row stops short of the watch-status corner (22 px × k): Silo's
+  emerald check for a watched item, or the episodes left on a started, unfinished series/season (from
+  leaf counts, else `user_state.watched_count`/`unplayed_count`). While overlays are on, `WatchedIndicator
+  (showWatchStatus: false)` drops Plezy's check and unwatched pill on that card (progress bars stay); Plezy's
+  "watched indicators"/"unwatched count" settings still gate Silo's corner. Plex/Jellyfin/Emby cards never
+  look a store up (`CardArtworkOverlays.storeFor` returns null for non-Silo items).
 - **Limits:** `GET /catalog/people` caps `limit` at 100; catalog pages at 200.
 - **Offline:** `fetchItem` falls back to `SiloApiCache.getMetadata` (the pinned download row) on a
   transient error; watch detail is read through the cache too.
@@ -423,6 +456,12 @@ PIN length (matches Silo's apps). Open follow-ups: an edit screen for an existin
   Embedded subtitles drawn from the stream (Silo Android #770: `hls_subtitle_renditions_all_v1`,
   `native_embedded`) are not declared: Plezy keeps server sidecars.
 - Theme music (Silo Android #678) is not offered: Plezy plays no theme music for any backend.
+- Card overlays: Plezilo only reads the document (no editor, like Silo's TV apps). List-mode rows keep
+  Plezy's indicator (no badges on their small thumbnails). Dolby Vision has no mark of its own (the text says
+  "DV"; no Dolby artwork ships) and the other brand marks are bold text; glyphs are Material Symbols. Text is
+  the app's font (no letter-spacing); shadows blur for real (Flutter can). The request-status badge never has
+  data (Plezilo lists no watchlist titles outside the library). Changes made in Silo's web client show on the
+  next Home load, not live.
 - Music, audiobooks and e-books are not mapped (`SiloMappers.item` returns null; those libraries
   are hidden). Silo's own TV app keeps music minimal; the v2 contract has no album/track types.
 
@@ -465,6 +504,14 @@ PIN length (matches Silo's apps). Open follow-ups: an edit screen for an existin
   `test/utils/youtube_trailer_launcher_test.dart`); add one for each contract rule you change. Capability mocks must list
   `features: ['sequenced_progress_v1']`. Mock-client handlers must
   `Uri.decodeComponent(request.url.path)` — ids are percent-encoded on the wire.
+- Card overlays: `test/services/silo/silo_card_overlays_test.dart` (document/style parsing, settle and
+  enabled precedence, labels incl. "4K DV Atmos", placement, caps, suppression, looks/paint, store sharing,
+  404/failure/known value, failed images), `test/widgets/silo_card_overlays_test.dart` (a Silo `MediaCard`
+  with an injected store via `CardArtworkOverlays.debugStoreResolver`, Plex/Jellyfin/Emby unchanged, overlays
+  off, layout geometry) and the `card overlays` group in `silo_client_test.dart` (routes, `keys` repeated,
+  profile header). Mock handlers that count every request must let `/api/v2/settings/` through (Home loads
+  read them). Widget tests render with the test font (boxes), so check sizes and `find.text`, not
+  pictures.
 - Tests that read caches need `AppDatabase.forTesting(NativeDatabase.memory())` +
   `SiloApiCache.initialize(db)` (and `PlexApiCache` for the fallback).
 - End to end against Siku's mock server (any username, password `silo`; profile "Kids" PIN `1234`;
@@ -480,7 +527,8 @@ PIN length (matches Silo's apps). Open follow-ups: an edit screen for an existin
   direct-download routes (404), and its capabilities may omit `sequenced_progress_v1`, which makes
   Plezy refuse playback against it; test playback with `MockClient` handlers instead.
 - Stop the mock with `kill <pid>` from `ps -eo pid,args | grep "[m]ock_server"`, not `pkill`.
-- What cannot be verified in a cloud session: real playback, TV focus on a device, real Silo
+- What cannot be verified in a cloud session: real playback, TV focus on a device, how card overlays
+  look on real screens and against a real server's documents and uploaded images, real Silo
   servers, phone sign-in discovery and TLS (needs a device on a LAN with Silo's phone app; read
   `adb logcat -s SiloPairing` and the `[silo-pair]` app log lines). Say so in the report.
 

@@ -51,6 +51,8 @@ import '../playback_initialization_types.dart';
 import '../scrub_preview_source.dart';
 import 'silo_api.dart';
 import 'silo_api_cache.dart';
+import 'silo_card_overlay_store.dart';
+import 'silo_card_overlays.dart';
 import 'silo_mappers.dart';
 import 'silo_playback_caps.dart';
 import 'silo_subtitles.dart';
@@ -1141,6 +1143,9 @@ class SiloClient
   /// Home sections; concurrent callers (continue watching and the hubs load
   /// together) share one request.
   Future<List<Map<String, dynamic>>> _homeSections() => _homeSectionsInFlight ??= () async {
+    // A Home load is where the profile's card overlay settings may have
+    // changed (edited in Silo's web client); read them again alongside.
+    unawaited(cardOverlays.refresh());
     try {
       final data = await _sectionList('/api/v2/home/sections');
       return _itemsOf(data, 'sections');
@@ -1185,6 +1190,46 @@ class SiloClient
   }
 
   static const _capabilityReadTimeout = Duration(seconds: 3);
+
+  // ---------------------------------------------------------------------------
+  // Card overlays
+  // ---------------------------------------------------------------------------
+
+  /// The badges this profile's cards draw (Silo's card overlays): read on the
+  /// first Silo card and again on Home loads, one read in flight at a time.
+  late final SiloCardOverlayStore cardOverlays = SiloCardOverlayStore(
+    cacheKey: connection.id,
+    readConfig: () => _readOptionalJson('/api/v2/settings/overlay-config'),
+    readValues: () => _readOptionalJson(
+      '/api/v2/settings/values/effective',
+      query: {
+        'keys': const [SiloCardOverlays.documentKey, SiloCardOverlays.enabledKey],
+      },
+    ),
+    isOffline: () => isOfflineMode,
+  );
+
+  /// The URL of an uploaded overlay image: a public, immutable API read under
+  /// the server's base URL, loaded without any credentials.
+  String cardOverlayImageUrl(String ref) {
+    final base = _api.baseUrl.endsWith('/') ? _api.baseUrl.substring(0, _api.baseUrl.length - 1) : _api.baseUrl;
+    return '$base${SiloCardOverlays.imagePath}${Uri.encodeComponent(ref)}';
+  }
+
+  /// GET a JSON object, or null when the server has no such route (404).
+  Future<Map<String, dynamic>?> _readOptionalJson(String path, {Map<String, dynamic>? query}) async {
+    final response = await _api.request('GET', path, query: query, timeout: const Duration(seconds: 10));
+    if (response.statusCode == 404) return null;
+    throwIfHttpError(response);
+    final data = response.data;
+    if (data is Map<String, dynamic>) return data;
+    throw MediaServerHttpException(
+      type: MediaServerHttpErrorType.unknown,
+      statusCode: response.statusCode,
+      requestUri: response.requestUri,
+      message: 'Expected a JSON object from $path',
+    );
+  }
 
   /// Whether [error] is v2's 422 `validation_failed` naming `query.<name>`
   /// as an `unknown_parameter`.

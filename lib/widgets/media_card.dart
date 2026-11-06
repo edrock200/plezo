@@ -26,6 +26,7 @@ import '../services/download_storage_service.dart';
 import '../services/settings_service.dart';
 import 'catalog_context_menu.dart';
 import 'settings_builder.dart';
+import 'silo_card_overlays.dart';
 import 'watched_indicator.dart';
 import '../utils/content_utils.dart';
 import '../utils/media_image_helper.dart';
@@ -646,7 +647,8 @@ class MediaCardState extends State<MediaCard> with ContextMenuTapMixin<MediaCard
       artworkDim: widget.artworkDim,
     );
     final overlays = <Widget>[
-      if (item is MediaItem && _showsWatchedIndicator(item)) WatchedIndicator(item: item),
+      if (item is MediaItem && _showsWatchedIndicator(item))
+        CardArtworkOverlays(item: item, shape: _overlayShape(item)),
       if (badgeLabels.isNotEmpty) _CatalogBadges(labels: badgeLabels),
     ];
     return ExcludeSemantics(
@@ -658,6 +660,21 @@ class MediaCardState extends State<MediaCard> with ContextMenuTapMixin<MediaCard
             : Stack(children: [_clipPosterImage(context, item, image), ...overlays]),
       ),
     );
+  }
+
+  /// The artwork's shape for Silo's card overlays, as [_buildPosterImage]
+  /// picks the image type.
+  SiloOverlayCardShape _overlayShape(MediaItem item) {
+    final imageType = switch (widget.cardShapeOverride) {
+      CardShape.wide => ImageType.thumb,
+      CardShape.square || CardShape.poster => ImageType.poster,
+      null => MediaImageHelper.cardImageType(
+        item,
+        widget.episodePosterModeOverride ?? SettingsService.instance.read(SettingsService.episodePosterMode),
+        mixedHubContext: widget.mixedHubContext,
+      ),
+    };
+    return imageType == ImageType.thumb ? SiloOverlayCardShape.wide : SiloOverlayCardShape.poster;
   }
 
   Widget _buildStandardGridCard(

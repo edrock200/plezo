@@ -67,17 +67,23 @@ class WatchedIndicator extends StatelessWidget {
   /// visibility updates reactively with the caller's rebuilds.
   final bool? showUnwatchedCount;
 
+  /// False leaves out the watched check and the unwatched-count pill (the
+  /// progress bars stay): Silo's card overlays draw their own watch status.
+  final bool showWatchStatus;
+
   const WatchedIndicator({
     super.key,
     required this.item,
     this.size = WatchedIndicatorSize.standard,
     this.showUnwatchedCount,
+    this.showWatchStatus = true,
   });
 
   @override
   Widget build(BuildContext context) {
-    final bool showCount = showUnwatchedCount ?? SettingsService.instance.read(SettingsService.showUnwatchedCount);
-    final bool showWatched = SettingsService.instance.read(SettingsService.showWatchedIndicators);
+    final bool showCount =
+        showWatchStatus && (showUnwatchedCount ?? SettingsService.instance.read(SettingsService.showUnwatchedCount));
+    final bool showWatched = showWatchStatus && SettingsService.instance.read(SettingsService.showWatchedIndicators);
     final hasActiveProgress = item.hasActiveProgress;
     final unwatched = item.unwatchedCount;
     final barRadius = BorderRadius.only(
