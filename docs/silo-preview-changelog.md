@@ -4,6 +4,10 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+## silo-preview-2.25.15
+
+Released November 6, 2026. Android and Windows.
+
 - **Audiobooks from your Silo server:** Silo audiobook libraries now show in Plezilo. Each book has a page with its authors, narrators, parts and chapters, and Play, Resume or Start over. The player saves your place on the server, moves by chapter or 30 seconds, plays at 0.75× to 2×, and works from the lock screen and notifications. If the server drops the session it picks up where it was; if an administrator stops it, Plezilo says so. (Silo has no music libraries yet, so there's nothing to show for music.)
 - **Requests and Calendar for Silo:** your profile menu has a Calendar with the week's new episodes and movie releases (Following, Trending or All) and badges like PREMIERE and FINALE, and — when your Silo server has requests on — a Requests page to search, request and follow movies and series. Search also shows titles "Available to request".
 - **Series remember your audio and subtitles:** the audio and subtitle tracks you pick for a show on a Silo server carry over to its next episodes on any device, and episodes follow your Silo profile's subtitle setting (Off, Auto or Always).
