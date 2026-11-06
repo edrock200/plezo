@@ -52,6 +52,7 @@ import '../playback_initialization_types.dart';
 import '../scrub_preview_source.dart';
 import 'silo_api.dart';
 import 'silo_api_cache.dart';
+import 'silo_audiobook.dart';
 import 'silo_card_overlay_store.dart';
 import 'silo_card_overlays.dart';
 import 'silo_download_registry.dart';
@@ -66,6 +67,7 @@ import 'silo_track_prefs.dart';
 import 'silo_trickplay.dart';
 import '../source_track_pick_sink.dart';
 
+part 'silo_client_audiobooks.dart';
 part 'silo_client_playback.dart';
 part 'silo_client_subtitles.dart';
 part 'silo_client_track_prefs.dart';
@@ -499,8 +501,9 @@ class SiloClient
     final libraries = <MediaLibrary>[];
     final boxSetLibraries = <String>{};
     for (final json in _itemsOf(data)) {
-      // Music, audiobooks and reading libraries have no Plezy surface yet.
-      if (SiloMappers.libraryFamily(json['type'] as String?) != SiloLibraryFamily.video) continue;
+      // Video and audiobook libraries only: music has no item types in the
+      // v2 contract, and reading/podcast libraries have no Plezy surface.
+      if (!SiloMappers.isShownLibraryType(json['type'] as String?)) continue;
       final library = SiloMappers.library(json, _ctx);
       if (library == null) continue;
       _libraryTitles[library.id] = library.title;
@@ -1828,7 +1831,8 @@ class SiloClient
     String? plexGuid,
     ExternalSeasonRef? season,
   }) async {
-    final type = SiloMappers.catalogType(kind);
+    // Audiobooks (Silo's "albums") carry no external ids to match.
+    final type = kind == MediaKind.album ? null : SiloMappers.catalogType(kind);
     if (type == null || titles.isEmpty) return null;
     final matches = <String, MediaItem>{};
     for (final title in titles.take(3)) {

@@ -8,6 +8,8 @@ import '../navigation/profile_navigation_scope.dart';
 import '../screens/music/album_detail_screen.dart';
 import '../screens/music/artist_detail_screen.dart';
 import '../screens/music/now_playing_screen.dart';
+import '../screens/silo/silo_audiobook_screen.dart';
+import '../services/silo/silo_mappers.dart';
 import '../services/device_performance.dart';
 import '../services/music/music_playback_service.dart';
 import '../services/playlist_items_loader.dart';
@@ -54,6 +56,11 @@ Future<void> openArtistById(BuildContext context, MediaServerClient client, Stri
 /// Push the album detail screen for [album] on the profile navigator.
 /// [isOffline] makes the screen read its track list from downloads.
 Future<void> navigateToAlbum(BuildContext context, MediaItem album, {bool isOffline = false}) async {
+  // A Silo "album" is an audiobook: it has its own page.
+  if (SiloMappers.isAudiobook(album)) {
+    await _contentNavigatorOf(context).push(MaterialPageRoute(builder: (context) => SiloAudiobookScreen(item: album)));
+    return;
+  }
   await _contentNavigatorOf(context).push(
     MaterialPageRoute(
       builder: (context) => AlbumDetailScreen(album: album, isOffline: isOffline),

@@ -297,8 +297,9 @@ void main() {
     });
   });
 
-  test('audio and reading items are not mapped', () {
-    expect(SiloMappers.item({'content_id': 'audiobook:x', 'type': 'audiobook'}, _ctx), isNull);
+  test('music and reading items are not mapped', () {
+    expect(SiloMappers.item({'content_id': 'ebook:x', 'type': 'ebook'}, _ctx), isNull);
+    expect(SiloMappers.item({'content_id': 'track:x', 'type': 'track'}, _ctx), isNull);
     expect(SiloMappers.item({'type': 'movie'}, _ctx), isNull);
   });
 
