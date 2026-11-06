@@ -30,6 +30,7 @@ import '../models/livetv_channel.dart';
 import '../services/live_seek_accumulator.dart';
 import '../services/plex_client.dart';
 import '../services/jellyfin_client.dart';
+import '../services/silo/silo_client.dart';
 import '../media/account_preferences.dart';
 import '../media/account_ref.dart';
 import '../utils/session_identifier.dart';

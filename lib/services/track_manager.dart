@@ -9,6 +9,7 @@ import '../media/media_server_user_profile.dart';
 import '../media/media_source_info.dart';
 import '../services/scoped_player_prefs.dart';
 import '../services/settings_service.dart';
+import '../services/source_track_pick_sink.dart';
 import '../services/subtitle_preference.dart';
 import '../services/track_selection_service.dart';
 import '../utils/app_logger.dart';
@@ -55,6 +56,10 @@ class TrackManager {
   /// Makes a MediaBrowser server keep the picks its progress reports carry.
   /// `null` for Plex and for playback with no server.
   final TrackSelectionMemoryEnabler? enableTrackSelectionMemory;
+
+  /// Remembers explicit picks where the backend keeps them itself (Silo's
+  /// series preferences). `null` for Plex, MediaBrowser and offline playback.
+  final SourceTrackPickSink? sourceTrackPickSink;
 
   /// Resolves the user's profile settings (may be null during loading).
   final MediaServerUserProfile? Function() getProfileSettings;
@@ -127,6 +132,7 @@ class TrackManager {
     required this.isActive,
     this.persistTrackPreference,
     this.enableTrackSelectionMemory,
+    this.sourceTrackPickSink,
     required this.getProfileSettings,
     required this.waitForProfileSettings,
     required this.metadata,
@@ -461,6 +467,7 @@ class TrackManager {
   /// before the user's.
   Future<void> onAudioTrackSelectedByUser(AudioTrack track) async {
     await invalidatePendingSelection();
+    _recordNativeAudioPick(track);
     await onAudioTrackChanged(track);
   }
 
@@ -468,7 +475,63 @@ class TrackManager {
   /// selection for the same reason as [onAudioTrackSelectedByUser].
   Future<void> onSubtitleTrackSelectedByUser(SubtitleTrack track, {int? sourceStreamId}) async {
     await invalidatePendingSelection();
+    _recordNativeSubtitlePick(track, sourceStreamId: sourceStreamId);
     await onSubtitleTrackChanged(track, sourceStreamId: sourceStreamId);
+  }
+
+  // ── Explicit picks for [sourceTrackPickSink] ───────────────────────
+
+  /// Hands an explicit pick that reopens the source (a server-side audio
+  /// switch, a source subtitle) to [sourceTrackPickSink]. The ids are the
+  /// source's own (`MediaAudioTrack.id`, `MediaSubtitleTrack.id`).
+  void recordSourceTrackPick({int? audioStreamId, int? subtitleStreamId, bool subtitlesOff = false}) {
+    final sink = sourceTrackPickSink;
+    if (sink == null) return;
+    unawaited(
+      _whenPicksAreRemembered(() {
+        if (audioStreamId != null) sink.audioPicked(audioStreamId);
+        if (subtitlesOff) {
+          sink.subtitlePicked(null);
+        } else if (subtitleStreamId != null) {
+          sink.subtitlePicked(subtitleStreamId);
+        }
+      }),
+    );
+  }
+
+  void _recordNativeAudioPick(AudioTrack track) {
+    final sink = sourceTrackPickSink;
+    final info = mediaInfo;
+    if (sink == null || info == null || track.id == AudioTrack.auto.id || track.id == AudioTrack.off.id) return;
+    final matched = findPlexTrackForMpvAudio(track, info.audioTracks, allMpvTracks: player.state.tracks.audio);
+    if (matched == null) return;
+    recordSourceTrackPick(audioStreamId: matched.id);
+  }
+
+  void _recordNativeSubtitlePick(SubtitleTrack track, {int? sourceStreamId}) {
+    if (sourceTrackPickSink == null || track.id == SubtitleTrack.auto.id) return;
+    if (track.id == SubtitleTrack.off.id) {
+      recordSourceTrackPick(subtitlesOff: true);
+      return;
+    }
+    final info = mediaInfo;
+    final id =
+        sourceStreamId ??
+        (info == null
+            ? null
+            : findPlexTrackForMpvSubtitle(track, info.subtitleTracks, allMpvTracks: player.state.tracks.subtitle)?.id);
+    if (id != null) recordSourceTrackPick(subtitleStreamId: id);
+  }
+
+  /// Runs [record] unless the viewer turned "Remember track selections" off.
+  /// Never throws: the pick already took effect in the player.
+  Future<void> _whenPicksAreRemembered(void Function() record) async {
+    try {
+      if (!await shouldPersistTrackSelections()) return;
+      record();
+    } catch (e) {
+      appLogger.d('Track pick not remembered', error: e);
+    }
   }
 
   // ── Server preference sync ─────────────────────────────────────────

@@ -55,11 +55,15 @@ import 'silo_card_overlay_store.dart';
 import 'silo_card_overlays.dart';
 import 'silo_mappers.dart';
 import 'silo_playback_caps.dart';
+import 'silo_series_track_choices.dart';
 import 'silo_subtitles.dart';
+import 'silo_track_prefs.dart';
 import 'silo_trickplay.dart';
+import '../source_track_pick_sink.dart';
 
 part 'silo_client_playback.dart';
 part 'silo_client_subtitles.dart';
+part 'silo_client_track_prefs.dart';
 
 /// [MediaServerClient] for a Silo server, spoken over the `/api/v2` REST
 /// contract only (the same surface Silo's Android TV app and the Siku Roku
@@ -73,7 +77,7 @@ part 'silo_client_subtitles.dart';
 /// client remembers the cursor that reaches each offset of a query and walks
 /// forward when asked for one it has not seen.
 class SiloClient
-    with MediaServerCacheMixin, _SiloPlaybackMethods, _SiloSubtitleMethods
+    with MediaServerCacheMixin, _SiloPlaybackMethods, _SiloSubtitleMethods, _SiloTrackPrefsMethods
     implements MediaServerClient, ScopedMediaServerClient, GracefullyCloseable, RemoteTrailerClient {
   SiloClient._({required this._connection, required this._api});
 
@@ -240,7 +244,10 @@ class SiloClient
   LibraryEventChannel? createLibraryEventChannel() => null;
 
   @override
-  void close() => _api.close();
+  void close() {
+    _trackChoices.close();
+    _api.close();
+  }
 
   @override
   Future<void> closeGracefully({Duration drainTimeout = const Duration(seconds: 2)}) =>
