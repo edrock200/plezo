@@ -2745,5 +2745,31 @@
     "ended": "Ended",
     "cancelled": "Cancelled",
     "upcoming": "Upcoming"
+  },
+  "siloAudio": {
+    "play": "Play",
+    "resumeAt": "Resume at ${time}",
+    "startOver": "Start over",
+    "listenAgain": "Listen again",
+    "byAuthors": "By ${names}",
+    "narratedBy": "Narrated by ${names}",
+    "series": "Series: ${name}",
+    "timeLeft": "${time} left",
+    "chapters": "Chapters",
+    "parts": "Parts",
+    "partNumber": "Part ${n}",
+    "chapterOf": "Chapter ${n} of ${total}",
+    "noAudio": "This audiobook has no audio to play.",
+    "loadFailed": "Couldn't load this audiobook.",
+    "retry": "Try again",
+    "playbackFailed": "Playback stopped. Press Play to try again.",
+    "sessionEnded": "An administrator ended this playback session.",
+    "finished": "You've reached the end of this book.",
+    "skipBack": "Back ${n} seconds",
+    "skipForward": "Forward ${n} seconds",
+    "previousChapter": "Previous chapter",
+    "nextChapter": "Next chapter",
+    "playPause": "Play or pause",
+    "speed": "Speed"
   }
 }

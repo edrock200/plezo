@@ -11,6 +11,7 @@ import '../../media/media_stream.dart';
 import '../../media/media_version.dart';
 import '../../media/remote_trailer.dart';
 import '../../utils/json_utils.dart';
+import 'silo_audiobook.dart';
 import 'silo_subtitles.dart';
 
 /// Everything a mapping needs from the client: who the items belong to and
@@ -70,9 +71,21 @@ abstract final class SiloMappers {
     return SiloLibraryFamily.unknown;
   }
 
+  /// Audiobook library types (Silo's `isAudiobookLikeLibraryType`).
+  static bool isAudiobookLibraryType(String? type) =>
+      const {'audiobook', 'audiobooks'}.contains((type ?? '').trim().toLowerCase());
+
+  /// Whether Plezy lists a library of this `type`: video libraries and
+  /// audiobooks. Music has no item types in Silo's v2 contract, and e-books,
+  /// comics, manga and podcasts have no Plezy surface, so those stay hidden.
+  static bool isShownLibraryType(String? type) =>
+      libraryFamily(type) == SiloLibraryFamily.video || isAudiobookLibraryType(type);
+
   static MediaKind libraryKind(String? type) {
     final value = (type ?? '').trim().toLowerCase();
     if (const {'movie', 'movies'}.contains(value)) return MediaKind.movie;
+    // Silo has no music albums: on Silo an "album" is an audiobook.
+    if (isAudiobookLibraryType(value)) return MediaKind.album;
     if (const {'series', 'show', 'shows', 'tv', 'tvshows'}.contains(value)) return MediaKind.show;
     // `video` and `mixed` hold movies and shows side by side.
     return MediaKind.unknown;
@@ -90,6 +103,7 @@ abstract final class SiloMappers {
       defaultBrowseKinds: switch (kind) {
         MediaKind.movie => const [MediaKind.movie],
         MediaKind.show => const [MediaKind.show],
+        MediaKind.album => const [MediaKind.album],
         _ => const [MediaKind.movie, MediaKind.show],
       },
       serverId: ctx.serverId,
@@ -103,6 +117,9 @@ abstract final class SiloMappers {
     'season' => MediaKind.season,
     'episode' => MediaKind.episode,
     'collection' => MediaKind.collection,
+    // A book is Plezy's album (a container of audio); its page is Silo's
+    // audiobook screen, not the music album screen.
+    'audiobook' => MediaKind.album,
     _ => MediaKind.unknown,
   };
 
@@ -111,6 +128,7 @@ abstract final class SiloMappers {
     MediaKind.movie => 'movie',
     MediaKind.show => 'series',
     MediaKind.episode => 'episode',
+    MediaKind.album => 'audiobook',
     _ => null,
   };
 
@@ -332,7 +350,9 @@ abstract final class SiloMappers {
   }
 
   /// Map a Silo card or detail object. Returns `null` for rows without an
-  /// id or of a type Plezy cannot show (audio and reading media).
+  /// id or of a type Plezy cannot show (music, podcasts and reading media).
+  /// An audiobook maps to a [MediaKind.album] whose `raw['type']` is
+  /// `audiobook` ([isAudiobook]).
   static MediaItem? item(Map<String, dynamic> json, SiloMappingContext ctx, {String? libraryId, String? libraryTitle}) {
     // A box set card (Silo Android #646). Library browse no longer asks for
     // them (`group=box_set`, dropped in #796), but a list may still carry one.
@@ -352,6 +372,7 @@ abstract final class SiloMappers {
     final durationMs =
         _secondsToMs(json['duration_seconds']) ??
         _secondsToMs(userData?['duration_seconds']) ??
+        _secondsToMs(_map(json['audiobook'])?['total_duration_seconds']) ??
         (flexibleInt(json['runtime']) == null ? null : flexibleInt(json['runtime'])! * 60000);
 
     final seasonNumber = flexibleInt(json['season_number']);
@@ -427,6 +448,12 @@ abstract final class SiloMappers {
         parentTitle = seriesTitle;
         parentThumbPath = poster;
         title ??= seasonNumber == null ? null : (seasonNumber == 0 ? 'Specials' : 'Season $seasonNumber');
+      case MediaKind.album:
+        // An audiobook: its authors stand where an album's artist does
+        // (card subtitles, `albumArtistTitle`).
+        final book = _map(json['audiobook']);
+        final authors = SiloAudiobookPeople.names(book?['authors'] ?? json['authors']);
+        if (authors.isNotEmpty) parentTitle = authors.join(', ');
       default:
         break;
     }
@@ -488,6 +515,10 @@ abstract final class SiloMappers {
       raw: json,
     );
   }
+
+  /// Whether [item] is a Silo audiobook (opens Silo's audiobook screen).
+  static bool isAudiobook(MediaItem item) =>
+      item.backend == MediaBackend.silo && item.kind == MediaKind.album && isSiloAudiobookType(item.raw?['type']);
 
   static List<MediaItem> items(
     Iterable<Object?> list,

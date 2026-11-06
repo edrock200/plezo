@@ -97,6 +97,7 @@ class Translations with BaseTranslations<AppLocale, Translations> {
 	late final Translations$deepLinks$en deepLinks = Translations$deepLinks$en.internal(_root);
 	late final Translations$siloPairing$en siloPairing = Translations$siloPairing$en.internal(_root);
 	late final Translations$siloCardOverlays$en siloCardOverlays = Translations$siloCardOverlays$en.internal(_root);
+	late final Translations$siloAudio$en siloAudio = Translations$siloAudio$en.internal(_root);
 }
 
 // Path: app
@@ -6584,6 +6585,87 @@ class Translations$siloCardOverlays$en {
 	String get upcoming => 'Upcoming';
 }
 
+// Path: siloAudio
+class Translations$siloAudio$en {
+	Translations$siloAudio$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Play'
+	String get play => 'Play';
+
+	/// en: 'Resume at ${time}'
+	String resumeAt({required Object time}) => 'Resume at ${time}';
+
+	/// en: 'Start over'
+	String get startOver => 'Start over';
+
+	/// en: 'Listen again'
+	String get listenAgain => 'Listen again';
+
+	/// en: 'By ${names}'
+	String byAuthors({required Object names}) => 'By ${names}';
+
+	/// en: 'Narrated by ${names}'
+	String narratedBy({required Object names}) => 'Narrated by ${names}';
+
+	/// en: 'Series: ${name}'
+	String series({required Object name}) => 'Series: ${name}';
+
+	/// en: '${time} left'
+	String timeLeft({required Object time}) => '${time} left';
+
+	/// en: 'Chapters'
+	String get chapters => 'Chapters';
+
+	/// en: 'Parts'
+	String get parts => 'Parts';
+
+	/// en: 'Part ${n}'
+	String partNumber({required Object n}) => 'Part ${n}';
+
+	/// en: 'Chapter ${n} of ${total}'
+	String chapterOf({required Object n, required Object total}) => 'Chapter ${n} of ${total}';
+
+	/// en: 'This audiobook has no audio to play.'
+	String get noAudio => 'This audiobook has no audio to play.';
+
+	/// en: 'Couldn't load this audiobook.'
+	String get loadFailed => 'Couldn\'t load this audiobook.';
+
+	/// en: 'Try again'
+	String get retry => 'Try again';
+
+	/// en: 'Playback stopped. Press Play to try again.'
+	String get playbackFailed => 'Playback stopped. Press Play to try again.';
+
+	/// en: 'An administrator ended this playback session.'
+	String get sessionEnded => 'An administrator ended this playback session.';
+
+	/// en: 'You've reached the end of this book.'
+	String get finished => 'You\'ve reached the end of this book.';
+
+	/// en: 'Back ${n} seconds'
+	String skipBack({required Object n}) => 'Back ${n} seconds';
+
+	/// en: 'Forward ${n} seconds'
+	String skipForward({required Object n}) => 'Forward ${n} seconds';
+
+	/// en: 'Previous chapter'
+	String get previousChapter => 'Previous chapter';
+
+	/// en: 'Next chapter'
+	String get nextChapter => 'Next chapter';
+
+	/// en: 'Play or pause'
+	String get playPause => 'Play or pause';
+
+	/// en: 'Speed'
+	String get speed => 'Speed';
+}
+
 // Path: appIcon.names
 class Translations$appIcon$names$en {
 	Translations$appIcon$names$en.internal(this._root);
@@ -11165,6 +11247,30 @@ extension on Translations {
 			'siloCardOverlays.ended' => 'Ended',
 			'siloCardOverlays.cancelled' => 'Cancelled',
 			'siloCardOverlays.upcoming' => 'Upcoming',
+			'siloAudio.play' => 'Play',
+			'siloAudio.resumeAt' => ({required Object time}) => 'Resume at ${time}',
+			'siloAudio.startOver' => 'Start over',
+			'siloAudio.listenAgain' => 'Listen again',
+			'siloAudio.byAuthors' => ({required Object names}) => 'By ${names}',
+			'siloAudio.narratedBy' => ({required Object names}) => 'Narrated by ${names}',
+			'siloAudio.series' => ({required Object name}) => 'Series: ${name}',
+			'siloAudio.timeLeft' => ({required Object time}) => '${time} left',
+			'siloAudio.chapters' => 'Chapters',
+			'siloAudio.parts' => 'Parts',
+			'siloAudio.partNumber' => ({required Object n}) => 'Part ${n}',
+			'siloAudio.chapterOf' => ({required Object n, required Object total}) => 'Chapter ${n} of ${total}',
+			'siloAudio.noAudio' => 'This audiobook has no audio to play.',
+			'siloAudio.loadFailed' => 'Couldn\'t load this audiobook.',
+			'siloAudio.retry' => 'Try again',
+			'siloAudio.playbackFailed' => 'Playback stopped. Press Play to try again.',
+			'siloAudio.sessionEnded' => 'An administrator ended this playback session.',
+			'siloAudio.finished' => 'You\'ve reached the end of this book.',
+			'siloAudio.skipBack' => ({required Object n}) => 'Back ${n} seconds',
+			'siloAudio.skipForward' => ({required Object n}) => 'Forward ${n} seconds',
+			'siloAudio.previousChapter' => 'Previous chapter',
+			'siloAudio.nextChapter' => 'Next chapter',
+			'siloAudio.playPause' => 'Play or pause',
+			'siloAudio.speed' => 'Speed',
 			_ => null,
 		};
 	}

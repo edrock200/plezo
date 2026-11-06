@@ -29,6 +29,7 @@ import '../utils/download_utils.dart';
 import '../utils/focus_utils.dart';
 import '../utils/global_key_utils.dart';
 import '../providers/download_provider.dart';
+import '../services/silo/silo_mappers.dart';
 import '../providers/multi_server_provider.dart';
 import '../providers/offline_mode_provider.dart';
 import '../providers/catalog_sources_provider.dart';
@@ -636,7 +637,8 @@ class MediaContextMenuState extends State<MediaContextMenu> {
     final itemSeriesKey = mediaKind == MediaKind.episode ? mediaItem.grandparentId : mediaItem.parentId;
 
     return [
-      if (mediaKind.isMusic) ..._musicMenuActions(context, menu, mediaItem),
+      // A Silo audiobook is an "album" with no tracks: its page plays it.
+      if (mediaKind.isMusic && !SiloMappers.isAudiobook(mediaItem)) ..._musicMenuActions(context, menu, mediaItem),
       if (hasActiveProgress)
         _MenuAction(value: 'play_from_beginning', icon: Symbols.replay_rounded, label: t.mediaMenu.playFromBeginning),
       // Trailer playback. The detail row may hide its trailer button on small
@@ -775,7 +777,8 @@ class MediaContextMenuState extends State<MediaContextMenu> {
     // skip entirely.
     final canDownload =
         !PlatformDetector.isAppleTV() &&
-        (mediaItem.isVideoContent || mediaKind == MediaKind.album || mediaKind == MediaKind.track);
+        (mediaItem.isVideoContent || mediaKind == MediaKind.album || mediaKind == MediaKind.track) &&
+        !SiloMappers.isAudiobook(mediaItem);
     final downloadProvider = canDownload ? Provider.of<DownloadProvider>(context, listen: false) : null;
     return [
       if (downloadProvider != null)

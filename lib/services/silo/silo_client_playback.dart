@@ -120,11 +120,12 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
     required TranscodeQualityPreset preset,
     int? audioIndex,
     bool originalOnly = false,
+    Map<String, Object?> Function(Map<String, Object?> body)? shapeBody,
   }) async {
     final appVersion = _api.device.clientVersion;
     final formFactor = _api.device.formFactor.playbackFormFactor;
     final metered = await _isMetered();
-    Map<String, Object?> body(String installationId) => {
+    Map<String, Object?> baseBody(String installationId) => {
       'protocol_version': SiloPlaybackCaps.protocolVersion,
       'installation_id': installationId,
       'file_id': fileId,
@@ -150,6 +151,11 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
         return context;
       }(),
     };
+
+    Map<String, Object?> body(String installationId) {
+      final built = baseBody(installationId);
+      return shapeBody == null ? built : shapeBody(built);
+    }
 
     var installationId = await _ensureInstallationId();
     var response = await _api.request('POST', '/api/v2/playback/start', body: body(installationId));
