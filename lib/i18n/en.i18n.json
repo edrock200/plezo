@@ -2745,5 +2745,25 @@
     "ended": "Ended",
     "cancelled": "Cancelled",
     "upcoming": "Upcoming"
+  },
+  "siloEditConnection": {
+    "editTitle": "Edit ${server}",
+    "signInAgainTitle": "Sign in to ${server} again",
+    "intro": "${account} on ${server}. Change the address if the server moved, then sign in again if its session expired.",
+    "wrongServer": "The server at this address is not ${server}. Check the address. To use another server, add it as a new connection.",
+    "saveAddress": "Save the new address",
+    "saveAddressHint": "Keeps the current sign-in. If it has expired, sign in below instead.",
+    "addressSaved": "Saved the new address for ${server}",
+    "signedInAgain": "Signed in to ${server} again",
+    "currentProfile": "Current",
+    "otherAccountTitle": "This is another account",
+    "otherProfileTitle": "This is another Silo profile",
+    "otherNewProfile": "You picked ${account} instead of ${previous}. A Plezilo profile uses one account per Silo server, so ${account} will be added to a new Plezilo profile, ${profile}. ${previous} stays in ${current} as it is.",
+    "otherJoinsProfile": "You picked ${account} instead of ${previous}. ${account} will be added to ${profile}, and ${previous} stays as it is.",
+    "otherKeepsBoth": "You picked ${account} instead of ${previous}. ${account} will be added as another connection, and ${previous} stays as it is.",
+    "continueAdding": "Add this account",
+    "back": "Choose again",
+    "edit": "Edit address",
+    "signInAgain": "Sign in again"
   }
 }

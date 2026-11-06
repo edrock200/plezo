@@ -97,6 +97,7 @@ class Translations with BaseTranslations<AppLocale, Translations> {
 	late final Translations$deepLinks$en deepLinks = Translations$deepLinks$en.internal(_root);
 	late final Translations$siloPairing$en siloPairing = Translations$siloPairing$en.internal(_root);
 	late final Translations$siloCardOverlays$en siloCardOverlays = Translations$siloCardOverlays$en.internal(_root);
+	late final Translations$siloEditConnection$en siloEditConnection = Translations$siloEditConnection$en.internal(_root);
 }
 
 // Path: app
@@ -6584,6 +6585,69 @@ class Translations$siloCardOverlays$en {
 	String get upcoming => 'Upcoming';
 }
 
+// Path: siloEditConnection
+class Translations$siloEditConnection$en {
+	Translations$siloEditConnection$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Edit ${server}'
+	String editTitle({required Object server}) => 'Edit ${server}';
+
+	/// en: 'Sign in to ${server} again'
+	String signInAgainTitle({required Object server}) => 'Sign in to ${server} again';
+
+	/// en: '${account} on ${server}. Change the address if the server moved, then sign in again if its session expired.'
+	String intro({required Object account, required Object server}) => '${account} on ${server}. Change the address if the server moved, then sign in again if its session expired.';
+
+	/// en: 'The server at this address is not ${server}. Check the address. To use another server, add it as a new connection.'
+	String wrongServer({required Object server}) => 'The server at this address is not ${server}. Check the address. To use another server, add it as a new connection.';
+
+	/// en: 'Save the new address'
+	String get saveAddress => 'Save the new address';
+
+	/// en: 'Keeps the current sign-in. If it has expired, sign in below instead.'
+	String get saveAddressHint => 'Keeps the current sign-in. If it has expired, sign in below instead.';
+
+	/// en: 'Saved the new address for ${server}'
+	String addressSaved({required Object server}) => 'Saved the new address for ${server}';
+
+	/// en: 'Signed in to ${server} again'
+	String signedInAgain({required Object server}) => 'Signed in to ${server} again';
+
+	/// en: 'Current'
+	String get currentProfile => 'Current';
+
+	/// en: 'This is another account'
+	String get otherAccountTitle => 'This is another account';
+
+	/// en: 'This is another Silo profile'
+	String get otherProfileTitle => 'This is another Silo profile';
+
+	/// en: 'You picked ${account} instead of ${previous}. A Plezilo profile uses one account per Silo server, so ${account} will be added to a new Plezilo profile, ${profile}. ${previous} stays in ${current} as it is.'
+	String otherNewProfile({required Object account, required Object previous, required Object profile, required Object current}) => 'You picked ${account} instead of ${previous}. A Plezilo profile uses one account per Silo server, so ${account} will be added to a new Plezilo profile, ${profile}. ${previous} stays in ${current} as it is.';
+
+	/// en: 'You picked ${account} instead of ${previous}. ${account} will be added to ${profile}, and ${previous} stays as it is.'
+	String otherJoinsProfile({required Object account, required Object previous, required Object profile}) => 'You picked ${account} instead of ${previous}. ${account} will be added to ${profile}, and ${previous} stays as it is.';
+
+	/// en: 'You picked ${account} instead of ${previous}. ${account} will be added as another connection, and ${previous} stays as it is.'
+	String otherKeepsBoth({required Object account, required Object previous}) => 'You picked ${account} instead of ${previous}. ${account} will be added as another connection, and ${previous} stays as it is.';
+
+	/// en: 'Add this account'
+	String get continueAdding => 'Add this account';
+
+	/// en: 'Choose again'
+	String get back => 'Choose again';
+
+	/// en: 'Edit address'
+	String get edit => 'Edit address';
+
+	/// en: 'Sign in again'
+	String get signInAgain => 'Sign in again';
+}
+
 // Path: appIcon.names
 class Translations$appIcon$names$en {
 	Translations$appIcon$names$en.internal(this._root);
@@ -11165,6 +11229,24 @@ extension on Translations {
 			'siloCardOverlays.ended' => 'Ended',
 			'siloCardOverlays.cancelled' => 'Cancelled',
 			'siloCardOverlays.upcoming' => 'Upcoming',
+			'siloEditConnection.editTitle' => ({required Object server}) => 'Edit ${server}',
+			'siloEditConnection.signInAgainTitle' => ({required Object server}) => 'Sign in to ${server} again',
+			'siloEditConnection.intro' => ({required Object account, required Object server}) => '${account} on ${server}. Change the address if the server moved, then sign in again if its session expired.',
+			'siloEditConnection.wrongServer' => ({required Object server}) => 'The server at this address is not ${server}. Check the address. To use another server, add it as a new connection.',
+			'siloEditConnection.saveAddress' => 'Save the new address',
+			'siloEditConnection.saveAddressHint' => 'Keeps the current sign-in. If it has expired, sign in below instead.',
+			'siloEditConnection.addressSaved' => ({required Object server}) => 'Saved the new address for ${server}',
+			'siloEditConnection.signedInAgain' => ({required Object server}) => 'Signed in to ${server} again',
+			'siloEditConnection.currentProfile' => 'Current',
+			'siloEditConnection.otherAccountTitle' => 'This is another account',
+			'siloEditConnection.otherProfileTitle' => 'This is another Silo profile',
+			'siloEditConnection.otherNewProfile' => ({required Object account, required Object previous, required Object profile, required Object current}) => 'You picked ${account} instead of ${previous}. A Plezilo profile uses one account per Silo server, so ${account} will be added to a new Plezilo profile, ${profile}. ${previous} stays in ${current} as it is.',
+			'siloEditConnection.otherJoinsProfile' => ({required Object account, required Object previous, required Object profile}) => 'You picked ${account} instead of ${previous}. ${account} will be added to ${profile}, and ${previous} stays as it is.',
+			'siloEditConnection.otherKeepsBoth' => ({required Object account, required Object previous}) => 'You picked ${account} instead of ${previous}. ${account} will be added as another connection, and ${previous} stays as it is.',
+			'siloEditConnection.continueAdding' => 'Add this account',
+			'siloEditConnection.back' => 'Choose again',
+			'siloEditConnection.edit' => 'Edit address',
+			'siloEditConnection.signInAgain' => 'Sign in again',
 			_ => null,
 		};
 	}

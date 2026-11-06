@@ -29,6 +29,7 @@ import '../../widgets/focused_scroll_scaffold.dart';
 import '../../widgets/settings_section.dart';
 import '../../utils/dialogs.dart';
 import '../settings/add_connection_screen.dart';
+import '../settings/add_silo_screen.dart';
 import '../settings/edit_jellyfin_connection_screen.dart';
 import 'pin_entry_dialog.dart';
 import 'pin_status_row.dart';
@@ -217,11 +218,21 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> with Controll
     return retained;
   }
 
-  Future<void> _editConnection(Connection conn) async {
+  Future<void> _editConnection(Connection conn, {bool signInAgain = false}) async {
+    if (conn is SiloConnection) {
+      // The add-server steps against this connection; it saves (and rebinds)
+      // itself.
+      await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (_) => AddSiloScreen(editConnection: conn, targetProfile: _profile, signInAgain: signInAgain),
+        ),
+      );
+      if (mounted) setState(() {});
+      return;
+    }
     if (conn is! JellyfinConnection) return;
-    final changed = await Navigator.of(
-      context,
-    ).push<bool>(MaterialPageRoute(builder: (_) => EditJellyfinConnectionScreen(connection: conn)));
+    final screen = EditJellyfinConnectionScreen(connection: conn);
+    final changed = await Navigator.of(context).push<bool>(MaterialPageRoute(builder: (_) => screen));
     if (changed != true || !mounted) return;
     setState(() {});
     unawaited(context.read<ActiveProfileBinder>().rebindIfActive(_profile.id));
@@ -373,7 +384,7 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> with Controll
 class _ConnectionsList extends StatefulWidget {
   final Profile profile;
   final Future<void> Function(ProfileConnection pc, Connection conn) onRemove;
-  final Future<void> Function(Connection conn) onEdit;
+  final Future<void> Function(Connection conn, {bool signInAgain}) onEdit;
   final Future<void> Function(Connection conn) onSignOutParent;
 
   const _ConnectionsList({
@@ -483,6 +494,8 @@ class _ConnectionsListState extends State<_ConnectionsList> {
                                 unawaited(pcRegistry.setDefault(profile.id, pc.connectionId));
                               } else if (value == 'edit') {
                                 unawaited(widget.onEdit(conn));
+                              } else if (value == 'sign_in_again') {
+                                unawaited(widget.onEdit(conn, signInAgain: true));
                               } else if (value == 'remove') {
                                 unawaited(widget.onRemove(pc, conn));
                               }
@@ -490,6 +503,10 @@ class _ConnectionsListState extends State<_ConnectionsList> {
                             itemBuilder: (_) => [
                               if (!pc.isDefault) AppMenuItem(value: 'default', label: t.profiles.makeDefault),
                               if (conn is JellyfinConnection) AppMenuItem(value: 'edit', label: t.common.edit),
+                              if (conn is SiloConnection) ...[
+                                AppMenuItem(value: 'sign_in_again', label: t.siloEditConnection.signInAgain),
+                                AppMenuItem(value: 'edit', label: t.siloEditConnection.edit),
+                              ],
                               AppMenuItem(value: 'remove', label: t.profiles.removeConnection),
                             ],
                           ),

@@ -21,12 +21,15 @@ import '../../profiles/profile.dart';
 import '../../profiles/profile_connection.dart';
 import '../../profiles/profile_connection_registry.dart';
 import '../../profiles/silo_accounts.dart';
+import '../../providers/multi_server_provider.dart';
+import '../../services/multi_server_manager.dart';
 import '../../services/silo/pairing/silo_pairing_flow.dart';
 import '../../services/silo/pairing/silo_pairing_host.dart';
 import '../../services/silo/pairing/silo_pairing_protocol.dart';
 import '../../services/silo/pairing/silo_pairing_receiver.dart';
 import '../../services/silo/silo_api.dart';
 import '../../services/silo/silo_auth_service.dart';
+import '../../services/silo/silo_connection_edit.dart';
 import '../../services/silo/silo_device_sign_in.dart';
 import '../../services/silo/silo_password_change.dart';
 import '../../services/storage_service.dart';
@@ -44,6 +47,8 @@ import '../profile/profile_switch_screen.dart';
 import 'async_form_state_mixin.dart';
 import 'connection_persistence.dart';
 import 'silo_password_change_panel.dart';
+
+part 'add_silo_screen_edit.dart';
 
 /// Product name shown in the UI; not localized.
 const _silo = 'Silo';
@@ -92,9 +97,21 @@ class AddSiloScreen extends StatefulWidget {
   @visibleForTesting
   final void Function(SiloPairingHost host)? onPairingHost;
 
+  /// "Edit" / "Sign in again" on this saved connection instead of adding a
+  /// server (see add_silo_screen_edit.dart). Pass the Plezilo profile it was
+  /// opened from as [targetProfile].
+  final SiloConnection? editConnection;
+
+  /// With [editConnection]: check the saved address at once and go to the
+  /// sign-in (the expired-session entry points), instead of opening at the
+  /// address.
+  final bool signInAgain;
+
   const AddSiloScreen({
     super.key,
     this.targetProfile,
+    this.editConnection,
+    this.signInAgain = false,
     this.authService,
     this.deviceSignInConfig = const SiloDeviceSignInConfig(),
     this.phoneSignIn,
@@ -120,6 +137,9 @@ enum _Step {
 
   /// Where the accounts of a phone session went (several, or one that failed).
   pairedSummary,
+
+  /// Editing: another account or Silo profile signed in; where it goes.
+  editConfirm,
 }
 
 /// One account of a finished phone session: saved into [profile], or not
@@ -223,9 +243,15 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
   /// The ended session's accounts being saved, one at a time.
   _PairedRun? _pairedRun;
 
+  /// "Edit" / "Sign in again" ([AddSiloScreen.editConnection]).
+  final _edit = _SiloEditState();
+
+  void _setEditState(VoidCallback fn) => setState(fn);
+
   @override
   void initState() {
     super.initState();
+    _initEdit();
     if (widget.phoneSignIn ?? SiloPairingHost.supported) unawaited(_startPairing());
   }
 
@@ -261,6 +287,7 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
     ]) {
       node.dispose();
     }
+    _edit.dispose();
     super.dispose();
   }
 
@@ -343,7 +370,9 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
     // Saving a finished session's accounts: no new phone meanwhile.
     if (_pairedRun != null) return null;
     return switch (_step) {
-      _Step.address => SiloPairingAdvertisement.setup,
+      // Editing signs in to one saved server: a phone approves the code on
+      // screen (`login`), it does not push servers.
+      _Step.address when widget.editConnection == null => SiloPairingAdvertisement.setup,
       _Step.deviceCode when server != null && !_completingApproval && server.serverId.isNotEmpty =>
         SiloPairingAdvertisement.login(server.serverId),
       _ => null,
@@ -409,6 +438,8 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
         _focusSignInStep();
       case _Step.pairedSummary:
         requestFocusAfterFrame(_pairedDoneFocus);
+      case _Step.editConfirm:
+        requestFocusAfterFrame(_edit.confirmFocus);
       case _Step.profile || _Step.passwordChange || _Step.passwordOnTv:
         break;
     }
@@ -425,7 +456,9 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
   /// code carries the session's [binding] where the server checks one.
   Future<SiloPairingCode> _pairingStartSetup(SiloPairingTarget target, {SiloDeviceLoginBinding? binding}) async {
     // Saving an earlier session's accounts: nothing new starts meanwhile.
-    if (!mounted || _pairedRun != null) throw const SiloPairingAttemptFailure(SiloPairingFailureCode.authFailed);
+    if (!mounted || _pairedRun != null || widget.editConnection != null) {
+      throw const SiloPairingAttemptFailure(SiloPairingFailureCode.authFailed);
+    }
     final auth = await _authService();
     final SiloServerInfo server;
     try {
@@ -505,14 +538,17 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
       () async => (await _authService()).probe(_urlController.text),
       errorMapper: _errorFor,
     );
-    if (server == null || !mounted) return;
+    if (server == null || !mounted || !_editAcceptsServer(server)) return;
     setState(() {
       _server = server;
       _urlController.text = server.baseUrl;
       _step = _Step.signIn;
     });
-    // Typing a password with a remote is miserable; TVs go straight to a code.
-    if (server.deviceLoginAvailable && (PlatformDetector.isTV() || !server.passwordLoginAvailable)) {
+    if (_editAddressPending) {
+      // Editing, and the server moved: saving the address may be all it needs.
+      requestFocusAfterFrame(_edit.saveAddressFocus);
+    } else if (server.deviceLoginAvailable && (PlatformDetector.isTV() || !server.passwordLoginAvailable)) {
+      // Typing a password with a remote is miserable; TVs go straight to a code.
       await _startDeviceLogin();
     } else {
       _focusSignInStep(preferPassword: true);
@@ -666,7 +702,8 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
     if (server == null) return;
     final FocusNode target;
     if (preferPassword && server.passwordLoginAvailable) {
-      target = _usernameFocus;
+      // Editing fills in the username: the password is what is left to type.
+      target = widget.editConnection != null && _usernameController.text.isNotEmpty ? _passwordFocus : _usernameFocus;
     } else if (server.deviceLoginAvailable) {
       target = _codeFocus;
     } else {
@@ -915,6 +952,7 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
     final auth = _auth;
     if (signIn == null || auth == null) return false;
     final connection = auth.buildConnection(signIn, profile, profileToken: profileToken);
+    if (widget.editConnection case final edited?) return _finishEdit(edited, connection);
     var saved = false;
     await runAsync<void>(
       () async => saved = await _persistAndExit(connection),
@@ -1127,7 +1165,10 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
     _schedulePairingSync();
     final pairingPanel = _pairingTakesOver(_pairingStatus);
     return FocusedScrollScaffold(
-      title: Text(t.addServer.addMediaBrowserTitle(product: _silo)),
+      title: Text(switch (widget.editConnection) {
+        final edited? => _editTitle(edited),
+        null => t.addServer.addMediaBrowserTitle(product: _silo),
+      }),
       slivers: [
         if (pairingPanel)
           SliverPadding(
@@ -1172,6 +1213,7 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
                   children: switch (_step) {
                     _Step.profile => _buildProfileStep(theme),
                     _Step.pairedSummary => _buildPairedSummary(theme),
+                    _Step.editConfirm => _buildEditConfirm(theme),
                     _Step.passwordOnTv => _buildPasswordOnTvStep(theme),
                     _Step.passwordChange when _passwordChange != null => [
                       SiloPasswordChangePanel(controller: _passwordChange!, onSignOut: _signOutTemporaryPassword),
@@ -1190,6 +1232,7 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
     final server = _server;
     return [
       if (server == null) ...[
+        ..._buildEditIntro(theme),
         FocusableTextFormField(
           controller: _urlController,
           focusNode: _urlFocus,
@@ -1225,15 +1268,16 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
             label: Text(t.addServer.findServer),
           ),
         ),
-        if (_pairing != null) ...[const SizedBox(height: 24), _buildPhoneCard(theme)],
+        if (_pairing != null && widget.editConnection == null) ...[const SizedBox(height: 24), _buildPhoneCard(theme)],
       ] else ...[
         _buildServerCard(theme, server),
+        ..._buildEditAddressAction(theme, server),
         if (server.deviceLoginAvailable) ...[
           const SizedBox(height: 16),
           FocusableButton(
             focusNode: _codeFocus,
             useBackgroundFocus: true,
-            onNavigateUp: () => _changeServerFocus.requestFocus(),
+            onNavigateUp: () => (_editAddressFocus ?? _changeServerFocus).requestFocus(),
             onNavigateDown: server.passwordLoginAvailable ? () => _usernameFocus.requestFocus() : null,
             onPressed: busy ? null : _startDeviceLogin,
             child: FilledButton.tonalIcon(
@@ -1251,7 +1295,8 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
             autocorrect: false,
             enableSuggestions: false,
             enabled: !busy,
-            onNavigateUp: () => (server.deviceLoginAvailable ? _codeFocus : _changeServerFocus).requestFocus(),
+            onNavigateUp: () =>
+                (server.deviceLoginAvailable ? _codeFocus : _editAddressFocus ?? _changeServerFocus).requestFocus(),
             textInputAction: TextInputAction.next,
             onFieldSubmitted: busy ? null : (_) => _passwordFocus.requestFocus(),
             decoration: InputDecoration(
@@ -1321,7 +1366,8 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
           FocusableButton(
             focusNode: _changeServerFocus,
             useBackgroundFocus: true,
-            onNavigateDown: () => (server.deviceLoginAvailable ? _codeFocus : _usernameFocus).requestFocus(),
+            onNavigateDown: () =>
+                (_editAddressFocus ?? (server.deviceLoginAvailable ? _codeFocus : _usernameFocus)).requestFocus(),
             onPressed: busy ? null : _changeServer,
             child: TextButton(onPressed: busy ? null : _changeServer, child: Text(t.addServer.change)),
           ),
@@ -1746,7 +1792,9 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
         if (i > 0) SizedBox(height: tokensRef.groupGap),
         _SiloProfileTile(
           profile: profile,
-          autofocus: i == 0,
+          // Editing: the connection's own Silo profile comes first to hand.
+          autofocus: _profiles.any(_isEditedProfile) ? _isEditedProfile(profile) : i == 0,
+          current: _isEditedProfile(profile),
           borderRadius: groupItemRadii(context, i, _profiles.length),
           onTap: busy ? null : () => unawaited(_pickProfile(profile)),
         ),
@@ -1852,7 +1900,16 @@ class _SiloProfileTile extends StatelessWidget {
   final BorderRadius borderRadius;
   final VoidCallback? onTap;
 
-  const _SiloProfileTile({required this.profile, required this.autofocus, required this.borderRadius, this.onTap});
+  /// The Silo profile the edited connection uses.
+  final bool current;
+
+  const _SiloProfileTile({
+    required this.profile,
+    required this.autofocus,
+    required this.borderRadius,
+    this.onTap,
+    this.current = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1860,6 +1917,7 @@ class _SiloProfileTile extends StatelessWidget {
     final avatar = profile.avatarUrl;
     final initial = profile.name.isEmpty ? '?' : profile.name.characters.first.toUpperCase();
     final states = [
+      if (current) t.siloEditConnection.currentProfile,
       if (profile.hasPin) t.addServer.siloProfilePinProtected,
       if (profile.isChild) t.addServer.siloProfileKids,
     ];
@@ -1903,9 +1961,12 @@ class _SiloProfileTile extends StatelessWidget {
                       crossAxisAlignment: .start,
                       children: [
                         Text(profile.name, style: theme.textTheme.titleSmall),
-                        if (profile.isChild)
+                        if (current || profile.isChild)
                           Text(
-                            t.addServer.siloProfileKids,
+                            [
+                              if (current) t.siloEditConnection.currentProfile,
+                              if (profile.isChild) t.addServer.siloProfileKids,
+                            ].join(' · '),
                             style: theme.textTheme.bodySmall?.copyWith(
                               color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
                             ),

@@ -4,8 +4,11 @@ import 'package:material_symbols_icons/symbols.dart';
 import 'package:provider/provider.dart';
 
 import '../i18n/strings.g.dart';
+import '../profiles/active_profile_provider.dart';
 import '../providers/multi_server_provider.dart';
 import '../screens/settings/add_connection_screen.dart';
+import '../screens/settings/add_silo_screen.dart';
+import '../services/silo/silo_client.dart';
 import '../focus/focusable_button.dart';
 import 'app_icon.dart';
 
@@ -14,8 +17,9 @@ import 'app_icon.dart';
 /// need an explanation.
 ///
 /// Two refusals, two rows. A rejected token (HTTP 401,
-/// [MultiServerProvider.authErrorServers]) gets a CTA that opens
-/// [AddConnectionScreen]; the user picks the right backend and the resulting
+/// [MultiServerProvider.authErrorServers]) gets a CTA: one Silo server opens
+/// "Sign in again" on its connection ([AddSiloScreen.editConnection]);
+/// anything else opens [AddConnectionScreen]; the user picks the right backend and the resulting
 /// token replaces the stale row in the registry, which clears the auth-error
 /// state on the next health sweep. A refused account (HTTP 403,
 /// [MultiServerProvider.accessDeniedServers]) gets no CTA: a new sign-in gets
@@ -51,13 +55,13 @@ class AuthErrorBanner extends StatelessWidget {
                     ? t.connections.sessionExpiredOne(name: signInEntries.first.displayName)
                     : t.connections.sessionExpiredMany(count: signInEntries.length),
                 action: FocusableButton(
-                  onPressed: () => _openReauth(context),
+                  onPressed: () => _openReauth(context, signInEntries),
                   child: FilledButton.tonal(
                     style: FilledButton.styleFrom(
                       backgroundColor: scheme.onErrorContainer,
                       foregroundColor: scheme.errorContainer,
                     ),
-                    onPressed: () => _openReauth(context),
+                    onPressed: () => _openReauth(context, signInEntries),
                     child: Text(t.connections.signInAgain),
                   ),
                 ),
@@ -75,7 +79,21 @@ class AuthErrorBanner extends StatelessWidget {
     );
   }
 
-  Future<void> _openReauth(BuildContext context) async {
+  Future<void> _openReauth(BuildContext context, List<({ServerId serverId, String displayName})> entries) async {
+    // One Silo server: "Sign in again" on its own connection, which keeps the
+    // connection id, its profiles and its downloads (Silo's apps do the same).
+    final silo = entries.length == 1
+        ? context.read<MultiServerProvider>().serverManager.getClient(entries.single.serverId)
+        : null;
+    if (silo is SiloClient) {
+      final target = context.read<ActiveProfileProvider>().active;
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => AddSiloScreen(editConnection: silo.connection, targetProfile: target, signInAgain: true),
+        ),
+      );
+      return;
+    }
     await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AddConnectionScreen()));
   }
 }
