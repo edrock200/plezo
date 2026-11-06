@@ -5,6 +5,7 @@ What changed in each preview (Android, and Windows and macOS where the release h
 ## Next preview
 
 - **Silo's card badges on Silo posters and episode pictures:** posters, wide cards and episode pictures from a Silo server now show the badges your Silo profile chose in Silo's web app, such as 4K, Dolby Vision, Atmos, the release type or a rating, in the same places and style (including the combined "4K DV Atmos" badge and pictures your server's admin uploaded). A watched title shows Silo's green check, and a series or season you have started shows how many episodes are left, in place of Plezilo's own marks. If the profile has badges turned off, or the server doesn't offer them, cards look as before. Plex, Jellyfin and Emby cards don't change. Changes you make in Silo show up the next time you open Home.
+- **From upstream Plezy:** the player can remember the zoom you pick for a show, a library or everywhere; subtitles line up with the picture on Amlogic and MediaTek TV boxes; and a page opened over the main screen gets the remote's focus straight away.
 
 ## silo-preview-2.25.13
 
