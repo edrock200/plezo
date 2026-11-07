@@ -4,6 +4,8 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **AI subtitles show up within seconds:** when you use Translate with AI (or AI subtitles from the audio) on a Silo server, Plezilo now shows the translated lines for the scene you're watching as soon as the server makes them, like Silo's website does, instead of waiting minutes for the whole file. They appear where subtitles go, with your original subtitle hidden meanwhile, and the finished track replaces them when the server is done. On a Silo server without this live connection, or if it can't be opened, Plezilo waits for the finished file as before.
+
 ## silo-preview-2.25.17
 
 Released November 7, 2026. Android and Windows.
