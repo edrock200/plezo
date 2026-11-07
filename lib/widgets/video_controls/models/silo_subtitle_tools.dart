@@ -12,6 +12,7 @@ class SiloSubtitleTools {
     required this.isCurrent,
     required this.applyStored,
     required this.notify,
+    this.setLiveCuesShowing,
   });
 
   final SiloClient client;
@@ -30,4 +31,8 @@ class SiloSubtitleTools {
 
   /// Shows a message over the player (also when no sheet is open).
   final void Function(String message, {bool error}) notify;
+
+  /// Hides the player's own subtitle while live AI cues are drawn over the
+  /// video (true), and shows it again as the user had it (false).
+  final void Function(bool showing)? setLiveCuesShowing;
 }

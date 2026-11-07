@@ -57,6 +57,7 @@ import 'silo_card_overlay_store.dart';
 import 'silo_card_overlays.dart';
 import 'silo_download_registry.dart';
 import 'silo_managed_downloads.dart';
+import 'silo_live_subtitles.dart';
 import 'silo_mappers.dart';
 import 'silo_calendar.dart';
 import 'silo_playback_caps.dart';

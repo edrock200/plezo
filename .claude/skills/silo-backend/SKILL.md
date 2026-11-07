@@ -302,7 +302,17 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
   language and sends no target). `translate` reads a subtitle `combined_index` (embedded non-bitmap, external or stored
   SRT/VTT); the transcribe kinds read an audio `index` (`transcribe` when the audio is already in the target). The
   request names `session_id` (Silo Android #726: a foreground job from the playhead); a 404 is resent once without it.
-  Plezy polls every 2 s (transport errors keep polling, 404 = gone) and ignores live cues. Applying a stored result:
+  Plezy polls every 2 s (transport errors keep polling, 404 = gone; the job read is the authority). **Live cues**
+  (Silo's web player behaviour; Silo's Android apps ignore them): before the POST, `openAiLiveSocket` reads
+  `GET /playback/sessions/control/capabilities` (`available`, `protocol` = `silo.playback-control.v2`), mints
+  `POST /playback/sessions/{sid}/control/ws-ticket` (`installation_id`) and opens `…/control/ws` offering
+  `silo.playback-control.v2`, `silo.ticket.<ticket>` (never in the URL), then sends a hello advertising no commands
+  and never answers command frames. It must be open before the job exists (no replay). The 202's
+  `live_delivery_attached` says the stream is ours; `subtitle_translation_cues` carry `{start,end,text}` in source
+  seconds, playhead-first then wrapping, `job_id`/`file_id` as JSON numbers (the v2 job id is the same decimal as a
+  string). `silo_live_subtitles.dart` holds the sorted cue track and parser; `SiloLiveSubtitleOverlay` draws the
+  lines while the player's subtitle is hidden (`setLiveCuesShowing`), until the stored track is applied, the job
+  fails, or the user picks a track (`stopLiveCues`). A socket that opens after the 6 s budget is closed. Applying a stored result:
   `onPlaybackSourceChanged(newSubtitleChoice: source(storedTrackId))` reloads (a fresh `/playback/start` lists it);
   `playback_reload.dart` asks the reload for that `source:<id>` even though the current track list lacks it (Silo only).
 - **Downloads:** `POST /direct-download/links` → header-free link to the original file (Plezy's

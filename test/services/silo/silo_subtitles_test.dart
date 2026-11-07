@@ -15,6 +15,7 @@ import 'package:plezy/services/plex_api_cache.dart';
 import 'package:plezy/services/silo/silo_api.dart';
 import 'package:plezy/services/silo/silo_api_cache.dart';
 import 'package:plezy/services/silo/silo_client.dart';
+import 'package:plezy/services/silo/silo_live_subtitles.dart';
 import 'package:plezy/services/silo/silo_subtitles.dart';
 import 'package:plezy/widgets/video_controls/models/silo_subtitle_tools.dart';
 import 'package:plezy/widgets/video_controls/models/track_controls_state.dart';
@@ -489,6 +490,127 @@ void main() {
         expect(applied, ['11']);
         expect(controller.phase, SiloAiPhase.idle);
         expect(messages, hasLength(1));
+        controller.dispose();
+      });
+    });
+    test('shows the live cues the server streams, then swaps in the stored track', () async {
+      var reads = 0;
+      extra = (request, path) {
+        if (path.endsWith('/subtitles/ai/status')) {
+          return _json({'state': 'available', 'allowed': true, 'enabled': true, 'transcribe_enabled': true});
+        }
+        if (path.endsWith('/subtitles/ai/quota')) return _json({'limited': false});
+        if (path.endsWith('/subtitles/ai/translate')) {
+          return _json({..._job('pending'), 'live_delivery_attached': true}, 202);
+        }
+        if (path.endsWith('/subtitles/ai/jobs/j1')) {
+          reads++;
+          return _json(reads < 2 ? _job('running', progress: 0.1) : _job('completed', progress: 1, result: '11'));
+        }
+        return null;
+      };
+      final c = await playing();
+      final frames = StreamController<String>();
+      addTearDown(frames.close);
+      var closed = false;
+      SiloAiSubtitleController.debugOpenLive = (context) async {
+        expect(context.sessionId, 'sess-1');
+        return SiloLiveSubtitleSocket.fromFrames(frames.stream, onClose: () async => closed = true);
+      };
+      addTearDown(() => SiloAiSubtitleController.debugOpenLive = null);
+      String cues(String job, List<Map<String, Object>> list) => jsonEncode({
+        'type': 'event',
+        'session_id': 'sess-1',
+        'name': 'subtitle_translation_cues',
+        'payload': {'file_id': 42, 'job_id': job, 'track_key': 'k', 'cues': list, 'done': 1, 'total': 9},
+      });
+      fakeAsync((async) {
+        final showing = <bool>[];
+        final applied = <String>[];
+        final tools = SiloSubtitleTools(
+          client: c,
+          itemId: 'movie:m1',
+          position: () => const Duration(seconds: 30),
+          isCurrent: () => true,
+          applyStored: (id) async {
+            applied.add(id);
+            return SubtitleDownloadApplyOutcome.applied;
+          },
+          notify: (message, {error = false}) {},
+          setLiveCuesShowing: showing.add,
+        );
+        final controller = SiloAiSubtitleController.of(tools);
+        controller.open(preferredTarget: 'fr');
+        async.flushMicrotasks();
+        controller.submit();
+        // A batch that lands before the creation answer is held, then shown.
+        frames.add(
+          cues('j1', [
+            {'start': 30, 'end': 33, 'text': 'Bonjour'},
+          ]),
+        );
+        async.flushMicrotasks();
+        expect(controller.phase, SiloAiPhase.running);
+        expect(controller.showsLiveCues, isTrue);
+        expect(showing, [true]);
+        expect(controller.liveTextAt(const Duration(seconds: 31)), 'Bonjour');
+        // Another job's cues and another file's are ignored.
+        frames.add(
+          cues('j2', [
+            {'start': 40, 'end': 41, 'text': 'autre'},
+          ]),
+        );
+        async.flushMicrotasks();
+        expect(controller.liveTextAt(const Duration(seconds: 40, milliseconds: 500)), isNull);
+
+        async.elapse(SiloAiSubtitleController.pollInterval);
+        expect(controller.showsLiveCues, isTrue);
+        async.elapse(SiloAiSubtitleController.pollInterval);
+        expect(applied, ['11']);
+        expect(controller.showsLiveCues, isFalse);
+        expect(showing, [true, false]);
+        expect(closed, isTrue);
+        controller.dispose();
+      });
+    });
+
+    test('without live delivery the socket is closed and the job is polled', () async {
+      extra = (request, path) {
+        if (path.endsWith('/subtitles/ai/status')) {
+          return _json({'state': 'available', 'allowed': true, 'enabled': true, 'transcribe_enabled': true});
+        }
+        if (path.endsWith('/subtitles/ai/quota')) return _json({'limited': false});
+        if (path.endsWith('/subtitles/ai/translate')) return _json(_job('running'), 202);
+        if (path.endsWith('/subtitles/ai/jobs/j1')) return _json(_job('running', progress: 0.5));
+        return null;
+      };
+      final c = await playing();
+      var closed = false;
+      final idle = StreamController<String>();
+      addTearDown(idle.close);
+      SiloAiSubtitleController.debugOpenLive = (_) async =>
+          SiloLiveSubtitleSocket.fromFrames(idle.stream, onClose: () async => closed = true);
+      addTearDown(() => SiloAiSubtitleController.debugOpenLive = null);
+      fakeAsync((async) {
+        final tools = SiloSubtitleTools(
+          client: c,
+          itemId: 'movie:m1',
+          position: () => Duration.zero,
+          isCurrent: () => true,
+          applyStored: (_) async => SubtitleDownloadApplyOutcome.applied,
+          notify: (message, {error = false}) {},
+        );
+        final controller = SiloAiSubtitleController.of(tools);
+        controller.open();
+        async.flushMicrotasks();
+        controller.submit();
+        async.flushMicrotasks();
+        expect(controller.phase, SiloAiPhase.running);
+        expect(controller.liveCues, isNull);
+        async.elapse(SiloAiSubtitleController.pollInterval);
+        expect(closed, isTrue);
+        expect(controller.job?.progress, 0.5);
+        controller.cancel();
         controller.dispose();
       });
     });

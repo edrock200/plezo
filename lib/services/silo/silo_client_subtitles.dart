@@ -91,6 +91,7 @@ mixin _SiloSubtitleMethods on MediaServerCacheMixin, _SiloPlaybackMethods {
       itemId: itemId,
       fileId: fileId,
       sessionId: session.sessionId,
+      installationId: session.installationId,
       subtitleSources: subtitles,
       audioSources: audio,
       selectedAudioIndex: session.selectedAudioIndex,
@@ -103,8 +104,9 @@ mixin _SiloSubtitleMethods on MediaServerCacheMixin, _SiloPlaybackMethods {
   /// seconds; without it the whole file is extracted first. The server binds
   /// the session before it creates a job, so a 404 created nothing (the
   /// session ended, or another replica holds it): the request is sent once
-  /// more without it and runs as a background job. Plezy polls the job and
-  /// ignores the live cues the server streams to the session.
+  /// more without it and runs as a background job. Plezilo polls the job;
+  /// with [openAiLiveSocket] open first it also shows the cues the server
+  /// streams to the session (`job.liveDeliveryAttached`).
   Future<SiloAiJob> startAiJob({
     required SiloAiPlaybackContext context,
     required SiloAiJobKind kind,
@@ -134,7 +136,59 @@ mixin _SiloSubtitleMethods on MediaServerCacheMixin, _SiloPlaybackMethods {
     final data = response.data;
     final job = SiloAiJob.fromJson(data is Map ? data['job'] : null);
     if (job == null) throw const SiloSubtitleException(null);
-    return job;
+    return job.withLiveDelivery(withSession && data is Map && data['live_delivery_attached'] == true);
+  }
+
+  Future<bool>? _controlSocketSupport;
+
+  /// `GET /playback/sessions/control/capabilities`, once per client: whether
+  /// the server serves the owner-bound control socket Plezilo understands.
+  Future<bool> _playbackControlAvailable() => _controlSocketSupport ??= () async {
+    try {
+      final data = await _api.getJson(
+        '/api/v2/playback/sessions/control/capabilities',
+        timeout: const Duration(seconds: 5),
+      );
+      return data['available'] == true && data['protocol'] == SiloLiveSubtitleSocket.protocol;
+    } catch (e) {
+      appLogger.d('SiloClient: control socket capabilities unreadable', error: e.runtimeType);
+      _controlSocketSupport = null;
+      return false;
+    }
+  }();
+
+  /// Opens the playing session's control socket so live AI cues reach this
+  /// player. Must be open before the job is created: the server replays
+  /// nothing. Null when the server has no socket, the ticket is refused or the
+  /// socket doesn't open; the job is then followed by polling alone.
+  Future<SiloLiveSubtitleSocket?> openAiLiveSocket(SiloAiPlaybackContext context) async {
+    if (context.sessionId.isEmpty || !await _playbackControlAvailable()) return null;
+    final path = '/api/v2/playback/sessions/${Uri.encodeComponent(context.sessionId)}/control';
+    final MediaServerResponse response;
+    try {
+      response = await _api.request(
+        'POST',
+        '$path/ws-ticket',
+        body: {if (context.installationId.isNotEmpty) 'installation_id': context.installationId},
+        timeout: const Duration(seconds: 5),
+      );
+    } catch (e) {
+      appLogger.i('SiloClient: control socket ticket failed (${e.runtimeType})');
+      return null;
+    }
+    final data = response.data;
+    final ticket = data is Map ? data['ticket']?.toString() ?? '' : '';
+    if (response.statusCode != 200 && response.statusCode != 201 || ticket.isEmpty) {
+      appLogger.i('SiloClient: control socket ticket refused (status ${response.statusCode})');
+      return null;
+    }
+    return SiloLiveSubtitleSocket.connect(
+      url: SiloLiveSubtitleSocket.socketUrl(_api.baseUrl, '$path/ws'),
+      ticket: ticket,
+      sessionId: context.sessionId,
+      clientVersion: _api.device.clientVersion,
+      headers: _api.device.toHeaders(),
+    );
   }
 
   /// `GET /subtitles/ai/jobs/{id}`; null when the job is gone (404).

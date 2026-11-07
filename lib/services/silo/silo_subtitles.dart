@@ -69,6 +69,7 @@ class SiloAiJob {
     this.progressMessage,
     this.errorMessage,
     this.resultSubtitleId,
+    this.liveDeliveryAttached = false,
   });
 
   final String id;
@@ -83,6 +84,21 @@ class SiloAiJob {
 
   /// The stored subtitle a completed job made.
   final String? resultSubtitleId;
+
+  /// Set on the creation answer only: the server attached this request's
+  /// playback session to the new job and streams its cues to that session's
+  /// control socket. An already running or reused job reports false.
+  final bool liveDeliveryAttached;
+
+  SiloAiJob withLiveDelivery(bool attached) => SiloAiJob(
+    id: id,
+    status: status,
+    progress: progress,
+    progressMessage: progressMessage,
+    errorMessage: errorMessage,
+    resultSubtitleId: resultSubtitleId,
+    liveDeliveryAttached: attached,
+  );
 
   bool get isCompleted => status == 'completed';
   bool get isFailed => status == 'failed';
@@ -151,11 +167,16 @@ class SiloAiPlaybackContext {
     required this.subtitleSources,
     required this.audioSources,
     this.selectedAudioIndex,
+    this.installationId = '',
   });
 
   final String itemId;
   final String fileId;
   final String sessionId;
+
+  /// The server installation the session was planned on, for the control
+  /// socket ticket.
+  final String installationId;
   final List<SiloAiSubtitleSource> subtitleSources;
   final List<SiloAiAudioSource> audioSources;
   final int? selectedAudioIndex;

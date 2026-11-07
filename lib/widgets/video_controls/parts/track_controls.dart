@@ -40,6 +40,10 @@ extension _PlexVideoControlsTrackMethods on _PlexVideoControlsState {
   );
 
   void _onSubtitleTrackChanged(SubtitleTrack track) {
+    if (_siloLiveCuesShowing) {
+      final tools = _siloSubtitleTools();
+      if (tools != null) SiloAiSubtitleController.of(tools).stopLiveCues();
+    }
     if (track.id != 'no' && !_subtitlesVisible) {
       _setSubtitleVisibility(true);
     }
@@ -58,7 +62,7 @@ extension _PlexVideoControlsTrackMethods on _PlexVideoControlsState {
     unawaited(() async {
       try {
         final committed = await coordinator.commitIfLatest('sub-visibility', writeToken, () async {
-          await targetPlayer.setProperty('sub-visibility', visible ? 'yes' : 'no');
+          await targetPlayer.setProperty('sub-visibility', visible && !_siloLiveCuesShowing ? 'yes' : 'no');
           if (mounted && targetPlayer == widget.player) {
             // Preserve every successfully executed mutation as the rollback
             // baseline, even when a newer optimistic toggle is queued.
@@ -250,6 +254,39 @@ extension _PlexVideoControlsTrackMethods on _PlexVideoControlsState {
           showSuccessSnackBar(context, message);
         }
       },
+      setLiveCuesShowing: (showing) {
+        if (!mounted || widget.metadata.globalKey != itemKey || _siloLiveCuesShowing == showing) return;
+        _setControlsState(() => _siloLiveCuesShowing = showing);
+        final player = widget.player;
+        unawaited(
+          player
+              .setProperty('sub-visibility', _subtitlesVisible && !showing ? 'yes' : 'no')
+              .catchError((Object e) => appLogger.w('Failed to update subtitle visibility', error: e)),
+        );
+      },
+    );
+  }
+
+  /// The live lines of a running Silo AI translation, or null.
+  Widget? _buildSiloLiveSubtitles() {
+    final tools = _siloSubtitleTools();
+    if (tools == null) return null;
+    final controller = SiloAiSubtitleController.of(tools);
+    return Positioned.fill(
+      child: IgnorePointer(
+        child: ListenableBuilder(
+          listenable: controller,
+          builder: (context, _) => !controller.showsLiveCues
+              ? const SizedBox.shrink()
+              : SiloLiveSubtitleOverlay(
+                  controller: controller,
+                  positions: widget.player.streams.position,
+                  position: () => widget.player.state.position,
+                  visible: _subtitlesVisible,
+                  controlsShown: _showControls,
+                ),
+        ),
+      ),
     );
   }
 

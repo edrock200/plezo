@@ -74,6 +74,8 @@ import '../../utils/app_logger.dart';
 import '../../i18n/strings.g.dart';
 import '../../focus/input_mode_tracker.dart';
 import 'models/silo_subtitle_tools.dart';
+import 'silo/silo_ai_subtitle_controller.dart';
+import 'silo/silo_live_subtitle_overlay.dart';
 import 'models/track_controls_state.dart';
 import 'widgets/double_tap_feedback.dart';
 import 'helpers/mobile_edge_adjustment_tracker.dart';
@@ -891,6 +893,9 @@ class _PlexVideoControlsState extends State<PlexVideoControls>
   bool _isLongPressing = false;
   // Subtitle visibility toggle state
   bool _subtitlesVisible = true;
+
+  /// Live AI cues are drawn over the video, so the player's subtitle is hidden.
+  bool _siloLiveCuesShowing = false;
   bool _confirmedSubtitlesVisible = true;
   int _subtitleVisibilityWriteGeneration = 0;
   // Skip marker button focus node (for TV D-pad navigation)
@@ -1263,6 +1268,8 @@ class _PlexVideoControlsState extends State<PlexVideoControls>
                       onLongPressEnd: (_) => _handleLongPressEnd(),
                       onLongPressCancel: _handleLongPressCancel,
                     ),
+                  // Live AI subtitle lines of a running Silo translation, under the controls.
+                  ?_buildSiloLiveSubtitles(),
                   // Custom controls overlay
                   // Positioned AFTER double-tap zones so controls receive taps first
                   Positioned.fill(
