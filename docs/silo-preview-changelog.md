@@ -4,6 +4,11 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **Fixes from upstream Plezy:**
+  - A title you have in two libraries (an HD and a 4K copy, say) keeps its Select Version choice in Continue Watching when a server comes online after Discover first loaded.
+  - Leaving fullscreen or closing the player while the display was switching to the video's refresh rate (or HDR on Windows) no longer leaves the screen in that mode afterwards.
+  - On Android the anime mappings download now checks the server's certificate against the system's certificate authorities only, like Plezilo's other fixed downloads.
+
 ## silo-preview-2.25.16
 
 Released November 6, 2026. Android and Windows.

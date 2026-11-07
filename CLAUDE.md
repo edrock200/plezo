@@ -12,7 +12,7 @@ agent needs. The code still says "Plezy" in internal names (Dart package `plezy`
   `group.com.edrock200.plezilo`); Windows exe `plezilo.exe` with its own installer AppId GUID. The
   About screen and README may say Plezilo is *based on* Plezy, never that the Plezy project makes or
   endorses it. New user-facing strings say "Plezilo"; translations replace the word too.
-- Last upstream merge: edde746/plezy `6cc283a7d` (2026-11-06), recorded with the 8-hourly check's baselines.
+- Last upstream merge: edde746/plezy `fa8acc3ee` (2026-11-07), recorded with the 8-hourly check's baselines.
 - After an upstream merge, check `grep -rni plezy android/app/src/main ios macos windows linux
   lib/i18n/en.i18n.json` again: only internal identifiers may remain. Re-apply the renames upstream
   reintroduces (labels, bundle ids, provider authorities, `plezy://`, artifact names).
