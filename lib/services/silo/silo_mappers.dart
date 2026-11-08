@@ -490,8 +490,10 @@ abstract final class SiloMappers {
       originalTitle: _string(json['original_title']),
       studio: studios?.first,
       year: flexibleInt(json['year']),
-      originallyAvailableAt:
-          _string(json['release_date']) ?? _string(json['first_air_date']) ?? _string(json['air_date']),
+      // Silo's apps date an episode by `air_date`, then `release_date`.
+      originallyAvailableAt: kind == MediaKind.episode
+          ? _string(json['air_date']) ?? _string(json['release_date'])
+          : _string(json['release_date']) ?? _string(json['first_air_date']) ?? _string(json['air_date']),
       contentRating: _string(json['content_rating']),
       parentId: parentId,
       parentTitle: parentTitle,

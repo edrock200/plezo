@@ -500,4 +500,15 @@ void main() {
       expect(item.originallyAvailableAt, '2022-02-18');
     });
   });
+
+  test("an episode is dated by its air date, not a release date it inherits", () {
+    final item = SiloMappers.item({
+      'content_id': 'episode:x-s01e02',
+      'type': 'episode',
+      'title': 'Second',
+      'air_date': '2022-02-25',
+      'release_date': '2022-02-18',
+    }, _ctx)!;
+    expect(item.originallyAvailableAt, '2022-02-25');
+  });
 }

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:drift/native.dart';
+import 'package:plezy/utils/formatters.dart';
 import 'package:plezy/media/ids.dart';
 
 import 'package:flutter/material.dart';
@@ -2276,6 +2277,24 @@ void main() {
       await resizeTo(320);
       expectChips(present: ['2017', rate], absent: ['1h 46min', '1080p', 'PG-13', '9.2']);
       expectScoresRow(['9.2', '7.4', '6.4']);
+    });
+
+    testWidgets('an episode shows its air date where a movie shows its year', (tester) async {
+      final episode = testMediaItem(
+        id: 'dated_episode',
+        backend: MediaBackend.silo,
+        kind: MediaKind.episode,
+        title: 'Good News About Hell',
+        originallyAvailableAt: '2022-02-18',
+        serverId: 'server_1',
+        serverName: 'Server',
+      );
+      final client = _FakeMediaServerClient(show: episode, childrenByParent: const {});
+
+      await pumpPhoneDetail(tester, client, episode);
+
+      expect(find.text(formatAbbreviatedDate('2022-02-18')), findsWidgets);
+      expect(tester.takeException(), isNull);
     });
 
     testWidgets('phone-width hero centres the title, chip rows and actions; wider heroes stay left', (tester) async {

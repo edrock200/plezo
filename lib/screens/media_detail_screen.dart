@@ -1334,7 +1334,12 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
     }
 
     if (!scoresOnly) {
-      if (metadata.year != null) addTextChip('${metadata.year}', 0);
+      // An episode shows when it aired (as the TV detail line does), else its year.
+      if (metadata.isEpisode && metadata.originallyAvailableAt != null) {
+        addTextChip(formatAbbreviatedDate(metadata.originallyAvailableAt!), 0);
+      } else if (metadata.year != null) {
+        addTextChip('${metadata.year}', 0);
+      }
       if (metadata case PlexMediaItem(:final editionTitle?)) addTextChip(editionTitle, 3);
       if (metadata.contentRating != null) addTextChip(formatContentRating(metadata.contentRating!), 2);
       if (metadata.durationMs != null) addTextChip(formatDurationTextual(metadata.durationMs!), 1);
