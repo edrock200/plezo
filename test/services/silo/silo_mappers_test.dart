@@ -457,4 +457,47 @@ void main() {
     expect(item.isWatched, isTrue);
     expect(item.viewOffsetMs, 1500000);
   });
+
+  group('length (0 means unknown)', () {
+    test('a detail with runtime 0 and an unmeasured file has no length', () {
+      final item = SiloMappers.item({
+        'content_id': 'movie:heat-1995',
+        'type': 'movie',
+        'title': 'Heat',
+        'runtime': 0,
+        'versions': [
+          {'file_id': '120', 'duration': 0},
+        ],
+      }, _ctx)!;
+      expect(item.durationMs, isNull);
+      expect(item.mediaVersions!.single.parts.single.durationMs, isNull);
+    });
+
+    test("the file's measured length comes before the catalog runtime", () {
+      final item = SiloMappers.item({
+        'content_id': 'movie:heat-1995',
+        'type': 'movie',
+        'title': 'Heat',
+        'runtime': 170,
+        'versions': [
+          {'file_id': '120', 'duration': 10237},
+        ],
+      }, _ctx)!;
+      expect(item.durationMs, 10237000);
+    });
+
+    test('runtime minutes when nothing was measured; zero progress lengths are skipped', () {
+      final item = SiloMappers.item({
+        'content_id': 'episode:x-s01e01',
+        'type': 'episode',
+        'title': 'Pilot',
+        'air_date': '2022-02-18',
+        'runtime': 57,
+        'duration_seconds': 0,
+        'user_data': {'duration_seconds': 0, 'played': false},
+      }, _ctx)!;
+      expect(item.durationMs, 57 * 60000);
+      expect(item.originallyAvailableAt, '2022-02-18');
+    });
+  });
 }

@@ -172,6 +172,12 @@ abstract final class SiloMappers {
     return value == null || value < 0 ? null : (value * 1000).round();
   }
 
+  /// [_secondsToMs] for a length, where Silo's 0 means unknown.
+  static int? _lengthMs(Object? seconds) {
+    final ms = _secondsToMs(seconds);
+    return ms == null || ms <= 0 ? null : ms;
+  }
+
   static List<MediaRatingSource>? _ratings(Map<String, dynamic> json) {
     final out = <MediaRatingSource>[];
     final imdb = _double(json['rating_imdb']);
@@ -324,7 +330,7 @@ abstract final class SiloMappers {
           id: fileId,
           container: _string(json['container']),
           sizeBytes: flexibleInt(json['file_size']),
-          durationMs: _secondsToMs(json['duration'] ?? json['duration_seconds']),
+          durationMs: _lengthMs(json['duration'] ?? json['duration_seconds']),
           accessible: json['unreadable'] == true ? false : null,
           streams: _streams(json),
         ),
@@ -336,6 +342,22 @@ abstract final class SiloMappers {
     final raw = json['versions'] ?? json['files'];
     if (raw is! List) return null;
     return raw.whereType<Map<String, dynamic>>().map(version).nonNulls.toList();
+  }
+
+  /// An item's length, as Silo's apps show it (`selectedMediaRuntimeMinutes`):
+  /// a measured length when the payload has one, then the first file's
+  /// measured `duration`, then the catalog `runtime` (minutes). Zero means
+  /// unknown on every field (v2 sends `runtime: 0` and `duration: 0` for a
+  /// title or file without one), so null when nothing is positive.
+  static int? itemDurationMs(Map<String, dynamic> json) {
+    final versions = json['versions'] ?? json['files'];
+    final firstVersion = versions is List ? versions.whereType<Map<String, dynamic>>().firstOrNull : null;
+    final runtimeMinutes = flexibleInt(json['runtime']);
+    return _lengthMs(json['duration_seconds']) ??
+        _lengthMs(_map(json['user_data'])?['duration_seconds']) ??
+        _lengthMs(_map(json['audiobook'])?['total_duration_seconds']) ??
+        _lengthMs(firstVersion?['duration'] ?? firstVersion?['duration_seconds']) ??
+        _lengthMs(runtimeMinutes == null ? null : runtimeMinutes * 60);
   }
 
   /// The resume point of a stored position, as Silo's TV app decides it
@@ -369,11 +391,7 @@ abstract final class SiloMappers {
     final userData = _map(json['user_data']);
     final played = userState?['played'] == true || userData?['played'] == true;
     final positionSeconds = _double(json['position_seconds']) ?? _double(userData?['position_seconds']);
-    final durationMs =
-        _secondsToMs(json['duration_seconds']) ??
-        _secondsToMs(userData?['duration_seconds']) ??
-        _secondsToMs(_map(json['audiobook'])?['total_duration_seconds']) ??
-        (flexibleInt(json['runtime']) == null ? null : flexibleInt(json['runtime'])! * 60000);
+    final durationMs = itemDurationMs(json);
 
     final seasonNumber = flexibleInt(json['season_number']);
     final episodeNumber = flexibleInt(json['episode_number']);
@@ -630,7 +648,7 @@ abstract final class SiloMappers {
           kind: MediaKind.clip,
           title: _string(json['title']) ?? extraKindLabel(kind),
           thumbPath: _url(json['still_url'], ctx),
-          durationMs: _secondsToMs(json['duration_seconds']),
+          durationMs: _lengthMs(json['duration_seconds']),
           serverId: ctx.serverId,
           serverName: ctx.serverName,
           raw: {...json, extraMarkerKey: true},
@@ -851,7 +869,7 @@ abstract final class SiloMappers {
       subtitleTracks: subs,
       chapters: MediaChapter.backfillEndOffsets(
         chapters(version['chapters'], ctx),
-        runtimeMs: _secondsToMs(version['duration'] ?? version['duration_seconds']),
+        runtimeMs: _lengthMs(version['duration'] ?? version['duration_seconds']),
       ),
       mediaSourceId: version['file_id']?.toString(),
       mediaIndex: mediaIndex,
