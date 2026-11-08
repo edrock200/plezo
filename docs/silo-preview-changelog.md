@@ -4,6 +4,10 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+## silo-preview-2.25.21
+
+Released November 8, 2026. Android and Windows.
+
 - **Fixes from upstream Plezy:**
   - Continue Watching posters no longer flip between the series and season poster when you come back from the player.
   - With "Ask for profile on app open" on, coming back to Plezilo with a video open now asks for the profile too, and keeps the video paused until one is chosen.
