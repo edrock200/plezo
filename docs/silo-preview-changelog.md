@@ -4,6 +4,8 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **Running times for Silo titles:** a Silo title whose server has no running time on record no longer shows "0s" on its page and cards. Plezilo now uses the length the server measured from the file, like Silo's own apps, and shows no time at all when neither is known.
+
 ## silo-preview-2.25.18
 
 Released November 7, 2026. Android and Windows.
