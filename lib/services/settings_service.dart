@@ -154,6 +154,11 @@ enum SubAssOverride { no, yes, scale, force, strip }
 /// [quarter] trade sharpness for raster throughput on render-bound low-end TVs.
 enum SubtitleRenderResolution { screen, video, threeQuarter, half, third, quarter }
 
+/// Which kind of track [SettingsService.defaultSubtitleLanguage] turns on:
+/// the full subtitles of that language, or only its forced track (the lines
+/// for foreign speech and signs).
+enum DefaultSubtitleType { regular, forced }
+
 /// Who reduces HDR content to what the display can actually show, on the Linux
 /// native video plane.
 ///
@@ -663,6 +668,19 @@ class SettingsService extends BaseSharedPreferencesService {
   static const audioSyncOffset = IntPref('audio_sync_offset');
   static const subtitleSyncOffset = IntPref('subtitle_sync_offset');
   static const subtitleSearchLanguage = NullableStringPref('subtitle_search_language');
+
+  /// The subtitles every playback starts with, on every server: null leaves
+  /// the choice to the server (its own pick and the profile's subtitle mode),
+  /// [defaultSubtitlesNone] starts with subtitles off, and an ISO 639-1 code
+  /// starts with that language's track of [defaultSubtitleType]. A track the
+  /// viewer picked while watching still carries to the next episode.
+  static const defaultSubtitleLanguage = NullableStringPref('default_subtitle_language');
+  static const defaultSubtitlesNone = 'none';
+  static const defaultSubtitleType = EnumPref<DefaultSubtitleType>(
+    'default_subtitle_type',
+    values: DefaultSubtitleType.values,
+    defaultValue: DefaultSubtitleType.regular,
+  );
   static const volume = DoublePref('volume', defaultValue: 100.0);
   static const rotationLocked = BoolPref('rotation_locked', defaultValue: true);
   static const subtitleFontSize = IntPref('subtitle_font_size', defaultValue: 38);
@@ -1498,6 +1516,8 @@ class SettingsService extends BaseSharedPreferencesService {
     audioSyncOffset,
     subtitleSyncOffset,
     subtitleSearchLanguage,
+    defaultSubtitleLanguage,
+    defaultSubtitleType,
     volume,
     subtitleFontSize,
     subtitleTextColor,
@@ -1709,6 +1729,12 @@ class SettingsService extends BaseSharedPreferencesService {
     }
     if (pref == subtitleSearchLanguage && value != null && LanguageCodes.getIso6391Code(value as String) == null) {
       throw const FormatException('Expected an ISO 639 language code');
+    }
+    if (pref == defaultSubtitleLanguage &&
+        value != null &&
+        value != defaultSubtitlesNone &&
+        LanguageCodes.getIso6391Code(value as String) == null) {
+      throw const FormatException('Expected "none" or an ISO 639 language code');
     }
     if (pref == rememberedBrightnessLevel && value is num && value < 0 && value != -1) {
       throw const FormatException('Brightness must be -1 (unset) or in 0..1');

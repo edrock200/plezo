@@ -13,6 +13,7 @@ import '../../utils/quality_preset_labels.dart';
 import '../../services/settings_service.dart';
 import '../../services/video_decode_capabilities.dart';
 import '../../utils/codec_utils.dart';
+import '../../utils/language_codes.dart';
 import '../../utils/platform_detector.dart';
 import '../../widgets/setting_tile.dart';
 import '../../widgets/settings_builder.dart';
@@ -42,6 +43,7 @@ class PlaybackSettingsScreen extends StatelessWidget {
         SettingsService.matchContentResolution,
         SettingsService.audioChannelLimit,
         SettingsService.disableDolbyVision,
+        SettingsService.defaultSubtitleLanguage,
       ],
       builder: (context) {
         final svc = SettingsService.instance;
@@ -134,6 +136,8 @@ class PlaybackSettingsScreen extends StatelessWidget {
             SettingsGroup(
               title: t.settings.subtitles,
               children: [
+                _defaultSubtitlesTile(),
+                if (_hasDefaultSubtitleLanguage(svc)) _defaultSubtitleTypeTile(),
                 SettingNavigationTile(
                   icon: Symbols.subtitles_rounded,
                   title: t.settings.subtitleStyling,
@@ -674,6 +678,45 @@ class PlaybackSettingsScreen extends StatelessWidget {
     PlaybackBufferTier.auto => t.settings.playbackBufferAuto,
     PlaybackBufferTier.large => t.settings.playbackBufferLarge,
     PlaybackBufferTier.extraLarge => t.settings.playbackBufferExtraLarge,
+  };
+
+  static bool _hasDefaultSubtitleLanguage(SettingsService svc) {
+    final value = svc.read(SettingsService.defaultSubtitleLanguage);
+    return value != null && value != SettingsService.defaultSubtitlesNone;
+  }
+
+  static String _defaultSubtitlesLabel(String? value) {
+    if (value == null) return t.settings.defaultSubtitlesServer;
+    if (value == SettingsService.defaultSubtitlesNone) return t.settings.defaultSubtitlesNone;
+    return LanguageCodes.getLanguageName(value) ?? value;
+  }
+
+  Widget _defaultSubtitlesTile() => SettingSelectionTile<String?>(
+    pref: SettingsService.defaultSubtitleLanguage,
+    icon: Symbols.closed_caption_rounded,
+    title: t.settings.defaultSubtitles,
+    subtitleBuilder: _defaultSubtitlesLabel,
+    options: [
+      DialogOption<String?>(value: null, title: t.settings.defaultSubtitlesServer),
+      DialogOption<String?>(value: SettingsService.defaultSubtitlesNone, title: t.settings.defaultSubtitlesNone),
+      for (final language in LanguageCodes.getAllLanguages())
+        DialogOption<String?>(value: language.code, title: language.name),
+    ],
+  );
+
+  Widget _defaultSubtitleTypeTile() => SettingSelectionTile<DefaultSubtitleType>(
+    pref: SettingsService.defaultSubtitleType,
+    icon: Symbols.subtitles_rounded,
+    title: t.settings.defaultSubtitleType,
+    subtitleBuilder: _defaultSubtitleTypeLabel,
+    options: [
+      for (final type in DefaultSubtitleType.values) DialogOption(value: type, title: _defaultSubtitleTypeLabel(type)),
+    ],
+  );
+
+  static String _defaultSubtitleTypeLabel(DefaultSubtitleType type) => switch (type) {
+    DefaultSubtitleType.regular => t.settings.defaultSubtitleTypeRegular,
+    DefaultSubtitleType.forced => t.settings.defaultSubtitleTypeForced,
   };
 
   Widget _defaultQualityTile() => SettingSelectionTile<TranscodeQualityPreset>(

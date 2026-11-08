@@ -10,6 +10,7 @@ import '../utils/future_extensions.dart';
 import '../utils/app_logger.dart';
 import '../utils/language_codes.dart';
 import '../utils/subtitle_forced_semantics.dart';
+import 'settings_service.dart';
 import 'subtitle_preference.dart';
 
 // These functions match MPV tracks to Plex tracks by properties (language,
@@ -670,6 +671,7 @@ int _mediaTrackStreamIndex(int id, int? index) => index ?? id;
 /// with something the server had already rejected.
 enum TrackSelectionPriority {
   navigation, // Priority 1: User's manual selection from previous episode
+  appDefault, // Priority 1b: the app's Default subtitles setting (subtitles only)
   serverSelected, // Priority 2: server's pre-selected track
   profile, // Priority 3: User profile preferences
   defaultTrack, // Priority 4: Default or first track
@@ -686,13 +688,91 @@ class TrackSelectionResult<T> {
 
 /// Service for selecting and applying audio and subtitle tracks based on
 /// carried selections, server-selected streams, and account preferences.
+/// The app's Default subtitles setting, read once per selection service.
+class DefaultSubtitleChoice {
+  const DefaultSubtitleChoice.off() : off = true, language = null, type = DefaultSubtitleType.regular;
+  const DefaultSubtitleChoice.language(String this.language, {this.type = DefaultSubtitleType.regular}) : off = false;
+
+  /// Start every playback with subtitles off.
+  final bool off;
+
+  /// ISO 639-1 code of the language to turn on, when not [off].
+  final String? language;
+  final DefaultSubtitleType type;
+
+  /// The saved setting, or null when it is "Server default" (or settings are
+  /// not loaded, as in tests).
+  static DefaultSubtitleChoice? fromSettings(SettingsService? settings) {
+    if (settings == null) return null;
+    final value = settings.read(SettingsService.defaultSubtitleLanguage);
+    if (value == null || value.isEmpty) return null;
+    if (value == SettingsService.defaultSubtitlesNone) return const DefaultSubtitleChoice.off();
+    return DefaultSubtitleChoice.language(value, type: settings.read(SettingsService.defaultSubtitleType));
+  }
+}
+
 class TrackSelectionService {
   final Player? player;
   final MediaServerUserProfile? profileSettings;
   final MediaItem metadata;
   final MediaSourceInfo? plexMediaInfo;
 
-  TrackSelectionService({this.player, this.profileSettings, required this.metadata, this.plexMediaInfo});
+  /// The app's Default subtitles setting; read from [SettingsService] when not given.
+  final DefaultSubtitleChoice? defaultSubtitles;
+
+  TrackSelectionService({
+    this.player,
+    this.profileSettings,
+    required this.metadata,
+    this.plexMediaInfo,
+    DefaultSubtitleChoice? defaultSubtitles,
+    bool readDefaultSubtitles = true,
+  }) : defaultSubtitles =
+           defaultSubtitles ??
+           (readDefaultSubtitles ? DefaultSubtitleChoice.fromSettings(SettingsService.instanceOrNull) : null);
+
+  /// Whether the source catalog lists a track of the kind [choice] wants that
+  /// the native player has not produced yet (and still may).
+  bool _defaultSubtitleSourcePending(List<SubtitleTrack> availableTracks, DefaultSubtitleChoice choice) {
+    final info = plexMediaInfo;
+    final language = choice.language;
+    if (info == null || choice.off || language == null) return false;
+    final wantsForced = choice.type == DefaultSubtitleType.forced;
+    for (final row in info.subtitleTracks) {
+      if (row.effectiveForced != wantsForced || !languageMatches(row.languageCode, language)) continue;
+      final native = findMpvTrackForPlexSubtitle(row, availableTracks, allPlexTracks: info.subtitleTracks);
+      if (native == null && !_hasCompleteDirectSourceCatalogFor(row, availableTracks)) return true;
+    }
+    return false;
+  }
+
+  /// The track the app's Default subtitles setting starts playback with, or
+  /// null when the setting is "Server default" or this file has nothing it
+  /// asks for (Regular with no track in that language: the server decides).
+  /// Forced asks only for the language's forced lines: without them, off.
+  /// Regular prefers the language's non-forced track (its default first),
+  /// else its forced one.
+  TrackSelectionResult<SubtitleTrack>? _selectSubtitleTrackByAppDefault(List<SubtitleTrack> availableTracks) {
+    final choice = defaultSubtitles;
+    if (choice == null) return null;
+    if (choice.off) return const TrackSelectionResult(SubtitleTrack.off, TrackSelectionPriority.appDefault);
+    final language = choice.language;
+    if (language == null) return null;
+    final inLanguage = availableTracks
+        .where(
+          (t) => t.id != SubtitleTrack.auto.id && t.id != SubtitleTrack.off.id && languageMatches(t.language, language),
+        )
+        .toList(growable: false);
+    final forced = inLanguage.where((t) => t.effectiveForced).toList(growable: false);
+    final regular = inLanguage.where((t) => !t.effectiveForced).toList(growable: false);
+    SubtitleTrack? pick(List<SubtitleTrack> tracks) =>
+        tracks.where((t) => t.isDefault).firstOrNull ?? tracks.firstOrNull;
+    final SubtitleTrack? selected = switch (choice.type) {
+      DefaultSubtitleType.forced => pick(forced) ?? SubtitleTrack.off,
+      DefaultSubtitleType.regular => pick(regular) ?? pick(forced),
+    };
+    return selected == null ? null : TrackSelectionResult(selected, TrackSelectionPriority.appDefault);
+  }
 
   /// The profile's preferred language for one track kind, or null when unset.
   static String? _preferredLanguage(MediaServerUserProfile profile, {required bool isAudio}) {
@@ -1093,6 +1173,22 @@ class TrackSelectionService {
           }
         }
         appLogger.d('Subtitle intent declined: $intent');
+    }
+
+    // Priority 1b: the app's Default subtitles setting, on every server. It
+    // waits for the native tracks like the server's own pick does: the
+    // language's track may still be on its way.
+    final defaultChoice = defaultSubtitles;
+    if (defaultChoice != null) {
+      final appDefault = _selectSubtitleTrackByAppDefault(availableTracks);
+      final wantsForced = defaultChoice.type == DefaultSubtitleType.forced;
+      final gotWanted =
+          appDefault != null &&
+          (defaultChoice.off ||
+              (appDefault.track.id != SubtitleTrack.off.id && appDefault.track.effectiveForced == wantsForced));
+      if (gotWanted) return appDefault;
+      if (waitForPendingSource && _defaultSubtitleSourcePending(availableTracks, defaultChoice)) return null;
+      if (appDefault != null) return appDefault;
     }
 
     // Priority 2: Trust the server's selected track. Plex computes this from

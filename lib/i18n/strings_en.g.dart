@@ -1432,6 +1432,24 @@ class Translations$settings$en {
 	/// en: 'Subtitles'
 	String get subtitles => 'Subtitles';
 
+	/// en: 'Default subtitles'
+	String get defaultSubtitles => 'Default subtitles';
+
+	/// en: 'Server default'
+	String get defaultSubtitlesServer => 'Server default';
+
+	/// en: 'None'
+	String get defaultSubtitlesNone => 'None';
+
+	/// en: 'Subtitle type'
+	String get defaultSubtitleType => 'Subtitle type';
+
+	/// en: 'Regular'
+	String get defaultSubtitleTypeRegular => 'Regular';
+
+	/// en: 'Forced only (foreign dialogue and signs)'
+	String get defaultSubtitleTypeForced => 'Forced only (foreign dialogue and signs)';
+
 	/// en: 'Seek & Timing'
 	String get seekAndTiming => 'Seek & Timing';
 
@@ -9651,6 +9669,12 @@ extension on Translations {
 			'settings.audio' => 'Audio',
 			'settings.quality' => 'Quality',
 			'settings.subtitles' => 'Subtitles',
+			'settings.defaultSubtitles' => 'Default subtitles',
+			'settings.defaultSubtitlesServer' => 'Server default',
+			'settings.defaultSubtitlesNone' => 'None',
+			'settings.defaultSubtitleType' => 'Subtitle type',
+			'settings.defaultSubtitleTypeRegular' => 'Regular',
+			'settings.defaultSubtitleTypeForced' => 'Forced only (foreign dialogue and signs)',
 			'settings.seekAndTiming' => 'Seek & Timing',
 			'settings.behavior' => 'Behavior',
 			'settings.gestures' => 'Gestures',
@@ -9687,14 +9711,14 @@ extension on Translations {
 			'themeEditor.startFrom' => 'Start from',
 			'themeEditor.startFromDescription' => 'Copy all colors from another theme',
 			'themeEditor.colors' => 'Colors',
+			_ => null,
+		} ?? switch (path) {
 			'themeEditor.preview' => 'Preview',
 			'themeEditor.slots.bg' => 'Background',
 			'themeEditor.slots.surface' => 'Surface',
 			'themeEditor.slots.outline' => 'Outline',
 			'themeEditor.slots.text' => 'Text',
 			'themeEditor.slots.textMuted' => 'Secondary text',
-			_ => null,
-		} ?? switch (path) {
 			'themeEditor.slots.accent' => 'Accent',
 			'themeEditor.opacity' => 'Opacity',
 			'themeEditor.hexHint' => '#RRGGBB or #AARRGGBB',
@@ -10201,14 +10225,14 @@ extension on Translations {
 			'profiles.deleteProfileTitle' => 'Delete profile?',
 			'profiles.deleteProfileMessage' => ({required Object displayName}) => 'Remove ${displayName} and its connections. Servers stay available.',
 			'profiles.profileNameLabel' => 'Profile name',
+			_ => null,
+		} ?? switch (path) {
 			'profiles.pinProtectionLabel' => 'PIN protection',
 			'profiles.pinManagedByPlex' => 'PIN managed by Plex. Edit on plex.tv.',
 			'profiles.noPinSetEditOnPlex' => 'No PIN set. To require one, edit the home user on plex.tv.',
 			'profiles.setPin' => 'Set PIN',
 			'profiles.setPinTitle' => 'Set PIN',
 			'profiles.confirmPinTitle' => 'Confirm PIN',
-			_ => null,
-		} ?? switch (path) {
 			'profiles.pinSet' => 'PIN set',
 			'profiles.changePin' => 'Change',
 			'profiles.removePin' => 'Remove',
@@ -10715,14 +10739,14 @@ extension on Translations {
 			'liveTv.programsSection' => 'Programs',
 			'liveTv.now' => 'Now',
 			'liveTv.today' => 'Today',
+			_ => null,
+		} ?? switch (path) {
 			'liveTv.tomorrow' => 'Tomorrow',
 			'liveTv.midnight' => 'Midnight',
 			'liveTv.overnight' => 'Overnight',
 			'liveTv.morning' => 'Morning',
 			'liveTv.daytime' => 'Daytime',
 			'liveTv.evening' => 'Evening',
-			_ => null,
-		} ?? switch (path) {
 			'liveTv.lateNight' => 'Late Night',
 			'liveTv.whatsOn' => 'What\'s On',
 			'liveTv.watchChannel' => 'Watch Channel',
@@ -11229,14 +11253,14 @@ extension on Translations {
 			'videoSettings.hdrToneMapping' => 'HDR Tone Mapping',
 			'videoSettings.hdrToneMappingCompositor' => 'Compositor',
 			'videoSettings.hdrToneMappingCompositorDescription' => 'Pass the source\'s HDR metadata through and let the desktop compositor map it.',
+			_ => null,
+		} ?? switch (path) {
 			'videoSettings.hdrToneMappingPlayer' => 'Player',
 			'videoSettings.hdrToneMappingPlayerDescription' => 'Map to the display\'s peak brightness in the player, then tell the compositor the result.',
 			'videoSettings.hdrToneMappingFailed' => 'Couldn\'t change HDR tone mapping — the previous mode is still active.',
 			'videoSettings.audioOutput' => 'Audio Output',
 			'videoSettings.performanceOverlay' => 'Performance Overlay',
 			'videoSettings.audioOutputDolbyAtmos' => 'Dolby Atmos',
-			_ => null,
-		} ?? switch (path) {
 			'videoSettings.audioOutputDolbyAudio' => 'Dolby Audio',
 			'videoSettings.audioOutputSurround' => 'Surround',
 			'videoSettings.audioOutputSpatial' => 'Spatial Audio',
@@ -11743,14 +11767,14 @@ extension on Translations {
 			'siloRequests.reasonBlocked' => 'You can\'t request media right now',
 			'siloRequests.reasonInvalid' => 'That request couldn\'t be submitted',
 			'siloRequests.reasonNotFound' => 'This title is no longer available',
+			_ => null,
+		} ?? switch (path) {
 			'siloRequests.request' => 'Request',
 			'siloRequests.cancelRequest' => 'Cancel request',
 			'siloRequests.openInLibrary' => 'Open in library',
 			'siloRequests.requested' => 'Requested',
 			'siloRequests.requestCancelled' => 'Request cancelled',
 			'siloRequests.unconfirmedSubmit' => 'We couldn\'t confirm the request. Check My requests before trying again.',
-			_ => null,
-		} ?? switch (path) {
 			'siloRequests.unconfirmedCancel' => 'We couldn\'t confirm the cancellation. Refresh your requests to check it.',
 			'siloRequests.submitFailed' => 'Couldn\'t submit the request',
 			'siloRequests.cancelFailed' => 'Couldn\'t cancel the request',

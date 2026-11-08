@@ -6,6 +6,7 @@ import 'package:plezy/media/media_kind.dart';
 import 'package:plezy/media/media_server_user_profile.dart';
 import 'package:plezy/media/media_source_info.dart';
 import 'package:plezy/mpv/mpv.dart';
+import 'package:plezy/services/settings_service.dart';
 import 'package:plezy/services/subtitle_preference.dart';
 import 'package:plezy/services/track_selection_service.dart';
 import '../test_helpers/media_items.dart';
@@ -134,12 +135,18 @@ class _StubPlayer implements Player {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-TrackSelectionService _svc({MediaItem? metadata, MediaServerUserProfile? profile, MediaSourceInfo? info}) {
+TrackSelectionService _svc({
+  MediaItem? metadata,
+  MediaServerUserProfile? profile,
+  MediaSourceInfo? info,
+  DefaultSubtitleChoice? defaultSubtitles,
+}) {
   return TrackSelectionService(
     player: _StubPlayer(),
     metadata: metadata ?? _meta(),
     profileSettings: profile,
     plexMediaInfo: info,
+    defaultSubtitles: defaultSubtitles,
   );
 }
 
@@ -1419,6 +1426,77 @@ void main() {
     test('stereo player track maps to the 2-channel Plex stream', () {
       final match = findPlexTrackForMpvAudio(mpvStereo, plexTracks, allMpvTracks: allMpv);
       expect(match?.id, 20);
+    });
+  });
+
+  group('Default subtitles setting', () {
+    final tracks = [
+      _sub('1', lang: 'eng', isForced: true),
+      _sub('2', lang: 'eng'),
+      _sub('3', lang: 'fre', isDefault: true),
+    ];
+    final serverPicksFrench = _info(
+      subs: [
+        _plexSub(10, language: 'eng', languageCode: 'eng', forced: true),
+        _plexSub(11, language: 'eng', languageCode: 'eng'),
+        _plexSub(12, language: 'fre', languageCode: 'fre', selected: true),
+      ],
+    );
+
+    test('None starts with subtitles off over the server pick', () {
+      final result = _svc(
+        info: serverPicksFrench,
+        defaultSubtitles: const DefaultSubtitleChoice.off(),
+      ).selectSubtitleTrack(tracks, null, null)!;
+      expect(result.priority, TrackSelectionPriority.appDefault);
+      expect(result.track.id, 'no');
+    });
+
+    test('a language with Regular picks its full track over the server pick', () {
+      final result = _svc(
+        info: serverPicksFrench,
+        defaultSubtitles: const DefaultSubtitleChoice.language('en'),
+      ).selectSubtitleTrack(tracks, null, null)!;
+      expect(result.priority, TrackSelectionPriority.appDefault);
+      expect(result.track.id, '2');
+    });
+
+    test('Forced picks the forced track, and off when the language has none', () {
+      final forced = _svc(
+        info: serverPicksFrench,
+        defaultSubtitles: const DefaultSubtitleChoice.language('en', type: DefaultSubtitleType.forced),
+      ).selectSubtitleTrack(tracks, null, null)!;
+      expect(forced.track.id, '1');
+      final none = _svc(
+        defaultSubtitles: const DefaultSubtitleChoice.language('fr', type: DefaultSubtitleType.forced),
+      ).selectSubtitleTrack(tracks, null, null)!;
+      expect(none.track.id, 'no');
+    });
+
+    test('Regular falls back to the forced track, then to the server when the language is missing', () {
+      final onlyForced = _svc(
+        defaultSubtitles: const DefaultSubtitleChoice.language('en'),
+      ).selectSubtitleTrack([_sub('1', lang: 'eng', isForced: true), _sub('3', lang: 'fre')], null, null)!;
+      expect(onlyForced.track.id, '1');
+      final missing = _svc(
+        info: serverPicksFrench,
+        defaultSubtitles: const DefaultSubtitleChoice.language('de'),
+      ).selectSubtitleTrack(tracks, null, null)!;
+      expect(missing.priority, TrackSelectionPriority.serverSelected);
+      expect(missing.track.id, '3');
+    });
+
+    test("a track the viewer picked while watching still wins", () {
+      final result = _svc(
+        defaultSubtitles: const DefaultSubtitleChoice.off(),
+      ).selectSubtitleTrack(tracks, SubtitlePreference.track(_sub('3', lang: 'fre')), null)!;
+      expect(result.priority, TrackSelectionPriority.navigation);
+      expect(result.track.id, '3');
+    });
+
+    test('without the setting nothing changes', () {
+      final result = _svc(info: serverPicksFrench).selectSubtitleTrack(tracks, null, null)!;
+      expect(result.priority, TrackSelectionPriority.serverSelected);
     });
   });
 }
