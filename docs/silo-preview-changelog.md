@@ -4,6 +4,10 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+## silo-preview-2.25.20
+
+Released November 8, 2026. Android and Windows.
+
 - **Air dates on episode pages:** on phones, tablets and computers an episode's page now shows when it aired, as the TV layout already did. Silo episodes have no year of their own, so their pages showed no date at all before. Silo episodes are dated by their air date, like in Silo's own apps.
 
 ## silo-preview-2.25.19
