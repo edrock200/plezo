@@ -4,6 +4,10 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+## silo-preview-2.25.22
+
+Released November 8, 2026. Android and Windows.
+
 - **Default subtitles:** Settings › Playback › Subtitles has a new "Default subtitles" choice for every server: Server default (as before), None, or a language, with "Subtitle type" Regular or Forced only. Every video then starts with that choice: None turns subtitles off; Regular turns on the language's full subtitles (its forced track if that's all there is, and the server's usual pick if the language is missing); Forced only turns on just the lines for foreign speech and signs, and leaves subtitles off when there are none. A subtitle you pick while watching still carries on to the next episode. While a language or None is set, it takes the place of the subtitle a server remembers for a show.
 
 ## silo-preview-2.25.21
