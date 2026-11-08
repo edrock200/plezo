@@ -4,6 +4,11 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **Fixes from upstream Plezy:**
+  - Continue Watching posters no longer flip between the series and season poster when you come back from the player.
+  - With "Ask for profile on app open" on, coming back to Plezilo with a video open now asks for the profile too, and keeps the video paused until one is chosen.
+  - In Watch Together, a guest who switches to another version of the room's video (1080p to 4K, say) stays in sync with the room.
+
 ## silo-preview-2.25.20
 
 Released November 8, 2026. Android and Windows.
