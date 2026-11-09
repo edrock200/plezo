@@ -4,6 +4,12 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **Voice search on Android 11 Google TV:** on Google TV devices still on Android 11, the voice search button now works. Plezilo listens through the TV's speech service itself there, asks once for microphone access, and shows a small box with what it heard (from Silo Android #860). Other devices work as before.
+- **Fixes from upstream Plezy (version 2.26):**
+  - Dolby Vision no longer plays green on a Fire TV Stick 4K with mpv and "Match content frame rate" on: the TV switches its refresh rate before the video starts.
+  - Pausing, leaving Plezilo and coming back no longer leaves the picture black on Android until you press play.
+  - The cosmetic purchase is now called "Theme & Icon Pack".
+
 ## silo-preview-2.25.22
 
 Released November 8, 2026. Android and Windows.
