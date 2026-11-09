@@ -139,11 +139,14 @@ agent needs. The code still says "Plezy" in internal names (Dart package `plezy`
   the rolling release's notes; every announcement includes them (the script does). The x86_64
   (emulator) APK is never in the Discord post and has no code (the user's wish); it stays on the
   release pages and the fixed links.
-- **Every preview is announced on Discord** (the user's standing request, like Siku's releases): once
-  the Android and Windows files are attached (macOS only when the user asked for it), run
-  `DISCORD_WEBHOOK_URL=<url> python3 scripts/silo_announce_discord.py silo-preview-<version>`. It posts
-  the release's notes and download links. The webhook URL is a secret the user gave in the session:
-  never commit, print or log it (Discord revokes webhooks found on GitHub); ask for it if you don't have it.
+- **Every preview is announced on Discord** (the user's standing request, like Siku's releases). The
+  `silo-preview-desktop.yml` package job does it for every `[release-apk]` build, right after it attaches
+  the Windows files (the Android files are already on the release): step "Announce on Discord" runs
+  `scripts/silo_announce_discord.py silo-preview-<version>` with the repository secret `DISCORD_WEBHOOK`
+  (set by the user on 2026-11-09). Do not also post by hand: check that step, and run
+  `DISCORD_WEBHOOK_URL=<url> python3 scripts/silo_announce_discord.py silo-preview-<version>` yourself only
+  when it failed or was skipped (e.g. the Windows build failed). The webhook URL is a secret: never commit,
+  print or log it (Discord revokes webhooks found on GitHub).
 - macOS runners: from 2026-11-03 GitHub often left macOS jobs unassigned (queued 15 minutes, then
   cancelled). That is why Mac builds are now on request only (see Desktop above).
 - The preview workflow cancels an in-progress build when anything else is pushed to the same
