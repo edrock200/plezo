@@ -680,6 +680,12 @@ class PlezyActivity : FlutterActivity() {
     return handled
   }
 
+  override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+    if (!voiceSearchChannel.onRequestPermissionsResult(requestCode, grantResults)) {
+      super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+    }
+  }
+
   override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
     if (!externalPlayerChannel.onActivityResult(requestCode, resultCode, data) &&
       !voiceSearchChannel.onActivityResult(requestCode, resultCode, data)
