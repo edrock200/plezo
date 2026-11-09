@@ -301,14 +301,14 @@ jobs:
 
       # Every preview is announced on Discord once its Android and Windows
       # files are on the release (the user's standing request). Only a
-      # [release-apk] build announces; the repository secret DISCORD_WEBHOOK
+      # [release-apk] build announces; the repository secret PLEZILO_DISCORD_WEBHOOK
       # holds the webhook, and without it the script posts nothing. The URL
       # is a secret: the script never prints it.
       - name: Announce on Discord
         if: ${{ needs.gate.outputs.mode == 'apk' }}
         shell: bash
         env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.PLEZILO_DISCORD_WEBHOOK }}
           TAG: silo-preview-${{ needs.resolve.outputs.version }}
         # In [release-apk] mode this job checked out the pushed commit.
         run: |
