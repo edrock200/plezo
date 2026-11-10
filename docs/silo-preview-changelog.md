@@ -4,6 +4,10 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+## silo-preview-2.26.2
+
+Released November 10, 2026. Android and Windows.
+
 - **Faster video start on Android (from upstream Plezy):** the mpv player no longer loads seven built-in scripts Plezilo never uses, so videos start a little sooner and each player uses less memory.
 
 ## silo-preview-2.26.1

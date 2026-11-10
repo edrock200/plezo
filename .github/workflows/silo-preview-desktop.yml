@@ -313,6 +313,10 @@ jobs:
         # In [release-apk] mode this job checked out the pushed commit.
         run: |
           set -euo pipefail
+          if [[ -z "${DISCORD_WEBHOOK_URL:-}" ]]; then
+            echo "::warning::The repository secret PLEZILO_DISCORD_WEBHOOK is empty or missing; $TAG was not announced on Discord."
+            exit 0
+          fi
           py="$(command -v python3 || command -v python)"
           "$py" scripts/silo_announce_discord.py "$TAG" "$GITHUB_REPOSITORY"
 
