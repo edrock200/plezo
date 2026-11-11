@@ -4,6 +4,10 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+## silo-preview-2.26.3
+
+Released November 11, 2026. Android and Windows.
+
 - **Downloads use less battery on Android (from upstream Plezy):** while you watch a downloaded video with the mpv player, Plezilo reads ahead half a second at a time instead of after every frame, so the phone or TV works less during playback. Streaming is unchanged.
 
 ## silo-preview-2.26.2
