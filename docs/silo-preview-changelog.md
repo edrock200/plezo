@@ -4,6 +4,8 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **Silo badges are readable again:** since 2.26.4 badge text on Silo posters was cut short ("108…" instead of "1080p", "EA…", "5…", and an empty box where "CC" belonged). The text picked up a little extra letter spacing from the app's theme, so it no longer fit the space measured for it. Badges now draw their full text.
+
 ## silo-preview-2.26.4
 
 Released November 11, 2026. Android and Windows.

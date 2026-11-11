@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plezy/media/media_backend.dart';
 import 'package:plezy/media/media_item.dart';
@@ -394,6 +395,46 @@ void main() {
     final glyphs = tester.widgetList<SiloOverlayGlyph>(find.byType(SiloOverlayGlyph)).map((g) => g.icon).toList();
     expect(glyphs, containsAll(['monitor', 'dolby-vision', 'clock']));
     expect(find.text('2H 50M'), findsOneWidget);
+  });
+
+  testWidgets("badge text keeps its measured spacing whatever the theme's text style says", (tester) async {
+    // A theme style with letter spacing used to leak into the drawn text, so a
+    // label came out wider than measured and ellipsized ("1080p" as "108…").
+    final settings = SiloCardOverlaySettings.settle(
+      SiloOverlayProfileValues(
+        document: {
+          'version': 2,
+          'preset': 'pill',
+          'items': {
+            'runtime': {'enabled': true},
+          },
+        },
+      ),
+      {'enabled': true},
+    );
+    await tester.pumpWidget(
+      _app(
+        DefaultTextStyle.merge(
+          style: const TextStyle(letterSpacing: 3, wordSpacing: 4),
+          child: SizedBox(
+            width: 185,
+            height: 277,
+            child: SiloCardOverlayLayer(
+              settings: settings,
+              data: SiloOverlayData.fromJson({'overlay_summary': _summary, 'runtime': 170}),
+              shape: SiloOverlayCardShape.poster,
+              imageUrl: (_) => null,
+            ),
+          ),
+        ),
+      ),
+    );
+    final paragraph = tester.renderObject<RenderParagraph>(find.text('2H 50M'));
+    final style = (paragraph.text as TextSpan).style!;
+    expect(style.letterSpacing, isNot(3), reason: "the preset's spacing, not the theme's");
+    expect(style.letterSpacing, closeTo(0.25, 0.01));
+    expect(style.wordSpacing, 0);
+    expect(paragraph.overflow, TextOverflow.visible, reason: 'a label measured to fit never ellipsizes');
   });
 
   test('layout: a band look draws scrims and dividers', () {

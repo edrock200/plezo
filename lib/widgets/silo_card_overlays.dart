@@ -352,7 +352,11 @@ class SiloBadgePlan {
     this.padX = 0,
     this.padY = 0,
     this.contentHeight = 0,
+    this.truncated = false,
   });
+
+  /// True when the label was cut to the slot's width and draws an ellipsis.
+  final bool truncated;
 
   final SiloOverlayBadge badge;
   final SiloOverlayFinished finished;
@@ -416,6 +420,8 @@ TextStyle siloWatchCountStyle(double fontSize, String? fontFamily) => TextStyle(
   color: const Color(0xFFFFFFFF),
   fontSize: fontSize,
   fontWeight: FontWeight.w700,
+  letterSpacing: 0,
+  wordSpacing: 0,
   height: 1,
   leadingDistribution: TextLeadingDistribution.even,
   fontFeatures: const [FontFeature.tabularFigures()],
@@ -561,7 +567,14 @@ TextStyle siloOverlayTextStyle(double fontSize, int weight, String? fontFamily, 
       fontFamily: fontFamily,
       fontSize: fontSize,
       fontWeight: _fontWeight(weight),
-      letterSpacing: letterSpacing == 0 ? null : letterSpacing,
+      // Every spacing field is set, so the drawn text cannot pick up the
+      // theme's (Material's body styles carry 0.25 letter spacing) and come
+      // out wider than it was measured, which ellipsized "1080p" to "108…".
+      letterSpacing: letterSpacing,
+      wordSpacing: 0,
+      fontFeatures: const [],
+      fontVariations: const [],
+      decoration: TextDecoration.none,
       height: 1,
       leadingDistribution: TextLeadingDistribution.even,
     );
@@ -773,7 +786,8 @@ class _Canvas {
     final gapW = leadW > 0 && textW > 0 ? look.iconGap * k : 0.0;
     var w = left + padX + leadW + gapW + textW + padX + right;
     // A bare score never truncates; any other label ellipsizes.
-    if (w > maxWidth && textW > 0 && !finished.scoreOnly) w = maxWidth;
+    final truncated = w > maxWidth && textW > 0 && !finished.scoreOnly;
+    if (truncated) w = maxWidth;
     // Rounded up so the measured text never wraps at the last pixel.
     w = w.ceilToDouble();
     return SiloBadgePlan(
@@ -796,6 +810,7 @@ class _Canvas {
       padX: padX,
       padY: padY,
       contentHeight: contentHeight,
+      truncated: truncated,
     );
   }
 }
@@ -935,7 +950,9 @@ class SiloOverlayBadgeView extends StatelessWidget {
             plan.finished.text,
             maxLines: 1,
             softWrap: false,
-            overflow: plan.finished.scoreOnly ? TextOverflow.visible : TextOverflow.ellipsis,
+            // Only a label cut to its slot ellipsizes; one measured to fit draws
+            // whole even if the device's font lays it out a hair wider.
+            overflow: plan.truncated ? TextOverflow.ellipsis : TextOverflow.visible,
             textScaler: TextScaler.noScaling,
             style: textStyle,
           ),
