@@ -429,6 +429,236 @@ void main() {
     });
   });
 
+  group('poster layout (Silo Android #882)', () {
+    test('a stored top-right badge moves to the right-edge rail; the corner holds no badge', () {
+      expect(SiloOverlayPosition.fromWire('top-right'), SiloOverlayPosition.rightEdge);
+      expect(SiloOverlayPosition.values.map((p) => p.wire), isNot(contains('top-right')));
+      final prefs = _prefs({
+        'rating_imdb': {'enabled': true, 'position': 'top-right'},
+      });
+      expect(prefs.items['rating_imdb']!.position, SiloOverlayPosition.rightEdge);
+      final resolved = SiloOverlayBadges.resolve(
+        prefs,
+        _data({'rating_imdb': 7.5}),
+        SiloOverlayLook.of('classic', null),
+      );
+      expect(_ids(resolved[SiloOverlayPosition.rightEdge]!), ['rating_imdb']);
+      expect(SiloOverlayPosition.rightEdge.isRail, isTrue);
+      expect(SiloCardOverlays.maxCorner, 3);
+      expect(SiloCardOverlays.maxRail, 4);
+    });
+
+    test('every corner stops at three and every rail at four', () {
+      final full = _data({
+        'overlay_summary': {
+          'resolution': '2160p',
+          'hdr': 'HDR10',
+          'audio': 'Atmos',
+          'audio_channels': '7.1',
+          'video_codec': 'HEVC',
+          'container': 'MKV',
+          'release_type': 'WEB-DL',
+          'edition': 'IMAX',
+          'aspect_ratio': '2.39',
+          'multi_audio': true,
+          'multi_sub': true,
+        },
+        'year': 2024,
+        'runtime': 120,
+        'rating_imdb': 7,
+        'rating_tmdb': 7,
+        'rating_rt_critic': 80,
+        'rating_rt_audience': 70,
+        'content_rating': 'PG-13',
+        'studios': ['A24'],
+      });
+      final ids = ['container', 'edition', 'year', 'runtime'];
+      final prefs = _prefs({
+        for (final id in ids) id: {'enabled': true},
+        for (final id in ['aspect_ratio', 'multi_audio', 'multi_sub', 'content_rating']) id: {'enabled': true},
+        for (final id in ['rating_imdb', 'rating_tmdb', 'rating_rt', 'rating_rt_audience', 'studio'])
+          id: {'enabled': true, 'position': 'right-edge'},
+      });
+      final resolved = SiloOverlayBadges.resolve(prefs, full, SiloOverlayLook.of('classic', null));
+      expect(resolved[SiloOverlayPosition.bottomLeft]!, hasLength(3));
+      expect(resolved[SiloOverlayPosition.bottomRight]!, hasLength(3));
+      expect(_ids(resolved[SiloOverlayPosition.rightEdge]!), [
+        'rating_imdb',
+        'rating_tmdb',
+        'rating_rt',
+        'rating_rt_audience',
+      ]);
+    });
+
+    test('insets: a poster scales by width over 185, a wide card draws at 1, a progress bar lifts the bottom', () {
+      final poster = SiloOverlayLayoutMath.insets(width: 370, wide: false, progress: false);
+      expect(poster.k, 2);
+      expect(poster.side, 16);
+      expect(poster.bottom, 16);
+      // 8 inset + 22 status + 8 gap, scaled.
+      expect(poster.topRight, 76);
+      final lifted = SiloOverlayLayoutMath.insets(width: 185, wide: false, progress: true);
+      expect(lifted.bottom, 16, reason: 'a poster with a progress bar lifts its bottom row too');
+      final wide = SiloOverlayLayoutMath.insets(width: 320, wide: true, progress: true);
+      expect(wide.k, 1);
+      expect(wide.side, 8);
+      expect(wide.bottom, 16);
+      expect(wide.topRight, 38);
+    });
+
+    ({List<SiloBadgeOffset> left, List<SiloBadgeOffset> right, double height}) rows(
+      List<(double, double)> left,
+      List<(double, double)> right, {
+      double available = 169,
+    }) => SiloOverlayLayoutMath.bottomRows(
+      [for (final (w, h) in left) (w: w, h: h)],
+      [for (final (w, h) in right) (w: w, h: h)],
+      available: available,
+      gap: 8,
+      stackGap: 4,
+    );
+
+    // Hand-worked cases from the web's CSS, as Silo Android's OverlayLayoutMathTest has them.
+    test('a pair that fits shares one row with the right badge at the end', () {
+      final r = rows([(60, 14)], [(40, 14)]);
+      expect(r.height, 14);
+      expect(r.left.single, (x: 0.0, y: 0.0));
+      expect(r.right.single, (x: 129.0, y: 0.0));
+      expect(rows([(100, 14)], [(61, 14)]).right.single.y, 0, reason: 'an exact fit stays on one row');
+    });
+
+    test('a pair one pixel too wide wraps the right badge onto a line of its own below', () {
+      final r = rows([(100, 14)], [(62, 14)]);
+      expect(r.left.single, (x: 0.0, y: 0.0));
+      expect(r.right.single, (x: 107.0, y: 18.0));
+      expect(r.height, 32);
+      final full = rows([(169, 14)], [(30, 14)]);
+      expect(full.right.single, (x: 139.0, y: 18.0));
+      expect(SiloOverlayLayoutMath.fitsOnOneLine(100, 61, 169, 8), isTrue);
+      expect(SiloOverlayLayoutMath.fitsOnOneLine(100, 62, 169, 8), isFalse);
+    });
+
+    test('levels count from the bottom, and a wrap at one level leaves the others alone', () {
+      final r = rows([(50, 10), (50, 10), (50, 10)], [(40, 10)]);
+      expect([for (final o in r.left) o.y], [0, 14, 28]);
+      expect(r.right.single.y, 28);
+      expect(r.height, 38);
+      final mixed = rows([(150, 10), (40, 10)], [(40, 10), (40, 10)]);
+      expect([for (final o in mixed.left) o.y], [0, 28]);
+      expect([for (final o in mixed.right) o.y], [14, 28]);
+      expect(mixed.height, 38);
+    });
+
+    test('badges on one line align to its bottom; a right corner alone sits at the end', () {
+      final r = rows([(40, 20)], [(40, 12)]);
+      expect(r.left.single.y, 0);
+      expect(r.right.single.y, 8);
+      expect(r.height, 20);
+      final alone = rows([], [(30, 10), (50, 10)]);
+      expect([for (final o in alone.right) o.x], [139, 119]);
+      expect([for (final o in alone.right) o.y], [0, 14]);
+      expect(rows([], []).height, 0);
+    });
+
+    test("the watch-status count is the label plus 0.4 em a side and its border, never narrower than tall", () {
+      expect(SiloOverlayLayoutMath.countWidth(5, 1), 22);
+      // 30 + 11 * 0.8 + 2
+      expect(SiloOverlayLayoutMath.countWidth(30, 1), closeTo(40.8, 1e-9));
+      expect(SiloOverlayLayoutMath.countWidth(30, 2), closeTo(49.6, 1e-9));
+    });
+  });
+
+  group('presets (the web numbers)', () {
+    test('each preset has its font, padding, radius, border, icon, gap, tracking and accent strategy', () {
+      final table = {
+        // id: fontSize, padX, padY, radius, border, iconSize, iconGap, stackGap, tracking, weight, preferIcon
+        'minimal': (9.0, 4.0, 0.0, 8.0, 0.0, 10.0, 4.0, 2.0, 0.1, 600, false, SiloAccentStrategy.text),
+        'classic': (10.0, 8.0, 2.0, -1.0, 1.0, 11.0, 4.0, 4.0, 0.025, 600, false, SiloAccentStrategy.background),
+        'vibrant': (10.0, 8.0, 2.0, 10.0, 0.0, 12.0, 4.0, 4.0, 0.025, 700, true, SiloAccentStrategy.background),
+        'pill': (10.0, 10.0, 4.0, -1.0, 1.0, 12.0, 4.0, 4.0, 0.025, 600, true, SiloAccentStrategy.background),
+        'square': (9.0, 6.0, 2.0, 8.0, 0.0, 10.0, 4.0, 2.0, 0.1, 700, false, SiloAccentStrategy.border),
+        'plate': (12.0, 7.0, 4.0, 6.0, 1.0, 13.0, 5.0, 4.0, 0.025, 800, true, SiloAccentStrategy.border),
+        'band': (12.5, 0.0, 1.0, 0.0, 0.0, 13.0, 3.0, 7.0, 0.025, 800, false, SiloAccentStrategy.text),
+      };
+      expect(table.keys, SiloCardOverlays.presetIds);
+      for (final MapEntry(key: id, value: v) in table.entries) {
+        final look = SiloOverlayLook.of(id, null);
+        expect(
+          (
+            look.fontSize,
+            look.padX,
+            look.padY,
+            look.radius,
+            look.borderWidth,
+            look.iconSize,
+            look.iconGap,
+            look.stackGap,
+            look.letterSpacingEm,
+            look.weight,
+            look.preferIcon,
+            look.strategy,
+          ),
+          v,
+          reason: id,
+        );
+      }
+      expect(SiloOverlayLook.of('plate', null).sourceChips, isTrue);
+      expect(SiloOverlayLook.of('square', null).accentLeft, 2);
+      expect(SiloOverlayLook.of('nonsense', null).id, 'classic');
+    });
+
+    test('the style layer scales lengths, frames bare text and keeps the tracking', () {
+      final minimal = SiloOverlayLook.of('minimal', SiloOverlayStyle.parse({'size': 1.5, 'borderWidth': 1}));
+      expect(minimal.fontSize, 13.5);
+      expect(minimal.padX, closeTo(13.5 * 0.6, 1e-9), reason: 'a framed badge gets at least 0.6 em of padding');
+      expect(minimal.padY, closeTo(13.5 * 0.2, 1e-9));
+      expect(minimal.letterSpacingEm, 0.1);
+      expect(minimal.borderWidth, 1);
+      final shadowed = SiloOverlayLook.of('classic', SiloOverlayStyle.parse({'shadow': true}));
+      expect(shadowed.boxShadow!.blur, 6);
+      expect(SiloOverlayLook.of('plate', SiloOverlayStyle.parse({'shadow': false})).boxShadow, isNull);
+    });
+
+    test('a CSS blur length converts to the same Gaussian in Flutter', () {
+      expect(siloCssBlurRadius(0), 0);
+      expect(siloCssBlurRadius(1), 0);
+      expect(siloCssBlurRadius(6), closeTo(2.5 / 0.57735, 1e-9));
+    });
+  });
+
+  group('web parity details', () {
+    test('values keep the spelling the API sent for value-image matches', () {
+      final data = _data({
+        'show_status': 'Returning Series ',
+        'content_rating': ' ',
+        'overlay_summary': {'resolution': '2160p'},
+      });
+      expect(data.text('show_status'), 'Returning Series ');
+      expect(SiloOverlayBadges.valueKey('show_status', data), 'Returning Series ');
+      expect(data.text('content_rating'), '', reason: 'a blank value is no value');
+    });
+
+    test('a v2 document whose items came as a list still keeps its preset', () {
+      final prefs = SiloOverlayPrefs.parse({'preset': 'band', 'items': []});
+      expect(prefs.preset, 'band');
+    });
+
+    test('an uploaded image in the mark\'s place still drops a label the wordmark spells', () {
+      final pill = SiloOverlayLook.of('pill', null);
+      final badge = SiloOverlayBadges.badge(
+        SiloOverlayRegistry.byId('audio')!,
+        _data({
+          'overlay_summary': {'audio': 'Atmos'},
+        }),
+        pill,
+        SiloOverlayItemConfig(enabled: true, position: SiloOverlayPosition.topLeft, image: _ref),
+      )!;
+      final finished = SiloOverlayBadges.finish(badge, pill, withImage: true);
+      expect(finished.markText, isNull);
+      expect(finished.text, '');
+    });
+  });
+
   test('episodes left show only on a started, unfinished series or season', () {
     expect(siloEpisodesLeft(played: false, watched: 3, unplayed: 5), 5);
     expect(siloEpisodesLeft(played: false, watched: 0, unplayed: 8), 0);

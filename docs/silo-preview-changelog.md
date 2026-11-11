@@ -4,6 +4,8 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **Silo posters look like Silo's own apps:** a poster's top-right corner now always shows Silo's green check on a watched title, or how many episodes are left on a series or season you have started, even when Silo's badges are turned off (it replaces Plezilo's own check and unwatched count on Silo posters; landscape cards keep Plezilo's check). Badge icons are the same drawings Silo's website uses, Dolby Vision gets its mark, text has Silo's letter spacing, badges along the bottom move up above a progress bar on posters too, and an uploaded badge logo never runs past its badge. Plex, Jellyfin and Emby cards are unchanged.
+
 ## silo-preview-2.26.3
 
 Released November 11, 2026. Android and Windows.

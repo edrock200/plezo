@@ -2,12 +2,12 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:material_symbols_icons/symbols.dart';
 import 'package:provider/provider.dart';
 
 import '../i18n/strings.g.dart';
 import '../media/ids.dart';
 import '../media/media_item.dart';
+import '../media/media_item_types.dart';
 import '../media/media_kind.dart';
 import '../providers/multi_server_provider.dart';
 import '../services/settings_service.dart';
@@ -16,6 +16,7 @@ import '../services/silo/silo_card_overlays.dart';
 import '../services/silo/silo_client.dart';
 import '../utils/json_utils.dart';
 import '../utils/media_image_helper.dart';
+import 'silo_overlay_icons.dart';
 import 'watched_indicator.dart';
 
 /// The artwork's shape for card overlays: a poster scales Silo's lengths by
@@ -23,11 +24,15 @@ import 'watched_indicator.dart';
 enum SiloOverlayCardShape { poster, wide }
 
 /// Plezy's watch-state overlay for a card's artwork ([WatchedIndicator]),
-/// and on a Silo item, while its profile shows card overlays, Silo's badges
-/// ([SiloCardOverlayLayer]) with Silo's own watch-status corner in place of
-/// Plezy's check and unwatched count (progress bars stay Plezy's). Plex,
-/// Jellyfin and Emby items, and Silo items whose profile has overlays off or
-/// not read yet, get [WatchedIndicator] unchanged.
+/// and on a Silo item Silo's own look, as Silo's apps draw it (Silo Android
+/// #882, the web's `CardWatchStatus`): a Silo poster's top-right corner is
+/// Silo's watch status (a check, or the episodes a started series or season
+/// has left) in place of Plezy's check and unwatched count, whether or not
+/// badges are on; while its profile shows card overlays, Silo's badges
+/// ([SiloCardOverlayLayer]) are drawn too. Silo draws no watch status on
+/// landscape artwork, so a wide Silo card keeps Plezy's check there, the one
+/// indicator it has. Progress bars stay Plezy's. Plex, Jellyfin and Emby
+/// items get [WatchedIndicator] unchanged.
 class CardArtworkOverlays extends StatefulWidget {
   const CardArtworkOverlays({
     super.key,
@@ -123,35 +128,39 @@ class _CardArtworkOverlaysState extends State<CardArtworkOverlays> {
 
   @override
   Widget build(BuildContext context) {
+    final item = widget.item;
+    if (item is! SiloMediaItem) return WatchedIndicator(item: item, size: widget.size);
     final store = _store;
-    if (store == null) return WatchedIndicator(item: widget.item, size: widget.size);
-    return Builder(
-      builder: (context) {
-        final settings = store.value;
-        if (settings == null || !settings.enabled) return WatchedIndicator(item: widget.item, size: widget.size);
-        final item = widget.item;
-        final showWatched = SettingsService.instance.read(SettingsService.showWatchedIndicators);
-        final showCount = SettingsService.instance.read(SettingsService.showUnwatchedCount);
-        return Stack(
-          fit: StackFit.expand,
-          children: [
-            WatchedIndicator(item: item, size: widget.size, showWatchStatus: false),
-            SiloCardOverlayLayer(
-              settings: settings,
-              data: SiloOverlayData.ofRaw(item.raw),
-              shape: widget.shape,
-              progress: item.hasActiveProgress,
-              watched: showWatched && item.isWatched && !item.hasActiveProgress,
-              episodesLeft: showCount ? siloEpisodesLeftOf(item) : 0,
-              imageUrl: _imageUrl,
-              onImageFailed: store.imageFailed,
-            ),
-          ],
-        );
-      },
+    final settings = store?.value;
+    final badges = settings != null && settings.enabled;
+    final poster = widget.shape == SiloOverlayCardShape.poster;
+    if (!poster && !badges) return WatchedIndicator(item: item, size: widget.size);
+    // Plezy's "watched indicators" and "unwatched count" settings still gate
+    // Silo's corner.
+    final showWatched = SettingsService.instance.read(SettingsService.showWatchedIndicators);
+    final showCount = SettingsService.instance.read(SettingsService.showUnwatchedCount);
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        WatchedIndicator(item: item, size: widget.size, showWatchStatus: !poster),
+        SiloCardOverlayLayer(
+          settings: badges ? settings : SiloCardOverlaySettings.off,
+          data: SiloOverlayData.ofRaw(item.raw),
+          shape: widget.shape,
+          progress: siloCardHasProgressBar(item),
+          watched: poster && showWatched && item.isWatched,
+          episodesLeft: poster && showCount ? siloEpisodesLeftOf(item) : 0,
+          imageUrl: _imageUrl,
+          onImageFailed: store?.imageFailed,
+        ),
+      ],
     );
   }
 }
+
+/// Whether [WatchedIndicator] draws a progress bar along the artwork's bottom
+/// for [item]: the bottom badge row lifts clear of it.
+bool siloCardHasProgressBar(MediaItem item) => item.hasActiveProgress || (item.isSeason && item.isPartiallyWatched);
 
 /// The episodes a started, unfinished Silo series or season has left (the
 /// watch-status corner's count), from its leaf counts, else the card's
@@ -190,7 +199,7 @@ class SiloCardOverlayLayer extends StatelessWidget {
   final SiloOverlayData data;
   final SiloOverlayCardShape shape;
 
-  /// The card shows a progress bar: a wide card lifts its bottom row over it.
+  /// The card shows a progress bar: the bottom row lifts one inset over it.
   final bool progress;
 
   /// Draw the watched check in the watch-status corner.
@@ -262,35 +271,26 @@ class SiloCardOverlayLayer extends StatelessWidget {
         ),
       ),
       SiloOverlayDividerPart() => const ColoredBox(color: Color(0x66FFFFFF)),
-      SiloOverlayCheckPart() => DecoratedBox(
-        decoration: const BoxDecoration(color: Color(0xFF10B981), shape: BoxShape.circle),
-        child: Center(
-          child: Icon(Symbols.check_rounded, size: part.rect.height * 0.62, color: Colors.white, weight: 700),
-        ),
-      ),
-      SiloOverlayCountPart(:final label) => DecoratedBox(
+      SiloOverlayCheckPart() => const SiloWatchedCheck(),
+      SiloOverlayCountPart(:final label, :final fontSize) => DecoratedBox(
         decoration: BoxDecoration(
           color: const Color(0xA6000000),
           borderRadius: BorderRadius.circular(part.rect.height / 2),
           border: Border.all(color: const Color(0x33FFFFFF)),
+          boxShadow: siloShadowSm,
         ),
         child: Center(
           child: Text(
             label,
             maxLines: 1,
             softWrap: false,
+            overflow: TextOverflow.visible,
             textScaler: TextScaler.noScaling,
-            style: TextStyle(
-              fontFamily: fontFamily,
-              color: Colors.white,
-              fontSize: (part.rect.height / 2).floorToDouble(),
-              fontWeight: FontWeight.w700,
-              height: 1,
-            ),
+            style: siloWatchCountStyle(fontSize, fontFamily),
           ),
         ),
       ),
-      SiloOverlayBadgePart(:final plan) => _BadgeView(
+      SiloOverlayBadgePart(:final plan) => SiloOverlayBadgeView(
         plan: plan,
         look: layout.look,
         k: layout.k,
@@ -405,9 +405,21 @@ class SiloOverlayCheckPart extends SiloOverlayPart {
 }
 
 class SiloOverlayCountPart extends SiloOverlayPart {
-  const SiloOverlayCountPart(super.rect, this.label);
+  const SiloOverlayCountPart(super.rect, this.label, this.fontSize);
   final String label;
+  final double fontSize;
 }
+
+/// The episodes-left count's text: bold, white, tabular figures.
+TextStyle siloWatchCountStyle(double fontSize, String? fontFamily) => TextStyle(
+  fontFamily: fontFamily,
+  color: const Color(0xFFFFFFFF),
+  fontSize: fontSize,
+  fontWeight: FontWeight.w700,
+  height: 1,
+  leadingDistribution: TextLeadingDistribution.even,
+  fontFeatures: const [FontFeature.tabularFigures()],
+);
 
 typedef _LayoutKey = (
   SiloCardOverlaySettings,
@@ -477,13 +489,18 @@ class SiloOverlayLayout {
   }
 
   /// The width of [text] in the overlay font, measured once.
-  static double textWidth(String text, double fontSize, int weight, String? fontFamily) {
+  static double textWidth(String text, double fontSize, int weight, String? fontFamily, {double letterSpacing = 0}) =>
+      _measure(text, siloOverlayTextStyle(fontSize, weight, fontFamily, letterSpacing: letterSpacing));
+
+  static double _measure(String text, TextStyle style) {
     if (text.isEmpty) return 0;
-    final key = '$fontFamily|$weight|$fontSize|$text';
+    final key =
+        '${style.fontFamily}|${style.fontWeight}|${style.fontSize}|${style.letterSpacing}|'
+        '${style.fontFeatures?.length ?? 0}|$text';
     final hit = _widths.remove(key);
     if (hit != null) return _widths[key] = hit;
     final painter = TextPainter(
-      text: TextSpan(text: text, style: siloOverlayTextStyle(fontSize, weight, fontFamily)),
+      text: TextSpan(text: text, style: style),
       textDirection: TextDirection.ltr,
       maxLines: 1,
     )..layout();
@@ -506,26 +523,28 @@ class SiloOverlayLayout {
     SiloOverlayCopy copy = SiloOverlayCopy.english,
   }) {
     final look = settings.look;
-    final wide = shape == SiloOverlayCardShape.wide;
-    final k = wide ? 1.0 : width / SiloCardOverlays.referenceWidth;
+    final insets = SiloOverlayLayoutMath.insets(
+      width: width,
+      wide: shape == SiloOverlayCardShape.wide,
+      progress: progress,
+    );
+    final k = insets.k;
     final layout = SiloOverlayLayout._(look, k);
     final c = _Canvas(layout, settings, width, height, k, fontFamily);
-    if (!data.isEmpty) {
+    if (settings.enabled && !data.isEmpty) {
       final resolved = SiloOverlayBadges.resolve(settings.prefs, data, look, copy);
-      final inset = SiloCardOverlays.edgeInset * k;
-      final checkSize = SiloCardOverlays.watchStatusSize * k;
-      // The top row stops short of the watch-status corner.
-      final reserve = inset + checkSize + SiloCardOverlays.edgeGap * k;
-      final lift = wide && progress;
+      final inset = insets.side;
       final topLeft = resolved[SiloOverlayPosition.topLeft]!;
       final bottomLeft = resolved[SiloOverlayPosition.bottomLeft]!;
       final bottomRight = resolved[SiloOverlayPosition.bottomRight]!;
+      // The top row stops short of the top-right corner.
+      final topWidth = width - inset - insets.topRight;
       if (look.band) {
-        c.bandTop(topLeft, width - reserve);
-        c.bandBottom([...bottomLeft, ...bottomRight], lift);
+        c.bandTop(topLeft, topWidth);
+        c.bandBottom([...bottomLeft, ...bottomRight], insets.bottom);
       } else {
-        c.stackTop(topLeft, width - reserve - inset);
-        c.bottomRows(bottomLeft, bottomRight, lift);
+        c.stackTop(topLeft, topWidth);
+        c.bottomRows(bottomLeft, bottomRight, insets.bottom);
       }
       final railInset = look.flushRails ? 0.0 : inset;
       c.rail(resolved[SiloOverlayPosition.leftEdge]!, railInset, left: true);
@@ -537,21 +556,31 @@ class SiloOverlayLayout {
 }
 
 /// The text style overlay badges use, at an exact size and line height 1.
-TextStyle siloOverlayTextStyle(double fontSize, int weight, String? fontFamily) => TextStyle(
-  fontFamily: fontFamily,
-  fontSize: fontSize,
-  fontWeight: _fontWeight(weight),
-  height: 1,
-  leadingDistribution: TextLeadingDistribution.even,
-);
+TextStyle siloOverlayTextStyle(double fontSize, int weight, String? fontFamily, {double letterSpacing = 0}) =>
+    TextStyle(
+      fontFamily: fontFamily,
+      fontSize: fontSize,
+      fontWeight: _fontWeight(weight),
+      letterSpacing: letterSpacing == 0 ? null : letterSpacing,
+      height: 1,
+      leadingDistribution: TextLeadingDistribution.even,
+    );
 
 FontWeight _fontWeight(int weight) => switch (weight) {
   <= 400 => FontWeight.w400,
   <= 500 => FontWeight.w500,
   <= 600 => FontWeight.w600,
   <= 700 => FontWeight.w700,
-  _ => FontWeight.w800,
+  <= 800 => FontWeight.w800,
+  _ => FontWeight.w900,
 };
+
+/// A wordmark's font size as a share of the icon size: the web draws them as
+/// SVG text on a view box 12 high, at font 10 (ATMOS 9).
+double siloWordmarkFontSize(String? icon, double iconSize) => iconSize * (icon == 'atmos' ? 9 : 10) / 12;
+
+/// The ATMOS wordmark's letter spacing: 0.5 view-box units at font 9.
+const siloAtmosTrackingEm = 0.5 / 9;
 
 class _Canvas {
   _Canvas(this.layout, this.settings, this.width, this.height, this.k, this.fontFamily);
@@ -591,48 +620,40 @@ class _Canvas {
     }
   }
 
-  /// The bottom corners a row per level from the bottom up; a pair too wide
-  /// to share its row wraps, the right badge onto a line under the left.
-  void bottomRows(List<SiloOverlayBadge> left, List<SiloOverlayBadge> right, bool lift) {
-    final rows = SiloOverlayBadges.bottomRows(left, right);
-    final edgeGap = SiloCardOverlays.edgeGap * k;
-    final available = width - 2 * inset;
-    var bottom = height - inset - (lift ? inset : 0);
-    for (final (l, r) in rows.reversed) {
-      final lp = l == null ? null : measure(l, available);
-      final rp = r == null ? null : measure(r, available);
-      if (lp != null && rp != null && lp.w + edgeGap + rp.w > available) {
-        _place(rp, width - inset - rp.w, bottom - rp.h);
-        bottom -= rp.h + gap;
-        _place(lp, inset, bottom - lp.h);
-        bottom -= lp.h + gap;
-      } else {
-        var lineHeight = 0.0;
-        if (lp != null) {
-          _place(lp, inset, bottom - lp.h);
-          lineHeight = lp.h;
-        }
-        if (rp != null) {
-          _place(rp, width - inset - rp.w, bottom - rp.h);
-          lineHeight = math.max(lineHeight, rp.h);
-        }
-        bottom -= lineHeight + gap;
-      }
+  /// The bottom corners a row per level from the bottom up
+  /// ([SiloOverlayLayoutMath.bottomRows]), [bottomInset] above the bottom.
+  void bottomRows(List<SiloOverlayBadge> left, List<SiloOverlayBadge> right, double bottomInset) {
+    if (left.isEmpty && right.isEmpty) return;
+    final available = math.max(0.0, width - 2 * inset);
+    final lp = [for (final badge in left) measure(badge, available)];
+    final rp = [for (final badge in right) measure(badge, available)];
+    final rows = SiloOverlayLayoutMath.bottomRows(
+      [for (final p in lp) (w: p.w, h: p.h)],
+      [for (final p in rp) (w: p.w, h: p.h)],
+      available: available,
+      gap: SiloCardOverlays.edgeGap * k,
+      stackGap: gap,
+    );
+    final top = height - bottomInset - rows.height;
+    for (var i = 0; i < lp.length; i++) {
+      _place(lp[i], inset + rows.left[i].x, top + rows.left[i].y);
+    }
+    for (var i = 0; i < rp.length; i++) {
+      _place(rp[i], inset + rows.right[i].x, top + rows.right[i].y);
     }
   }
 
-  void bandTop(List<SiloOverlayBadge> list, double right) {
+  void bandTop(List<SiloOverlayBadge> list, double available) {
     if (list.isEmpty) return;
-    final marks = _bandMarks(list, right - inset);
+    final marks = _bandMarks(list, available);
     final scrim = inset * 4 + marks.h;
     layout.parts.insert(0, SiloOverlayScrimPart(Rect.fromLTWH(0, 0, width, scrim), top: true));
     _placeMarks(marks, inset, inset);
   }
 
-  void bandBottom(List<SiloOverlayBadge> list, bool lift) {
+  void bandBottom(List<SiloOverlayBadge> list, double below) {
     if (list.isEmpty) return;
     final marks = _bandMarks(list, width - 2 * inset);
-    final below = lift ? 2 * inset : inset;
     final strip = inset * 3 + marks.h + below;
     layout.parts.insert(0, SiloOverlayScrimPart(Rect.fromLTWH(0, height - strip, width, strip), top: false));
     _placeMarks(marks, (width - marks.w) / 2, height - below - marks.h);
@@ -665,13 +686,17 @@ class _Canvas {
     }
   }
 
+  /// The top-right corner (the web's `CardWatchStatus`): the episodes left,
+  /// else the watched check, sized against the 185 px reference like badges.
   void watchStatus({required bool watched, required int episodesLeft}) {
     final size = SiloCardOverlays.watchStatusSize * k;
     if (episodesLeft > 0) {
       final label = '$episodesLeft';
-      final textW = SiloOverlayLayout.textWidth(label, (size / 2).floorToDouble(), 700, fontFamily);
-      final w = math.max(size, textW + 0.8 * size / 2);
-      layout.parts.add(SiloOverlayCountPart(Rect.fromLTWH(width - inset - w, inset, w, size), label));
+      // The web sizes this text from the card alone, without the text ratio.
+      final fontSize = SiloCardOverlays.watchStatusFontSize * k;
+      final textW = SiloOverlayLayout._measure(label, siloWatchCountStyle(fontSize, fontFamily));
+      final w = SiloOverlayLayoutMath.countWidth(textW, k).ceilToDouble();
+      layout.parts.add(SiloOverlayCountPart(Rect.fromLTWH(width - inset - w, inset, w, size), label, fontSize));
     } else if (watched) {
       layout.parts.add(SiloOverlayCheckPart(Rect.fromLTWH(width - inset - size, inset, size, size)));
     }
@@ -700,34 +725,9 @@ class _Canvas {
     final iconImage = _image(badge.image);
     final finished = SiloOverlayBadges.finish(badge, look, withImage: iconImage != null);
     final fontSize = look.fontSize * k;
+    final letterSpacing = look.letterSpacingEm * fontSize;
     final border = paint.border != null && (paint.border! >> 24) > 0 ? look.borderWidth * k : 0.0;
     final iconSize = look.iconSize * k;
-    var lead = SiloLeadKind.none;
-    var leadW = 0.0;
-    var leadH = 0.0;
-    var markFontSize = 0.0;
-    if (iconImage != null) {
-      lead = SiloLeadKind.image;
-      leadH = iconSize;
-      leadW = math.min(maxWidth, iconSize * iconImage.aspectRatio);
-    } else if (finished.chip != null) {
-      lead = SiloLeadKind.chip;
-      leadW = SiloOverlayLayout.textWidth(finished.chip!, fontSize, look.weight, fontFamily) + 0.7 * fontSize;
-      leadH = fontSize * 1.3;
-    } else if (finished.markText != null) {
-      lead = SiloLeadKind.mark;
-      markFontSize = iconSize * (badge.icon == 'atmos' ? 9 : 10) / 12;
-      leadW = SiloOverlayLayout.textWidth(finished.markText!, markFontSize, 800, fontFamily);
-      leadH = iconSize;
-    } else if (badge.icon != null && siloOverlayGlyph(badge.icon!) != null) {
-      lead = SiloLeadKind.glyph;
-      leadW = iconSize;
-      leadH = iconSize;
-    }
-    final text = finished.text;
-    final textW = SiloOverlayLayout.textWidth(text, fontSize, look.weight, fontFamily);
-    final contentHeight = math.max(fontSize, leadH);
-    final gapW = leadW > 0 && textW > 0 ? look.iconGap * k : 0.0;
     var left = border;
     var right = border;
     if (rail == AxisDirection.left) left = 0;
@@ -735,6 +735,42 @@ class _Canvas {
     if (look.accentLeft > 0 && paint.accentLeft != null && rail != AxisDirection.left) left = look.accentLeft * k;
     final padX = look.padX * k;
     final padY = look.padY * k;
+    var lead = SiloLeadKind.none;
+    var leadW = 0.0;
+    var leadH = 0.0;
+    var markFontSize = 0.0;
+    if (iconImage != null) {
+      lead = SiloLeadKind.image;
+      leadH = iconSize;
+      // At most the badge's content width (the web's `max-w-full`), so a wide
+      // logo cannot push the badge past its slot.
+      leadW = math.min(math.max(0.0, maxWidth - left - right - 2 * padX), iconSize * iconImage.aspectRatio);
+    } else if (finished.chip != null) {
+      lead = SiloLeadKind.chip;
+      leadW =
+          SiloOverlayLayout.textWidth(finished.chip!, fontSize, look.weight, fontFamily, letterSpacing: letterSpacing) +
+          0.7 * fontSize;
+      leadH = fontSize * 1.3;
+    } else if (finished.markText != null) {
+      lead = SiloLeadKind.mark;
+      markFontSize = siloWordmarkFontSize(badge.icon, iconSize);
+      leadW = SiloOverlayLayout.textWidth(
+        finished.markText!,
+        markFontSize,
+        900,
+        fontFamily,
+        letterSpacing: badge.icon == 'atmos' ? siloAtmosTrackingEm * markFontSize : 0,
+      );
+      leadH = iconSize;
+    } else if (badge.icon != null && SiloOverlayIcons.has(badge.icon!)) {
+      lead = SiloLeadKind.glyph;
+      leadW = iconSize;
+      leadH = iconSize;
+    }
+    final text = finished.text;
+    final textW = SiloOverlayLayout.textWidth(text, fontSize, look.weight, fontFamily, letterSpacing: letterSpacing);
+    final contentHeight = math.max(fontSize, leadH);
+    final gapW = leadW > 0 && textW > 0 ? look.iconGap * k : 0.0;
     var w = left + padX + leadW + gapW + textW + padX + right;
     // A bare score never truncates; any other label ellipsizes.
     if (w > maxWidth && textW > 0 && !finished.scoreOnly) w = maxWidth;
@@ -764,27 +800,10 @@ class _Canvas {
   }
 }
 
-/// The Material Symbols glyph for a badge icon, or null for none. Brand marks
-/// are text (wordmarks); Dolby Vision draws no mark of its own, as the
-/// badge's text already says "DV".
-IconData? siloOverlayGlyph(String icon) => switch (icon) {
-  'monitor' => Symbols.monitor,
-  'volume' => Symbols.volume_up,
-  'film' => Symbols.movie,
-  'layout' => Symbols.aspect_ratio,
-  'languages' => Symbols.translate,
-  'subtitles' => Symbols.subtitles,
-  'shield' => Symbols.shield,
-  'users' => Symbols.group,
-  'clock' => Symbols.schedule,
-  'globe' => Symbols.language,
-  'building' => Symbols.apartment,
-  'tv' => Symbols.tv,
-  _ => null,
-};
-
-class _BadgeView extends StatelessWidget {
-  const _BadgeView({
+/// One badge drawn as its [SiloBadgePlan] measured it.
+class SiloOverlayBadgeView extends StatelessWidget {
+  const SiloOverlayBadgeView({
+    super.key,
     required this.plan,
     required this.look,
     required this.k,
@@ -845,18 +864,19 @@ class _BadgeView extends StatelessWidget {
     final shadow = look.boxShadow;
     final textColor = Color(paint.text);
     final textShadow = look.textShadow;
-    final textStyle = siloOverlayTextStyle(plan.fontSize, look.weight, fontFamily).copyWith(
-      color: textColor,
-      shadows: textShadow == null
-          ? null
-          : [
-              Shadow(
-                offset: Offset(textShadow.x * k, textShadow.y * k),
-                blurRadius: textShadow.blur * k,
-                color: Color(textShadow.color),
-              ),
-            ],
-    );
+    final textShadowPaint = textShadow == null
+        ? null
+        : Shadow(
+            offset: Offset(textShadow.x * k, textShadow.y * k),
+            blurRadius: siloCssBlurRadius(textShadow.blur * k),
+            color: Color(textShadow.color),
+          );
+    final textStyle = siloOverlayTextStyle(
+      plan.fontSize,
+      look.weight,
+      fontFamily,
+      letterSpacing: look.letterSpacingEm * plan.fontSize,
+    ).copyWith(color: textColor, shadows: textShadowPaint == null ? null : [textShadowPaint]);
     final children = <Widget>[];
     switch (plan.lead) {
       case SiloLeadKind.image:
@@ -874,7 +894,7 @@ class _BadgeView extends StatelessWidget {
               maxLines: 1,
               softWrap: false,
               textScaler: TextScaler.noScaling,
-              style: textStyle.copyWith(color: Color(siloOverlayReadableOn(accent)), shadows: const []),
+              style: textStyle.copyWith(color: Color(siloOverlayReadableOn(accent))),
             ),
           ),
         );
@@ -890,14 +910,19 @@ class _BadgeView extends StatelessWidget {
                 softWrap: false,
                 overflow: TextOverflow.visible,
                 textScaler: TextScaler.noScaling,
-                style: siloOverlayTextStyle(plan.markFontSize, 800, fontFamily).copyWith(color: textColor),
+                style: siloOverlayTextStyle(
+                  plan.markFontSize,
+                  900,
+                  fontFamily,
+                  letterSpacing: plan.badge.icon == 'atmos' ? siloAtmosTrackingEm * plan.markFontSize : 0,
+                ).copyWith(color: textColor, shadows: textShadowPaint == null ? null : [textShadowPaint]),
               ),
             ),
           ),
         );
       case SiloLeadKind.glyph:
         children.add(
-          Icon(siloOverlayGlyph(plan.badge.icon!), size: plan.leadW, color: textColor, fill: 1, weight: 600),
+          SiloOverlayGlyph(icon: plan.badge.icon!, size: plan.leadW, color: textColor, shadow: textShadowPaint),
         );
       case SiloLeadKind.none:
         break;
@@ -954,7 +979,7 @@ class _BadgeView extends StatelessWidget {
             : [
                 BoxShadow(
                   offset: Offset(shadow.x * k, shadow.y * k),
-                  blurRadius: shadow.blur * k,
+                  blurRadius: siloCssBlurRadius(shadow.blur * k),
                   color: Color(shadow.color),
                 ),
               ],

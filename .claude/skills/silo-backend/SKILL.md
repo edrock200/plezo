@@ -48,6 +48,7 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
 | `lib/services/silo/silo_card_overlays.dart` | Card overlays, pure: registry, `ui.card_overlays` parsing (v1/v2, style), settle with the overlay config, labels, placement/caps/suppression, looks and colours, `SiloOverlayData` (from a card's raw JSON) |
 | `lib/services/silo/silo_card_overlay_store.dart` | `SiloCardOverlayStore` (`SiloClient.cardOverlays`): the two settings reads under one in-flight future, known value per connection |
 | `lib/widgets/silo_card_overlays.dart` | `CardArtworkOverlays` (Plezy's `WatchedIndicator`, or Silo's layer on Silo items), `SiloCardOverlayLayer` and the cached `SiloOverlayLayout` |
+| `lib/widgets/silo_overlay_icons.dart` | Overlay glyphs from Lucide path data and the web's Dolby Vision mark (`parseSvgPath`), `SiloWatchedCheck` |
 
 ## Contract rules the code depends on
 - **Headers:** every request sends `Accept: application/json` and `X-Silo-Device-Id/-Name/-Platform`,
@@ -389,13 +390,25 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
   (`SiloOverlayData.ofRaw(item.raw)`, cached per JSON object): `overlay_summary` (also on season episode
   rows), the four ratings, `content_rating`, `advisory_age`, `year`, `runtime`, `original_language`, first
   `studios`/`networks`, `show_status`; no new `MediaItem` fields (raw already round-trips). A poster scales
-  the web lengths by width/185; wide cards (landscape, episode stills) draw at 1 and a wide card with progress
-  lifts its bottom row by one inset. The top row stops short of the watch-status corner (22 px × k): Silo's
-  emerald check for a watched item, or the episodes left on a started, unfinished series/season (from
-  leaf counts, else `user_state.watched_count`/`unplayed_count`). While overlays are on, `WatchedIndicator
-  (showWatchStatus: false)` drops Plezy's check and unwatched pill on that card (progress bars stay); Plezy's
-  "watched indicators"/"unwatched count" settings still gate Silo's corner. Plex/Jellyfin/Emby cards never
-  look a store up (`CardArtworkOverlays.storeFor` returns null for non-Silo items).
+  the web lengths by width/185; wide cards (landscape, episode stills) draw at 1;
+  a card with a progress bar (active progress, or a partly watched season's bar) lifts its bottom
+  row by one inset, posters too (`SiloOverlayLayoutMath.insets`, Silo Android #882). The top row stops short
+  of the top-right corner (38 px × k). Watch status (Silo Android #882, the web's `CardWatchStatus`): on a
+  Silo **poster** the corner is always Silo's, whether or not badges are on or loaded: the emerald
+  (#00BC7D) Lucide check for a watched item, or the episodes left (font 11 × k, 0.4 em a side + 1 px
+  border, tabular figures) on a started, unfinished series/season (leaf counts, else
+  `user_state.watched_count`/`unplayed_count`); `WatchedIndicator(showWatchStatus: false)` drops Plezy's
+  check and unwatched pill there (progress bars stay). Silo draws no watch status on landscape artwork, so a
+  **wide** Silo card keeps Plezy's check (the one indicator) and only adds badges. Plezy's "watched
+  indicators"/"unwatched count" settings still gate Silo's corner. Bottom corners: one row per level from
+  the bottom, a pair too wide wraps the right badge under the left (`SiloOverlayLayoutMath.bottomRows`, the
+  web's `BottomRows`). Glyphs are Lucide's (lucide-react 0.576.0) and the web's Dolby Vision mark,
+  drawn from path data by `lib/widgets/silo_overlay_icons.dart` (own SVG path reader; Lucide licence on the
+  licenses page); wordmarks are weight 900 at 10/12 of the icon (ATMOS 9/12 with 0.5/9 em tracking);
+  badge text has the presets' `tracking-wide`/`-widest`; CSS blur lengths go through `siloCssBlurRadius`;
+  an uploaded icon is capped at the badge's content width. Values are kept as the API sent them (no
+  trimming), so `valueImages` keys match the web's. Plex/Jellyfin/Emby cards never look a store up
+  (`CardArtworkOverlays.storeFor` returns null for non-Silo items).
 - **Limits:** `GET /catalog/people` caps `limit` at 100; catalog pages at 200.
 - **Offline:** `fetchItem` falls back to `SiloApiCache.getMetadata` (the pinned download row) on a
   transient error; watch detail is read through the cache too.
@@ -466,10 +479,11 @@ PIN length (matches Silo's apps). Open follow-ups: an edit screen for an existin
   Embedded subtitles drawn from the stream (Silo Android #770: `hls_subtitle_renditions_all_v1`,
   `native_embedded`) are not declared: Plezy keeps server sidecars.
 - Theme music (Silo Android #678) is not offered: Plezy plays no theme music for any backend.
-- Card overlays: Plezilo only reads the document (no editor, like Silo's TV apps). List-mode rows keep
-  Plezy's indicator (no badges on their small thumbnails). Dolby Vision has no mark of its own (the text says
-  "DV"; no Dolby artwork ships) and the other brand marks are bold text; glyphs are Material Symbols. Text is
-  the app's font (no letter-spacing); shadows blur for real (Flutter can). The request-status badge never has
+- Card overlays: Plezilo only reads the document (no editor, like Silo's TV apps), so Silo Android #882's
+  save rules (settings revision, passthrough ids) do not apply. List-mode rows keep Plezy's indicator (no
+  badges on their small thumbnails). Dolby Vision draws the web's own ring mark (no Dolby artwork ships) and
+  the other brand marks are bold text. Text is the app's font; shadows blur for real (Flutter can). Wide
+  Silo cards keep Plezy's watched check where Silo shows none. The request-status badge never has
   data (Plezilo lists no watchlist titles outside the library). Changes made in Silo's web client show on the
   next Home load, not live.
 - Music, audiobooks and e-books are not mapped (`SiloMappers.item` returns null; those libraries
@@ -516,7 +530,10 @@ PIN length (matches Silo's apps). Open follow-ups: an edit screen for an existin
   `Uri.decodeComponent(request.url.path)` — ids are percent-encoded on the wire.
 - Card overlays: `test/services/silo/silo_card_overlays_test.dart` (document/style parsing, settle and
   enabled precedence, labels incl. "4K DV Atmos", placement, caps, suppression, looks/paint, store sharing,
-  404/failure/known value, failed images), `test/widgets/silo_card_overlays_test.dart` (a Silo `MediaCard`
+  404/failure/known value, failed images; #882's top-right → right rail, insets/progress lift, bottom-row
+  wrap cases from Android's `OverlayLayoutMathTest`, count width, the preset table),
+  `test/widgets/silo_overlay_icons_test.dart` (SVG path reader, icon bounds),
+  `test/widgets/silo_card_overlays_test.dart` (a Silo `MediaCard`
   with an injected store via `CardArtworkOverlays.debugStoreResolver`, Plex/Jellyfin/Emby unchanged, overlays
   off, layout geometry) and the `card overlays` group in `silo_client_test.dart` (routes, `keys` repeated,
   profile header). Mock handlers that count every request must let `/api/v2/settings/` through (Home loads

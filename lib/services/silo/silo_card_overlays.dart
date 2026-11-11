@@ -35,6 +35,17 @@ abstract final class SiloCardOverlays {
   /// The watch-status corner (the web's `CardWatchStatus`): a 22 px disc.
   static const watchStatusSize = 22.0;
 
+  /// The episodes-left count's font size in the watch-status corner.
+  static const watchStatusFontSize = 11.0;
+
+  /// How far a poster's top row stops short of the right edge (after the
+  /// edge inset), so a badge never runs under the watch-status corner.
+  static const watchStatusReserve = watchStatusSize + edgeGap;
+
+  /// Tailwind's `tracking-wide` and `tracking-widest`, in em.
+  static const trackingWide = 0.025;
+  static const trackingWidest = 0.1;
+
   static const documentKey = 'ui.card_overlays';
   static const enabledKey = 'ui.card_overlays_enabled';
   static const imagePath = '/api/v2/overlay-images/';
@@ -313,7 +324,9 @@ class SiloOverlayPrefs {
     }
     if (parsed is! Map) return SiloOverlayPrefs.defaults();
     final version = parsed['version'];
-    final v2 = (version is num && version == 2) || (parsed['preset'] is String && parsed['items'] is Map);
+    final v2 =
+        (version is num && version == 2) ||
+        (parsed['preset'] is String && (parsed['items'] is Map || parsed['items'] is List));
     if (!v2) return SiloOverlayPrefs(preset: 'classic', order: const [], items: _items(parsed));
     final preset = parsed['preset'];
     final order = <String>[];
@@ -424,6 +437,9 @@ class SiloCardOverlaySettings {
 
   SiloCardOverlaySettings({required this.enabled, required this.prefs, this.images = const {}});
 
+  /// Badges off: a Silo poster still draws its watch-status corner.
+  static final off = SiloCardOverlaySettings(enabled: false, prefs: SiloOverlayPrefs.defaults());
+
   /// The profile's values ([SiloOverlayProfileValues], or null before or
   /// without them) over the overlay config (null for a server without it):
   /// the profile's choice wins, then the server's default; without either,
@@ -522,8 +538,10 @@ class SiloOverlayData {
 
   static SiloOverlayData fromJson(Map<String, Object?> item) {
     final out = <String, Object>{};
+    // As the API sent it (the web's `x || undefined`): value images match the
+    // exact value, so nothing is trimmed; a blank one is no value.
     void keep(String key, Object? value) {
-      if (value is String && value.trim().isNotEmpty) out[key] = value.trim();
+      if (value is String && value.trim().isNotEmpty) out[key] = value;
     }
 
     final summary = item['overlay_summary'];
@@ -919,10 +937,13 @@ abstract final class SiloOverlayBadges {
     String? chip = !withImage && look.sourceChips ? badge.sourceMark : null;
     final scoreOnly = (withImage || chip != null) && badge.score != null;
     final markText = withImage ? null : wordmark(badge.icon);
+    // A label the badge's wordmark spells is dropped, as on the web, even
+    // when an uploaded image stands in for the mark.
+    final badgeMark = wordmark(badge.icon);
     String text;
     if (scoreOnly) {
       text = badge.score!;
-    } else if (markText != null && markText.toLowerCase() == badge.label.trim().toLowerCase()) {
+    } else if (badgeMark != null && badgeMark.toLowerCase() == badge.label.trim().toLowerCase()) {
       text = '';
     } else {
       text = badge.label;
@@ -985,6 +1006,112 @@ abstract final class SiloOverlayBadges {
 }
 
 // -----------------------------------------------------------------------------
+// Layout maths
+// -----------------------------------------------------------------------------
+
+/// A badge's measured size, in logical px.
+typedef SiloBadgeSize = ({double w, double h});
+
+/// A badge's top-left offset inside its block, in logical px.
+typedef SiloBadgeOffset = ({double x, double y});
+
+/// Where a card's badge layer starts and stops, in logical px.
+class SiloOverlayInsets {
+  /// The scale of the web's lengths on this card.
+  final double k;
+
+  /// From the left, right and top edges to a corner stack or rail.
+  final double side;
+
+  /// From the bottom edge to the bottom row, including the progress lift.
+  final double bottom;
+
+  /// From the right edge to the end of the top row: it stops short of the
+  /// watch-status corner.
+  final double topRight;
+
+  const SiloOverlayInsets({required this.k, required this.side, required this.bottom, required this.topRight});
+}
+
+/// The card-overlay rules that decide placement from measured sizes (the
+/// web's `CardOverlays.tsx`, Silo Android's `OverlayLayoutMath`), free of
+/// widgets so they can be checked on their own.
+abstract final class SiloOverlayLayoutMath {
+  /// A card's insets. A poster scales the web's lengths by its width over
+  /// 185 px, a wide card draws them at 1. A card that draws a progress bar
+  /// along its artwork's bottom lifts the bottom row one inset clear of it.
+  /// The top row always keeps the top-right corner clear: on a poster it is
+  /// Silo's watch status, on a wide card Plezilo's own watched check.
+  static SiloOverlayInsets insets({required double width, required bool wide, required bool progress}) {
+    final k = wide ? 1.0 : width / SiloCardOverlays.referenceWidth;
+    final edge = SiloCardOverlays.edgeInset * k;
+    return SiloOverlayInsets(
+      k: k,
+      side: edge,
+      bottom: edge + (progress ? edge : 0),
+      topRight: (SiloCardOverlays.edgeInset + SiloCardOverlays.watchStatusReserve) * k,
+    );
+  }
+
+  /// Whether a left and a right badge share one bottom row.
+  static bool fitsOnOneLine(double leftWidth, double rightWidth, double available, double gap) =>
+      leftWidth + gap + rightWidth <= available + 0.01;
+
+  /// Where the badges of the two bottom corners go (the web's `BottomRows`).
+  /// One row per level, counted from the bottom, so the shorter corner lines
+  /// up with the bottom and a badge shares its width only with the badge at
+  /// the same height in the other corner. A row is a CSS `flex-wrap` line:
+  /// the left badge at the start, the right at the end, [gap] apart, bottom
+  /// aligned; a pair too wide for [available] puts the right badge on a line
+  /// of its own under the left one, [stackGap] below. Rows are [stackGap]
+  /// apart. Widths are as measured against [available].
+  ///
+  /// [left] and [right] list each corner's badges top to bottom; the result
+  /// holds each badge's offset from the block's top-left, in the same order,
+  /// and the block's height.
+  static ({List<SiloBadgeOffset> left, List<SiloBadgeOffset> right, double height}) bottomRows(
+    List<SiloBadgeSize> left,
+    List<SiloBadgeSize> right, {
+    required double available,
+    required double gap,
+    required double stackGap,
+  }) {
+    final leftOut = List<SiloBadgeOffset>.filled(left.length, (x: 0, y: 0));
+    final rightOut = List<SiloBadgeOffset>.filled(right.length, (x: 0, y: 0));
+    final levels = math.max(left.length, right.length);
+    var y = 0.0;
+    for (var level = 0; level < levels; level++) {
+      if (level > 0) y += stackGap;
+      final l = left.length - levels + level;
+      final r = right.length - levels + level;
+      final hasLeft = l >= 0;
+      final hasRight = r >= 0;
+      if (hasLeft && hasRight && !fitsOnOneLine(left[l].w, right[r].w, available, gap)) {
+        leftOut[l] = (x: 0, y: y);
+        y += left[l].h + stackGap;
+        rightOut[r] = (x: available - right[r].w, y: y);
+        y += right[r].h;
+        continue;
+      }
+      final line = math.max(hasLeft ? left[l].h : 0.0, hasRight ? right[r].h : 0.0);
+      if (hasLeft) leftOut[l] = (x: 0, y: y + line - left[l].h);
+      if (hasRight) rightOut[r] = (x: available - right[r].w, y: y + line - right[r].h);
+      y += line;
+    }
+    return (left: leftOut, right: rightOut, height: y);
+  }
+
+  /// The watch-status count's capsule width for a label [textWidth] wide at
+  /// [k]: the label with 0.4 em either side and a 1 px border, at least as
+  /// wide as it is tall.
+  static double countWidth(double textWidth, double k) {
+    final size = SiloCardOverlays.watchStatusSize * k;
+    final font = SiloCardOverlays.watchStatusFontSize * k;
+    return math.max(size, textWidth + font * 0.4 * 2 + 2);
+  }
+}
+
+// -----------------------------------------------------------------------------
 // Looks
 // -----------------------------------------------------------------------------
 
@@ -1008,6 +1135,9 @@ class SiloOverlayLook {
   final bool sourceChips;
   final int weight;
   final bool uppercase;
+
+  /// Letter spacing as a share of the font size (the web's `tracking-*`).
+  final double letterSpacingEm;
   final double fontSize;
   final double padX;
   final double padY;
@@ -1040,6 +1170,7 @@ class SiloOverlayLook {
     this.sourceChips = false,
     required this.weight,
     this.uppercase = true,
+    this.letterSpacingEm = SiloCardOverlays.trackingWide,
     required this.fontSize,
     required this.padX,
     required this.padY,
@@ -1066,6 +1197,7 @@ class SiloOverlayLook {
       'minimal' => const SiloOverlayLook(
         id: 'minimal',
         weight: 600,
+        letterSpacingEm: SiloCardOverlays.trackingWidest,
         fontSize: 9,
         padX: 4,
         padY: 0,
@@ -1110,6 +1242,7 @@ class SiloOverlayLook {
       'square' => const SiloOverlayLook(
         id: 'square',
         weight: 700,
+        letterSpacingEm: SiloCardOverlays.trackingWidest,
         fontSize: 9,
         padX: 6,
         padY: 2,
@@ -1212,6 +1345,7 @@ class SiloOverlayLook {
       sourceChips: base.sourceChips,
       weight: weight,
       uppercase: style.uppercase ?? base.uppercase,
+      letterSpacingEm: base.letterSpacingEm,
       fontSize: fontSize,
       padX: padX,
       padY: padY,
@@ -1346,6 +1480,10 @@ double siloOverlayContrast(int a, int b) {
   final y = _luminance(b);
   return (math.max(x, y) + 0.05) / (math.min(x, y) + 0.05);
 }
+
+/// A CSS shadow blur length as a Flutter blur radius: CSS blurs with a
+/// sigma of half the length, Flutter with 0.57735 × radius + 0.5.
+double siloCssBlurRadius(double blur) => math.max((blur / 2 - 0.5) / 0.57735, 0);
 
 /// Black or white, whichever reads better on [color].
 int siloOverlayReadableOn(int color) => _luminance(color) > 0.4 ? 0xFF000000 : 0xFFFFFFFF;
