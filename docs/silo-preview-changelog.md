@@ -4,6 +4,8 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **Jump to a letter in Silo libraries (from Silo's Android app):** when a Silo library is sorted by title, the A–Z bar now scrolls the grid to the first title under the letter you pick instead of showing only that letter's titles, just as it does for Plex libraries. The bar lists only letters that have titles, follows along as you scroll, works with filters, and now also appears on phones. Servers that don't have Silo's letter index yet keep the old A–Z filter.
+
 ## silo-preview-2.26.6
 
 Released November 12, 2026. Android and Windows.

@@ -61,6 +61,7 @@ import 'silo_live_subtitles.dart';
 import 'silo_mappers.dart';
 import 'silo_calendar.dart';
 import 'silo_playback_caps.dart';
+import 'silo_letter_index.dart';
 import 'silo_series_track_choices.dart';
 import 'silo_requests.dart';
 import 'silo_subtitles.dart';
@@ -488,7 +489,17 @@ class SiloClient
       int? seek,
     }) async {
       abort?.throwIfAborted();
-      final query = {...params, 'limit': limit, 'cursor': ?cursor, 'seek': ?seek};
+      // A seek into a list whose exact size is already known skips the
+      // count (Silo Android #888): the server need not total the list again
+      // for every jump. The window cursor's scope ignores `skip_total`.
+      final knownTotal = seek != null ? state.exactTotal : null;
+      final query = {
+        ...params,
+        'limit': limit,
+        'cursor': ?cursor,
+        'seek': ?seek,
+        if (knownTotal != null) 'skip_total': 'true',
+      };
       final response = await _api.send('GET', path, query: query, abort: abort);
       final data = response.data is Map<String, dynamic> ? response.data as Map<String, dynamic> : null;
       final page = data?['page'];
@@ -498,7 +509,10 @@ class SiloClient
       if (window != null && window.isNotEmpty) state.window = window;
       final items = _itemsOf(data);
       if (hasMore && next != null && next.isNotEmpty) state.next[start + items.length] = next;
-      return (items: items, total: (data?['total'] as num?)?.toInt(), hasMore: hasMore);
+      final total = (data?['total'] as num?)?.toInt();
+      if (knownTotal != null) return (items: items, total: knownTotal, hasMore: hasMore);
+      if (total != null && data?['total_exact'] == true) state.exactTotal = total;
+      return (items: items, total: total, hasMore: hasMore);
     }
 
     if (offset <= 0) return fetch(0);
@@ -687,6 +701,54 @@ class SiloClient
       libraryId: libraryId,
       libraryTitle: _libraryTitles[libraryId],
     );
+  }
+
+  /// True once the server answered the letter index with 404, 405 or 501:
+  /// it has none, and the A–Z bar keeps filtering by `name_prefix`.
+  bool _letterIndexUnsupported = false;
+
+  /// Whether the server is known to lack the letter index.
+  bool get letterIndexUnsupported => _letterIndexUnsupported;
+
+  /// Where each letter starts in the title-ordered grid
+  /// [fetchLibraryPagedContent] pages for the same [libraryId], [query] and
+  /// [libraryKind] (`POST /api/v2/catalog/letters`, Silo Android #888).
+  ///
+  /// The index always counts in title order: [query]'s order when it sorts
+  /// by title, ascending otherwise, and never with its `nameStartsWith`.
+  /// Returns null from a server without the index (404, 405 or 501; it is
+  /// not asked again), or for a list the index cannot describe (a search).
+  /// Other failures throw.
+  Future<SiloLetterIndex?> fetchLetterIndex(
+    String libraryId, {
+    required LibraryQuery query,
+    MediaKind? libraryKind,
+    AbortController? abort,
+  }) async {
+    if (_letterIndexUnsupported) return null;
+    final params = _catalogParams(libraryId, query.copyWith(nameStartsWith: null), libraryKind);
+    if (params['sort'] != 'title' && params['sort'] != '-title') params['sort'] = 'title';
+    final body = SiloLetterIndex.requestBody(params);
+    if (body == null) return null;
+    try {
+      final response = await _api.send('POST', '/api/v2/catalog/letters', body: body, abort: abort);
+      final data = response.data;
+      if (data is! Map<String, dynamic>) {
+        throw MediaServerHttpException(
+          type: MediaServerHttpErrorType.unknown,
+          statusCode: response.statusCode,
+          requestUri: response.requestUri,
+          message: 'Expected a JSON object from /api/v2/catalog/letters',
+        );
+      }
+      return SiloLetterIndex.fromJson(data);
+    } on MediaServerHttpException catch (e) {
+      if (const {404, 405, 501}.contains(e.statusCode)) {
+        _letterIndexUnsupported = true;
+        return null;
+      }
+      rethrow;
+    }
   }
 
   @override
@@ -1979,6 +2041,10 @@ class _SiloNoLiveTv implements LiveTvSupport {
 class _SiloCursorState {
   /// Seed for `seek` jumps; carries the query scope.
   String? window;
+
+  /// The list's size from a page that counted it exactly (`total_exact`);
+  /// later seeks skip the count and report this.
+  int? exactTotal;
 
   /// Offset → `next_cursor` that starts there.
   final Map<int, String> next = {};

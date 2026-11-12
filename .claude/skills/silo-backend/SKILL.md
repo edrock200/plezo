@@ -190,7 +190,21 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
   `SiloClient._pageAt` keeps a bounded map per (query, page size): the adjacent page reuses
   `next_cursor`; any other offset sends `cursor=<window_cursor>&seek=<offset>` (no walking). A 400
   `invalid_cursor` (the listing changed, a search window expired) drops the map and restarts once.
-  Keep query params identical across pages.
+  Keep query params identical across pages. A seek into a list whose first page said
+  `total_exact: true` sends `skip_total=true` and reports that exact total (the cursor scope ignores
+  `skip_total`; it does include `limit`, so each page size needs its own first page).
+- **A–Z bar (Silo Android #888):** `SiloAlphaBarStrategy` (`library_alpha_bar_strategy.dart`) reads
+  `SiloClient.fetchLetterIndex` = `POST /api/v2/catalog/letters` with body `{library_id, type,
+  groups, order: asc|desc}` built from the grid's own `_catalogParams` by
+  `SiloLetterIndex.requestBody` (genre/year/content_rating become the rule groups the server derives
+  from those GET params; `q`/`name_prefix`/non-title sorts have no index). Answer `{total,
+  letters:[{letter,count,position}], runs:[{letter,position}]}`: a tap jumps to `position` (not
+  cumulative counts; a collation can put accented A after Z), the highlighted letter comes from
+  `runs`. Like Plex's bar it shows only in title order (phones too), letters without titles are left
+  out, and the grid loads the far range with `seek`. 404/405/501 = no index (sticky per client):
+  the static `name_prefix` bar stays (hidden on phones). Each load bumps a generation so only the
+  newest answer is kept. Tests: `silo_letter_index_test.dart`, `silo_alpha_bar_strategy_test.dart`,
+  the Silo cases in `library_browse_tab_test.dart`.
 - **Ids:** opaque strings (`movie:heat-1995`); always `Uri.encodeComponent` them in paths. Episode
   cards name their season only by series + number, so they get a synthetic parent id
   `silo-season:<n>:<seriesId>` (`SiloMappers.syntheticSeasonId`); `fetchItem`/`fetchChildren`

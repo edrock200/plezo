@@ -23,6 +23,7 @@ import 'package:plezy/services/silo/silo_api_cache.dart';
 import 'package:plezy/services/silo/silo_card_overlay_store.dart';
 import 'package:plezy/services/silo/silo_client.dart';
 import 'package:plezy/services/silo/silo_mappers.dart';
+import 'package:plezy/exceptions/media_server_exceptions.dart';
 
 const _headers = SiloDeviceHeaders(
   deviceId: 'dev-1',
@@ -178,6 +179,103 @@ void main() {
     expect(query['type'], 'series');
     expect(query['name_prefix'], 'B');
     expect(query['source'], 'query');
+  });
+
+  test('seeks into an exactly counted list skip the total and keep the exact one', () async {
+    final c = client((request) async {
+      final q = request.url.queryParameters;
+      final start = int.tryParse(q['seek'] ?? '') ?? 0;
+      final skip = q['skip_total'] == 'true';
+      return _json({
+        'items': [_movie(start)],
+        'page': {'has_more': true, 'next_cursor': 'n${start + 1}'},
+        'total': skip ? 900 : 1000,
+        'total_exact': !skip,
+        'window_cursor': 'win',
+      });
+    });
+    final first = await c.fetchLibraryPagedContent('3', query: const LibraryQuery(offset: 0, limit: 1));
+    expect(first.totalCount, 1000);
+    final far = await c.fetchLibraryPagedContent('3', query: const LibraryQuery(offset: 700, limit: 1));
+    expect(far.items.single.id, 'movie:m700');
+    // The estimate a skipped count answers never replaces the exact size.
+    expect(far.totalCount, 1000);
+    final seek = requests.last.url.queryParameters;
+    expect(seek['seek'], '700');
+    expect(seek['cursor'], 'win');
+    expect(seek['skip_total'], 'true');
+    expect(requests.first.url.queryParameters.containsKey('skip_total'), isFalse);
+  });
+
+  test('the letter index posts the grid query in title order', () async {
+    final c = client((request) async {
+      expect(request.method, 'POST');
+      expect(request.url.path, '/base/api/v2/catalog/letters');
+      return _json({
+        'total': 120,
+        'letters': [
+          {'letter': 'A', 'count': 20, 'position': 0},
+          {'letter': 'B', 'count': 100, 'position': 20},
+        ],
+        'runs': [
+          {'letter': 'A', 'position': 0},
+          {'letter': 'B', 'position': 20},
+        ],
+      });
+    });
+    final index = await c.fetchLetterIndex(
+      '3',
+      query: const LibraryQuery(
+        sort: LibrarySort(field: 'title', direction: LibrarySortDirection.descending),
+        nameStartsWith: 'B',
+        kind: MediaKind.movie,
+        filters: [
+          LibraryFilter(field: 'genre', values: ['Drama']),
+        ],
+      ),
+    );
+    expect(index!.total, 120);
+    expect(index.positionOf('B'), 20);
+    expect(jsonDecode(requests.single.body), {
+      'library_id': '3',
+      'type': 'movie',
+      'order': 'desc',
+      'groups': [
+        {
+          'match': 'all',
+          'rules': [
+            {'field': 'genre', 'op': 'contains', 'value': 'Drama'},
+          ],
+        },
+      ],
+    });
+
+    // Another sort still asks in title order (it only learns whether the
+    // server has an index).
+    requests.clear();
+    await c.fetchLetterIndex(
+      '3',
+      query: const LibraryQuery(
+        sort: LibrarySort(field: 'addedAt', direction: LibrarySortDirection.descending),
+      ),
+    );
+    expect(jsonDecode(requests.single.body)['order'], 'asc');
+  });
+
+  for (final status in [404, 405, 501]) {
+    test('a $status letter index means none, and it is not asked again', () async {
+      final c = client((_) async => _problem(status, 'not_found'));
+      expect(await c.fetchLetterIndex('3', query: const LibraryQuery()), isNull);
+      expect(c.letterIndexUnsupported, isTrue);
+      expect(await c.fetchLetterIndex('3', query: const LibraryQuery()), isNull);
+      expect(requests, hasLength(1));
+    });
+  }
+
+  test('other letter index failures throw and are asked again', () async {
+    final c = client((_) async => _problem(500, 'internal_error'));
+    await expectLater(c.fetchLetterIndex('3', query: const LibraryQuery()), throwsA(isA<MediaServerHttpException>()));
+    expect(c.letterIndexUnsupported, isFalse);
   });
 
   test('a 401 refreshes once, retries, and reports the rotated tokens', () async {

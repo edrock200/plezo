@@ -20,6 +20,7 @@ import '../../../media/media_sort.dart';
 import '../../../widgets/settings_builder.dart';
 import '../../../services/library_query_translator.dart';
 import '../../../services/plex_constants.dart';
+import '../../../services/silo/silo_client.dart';
 import '../../../utils/error_message_utils.dart';
 import '../../../utils/app_logger.dart';
 import '../../../utils/grid_size_calculator.dart';
@@ -389,6 +390,14 @@ class _LibraryBrowseTabState extends BaseLibraryTabState<MediaItem, LibraryBrows
       },
       libraryKey: library.id,
       isShared: library.isShared,
+      // Silo: the letter index of the grid's own query (filters, sort, kind),
+      // read from the library's live client at each load.
+      siloQuery: () => _buildQuery(clauses: _selectedFilters, offset: 0, limit: 1),
+      siloLetterIndex: (query) async {
+        final client = context.getMediaClientForLibrary(widget.library);
+        if (client is! SiloClient) return null;
+        return client.fetchLetterIndex(widget.library.id, query: query, libraryKind: widget.library.kind);
+      },
     );
   }
 

@@ -32,6 +32,10 @@ import 'package:plezy/screens/libraries/tabs/library_browse_tab.dart';
 import 'package:plezy/services/jellyfin_mappers.dart';
 import 'package:plezy/services/multi_server_manager.dart';
 import 'package:plezy/services/plex_api_cache.dart';
+import 'package:plezy/services/silo/silo_api.dart';
+import 'package:plezy/services/silo/silo_api_cache.dart';
+import 'package:plezy/services/silo/silo_client.dart';
+import 'package:plezy/connection/connection.dart';
 import 'package:plezy/services/settings_service.dart';
 import 'package:plezy/services/storage_service.dart';
 import 'package:plezy/utils/media_server_http_client.dart';
@@ -403,6 +407,86 @@ void main() {
     expect(focusedRight, lessThanOrEqualTo(bar.left));
   });
 
+  testWidgets('Silo with a letter index shows the phone handle like Plex', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+    final harness = _SiloBrowseHarness();
+    addTearDown(harness.dispose);
+
+    await pumpLibraryTab(
+      tester,
+      provider: harness.provider,
+      size: const Size(400, 800),
+      tab: LibraryBrowseTab(library: harness.library, canGroupByFolders: false, isActive: true),
+    );
+    await _pumpUntil(tester, () => harness.pageRequests.isNotEmpty && harness.letterRequests.isNotEmpty);
+    await pumpRequestFrames(tester);
+    final handles = find.byType(AlphaScrollHandle).evaluate().length;
+    debugDefaultTargetPlatformOverride = null;
+
+    expect(handles, 1);
+    expect(jsonDecode(harness.letterRequests.single), {'library_id': '3', 'type': 'movie', 'order': 'asc'});
+    // The grid never filters by letter.
+    expect(harness.pageRequests.map((u) => u.queryParameters['name_prefix']), everyElement(isNull));
+  });
+
+  testWidgets('Silo letter tap scrolls the grid and reads that range by seek', (tester) async {
+    TvDetectionService.debugSetAppleTVOverride(true);
+    addTearDown(() => TvDetectionService.debugSetAppleTVOverride(null));
+    final harness = _SiloBrowseHarness();
+    addTearDown(harness.dispose);
+
+    await pumpLibraryTab(
+      tester,
+      provider: harness.provider,
+      size: const Size(1280, 720),
+      tab: LibraryBrowseTab(library: harness.library, canGroupByFolders: false, isActive: true),
+    );
+    await _pumpUntil(tester, () => harness.pageRequests.isNotEmpty && harness.letterRequests.isNotEmpty);
+    await pumpRequestFrames(tester);
+    expect(find.byType(AlphaJumpBar), findsOneWidget);
+
+    await tester.tap(find.descendant(of: find.byType(AlphaJumpBar), matching: find.text('G')));
+    for (var i = 0; i < 10; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    await pumpRequestFrames(tester);
+
+    final seeks = [
+      for (final u in harness.pageRequests)
+        if (u.queryParameters['seek'] case final seek?) int.parse(seek),
+    ];
+    expect(seeks, isNotEmpty);
+    // G starts at 300: the read covers it, with the first page's window cursor.
+    expect(seeks.any((s) => s <= 300 && s + 200 > 300), isTrue);
+    expect(
+      harness.pageRequests.where((u) => u.queryParameters.containsKey('seek')).map((u) => u.queryParameters['cursor']),
+      everyElement('win'),
+    );
+    expect(find.text('G Movie 300'), findsOneWidget);
+    expect(harness.pageRequests.map((u) => u.queryParameters['name_prefix']), everyElement(isNull));
+  });
+
+  testWidgets('Silo without a letter index keeps the name_prefix filter', (tester) async {
+    TvDetectionService.debugSetAppleTVOverride(true);
+    addTearDown(() => TvDetectionService.debugSetAppleTVOverride(null));
+    final harness = _SiloBrowseHarness(lettersStatus: 404);
+    addTearDown(harness.dispose);
+
+    await pumpLibraryTab(
+      tester,
+      provider: harness.provider,
+      size: const Size(1280, 720),
+      tab: LibraryBrowseTab(library: harness.library, canGroupByFolders: false, isActive: true),
+    );
+    await _pumpUntil(tester, () => harness.pageRequests.isNotEmpty && harness.letterRequests.isNotEmpty);
+    await pumpRequestFrames(tester);
+    expect(find.byType(AlphaJumpBar), findsOneWidget);
+
+    await tester.tap(find.descendant(of: find.byType(AlphaJumpBar), matching: find.text('Q')));
+    await _pumpUntil(tester, () => harness.pageRequests.any((u) => u.queryParameters['name_prefix'] == 'Q'));
+    await pumpRequestFrames(tester);
+  });
+
   testWidgets('folder grouping loads only the tree and reports its own readiness', (tester) async {
     final harness = _PlexBrowseHarness();
     addTearDown(harness.dispose);
@@ -714,6 +798,115 @@ class _PlexBrowseHarness {
       200,
       headers: const {'content-type': 'application/json'},
     );
+  }
+
+  Future<void> dispose() async {
+    provider.dispose();
+    manager.dispose();
+    await database.close();
+  }
+}
+
+/// A Silo movie library of 400 titles, 50 under each of A–H, served with
+/// cursors, `seek` + `window_cursor`, and (unless [lettersStatus] says
+/// otherwise) the letter index.
+class _SiloBrowseHarness {
+  static const _itemCount = 400;
+  static const _letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+
+  final AppDatabase database;
+  final int lettersStatus;
+  late final MediaLibrary library;
+  late final MultiServerManager manager;
+  late final MultiServerProvider provider;
+  final pageRequests = <Uri>[];
+  final letterRequests = <String>[];
+
+  _SiloBrowseHarness({this.lettersStatus = 200}) : database = AppDatabase.forTesting(NativeDatabase.memory()) {
+    PlexApiCache.initialize(database);
+    SiloApiCache.initialize(database);
+    final connection = SiloConnection(
+      id: 'srv-1/1/p-owner',
+      baseUrl: 'https://silo.example.com',
+      serverName: 'Home Silo',
+      serverId: 'srv-1',
+      userId: '1',
+      userName: 'laura',
+      accessToken: 'acc-1',
+      refreshToken: 'ref-1',
+      deviceId: 'dev-1',
+      profileId: 'p-owner',
+      profileName: 'Laura',
+      createdAt: DateTime(2026),
+    );
+    final client = SiloClient.forTesting(
+      connection,
+      headers: const SiloDeviceHeaders(
+        deviceId: 'dev-1',
+        deviceName: 'Test',
+        platform: 'linux',
+        clientFamily: 'desktop',
+        clientVersion: '1.0',
+      ),
+      httpClient: MockClient(_handle),
+    );
+    library = MediaLibrary(
+      id: '3',
+      backend: MediaBackend.silo,
+      title: 'Movies',
+      kind: MediaKind.movie,
+      serverId: client.serverId,
+    );
+    manager = MultiServerManager()..debugRegisterClientForTesting(client);
+    provider = testMultiServerProvider(manager);
+  }
+
+  static http.Response _json(Object body, [int status = 200]) =>
+      http.Response(jsonEncode(body), status, headers: const {'content-type': 'application/json'});
+
+  Future<http.Response> _handle(http.Request request) async {
+    switch (request.url.path) {
+      case '/api/v2/catalog/letters':
+        letterRequests.add(request.body);
+        if (lettersStatus != 200) return _json({'status': lettersStatus}, lettersStatus);
+        return _json({
+          'total': _itemCount,
+          'letters': [
+            for (final (i, l) in _letters.indexed) {'letter': l, 'count': 50, 'position': i * 50},
+          ],
+          'runs': [
+            for (final (i, l) in _letters.indexed) {'letter': l, 'position': i * 50},
+          ],
+        });
+      case '/api/v2/catalog':
+        pageRequests.add(request.url);
+        final q = request.url.queryParameters;
+        final limit = int.parse(q['limit'] ?? '50');
+        final cursor = q['cursor'];
+        final prefix = q['name_prefix'];
+        final all = [
+          for (var i = 0; i < _itemCount; i++)
+            if (prefix == null || _letters[i ~/ 50] == prefix) i,
+        ];
+        final start = q['seek'] != null
+            ? int.parse(q['seek']!)
+            : cursor != null && cursor.startsWith('n:')
+            ? int.parse(cursor.substring(2))
+            : 0;
+        final end = (start + limit).clamp(0, all.length);
+        return _json({
+          'items': [
+            for (final i in all.sublist(start.clamp(0, all.length), end))
+              {'content_id': 'movie:m$i', 'type': 'movie', 'title': '${_letters[i ~/ 50]} Movie $i'},
+          ],
+          'page': {'has_more': end < all.length, 'next_cursor': 'n:$end'},
+          'total': all.length,
+          'total_exact': true,
+          'window_cursor': 'win',
+        });
+      default:
+        return _json({});
+    }
   }
 
   Future<void> dispose() async {
