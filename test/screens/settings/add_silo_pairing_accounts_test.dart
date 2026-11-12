@@ -340,4 +340,56 @@ void main() {
     final rows = await saved(tester);
     expect(rows.joins, isEmpty);
   });
+
+  testWidgets('adding an account and Silo profile saved before replaces the row and revokes the old session', (
+    tester,
+  ) async {
+    final id = SiloConnection.compoundId(serverId: 'srv-1', userId: 'u-laura', profileId: 'p-laura');
+    await tester.runAsync(
+      () => harness.connections.upsert(
+        SiloConnection(
+          id: id,
+          baseUrl: 'https://silo.example.com',
+          serverName: 'Home',
+          serverId: 'srv-1',
+          userId: 'u-laura',
+          userName: 'laura',
+          accessToken: 'old-acc',
+          refreshToken: 'old-ref',
+          deviceId: 'dev-1',
+          profileId: 'p-laura',
+          profileName: 'Laura',
+          createdAt: DateTime(2025, 3, 4),
+        ),
+      ),
+    );
+    await open(tester);
+    final phone = FakePairingTransport();
+    await phoneSignsIn(
+      tester,
+      phone,
+      const [SiloPairingPushServer(serverUrl: 'https://silo.example.com', serverName: 'Home', serverIdentity: 'srv-1')],
+      ['laura'],
+    );
+    await settle(tester);
+
+    expect(await route, isTrue);
+    // Read like [saved]: in the test's zone while real time and frames go by.
+    SiloConnection? stored;
+    var read = false;
+    unawaited(
+      harness.connections.get(id).then((c) {
+        stored = c as SiloConnection?;
+        read = true;
+      }),
+    );
+    for (var i = 0; i < 200 && !read; i++) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 10)));
+      await tester.pump(const Duration(milliseconds: 10));
+    }
+    expect(stored?.refreshToken, 'ref-acc-laura', reason: 'the new session is saved');
+    final logouts = server.requests.where((r) => r.url.path == '/api/v2/auth/logout').toList();
+    expect(logouts, hasLength(1));
+    expect(logouts.single.headers['Authorization'], 'Bearer old-acc', reason: 'only the replaced session is revoked');
+  });
 }

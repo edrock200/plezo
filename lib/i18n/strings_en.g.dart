@@ -6196,6 +6196,9 @@ class Translations$addServer$en {
 	/// en: 'No Silo server answered at this address.'
 	String get siloNotASiloServer => 'No Silo server answered at this address.';
 
+	/// en: 'The server is there but didn't answer properly (it may be busy or restarting). Wait a moment and try again.'
+	String get siloServerBusy => 'The server is there but didn\'t answer properly (it may be busy or restarting). Wait a moment and try again.';
+
 	/// en: 'Who's watching?'
 	String get siloChooseProfile => 'Who\'s watching?';
 
@@ -11589,6 +11592,7 @@ extension on Translations {
 			'addServer.siloDeviceCodeOpened' => 'Code opened. Finish signing in on your other device.',
 			'addServer.siloServerTooOld' => 'This Silo server is too old. Update it to a release that provides API v2.',
 			'addServer.siloNotASiloServer' => 'No Silo server answered at this address.',
+			'addServer.siloServerBusy' => 'The server is there but didn\'t answer properly (it may be busy or restarting). Wait a moment and try again.',
 			'addServer.siloChooseProfile' => 'Who\'s watching?',
 			'addServer.siloChooseProfileSubtitle' => 'Pick the Silo profile to use on this device.',
 			'addServer.siloNoProfiles' => 'This account has no Silo profiles.',
@@ -11772,9 +11776,9 @@ extension on Translations {
 			'siloRequests.reasonAlreadyAvailable' => 'Already in your library',
 			'siloRequests.reasonQuotaExceeded' => 'Request limit reached',
 			'siloRequests.reasonRequestsDisabled' => 'Requests are turned off',
-			'siloRequests.reasonBlocked' => 'You can\'t request media right now',
 			_ => null,
 		} ?? switch (path) {
+			'siloRequests.reasonBlocked' => 'You can\'t request media right now',
 			'siloRequests.reasonInvalid' => 'That request couldn\'t be submitted',
 			'siloRequests.reasonNotFound' => 'This title is no longer available',
 			'siloRequests.request' => 'Request',
