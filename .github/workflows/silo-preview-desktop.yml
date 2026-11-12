@@ -1,18 +1,28 @@
 name: Silo preview desktop
 run-name: Silo preview desktop ${{ github.sha }}
 
-# Builds the Windows app (x64 and arm64: installer and portable archives) and
-# the macOS app (universal DMG) of a Silo-support branch and attaches them to
-# a Silo preview release.
+# Builds the Windows app (x64 and arm64: installer and portable archives) and,
+# only when asked, the macOS app (universal DMG) of a Silo-support branch and
+# attaches them to a Silo preview release.
 #
 # Markers count only in the head commit's first line.
-# - "[release-apk]" builds both from the same commit as the Android preview
+# - "[release-apk]" builds Windows from the same commit as the Android preview
 #   and attaches to the release that build publishes (same version and build
 #   number, from scripts/silo_preview_version.sh). If that build fails or is
-#   cancelled, the desktop jobs stop instead of waiting for its release.
-# - "[release-desktop]", "[release-windows]" or "[release-macos]" (without
-#   "[release-apk]") builds both, Windows only or macOS only from the code of
-#   the latest existing preview release and attaches to it.
+#   cancelled, the desktop jobs stop instead of waiting for its release. The
+#   "announce" job then posts the preview on Discord, also when the Windows
+#   build failed (the post says so).
+# - "[release-desktop]" or "[release-windows]" (without "[release-apk]")
+#   builds Windows from the code of the latest existing preview release and
+#   attaches to it.
+# - "[release-macos]" adds the macOS app to the latest release. macOS is
+#   built only on request (the user's decision, 2026-11-05).
+#
+# Concurrency: a later push to the branch cancels the gate, resolve and build
+# jobs of a run still building (per-job groups, one per Windows architecture),
+# like silo-preview-apk.yml. Attaching the files, announcing and the macOS job
+# run in groups that are never cancelled, so a docs push after the release
+# cannot leave it without Windows files or a Discord post.
 #
 # The update check is left off (no ENABLE_UPDATE_CHECK): it reads upstream
 # Plezy's feed and would replace this build with Plezy. Both apps are
@@ -34,15 +44,20 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: silo-preview-desktop-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   # Release markers count only in the commit's first line, so a message body
-  # may mention them without starting a build.
+  # may mention them without starting a build. One gate per Windows
+  # architecture, each in that architecture's cancelling group, so any later
+  # push cancels both builds of an earlier run (both gates give the same
+  # outputs).
   gate:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        lane: [x64, arm64]
+    concurrency:
+      group: silo-preview-desktop-build-${{ github.ref }}-${{ matrix.lane }}
+      cancel-in-progress: true
     outputs:
       mode: ${{ steps.marker.outputs.mode }}
       windows: ${{ steps.marker.outputs.windows }}
@@ -75,6 +90,9 @@ jobs:
     needs: gate
     if: ${{ needs.gate.outputs.mode != 'none' }}
     runs-on: ubuntu-latest
+    concurrency:
+      group: silo-preview-desktop-build-${{ github.ref }}-x64
+      cancel-in-progress: true
     outputs:
       ref: ${{ steps.pick.outputs.ref }}
       version: ${{ steps.pick.outputs.version }}
@@ -134,6 +152,9 @@ jobs:
     if: ${{ needs.gate.outputs.windows == 'true' }}
     name: Build Windows (${{ matrix.arch }})
     runs-on: ${{ matrix.runner }}
+    concurrency:
+      group: silo-preview-desktop-build-${{ github.ref }}-${{ matrix.arch }}
+      cancel-in-progress: true
     strategy:
       fail-fast: true
       matrix:
@@ -213,10 +234,15 @@ jobs:
           name: windows-${{ matrix.arch }}-build
           path: build/windows/${{ matrix.arch }}/runner/Release/
 
+  # Never cancelled by a later push: once both builds are done, the files are
+  # attached even if docs were pushed meanwhile.
   package:
     needs: [gate, resolve, build]
     if: ${{ needs.gate.outputs.windows == 'true' }}
     runs-on: windows-latest
+    concurrency:
+      group: silo-preview-desktop-publish-${{ github.ref }}
+      cancel-in-progress: false
     permissions:
       contents: write
       actions: read
@@ -299,32 +325,83 @@ jobs:
           gh release upload "$TAG" dist/* --clobber
           echo "Attached $WHAT build to $TAG"
 
-      # Every preview is announced on Discord once its Android and Windows
-      # files are on the release (the user's standing request). Only a
-      # [release-apk] build announces; the repository secret DISCORD_WEBHOOK
-      # holds the webhook, and without it the script posts nothing. The URL
-      # is a secret: the script never prints it.
+  # Every preview is announced on Discord (the user's standing request), once
+  # its Android release is out and the Windows job has finished, whether or not
+  # Windows succeeded (the post says when its files are missing). Only a
+  # [release-apk] build announces. The repository secret DISCORD_WEBHOOK holds
+  # the webhook; without it nothing is posted. The URL is a secret: the script
+  # never prints it. A silo-preview-announced.txt asset on the release marks it
+  # as announced, so re-running this job does not post twice.
+  announce:
+    needs: [gate, resolve, build, package]
+    if: ${{ always() && needs.gate.outputs.mode == 'apk' && needs.resolve.result == 'success' }}
+    runs-on: ubuntu-latest
+    concurrency:
+      group: silo-preview-desktop-announce-${{ github.ref }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      # In [release-apk] mode the pushed commit is the code and the scripts.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts
+
       - name: Announce on Discord
-        if: ${{ needs.gate.outputs.mode == 'apk' }}
-        shell: bash
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK || secrets.PLEZILO_DISCORD_WEBHOOK }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
           TAG: silo-preview-${{ needs.resolve.outputs.version }}
-        # In [release-apk] mode this job checked out the pushed commit.
+          REF: ${{ needs.resolve.outputs.ref }}
+          WINDOWS_STATUS: ${{ needs.package.result == 'success' && 'attached' || needs.build.result == 'cancelled' && 'cancelled' || 'failed' }}
         run: |
           set -euo pipefail
+          # The Android release must exist (and be this commit's) before anything is posted.
+          after_success=0
+          for _ in $(seq 1 90); do
+            gh release view "$TAG" > /dev/null 2>&1 && break
+            run="$(gh run list --workflow silo-preview-apk.yml --commit "$REF" --event push \
+              --json databaseId,status,conclusion --jq 'sort_by(.databaseId) | last | "\(.status) \(.conclusion)"')"
+            case "$run" in
+              "completed success")
+                after_success=$((after_success + 1))
+                (( after_success <= 4 )) || { echo "::error::The APK build succeeded but no release $TAG appeared; not announced."; exit 1; } ;;
+              completed\ *)
+                echo "::notice::The APK build for this commit ended with '${run#completed }'; there is no release to announce."; exit 0 ;;
+            esac
+            echo "Waiting for release $TAG..."; sleep 30
+          done
+          gh release view "$TAG" > /dev/null
+          tag_ref="$(gh api "repos/${GH_REPO}/commits/${TAG}" --jq .sha)"
+          [[ "$tag_ref" == "$REF" ]] || { echo "::error::$TAG is commit $tag_ref, not $REF; not announced."; exit 1; }
+          # Read the names into a variable first: grep -q stopping early would kill gh with SIGPIPE.
+          assets="$(gh release view "$TAG" --json assets --jq '.assets[].name')"
+          if grep -qx silo-preview-announced.txt <<< "$assets"; then
+            echo "$TAG was already announced on Discord; not posting again."
+            exit 0
+          fi
           if [[ -z "${DISCORD_WEBHOOK_URL:-}" ]]; then
             echo "::warning::The repository secret DISCORD_WEBHOOK is empty or missing; $TAG was not announced on Discord."
             exit 0
           fi
-          py="$(command -v python3 || command -v python)"
-          "$py" scripts/silo_announce_discord.py "$TAG" "$GITHUB_REPOSITORY"
+          [[ "$WINDOWS_STATUS" == attached ]] || echo "::warning::The Windows build ${WINDOWS_STATUS}; the post says its files are missing."
+          python3 scripts/silo_announce_discord.py "$TAG" "$GITHUB_REPOSITORY"
+          echo "announced=$(date -u +%Y-%m-%dT%H:%M:%SZ) run=${GITHUB_RUN_ID}" > "$RUNNER_TEMP/silo-preview-announced.txt"
+          gh release upload "$TAG" "$RUNNER_TEMP/silo-preview-announced.txt" --clobber \
+            || echo "::warning::Posted, but could not mark $TAG as announced; a re-run would post again."
 
   macos:
     needs: [gate, resolve]
     if: ${{ needs.gate.outputs.macos == 'true' }}
     name: Build macOS
     runs-on: macos-26
+    # On request only and scarce runners: a later push never cancels it.
+    concurrency:
+      group: silo-preview-desktop-macos-${{ github.ref }}
+      cancel-in-progress: false
     permissions:
       contents: write
       actions: read
