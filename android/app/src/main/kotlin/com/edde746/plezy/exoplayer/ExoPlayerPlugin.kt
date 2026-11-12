@@ -243,6 +243,7 @@ class ExoPlayerPlugin :
       "pause" -> handlePause(result)
       "stop" -> handleStop(result)
       "seek" -> handleSeek(call, result)
+      "setStreamHeaders" -> handleSetStreamHeaders(call, result)
       "setVolume" -> handleSetVolume(call, result)
       "setRate" -> handleSetRate(call, result)
       "selectAudioTrack" -> handleSelectAudioTrack(call, result)
@@ -900,6 +901,20 @@ class ExoPlayerPlugin :
       } else {
         playerCore?.seekTo(positionMs)
       }
+      result.success(null)
+    } ?: result.success(null)
+  }
+
+  /** Rotated auth headers for the playing media; the mpv fallback keeps the ones it opened with. */
+  private fun handleSetStreamHeaders(call: MethodCall, result: MethodChannel.Result) {
+    val uri = call.argument<String>("uri")
+    val headers = call.argument<Map<String, String>>("headers")
+    if (uri == null || headers == null || usingMpvFallback) {
+      result.success(null)
+      return
+    }
+    activity?.runOnUiThread {
+      playerCore?.updateStreamHeaders(uri, headers)
       result.success(null)
     } ?: result.success(null)
   }

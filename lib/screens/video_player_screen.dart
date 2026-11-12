@@ -1124,6 +1124,7 @@ class VideoPlayerScreenState extends State<VideoPlayerScreen>
     _requestedMediaSourceId = session.mediaSourceId;
     _selectedQualityPreset = session.qualityPreset;
     _selectedAudioStreamId = session.audioStreamId;
+    _bindSiloStreamAuth(session.context);
     // Any freshly opened stream ends a dead-stream park (#1520).
     _eofRecovery.clearPark();
     // Every successful open passes through here (never live TV), making it
@@ -1132,6 +1133,61 @@ class VideoPlayerScreenState extends State<VideoPlayerScreen>
     if (!session.isOffline) {
       unawaited(LocalPlaybackHistory.recordPlayback(session.metadata));
     }
+  }
+
+  /// Releases the Silo stream-auth hold of the previous session.
+  void Function()? _releaseSiloStreamAuth;
+  DateTime? _siloStream401ReloadAt;
+
+  /// Silo checks account auth on every stream and segment request, and a
+  /// film outlives the access token it started with: while a Silo stream
+  /// plays, its client refreshes the token at half life and the player gets
+  /// the new `Authorization` header (ExoPlayer applies it to the next request;
+  /// mpv to the next stream it opens). Only the server's own stream URL gets it.
+  void _bindSiloStreamAuth(PlaybackContext context) {
+    _releaseSiloStreamAuth?.call();
+    _releaseSiloStreamAuth = null;
+    final client = context.reportingClient;
+    final uri = context.result.videoUrl;
+    if (client is! SiloClient || context.usesLocalMedia || context.streamHeaders == null || uri == null) return;
+    _releaseSiloStreamAuth = client.streamAuth.hold((headers) {
+      final current = player;
+      if (current is PlayerBase && mounted) {
+        unawaited(
+          current
+              .updateStreamHeaders(uri, headers)
+              .catchError((Object e) => appLogger.w('Updating Silo stream headers failed', error: e)),
+        );
+      }
+    });
+  }
+
+  /// mpv logged a 401 for a Silo stream that was playing: libav keeps the
+  /// headers a stream opened with, so refresh the token and reopen at the
+  /// playhead (at most once a minute).
+  void _onSiloStreamUnauthorized() {
+    final client = _playbackSession?.context.reportingClient;
+    if (client is! SiloClient || _releaseSiloStreamAuth == null || player is! PlayerNative) return;
+    if (!_firstFrame.rendered || _isExiting.value || _hasFatalPlaybackError) return;
+    final now = DateTime.now();
+    final last = _siloStream401ReloadAt;
+    if (last != null && now.difference(last) < const Duration(minutes: 1)) return;
+    _siloStream401ReloadAt = now;
+    appLogger.w('Silo stream answered 401; refreshing the token and reopening at the playhead');
+    unawaited(() async {
+      await client.streamAuth.refreshAfterRefusal();
+      if (!mounted || _isExiting.value) return;
+      final position = player?.state.position;
+      if (position == null) return;
+      await _reloadMediaInPlace(
+        metadata: _currentMetadata,
+        resumePosition: position,
+        preserveCurrentTrackSelection: true,
+        startPaused: !_playbackIntentShouldPlay,
+        showErrorUi: false,
+        reason: 'silo stream token refused',
+      );
+    }());
   }
 
   PlaybackSession _updatePlaybackSessionSubtitleSelection(
@@ -2472,6 +2528,8 @@ class VideoPlayerScreenState extends State<VideoPlayerScreen>
       }(),
     );
     _retireLaunchObserver();
+    _releaseSiloStreamAuth?.call();
+    _releaseSiloStreamAuth = null;
     _playerInitializationGeneration++;
     _frameRate.dispose();
     WidgetsBinding.instance.removeObserver(this);

@@ -55,6 +55,15 @@ class PlayerAndroid extends PlayerBase {
   @override
   String get playerType => 'exoplayer';
 
+  /// ExoPlayer's HTTP data source reads its request properties at every
+  /// request, so the playing media's segments carry [headers] from now on.
+  /// The native side ignores it when another media has opened since.
+  @override
+  Future<void> updateStreamHeaders(String uri, Map<String, String> headers) async {
+    if (disposed || headers.isEmpty) return;
+    await invoke('setStreamHeaders', {'uri': uri, 'headers': headers});
+  }
+
   // ExoPlayerPlugin no-ops a dispose whose instanceId is not the core's
   // creator, so a timed-out ownership wait may still force-dispose.
   @override
