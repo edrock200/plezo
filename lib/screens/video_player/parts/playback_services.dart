@@ -518,6 +518,9 @@ extension _VideoPlayerPlaybackServiceMethods on VideoPlayerScreenState {
           );
           return burned ? sourceStreamId : null;
         },
+        onServerTerminated: (e) {
+          if (e.leavePlayback) _leaveServerEndedPlayback();
+        },
         onPausedKeepalive: mediaClient is PlexClient && effectivePlayMethod == 'Transcode'
             ? () => mediaClient.pingTranscodeSession(_playbackTranscodeSessionId)
             : null,

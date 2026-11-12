@@ -148,6 +148,12 @@ class PlaybackSessionTerminatedException extends MediaServerException {
   /// Human-readable server-supplied reason; may carry an admin message.
   final String? reason;
 
-  PlaybackSessionTerminatedException({required this.code, this.reason})
+  /// The server's contract says the player must leave playback, not let the
+  /// buffer drain (Silo's 410 `playback_session_ended`). The progress tracker
+  /// hands such a stop to its `onServerTerminated` hook, and the video player
+  /// stops and says why. False for Plex, whose stops drain on their own.
+  final bool leavePlayback;
+
+  PlaybackSessionTerminatedException({required this.code, this.reason, this.leavePlayback = false})
     : super('Server terminated playback session (code $code)${reason == null ? '' : ': $reason'}');
 }

@@ -51,6 +51,12 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
 
   final Map<String, _SiloPlaybackSession> _sessions = {};
 
+  /// Sessions an administrator ended (410 `playback_session_ended`). The
+  /// contract says the player leaves: nothing more is written for them, not
+  /// even the sessionless progress or watched mark a forgotten (404) session
+  /// falls back to.
+  final Set<String> _endedSessionIds = {};
+
   /// Item id → the file its latest playback started, so the player's
   /// markers come from the version being played.
   final Map<String, String> _playingFileIds = {};
@@ -754,10 +760,18 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
         'is_paused': isPaused,
       },
     );
-    if (response.statusCode == 404 || response.statusCode == 410) {
-      // The server ended or forgot the session; nothing more to report.
+    final status = response.statusCode;
+    if (status == 404 || status == 410) {
+      // The server ended or forgot the session; nothing more to report to it.
       session.stopped = true;
       _sessions.remove(session.sessionId);
+      if (SiloAudiobookSessionRules.isSessionEnded(status, response.data)) {
+        // An administrator stopped it: leave playback and write nothing more.
+        _endedSessionIds.add(session.sessionId);
+        final problem = response.data;
+        final detail = problem is Map ? problem['detail']?.toString() : null;
+        throw PlaybackSessionTerminatedException(code: status, reason: detail, leavePlayback: true);
+      }
       return;
     }
     throwIfHttpError(response);
@@ -827,6 +841,7 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
     int? audioStreamIndex,
     int? subtitleStreamIndex,
   }) async {
+    if (_endedSessionIds.contains(playSessionId)) return;
     final session = playSessionId == null ? null : _sessions[playSessionId];
     if (session == null) {
       // A downloaded file plays without a server session.
@@ -848,6 +863,7 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
     int? subtitleStreamIndex,
     PlaybackReportMetadata report = const PlaybackReportMetadata.live(),
   }) async {
+    if (_endedSessionIds.contains(playSessionId)) return;
     final session = playSessionId == null ? null : _sessions[playSessionId];
     if (session == null) {
       // A downloaded file, or progress queued offline: no session to stop.

@@ -127,6 +127,18 @@ extension _VideoPlayerErrorMethods on VideoPlayerScreenState {
     }
   }
 
+  /// The server ended this playback session and its contract says the player
+  /// must leave (Silo's 410 `playback_session_ended`, an administrator stop):
+  /// stop the picture instead of letting the buffer drain, and say why. The
+  /// client already reports nothing more for that session. Retry, a viewer
+  /// action, opens a fresh one; Back leaves.
+  void _leaveServerEndedPlayback() {
+    if (!mounted || _shuttingDown || _hasFatalPlaybackError) return;
+    appLogger.i('The server ended this playback session; stopping the player');
+    _latchFatalPlaybackError(PlaybackFailureAction.fatal);
+    _presentPlaybackFailure(t.messages.playbackSessionEndedByServer);
+  }
+
   /// Raise the persistent failure surface over the player. It stays until
   /// Retry re-runs the open or Back leaves; a snackbar is neither focusable
   /// nor on a remote's path, and it is gone in seconds. The spinner is

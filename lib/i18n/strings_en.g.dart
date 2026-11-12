@@ -2597,6 +2597,9 @@ class Translations$messages$en {
 		other: 'Auto-removed ${n} watched downloads',
 	);
 
+	/// en: 'The server can't remove this item from Continue Watching. Open Continue Watching on Home and remove it there.'
+	String get cannotRemoveFromContinueWatching => 'The server can\'t remove this item from Continue Watching. Open Continue Watching on Home and remove it there.';
+
 	/// en: 'Removed from Continue Watching'
 	String get removedFromContinueWatching => 'Removed from Continue Watching';
 
@@ -2746,6 +2749,9 @@ class Translations$messages$en {
 
 	/// en: 'Playback not allowed'
 	String get playbackNotAllowedTitle => 'Playback not allowed';
+
+	/// en: 'An administrator ended this playback session.'
+	String get playbackSessionEndedByServer => 'An administrator ended this playback session.';
 
 	/// en: 'The server refused to stream this item (HTTP 403). Your account may not have permission to play it, or the server may only allow playback on its local network.'
 	String get playbackNotAllowedBody => 'The server refused to stream this item (HTTP 403). Your account may not have permission to play it, or the server may only allow playback on its local network.';
@@ -10104,6 +10110,7 @@ extension on Translations {
 			'messages.markedAsUnwatchedOffline' => 'Marked as unwatched (will sync when online)',
 			'messages.autoRemovedWatchedDownload' => ({required Object title}) => 'Auto-removed: ${title}',
 			'messages.autoRemovedWatchedDownloads' => ({required num n}) => (_root.$meta.cardinalResolver ?? PluralResolvers.cardinal('en'))(n, one: 'Auto-removed ${n} watched download', other: 'Auto-removed ${n} watched downloads', ), 
+			'messages.cannotRemoveFromContinueWatching' => 'The server can\'t remove this item from Continue Watching. Open Continue Watching on Home and remove it there.',
 			'messages.removedFromContinueWatching' => 'Removed from Continue Watching',
 			'messages.errorLoading' => ({required Object error}) => 'Error: ${error}',
 			'messages.searchPartialResults' => 'Some media servers could not be searched. Showing available results.',
@@ -10154,6 +10161,7 @@ extension on Translations {
 			'messages.serverBusyTitle' => 'Stream unavailable',
 			'messages.serverBusyBody' => 'The server kept refusing to stream this file (HTTP 503). It may be restarting, busy, or the file\'s storage may be offline. Try again in a moment — if it keeps happening, ask the server owner to check the server and the file\'s storage.',
 			'messages.playbackNotAllowedTitle' => 'Playback not allowed',
+			'messages.playbackSessionEndedByServer' => 'An administrator ended this playback session.',
 			'messages.playbackNotAllowedBody' => 'The server refused to stream this item (HTTP 403). Your account may not have permission to play it, or the server may only allow playback on its local network.',
 			'messages.logsUploaded' => 'Logs uploaded',
 			'messages.logsUploadFailed' => 'Failed to upload logs',
@@ -10229,10 +10237,10 @@ extension on Translations {
 			'profiles.summaryMultipleWithActive' => ({required Object count, required Object activeName}) => '${count} profiles · active: ${activeName}',
 			'profiles.summaryMultiple' => ({required Object count}) => '${count} profiles',
 			'profiles.removeConnectionTitle' => 'Remove connection?',
-			'profiles.removeConnectionMessage' => ({required Object displayName, required Object connectionLabel}) => 'Remove ${displayName}\'s access to ${connectionLabel}. Other profiles keep it.',
-			'profiles.deleteProfileTitle' => 'Delete profile?',
 			_ => null,
 		} ?? switch (path) {
+			'profiles.removeConnectionMessage' => ({required Object displayName, required Object connectionLabel}) => 'Remove ${displayName}\'s access to ${connectionLabel}. Other profiles keep it.',
+			'profiles.deleteProfileTitle' => 'Delete profile?',
 			'profiles.deleteProfileMessage' => ({required Object displayName}) => 'Remove ${displayName} and its connections. Servers stay available.',
 			'profiles.profileNameLabel' => 'Profile name',
 			'profiles.pinProtectionLabel' => 'PIN protection',
@@ -10743,10 +10751,10 @@ extension on Translations {
 			'liveTv.searchGuide' => 'Search Guide',
 			'liveTv.searchHint' => 'Search channels & programs',
 			'liveTv.searchNoResults' => ({required Object query}) => 'No matches for "${query}"',
-			'liveTv.channelsSection' => 'Channels',
-			'liveTv.programsSection' => 'Programs',
 			_ => null,
 		} ?? switch (path) {
+			'liveTv.channelsSection' => 'Channels',
+			'liveTv.programsSection' => 'Programs',
 			'liveTv.now' => 'Now',
 			'liveTv.today' => 'Today',
 			'liveTv.tomorrow' => 'Tomorrow',
@@ -11257,10 +11265,10 @@ extension on Translations {
 			'videoSettings.audioSync' => 'Audio Sync',
 			'videoSettings.subtitleSync' => 'Subtitle Sync',
 			'videoSettings.hdr' => 'HDR',
-			'videoSettings.hdrUnsupported' => 'HDR isn\'t available here — this desktop compositor or video output can\'t carry it.',
-			'videoSettings.hdrToneMapping' => 'HDR Tone Mapping',
 			_ => null,
 		} ?? switch (path) {
+			'videoSettings.hdrUnsupported' => 'HDR isn\'t available here — this desktop compositor or video output can\'t carry it.',
+			'videoSettings.hdrToneMapping' => 'HDR Tone Mapping',
 			'videoSettings.hdrToneMappingCompositor' => 'Compositor',
 			'videoSettings.hdrToneMappingCompositorDescription' => 'Pass the source\'s HDR metadata through and let the desktop compositor map it.',
 			'videoSettings.hdrToneMappingPlayer' => 'Player',
@@ -11771,10 +11779,10 @@ extension on Translations {
 			'siloRequests.reasonAlreadyRequested' => 'Already requested',
 			'siloRequests.reasonAlreadyAvailable' => 'Already in your library',
 			'siloRequests.reasonQuotaExceeded' => 'Request limit reached',
-			'siloRequests.reasonRequestsDisabled' => 'Requests are turned off',
-			'siloRequests.reasonBlocked' => 'You can\'t request media right now',
 			_ => null,
 		} ?? switch (path) {
+			'siloRequests.reasonRequestsDisabled' => 'Requests are turned off',
+			'siloRequests.reasonBlocked' => 'You can\'t request media right now',
 			'siloRequests.reasonInvalid' => 'That request couldn\'t be submitted',
 			'siloRequests.reasonNotFound' => 'This title is no longer available',
 			'siloRequests.request' => 'Request',

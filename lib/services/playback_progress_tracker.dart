@@ -69,6 +69,12 @@ class PlaybackProgressTracker {
   /// un-scrobble the primary item.
   final Future<void> Function()? onScrobbled;
 
+  /// Invoked once when the server ends this playback session
+  /// ([PlaybackSessionTerminatedException]). The video player wires it to
+  /// stop and explain when the exception asks to leave playback (Silo's
+  /// administrator stop); Plex stops keep draining the buffer.
+  final void Function(PlaybackSessionTerminatedException e)? onServerTerminated;
+
   /// Invoked on every paused progress tick. The player wires this to the
   /// Plex transcoder keepalive ping (`/video/:/transcode/universal/ping`) —
   /// timeline reports alone historically have not been enough to stop PMS
@@ -228,6 +234,7 @@ class PlaybackProgressTracker {
     this.hasRenderedPlayback,
     this.subtitleOffIsDeliberate,
     this.burnedSubtitleStreamIndex,
+    this.onServerTerminated,
     this.updateInterval = const Duration(seconds: 10),
   }) : assert(!isOffline || offlineWatchService != null, 'offlineWatchService is required when isOffline is true'),
        assert(isOffline || client != null, 'client is required when isOffline is false') {
@@ -379,7 +386,9 @@ class PlaybackProgressTracker {
   /// against PMS 1.43 to remove the session row. No user-facing message and
   /// no forced player stop: buffered playback drains on its own, the session
   /// stays closed until the viewer resumes ([stoppedByServer]), and the
-  /// eventual stall or exit rides the existing error/teardown paths.
+  /// eventual stall or exit rides the existing error/teardown paths. An
+  /// exception with `leavePlayback` (Silo) is also handed to
+  /// [onServerTerminated], whose owner stops the player and says why.
   ///
   /// Deliberately not a failure: no backoff and no offline-queue write —
   /// the server received the report and answered it.
@@ -391,6 +400,7 @@ class PlaybackProgressTracker {
     _pausedSinceServerTermination = !player.state.isActive;
     appLogger.w('Closing reporting session for ${metadata.id}: terminated server-side', error: e);
     _serverTerminationStop = sendProgress('stopped');
+    onServerTerminated?.call(e);
   }
 
   /// The item's terminal report after a server-side termination. The
