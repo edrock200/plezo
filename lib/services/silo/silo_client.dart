@@ -1491,9 +1491,42 @@ class SiloClient
       for (final section in sections.where((s) => s['section_type'] == 'continue_watching'))
         _sectionItems(section, '/api/v2/home/sections/${_seg(section['id'].toString())}/items'),
     ]);
-    final items = [for (final rows in perSection) ...SiloMappers.items(rows, _ctx)];
+    final items = continueWatchingInServerOrder([for (final rows in perSection) ...SiloMappers.items(rows, _ctx)]);
     final visible = items.where((item) => item.libraryId == null || !excludedLibraryIds.contains(item.libraryId));
     return count == null ? visible.toList() : visible.take(count).toList();
+  }
+
+  /// Silo already orders Continue Watching newest first, mixing resumable
+  /// cards (with `progress_updated_at`) and next-up episodes (ordered by when
+  /// the previous episode was finished, with no timestamp of their own). The
+  /// shelf re-sorts by [MediaItem.recencySortKey], which would fall back to a
+  /// next-up episode's *added* date and scatter it, so each row gets a
+  /// recency that falls down the list: its own watch time, kept at least a
+  /// second below the row above (Dart's sort is not stable, so no two rows may
+  /// tie). The first row without a time of its own takes the newest time in the
+  /// list ([now] when none has one). Silo's order is kept exactly, and the rows
+  /// still interleave by time with other servers'.
+  @visibleForTesting
+  static List<MediaItem> continueWatchingInServerOrder(List<MediaItem> items, {int? now}) {
+    if (items.isEmpty) return items;
+    final known = [for (final item in items) item.lastViewedAt].whereType<int>();
+    int? previous;
+    return [
+      for (final item in items)
+        () {
+          final own = item.lastViewedAt;
+          final int key;
+          if (previous == null) {
+            key =
+                own ??
+                (known.isEmpty ? (now ?? DateTime.now().millisecondsSinceEpoch ~/ 1000) : known.reduce(math.max));
+          } else {
+            key = math.min(own ?? previous! - 1, previous! - 1);
+          }
+          previous = key;
+          return item.copyWith(raw: {...?item.raw, MediaItem.continueWatchingRecencyKey: key});
+        }(),
+    ];
   }
 
   @override

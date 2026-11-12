@@ -473,10 +473,19 @@ sealed class MediaItem with _$MediaItem {
     return null;
   }
 
+  /// Raw key a client may set on a Continue Watching row to give its server's
+  /// own order as epoch seconds (Silo: its next-up cards carry no watch time,
+  /// so `addedAt` would scatter them; see `SiloClient.fetchContinueWatching`).
+  static const continueWatchingRecencyKey = 'plezy_cw_recency';
+
   /// Recency used to order the Continue Watching / On Deck shelf: when the item
   /// was last watched, falling back to when it was added for never-watched rows.
   /// Shared by the per-client merge and the cross-server sort so they agree.
-  int get recencySortKey => lastViewedAt ?? addedAt ?? 0;
+  int get recencySortKey {
+    final override = raw?[continueWatchingRecencyKey];
+    if (override is int) return override;
+    return lastViewedAt ?? addedAt ?? 0;
+  }
 
   /// Whether this item has started but not finished playback.
   bool get hasActiveProgress {

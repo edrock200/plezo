@@ -4,6 +4,12 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **Continue Watching is in the same order as Silo's own apps:** the title you watched most recently is first again. Plezilo re-sorted the row by itself and put the next episode of a show you had just finished by the date that episode was added to the library, so it could land far down the row (or jump ahead of what you were watching). Plezilo now keeps Silo's order; with several servers, Silo's rows still slot in by time between the others'.
+
+## silo-preview-2.29.0
+
+Released November 12, 2026. Android and Windows.
+
 Fixes from a full review of the app. Things to try on your device are marked *(please test)*.
 
 - **Long Silo films keep playing:** Plezilo now renews its Silo sign-in while a film plays. Before, a long film could stop with an error about 30–60 minutes in, or the first seek after an hour failed. On Android the film plays straight through; on Windows, macOS and iPhone the player reopens where you were once the old sign-in runs out (a short hitch, no error). *(please test: a film longer than an hour)*
