@@ -37,6 +37,7 @@ import '../../theme/mono_tokens.dart';
 import '../../utils/app_logger.dart';
 import '../../utils/device_identity.dart';
 import '../../utils/dialogs.dart';
+import '../../utils/error_message_utils.dart';
 import '../../utils/layout_constants.dart';
 import '../../utils/platform_detector.dart';
 import '../../utils/snackbar_helper.dart';
@@ -177,6 +178,21 @@ String siloPinErrorMessage(Object error) => switch (error) {
   _ => t.addServer.siloPinNetworkError,
 };
 
+/// Whether an HTTP [status] means the server (or a proxy in front of it) is
+/// there but could not answer just now: 5xx, 408 and 429. Trying again later
+/// may work, so it is not reported as "no Silo server here".
+@visibleForTesting
+bool siloIsTransientStatus(int status) => status >= 500 || status == 408 || status == 429;
+
+/// The message for a sign-in step that failed for a reason other than a
+/// refused password or an unusable server: a busy server, or a localized
+/// reason (never the raw exception text).
+@visibleForTesting
+String siloSignInErrorMessage(Object error) => switch (error) {
+  MediaServerHttpException(statusCode: final status?) when siloIsTransientStatus(status) => t.addServer.siloServerBusy,
+  _ => t.addServer.signInFailed(error: localizedErrorReason(error)),
+};
+
 class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin, ControllerDisposerMixin {
   late final _urlController = createTextEditingController();
   late final _usernameController = createTextEditingController();
@@ -310,8 +326,10 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
     SiloSignInException() => t.addServer.siloUnreadableAnswer,
     MediaServerAuthException() => e.display ?? e.message,
     MediaServerUrlException() => t.addServer.enterMediaBrowserUrlError(product: _silo),
+    MediaServerHttpException(statusCode: final status?) when siloIsTransientStatus(status) =>
+      t.addServer.siloServerBusy,
     MediaServerHttpException(statusCode: _?) => t.addServer.siloNotASiloServer,
-    _ => t.addServer.couldNotReachServer(error: e.toString()),
+    _ => t.addServer.couldNotReachServer(error: localizedErrorReason(e)),
   };
 
   /// Log out a signed-in session that will not be saved.
@@ -600,10 +618,12 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
         password: _passwordController.text,
       ),
       errorMapper: (e) {
-        if (e is MediaServerAuthException) return e.display ?? t.addServer.invalidCredentials;
+        if (e is MediaServerAuthException) {
+          return e.display ?? (e.statusCode == 429 ? t.addServer.siloServerBusy : t.addServer.invalidCredentials);
+        }
         if (e is SiloSignInException) return _errorFor(e);
         appLogger.e('Add Silo sign-in failed', error: e);
-        return t.addServer.signInFailed(error: e.toString());
+        return siloSignInErrorMessage(e);
       },
     );
     if (signIn != null && mounted) await _onSignedIn(signIn);
@@ -767,7 +787,7 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
           passwordChangeRequired = true;
           return '';
         }
-        return e is SiloSignInException ? _errorFor(e) : t.addServer.signInFailed(error: e.toString());
+        return e is SiloSignInException ? _errorFor(e) : siloSignInErrorMessage(e);
       },
     );
     if (!mounted) return;
@@ -875,16 +895,9 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
     }
     final auth = await _authService();
     if (!mounted || !identical(_signIn, signIn)) return;
-    late final SiloTemporaryPasswordSession session;
-    session = await auth.temporaryPasswordSession(
-      signIn,
-      onTokensRefreshed: (tokens) {
-        // The old pair is dead: keep the new one, so leaving logs out the
-        // live session and the profiles are read with it.
-        final current = _signIn;
-        if (identical(_passwordSession, session) && current != null) _signIn = current.withTokens(tokens);
-      },
-    );
+    // A rotated pair is written back to signIn, so leaving logs out the live
+    // session and the profiles are read with it.
+    final session = await auth.temporaryPasswordSession(signIn);
     if (!mounted || !identical(_signIn, signIn)) {
       session.close();
       return;
@@ -974,7 +987,7 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
       () async => saved = await _persistAndExit(connection),
       errorMapper: (e) {
         appLogger.e('Add Silo failed', error: e);
-        return t.addServer.signInFailed(error: e.toString());
+        return siloSignInErrorMessage(e);
       },
     );
     return saved;
@@ -1016,6 +1029,13 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
     }
 
     final registry = context.read<ConnectionRegistry>();
+    // This account and Silo profile may be saved already, with another
+    // session: that one is revoked once the new one is stored.
+    final prior = await registry.get(connection.id).catchError((_) => null);
+    if (!mounted) return false;
+    final replaced = prior is SiloConnection && prior.refreshToken != connection.refreshToken ? prior : null;
+    final auth = _auth;
+    final replacedEditor = replaced != null && auth != null ? _editor(auth) : null;
     // One Plezilo profile uses one account per Silo server (one active client
     // per server). Another account on a server the chosen profile already
     // uses gets a profile of its own, so both keep working; the active
@@ -1070,9 +1090,19 @@ class _AddSiloScreenState extends State<AddSiloScreen> with AsyncFormStateMixin,
       );
     } catch (_) {
       // The save is one transaction: when it did not commit, the session is
-      // still ours to log out on leaving.
-      _handedOff = await registry.get(connection.id).catchError((_) => null) != null;
+      // still ours to log out on leaving. A row saved earlier for this
+      // account and Silo profile holds another session, so only a stored
+      // copy of this session's refresh token counts.
+      final stored = await registry.get(connection.id).catchError((_) => null);
+      _handedOff = stored is SiloConnection && stored.refreshToken == connection.refreshToken;
       rethrow;
+    }
+    if (replaced != null && replacedEditor != null) {
+      // The live client of the replaced session can no longer write its
+      // tokens over the new row (its refresh token is not the stored one);
+      // removing it from the manager logs that session out.
+      appLogger.i('Silo: ${connection.serverName} was saved with another session; revoking it');
+      replacedEditor.revokeSession(replaced);
     }
 
     final run = _pairedRun;

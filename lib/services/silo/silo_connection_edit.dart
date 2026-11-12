@@ -95,18 +95,24 @@ class SiloConnectionEditor {
   Future<void> replaceSession(SiloConnection updated) async {
     final prior = await registry.get(updated.id);
     final replaced = prior is SiloConnection && prior.refreshToken != updated.refreshToken ? prior : null;
-    if (replaced != null) {
-      final manager = serverManager;
-      if (manager != null) {
-        manager.removeSiloConnection(replaced);
-      } else {
-        unawaited(auth.logout(_serverOf(replaced), siloTokensOf(replaced)));
-      }
-    }
+    if (replaced != null) revokeSession(replaced);
     await registry.upsert(updated);
     appLogger.i(
       '[silo-edit] signed in again on ${updated.serverName}; ${replaced != null ? 'old session revoked' : 'no old session'}',
     );
+  }
+
+  /// Revoke [replaced]'s session on the server, best effort: through the live
+  /// client when there is one (it holds the newest of that session's rotated
+  /// pairs, and leaving the manager means it stops using that session), else
+  /// with the stored pair.
+  void revokeSession(SiloConnection replaced) {
+    final manager = serverManager;
+    if (manager != null) {
+      manager.removeSiloConnection(replaced);
+    } else {
+      unawaited(auth.logout(_serverOf(replaced), siloTokensOf(replaced)));
+    }
   }
 
   static SiloServerInfo _serverOf(SiloConnection connection) =>

@@ -5,6 +5,7 @@ import 'dart:typed_data';
 
 import 'package:clock/clock.dart';
 import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:http/http.dart' as http;
 
 import '../../connection/connection.dart';
@@ -250,7 +251,12 @@ class SiloDevicePollResult {
 /// A signed-in session that has not yet chosen a profile.
 class SiloSignIn {
   final SiloServerInfo server;
-  final SiloTokens tokens;
+
+  /// The session's current token pair. Silo refresh tokens rotate, so every
+  /// call [SiloAuthService] makes for this sign-in writes a refreshed pair
+  /// back here (the old pair is dead once a refresh lands); the connection
+  /// saved later and a logout use whatever is current.
+  SiloTokens tokens;
   final SiloAccount account;
   final String deviceId;
 
@@ -258,7 +264,7 @@ class SiloSignIn {
   final String? presetProfileId;
   final String? presetProfileToken;
 
-  const SiloSignIn({
+  SiloSignIn({
     required this.server,
     required this.tokens,
     required this.account,
@@ -266,17 +272,6 @@ class SiloSignIn {
     this.presetProfileId,
     this.presetProfileToken,
   });
-
-  /// The same sign-in on a rotated token pair (Silo refresh tokens rotate, so
-  /// the old pair is dead once a refresh lands).
-  SiloSignIn withTokens(SiloTokens next) => SiloSignIn(
-    server: server,
-    tokens: next,
-    account: account,
-    deviceId: deviceId,
-    presetProfileId: presetProfileId,
-    presetProfileToken: presetProfileToken,
-  );
 }
 
 /// Thrown for a Silo server that is reachable but cannot be used: too old for
@@ -348,6 +343,18 @@ class SiloAuthService {
     );
   }
 
+  /// A client for one call on [signIn]'s session. A refresh it makes is
+  /// written back to [signIn] before anyone else sees it, so a later call,
+  /// the saved connection and a logout never use the spent refresh token.
+  Future<SiloApi> _signInApi(SiloSignIn signIn, {void Function(SiloTokens tokens)? onTokensRefreshed}) async {
+    final api = await _api(signIn.server.baseUrl, tokens: signIn.tokens);
+    api.onTokensRefreshed = (tokens) {
+      signIn.tokens = tokens;
+      onTokensRefreshed?.call(tokens);
+    };
+    return api;
+  }
+
   /// Silo's default listening port, tried last for a bare host.
   static const defaultPort = 8090;
 
@@ -379,20 +386,34 @@ class SiloAuthService {
   Future<SiloServerInfo> probe(String input) async {
     final candidates = candidatesFor(input);
     if (candidates.isEmpty) throw const MediaServerUrlException('Empty server address');
-    Object? lastError;
+    final errors = <Object>[];
     for (final candidate in candidates) {
       try {
         return await _probeOne(candidate);
       } on SiloServerUnsupportedException {
         rethrow;
       } catch (e) {
-        lastError = e;
+        errors.add(e);
         appLogger.d('Silo probe failed for a candidate', error: e.runtimeType);
       }
     }
-    if (lastError is MediaServerException) throw lastError;
-    if (lastError is SiloSignInException) throw lastError;
+    final error = probeErrorToReport(errors);
+    if (error is MediaServerException) throw error;
+    if (error is SiloSignInException) throw error;
     throw MediaServerHttpException(type: MediaServerHttpErrorType.connectionError, message: 'Server unreachable');
+  }
+
+  /// Which of the candidates' [errors] (in [candidatesFor] order, https
+  /// first) explains the failure best: the first one where something
+  /// answered (an HTTP status, or an answer that was not Silo's), else the
+  /// first one. A busy server behind https is not hidden by the plain-HTTP
+  /// fallbacks that nothing listens on.
+  @visibleForTesting
+  static Object? probeErrorToReport(List<Object> errors) {
+    for (final e in errors) {
+      if (e is SiloSignInException || (e is MediaServerHttpException && e.statusCode != null)) return e;
+    }
+    return errors.firstOrNull;
   }
 
   Future<SiloServerInfo> _probeOne(String baseUrl) async {
@@ -699,13 +720,15 @@ class SiloAuthService {
   /// Finish a device-code approval: resolve the account when the poll did
   /// not include it.
   Future<SiloSignIn> completeDeviceLogin(SiloServerInfo server, SiloDevicePollResult result) async {
-    final tokens = result.tokens!;
+    var tokens = result.tokens!;
     var account = result.account;
     if (account == null) {
       final api = await _api(server.baseUrl, tokens: tokens);
       try {
         account = SiloAccount.fromJson(await api.getJson('/api/v2/account/me', profile: false));
       } finally {
+        // A refresh during the read rotated the pair: keep the live one.
+        tokens = api.tokens ?? tokens;
         api.close();
       }
     }
@@ -723,14 +746,13 @@ class SiloAuthService {
   /// The calls "Choose a new password" makes for [signIn] when its account
   /// holds a temporary password (`fetchProfiles` threw
   /// [SiloPasswordChangeRequiredException]). Every rotated token pair is
-  /// passed to [onTokensRefreshed]: the old pair is dead once it fires. The
-  /// caller closes the session.
+  /// written to [SiloSignIn.tokens] and passed to [onTokensRefreshed]: the
+  /// old pair is dead once it fires. The caller closes the session.
   Future<SiloTemporaryPasswordSession> temporaryPasswordSession(
     SiloSignIn signIn, {
-    required void Function(SiloTokens tokens) onTokensRefreshed,
+    void Function(SiloTokens tokens)? onTokensRefreshed,
   }) async {
-    final api = await _api(signIn.server.baseUrl, tokens: signIn.tokens);
-    api.onTokensRefreshed = onTokensRefreshed;
+    final api = await _signInApi(signIn, onTokensRefreshed: onTokensRefreshed);
     return SiloTemporaryPasswordSession(api);
   }
 
@@ -738,7 +760,7 @@ class SiloAuthService {
   /// [SiloPasswordChangeRequiredException] for an account holding a temporary
   /// password.
   Future<List<SiloProfile>> fetchProfiles(SiloSignIn signIn) async {
-    final api = await _api(signIn.server.baseUrl, tokens: signIn.tokens);
+    final api = await _signInApi(signIn);
     try {
       final data = await api.getJson('/api/v2/profiles', profile: false);
       final items = data['items'];
@@ -767,7 +789,7 @@ class SiloAuthService {
   /// ([SiloSignInFailure.pinRateLimited] for 429, [SiloSignInFailure.pinRefused]
   /// for another 4xx); 5xx and transport errors throw [MediaServerHttpException].
   Future<String?> verifyPin(SiloSignIn signIn, SiloProfile profile, String pin) async {
-    final api = await _api(signIn.server.baseUrl, tokens: signIn.tokens);
+    final api = await _signInApi(signIn);
     try {
       final response = await api.request(
         'POST',

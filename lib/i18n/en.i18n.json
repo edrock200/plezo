@@ -2619,6 +2619,7 @@
     "siloDeviceCodeOpened": "Code opened. Finish signing in on your other device.",
     "siloServerTooOld": "This Silo server is too old. Update it to a release that provides API v2.",
     "siloNotASiloServer": "No Silo server answered at this address.",
+    "siloServerBusy": "The server is there but didn't answer properly (it may be busy or restarting). Wait a moment and try again.",
     "siloChooseProfile": "Who's watching?",
     "siloChooseProfileSubtitle": "Pick the Silo profile to use on this device.",
     "siloNoProfiles": "This account has no Silo profiles.",

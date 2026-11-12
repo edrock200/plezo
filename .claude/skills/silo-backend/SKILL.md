@@ -177,7 +177,11 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
   frame refreshes and reopens at the playhead (once a minute). External-player fallback URLs and the AI
   control-socket ticket refresh a half-spent token first; a control socket that closes under a running
   job is re-minted with backoff (1–16 s, 5 tries), keeping the cue track, then the live lines come off. **Refresh tokens rotate**: persist every new pair
-  (`SiloClient.onConnectionUpdated` → `ConnectionRegistry.upsert`). `MultiServerManager` keeps the
+  (`SiloClient.onConnectionUpdated` → `ConnectionRegistry.updateSiloSession`, a token-and-role-only write into a row whose stored
+  refresh token the client owns, so a stale snapshot never undoes an address edit, revives a removed row or overwrites a new
+  sign-in). Sign-in steps (`fetchProfiles`, `verifyPin`, the temporary-password session) write a refreshed pair back to the
+  mutable `SiloSignIn.tokens`, so the saved connection and a logout use the live pair; re-adding a saved account+profile
+  revokes the replaced session after the save. `MultiServerManager` keeps the
   live client when a re-bind arrives with an older, already-rotated refresh token
   (`SiloClient.ownsRefreshToken`) — replacing it would revive a dead token. When such a re-bind
   must rebuild the client (new address or PIN token), the replacement takes the live client's

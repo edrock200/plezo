@@ -1835,7 +1835,9 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
         ChangeNotifierProvider(
           create: (context) {
             _serverManager.onJellyfinConnectionUpdated = context.read<ConnectionRegistry>().upsert;
-            _serverManager.onSiloConnectionUpdated = context.read<ConnectionRegistry>().upsert;
+            final registry = context.read<ConnectionRegistry>();
+            _serverManager.onSiloConnectionUpdated = (connection, ownsRefreshToken) =>
+                registry.updateSiloSession(connection, ownsRefreshToken: ownsRefreshToken);
             return MultiServerProvider(_serverManager, _aggregationService);
           },
         ),

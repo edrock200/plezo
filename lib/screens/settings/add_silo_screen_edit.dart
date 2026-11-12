@@ -150,7 +150,7 @@ extension _SiloEditFlow on _AddSiloScreenState {
       },
       errorMapper: (e) {
         appLogger.e('Silo address change failed', error: e);
-        return t.addServer.signInFailed(error: e.toString());
+        return siloSignInErrorMessage(e);
       },
     );
     if (saved != true || !mounted) return;
@@ -167,7 +167,7 @@ extension _SiloEditFlow on _AddSiloScreenState {
     if (kind == SiloEditKind.sameConnection) return _saveSignedInAgain(connection);
     final preview = await runAsync<(String, String)>(
       () => _previewOtherConnection(edited, connection, kind),
-      errorMapper: (e) => t.addServer.signInFailed(error: e.toString()),
+      errorMapper: (e) => siloSignInErrorMessage(e),
     );
     if (preview == null || !mounted) return false;
     _disposeDeviceFlow();
@@ -251,7 +251,7 @@ extension _SiloEditFlow on _AddSiloScreenState {
       },
       errorMapper: (e) {
         appLogger.e('Silo sign-in again failed', error: e);
-        return t.addServer.signInFailed(error: e.toString());
+        return siloSignInErrorMessage(e);
       },
     );
     if (!saved || !mounted) return saved;
@@ -271,7 +271,7 @@ extension _SiloEditFlow on _AddSiloScreenState {
       },
       errorMapper: (e) {
         appLogger.e('Silo edit: saving another account failed', error: e);
-        return t.addServer.signInFailed(error: e.toString());
+        return siloSignInErrorMessage(e);
       },
     );
   }

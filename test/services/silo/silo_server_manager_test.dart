@@ -211,7 +211,7 @@ void main() {
       final m = manager();
       addTearDown(m.dispose);
       final persisted = <SiloConnection>[];
-      m.onSiloConnectionUpdated = persisted.add;
+      m.onSiloConnectionUpdated = (c, _) => persisted.add(c);
 
       await m.addSiloConnection(_connection());
       // The live client rotates (ref-1 → ref-2) on a 401.
@@ -238,7 +238,7 @@ void main() {
       final m = manager();
       addTearDown(m.dispose);
       final persisted = <SiloConnection>[];
-      m.onSiloConnectionUpdated = persisted.add;
+      m.onSiloConnectionUpdated = (c, _) => persisted.add(c);
 
       await m.addSiloConnection(_connection());
       final first = built.single;

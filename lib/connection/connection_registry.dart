@@ -74,22 +74,65 @@ class ConnectionRegistry {
         }
       }
       final createdAt = existing?.createdAt ?? connection.createdAt.millisecondsSinceEpoch;
-      final protectedConfig = await CredentialVault.protectConnectionConfig(
-        connection.kind.id,
-        connection.toConfigJson(),
-      );
-      final row = ConnectionsCompanion(
-        id: Value(connection.id),
-        kind: Value(connection.kind.id),
-        displayName: Value(connection.displayName),
-        configJson: Value(jsonEncode(protectedConfig)),
-        createdAt: Value(createdAt),
-        lastAuthenticatedAt: Value(connection.lastAuthenticatedAt?.millisecondsSinceEpoch),
-      );
-      checkCurrent?.call();
-      await _db.into(_db.connections).insertOnConflictUpdate(row);
+      await _writeRow(connection, createdAt: createdAt, checkCurrent: checkCurrent);
     });
     appLogger.d('ConnectionRegistry: upserted ${connection.kind.id}/${connection.id}');
+  }
+
+  /// Store the token pair (and admin role) a live Silo client reports in
+  /// [updated], and nothing else: the stored row keeps its address, profile
+  /// token and every other field, which an edit may have changed since the
+  /// client was built.
+  ///
+  /// Written only when the row still exists and its stored refresh token
+  /// belongs to the reporting client's login session ([ownsRefreshToken]:
+  /// the token it rotated from, or one it held earlier). A removed row stays
+  /// removed, and a row a new sign-in replaced keeps the new session.
+  /// Returns whether the row was written. The tokens are encrypted by
+  /// `CredentialVault` like every other write.
+  Future<bool> updateSiloSession(
+    SiloConnection updated, {
+    required bool Function(String refreshToken) ownsRefreshToken,
+  }) async {
+    final written = await _db.runIdentityMutation(() async {
+      final existing = await (_db.select(_db.connections)..where((t) => t.id.equals(updated.id))).getSingleOrNull();
+      if (existing == null) return false;
+      final current = await _rowToConnection(existing);
+      if (current is! SiloConnection || !ownsRefreshToken(current.refreshToken)) return false;
+      final next = current.copyWith(
+        accessToken: updated.accessToken,
+        refreshToken: updated.refreshToken,
+        accessTokenExpiresAt: updated.accessTokenExpiresAt,
+        accessTokenLifetimeSeconds: updated.accessTokenLifetimeSeconds,
+        isAdministrator: updated.isAdministrator,
+      );
+      if (hasSameConfig(current, next)) return true;
+      await _writeRow(next, createdAt: existing.createdAt);
+      return true;
+    });
+    appLogger.d(
+      written
+          ? 'ConnectionRegistry: stored the Silo session update for ${updated.id}'
+          : 'ConnectionRegistry: Silo session update for ${updated.id} skipped (row gone or replaced)',
+    );
+    return written;
+  }
+
+  Future<void> _writeRow(Connection connection, {required int createdAt, void Function()? checkCurrent}) async {
+    final protectedConfig = await CredentialVault.protectConnectionConfig(
+      connection.kind.id,
+      connection.toConfigJson(),
+    );
+    final row = ConnectionsCompanion(
+      id: Value(connection.id),
+      kind: Value(connection.kind.id),
+      displayName: Value(connection.displayName),
+      configJson: Value(jsonEncode(protectedConfig)),
+      createdAt: Value(createdAt),
+      lastAuthenticatedAt: Value(connection.lastAuthenticatedAt?.millisecondsSinceEpoch),
+    );
+    checkCurrent?.call();
+    await _db.into(_db.connections).insertOnConflictUpdate(row);
   }
 
   /// Shared edit-screen/command validation. Probes public server identity only;
