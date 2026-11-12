@@ -13,12 +13,12 @@ OUTPUT_DIR = Path(os.environ.get("OUTPUT_DIR", PROJECT_ROOT))
 ARCH_SUFFIX = os.environ.get("ARCH_SUFFIX", "x64")
 
 METADATA = {
-    "name": "plezy",
+    "name": "plezilo",
     "license": "GPL-3.0",
-    "vendor": "edde746",
-    "maintainer": "edde746 <noreply@github.com>",
-    "url": "https://github.com/edde746/plezy",
-    "description": "A modern Plex and Jellyfin client for desktop and mobile",
+    "vendor": "edrock200",
+    "maintainer": "edrock200 <noreply@github.com>",
+    "url": "https://github.com/edrock200/plezo",
+    "description": "A Plex, Jellyfin, Emby and Silo client for desktop and mobile (based on Plezy)",
 }
 
 ICON_SIZES = [16, 32, 48, 64, 128, 256, 512]
@@ -158,7 +158,7 @@ def generate_icons():
     for size in ICON_SIZES:
         dest_dir = SCRIPT_DIR / f"icons/{size}x{size}"
         dest_dir.mkdir(parents=True, exist_ok=True)
-        dest = dest_dir / "plezy.png"
+        dest = dest_dir / "plezilo.png"
 
         # Try magick (ImageMagick 7) first, then convert (ImageMagick 6)
         for cmd in ["magick", "convert"]:
@@ -173,14 +173,14 @@ def generate_icons():
 def get_file_mappings() -> list[str]:
     """Get file mappings for fpm."""
     mappings = [
-        f"{BUILD_DIR}/=/opt/plezy/",
-        f"{SCRIPT_DIR}/com.edde746.plezy.desktop=/usr/share/applications/com.edde746.plezy.desktop",
-        f"{SCRIPT_DIR}/plezy.sh=/usr/bin/plezy",
+        f"{BUILD_DIR}/=/opt/plezilo/",
+        f"{SCRIPT_DIR}/com.edrock200.plezilo.desktop=/usr/share/applications/com.edrock200.plezilo.desktop",
+        f"{SCRIPT_DIR}/plezilo.sh=/usr/bin/plezilo",
     ]
 
     for size in ICON_SIZES:
         mappings.append(
-            f"{SCRIPT_DIR}/icons/{size}x{size}/plezy.png=/usr/share/icons/hicolor/{size}x{size}/apps/plezy.png"
+            f"{SCRIPT_DIR}/icons/{size}x{size}/plezilo.png=/usr/share/icons/hicolor/{size}x{size}/apps/plezilo.png"
         )
 
     return mappings
@@ -308,7 +308,7 @@ def main():
     print(f"Building {ARCH_SUFFIX} packages for {METADATA['name']} version {version}")
 
     # Make scripts executable
-    for script in ["plezy.sh", "after-install.sh", "after-remove.sh"]:
+    for script in ["plezilo.sh", "after-install.sh", "after-remove.sh"]:
         (SCRIPT_DIR / script).chmod(0o755)
 
     # Generate icons

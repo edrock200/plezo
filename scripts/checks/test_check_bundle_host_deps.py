@@ -93,7 +93,7 @@ def stage_bundle(
     """A synthetic bundle plus host-tool stubs, and the environment that finds them."""
     bundle = staging / "bundle"
     bundle.mkdir()
-    (bundle / "plezy").write_bytes(b"")
+    (bundle / "plezilo").write_bytes(b"")
     for name in shipped:
         library = bundle / name
         library.parent.mkdir(parents=True, exist_ok=True)
@@ -143,7 +143,7 @@ class BundleHostDepsGuardTest(unittest.TestCase):
     def test_a_bundle_whose_host_libraries_are_all_declared_passes(self) -> None:
         result = self._check(
             ldd={
-                "plezy": [
+                "plezilo": [
                     # No "=>" on this one: it must not be read as a soname.
                     "linux-vdso.so.1 (0x00007ffd1b3fe000)",
                     f"{DECLARED_SONAME} => {DECLARED_PATH} (0x00007f9c2c000000)",
@@ -162,7 +162,7 @@ class BundleHostDepsGuardTest(unittest.TestCase):
 
     def test_an_undeclared_host_library_is_named(self) -> None:
         result = self._check(
-            ldd={"plezy": [f"{UNDECLARED_SONAME} => {UNDECLARED_PATH} (0x00007f9c2c000000)"]},
+            ldd={"plezilo": [f"{UNDECLARED_SONAME} => {UNDECLARED_PATH} (0x00007f9c2c000000)"]},
             owners={UNDECLARED_PATH: UNDECLARED_OWNER},
         )
 
@@ -184,7 +184,7 @@ class BundleHostDepsGuardTest(unittest.TestCase):
         soname = "libGLESv2.so.2"
         path = f"/usr/lib/x86_64-linux-gnu/{soname}"
         result = self._check(
-            ldd={"plezy": [f"{soname} => {path} (0x00007f9c2c000000)"]},
+            ldd={"plezilo": [f"{soname} => {path} (0x00007f9c2c000000)"]},
             # Owned by a package the deb list does declare, so only the non-deb
             # half can be what rejects this.
             owners={path: "libegl1"},
@@ -203,7 +203,7 @@ class BundleHostDepsGuardTest(unittest.TestCase):
         bundle cannot need zero host libraries. Reporting success here would make
         every later breakage invisible, which is the worst thing a guard can do.
         """
-        result = self._check(ldd={"plezy": []}, owners={})
+        result = self._check(ldd={"plezilo": []}, owners={})
 
         self.assertEqual(result.returncode, 1, result.stdout)
         self.assertIn("proved nothing", result.stderr)
@@ -216,7 +216,7 @@ class BundleHostDepsGuardTest(unittest.TestCase):
         """
         result = self._check(
             ldd={
-                "plezy": [f"{DECLARED_SONAME} => {DECLARED_PATH} (0x00007f9c2c000000)"],
+                "plezilo": [f"{DECLARED_SONAME} => {DECLARED_PATH} (0x00007f9c2c000000)"],
                 "libpixbufloader-png.so": [f"{UNDECLARED_SONAME} => {UNDECLARED_PATH} (0x00007f9c2b000000)"],
             },
             owners={DECLARED_PATH: DECLARED_OWNER, UNDECLARED_PATH: UNDECLARED_OWNER},
@@ -229,7 +229,7 @@ class BundleHostDepsGuardTest(unittest.TestCase):
     def test_a_nested_module_cannot_satisfy_a_top_level_dependency(self) -> None:
         """Only lib/ is on the loader path, so only lib/ can make a soname bundled.
 
-        plezy carries RPATH $ORIGIN/lib and plezy.sh exports $INSTALL_DIR/lib.
+        plezilo carries RPATH $ORIGIN/lib and plezilo.sh exports $INSTALL_DIR/lib.
         The gdk-pixbuf loaders two directories below are opened by explicit
         path and resolve nothing for the executable, so a module whose basename
         happens to equal a host soname must not suppress it - otherwise the
@@ -237,7 +237,7 @@ class BundleHostDepsGuardTest(unittest.TestCase):
         """
         result = self._check(
             ldd={
-                "plezy": [
+                "plezilo": [
                     f"{DECLARED_SONAME} => {DECLARED_PATH} (0x00007f9c2c000000)",
                     f"{UNDECLARED_SONAME} => {UNDECLARED_PATH} (0x00007f9c2b000000)",
                 ]
@@ -262,7 +262,7 @@ class BundleHostDepsGuardTest(unittest.TestCase):
         """
         result = self._check(
             ldd={
-                "plezy": [f"{DECLARED_SONAME} => {DECLARED_PATH} (0x00007f9c2c000000)"],
+                "plezilo": [f"{DECLARED_SONAME} => {DECLARED_PATH} (0x00007f9c2c000000)"],
                 # The bundled libmpv needs a bundled shaderc, and sees nothing.
                 "libmpv.so.2": ["libshaderc_shared.so.1 => not found"],
             },
@@ -288,7 +288,7 @@ class BundleHostDepsGuardTest(unittest.TestCase):
     def test_the_checker_reads_build_packages_from_any_working_directory(self) -> None:
         """--root defaulted to cwd, so running the check from the build tree crashed."""
         result = self._check(
-            ldd={"plezy": [f"{DECLARED_SONAME} => {DECLARED_PATH} (0x00007f9c2c000000)"]},
+            ldd={"plezilo": [f"{DECLARED_SONAME} => {DECLARED_PATH} (0x00007f9c2c000000)"]},
             owners={DECLARED_PATH: DECLARED_OWNER},
             cwd=Path(tempfile.gettempdir()),
         )
@@ -304,7 +304,7 @@ class BundleHostDepsGuardTest(unittest.TestCase):
         skip and never a traceback.
         """
         result = self._check(
-            ldd={"plezy": [f"{DECLARED_SONAME} => {DECLARED_PATH} (0x00007f9c2c000000)"]},
+            ldd={"plezilo": [f"{DECLARED_SONAME} => {DECLARED_PATH} (0x00007f9c2c000000)"]},
             owners={DECLARED_PATH: DECLARED_OWNER},
             install=("ldd",),
             path="",
@@ -328,7 +328,7 @@ class BuildPackagesGuardWiringTest(unittest.TestCase):
             staging = Path(directory)
             bundle, env = stage_bundle(
                 staging,
-                ldd={"plezy": [f"{UNDECLARED_SONAME} => {UNDECLARED_PATH} (0x00007f9c2c000000)"]},
+                ldd={"plezilo": [f"{UNDECLARED_SONAME} => {UNDECLARED_PATH} (0x00007f9c2c000000)"]},
                 owners={UNDECLARED_PATH: UNDECLARED_OWNER},
                 shipped=("lib/libmpv.so.2",),
             )

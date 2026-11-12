@@ -301,14 +301,14 @@ jobs:
             -DPLEZY_BUILD_MPV_RELIABILITY_TESTS=ON \
             -DPLEZY_MPV_RELIABILITY_SANITIZER=${{ matrix.sanitizer }}
 
-      # `plezy` is the runner itself. Without it nothing in CI ever compiles
+      # `plezilo` is the runner itself. Without it nothing in CI ever compiles
       # my_application.cc, mpv_plugin.cc or the Wayland video plane — the
       # reliability test targets each pull in only a couple of translation units,
       # so a break in the rest of linux/runner reached a release build unseen.
       - name: Build Linux native reliability tests
         run: |
           cmake --build build/linux-native-${{ matrix.sanitizer }} --parallel 2 --target \
-            plezy \
+            plezilo \
             mpv_player_lifecycle_test \
             mpv_player_hdr_output_test \
             mpv_property_result_contract_test \
@@ -716,7 +716,7 @@ jobs:
         run: bash linux/packaging/bundle-libs.sh build/linux/x64/release/bundle
 
       - name: Copy wrapper script into the bundle
-        run: cp linux/packaging/plezy.sh build/linux/x64/release/bundle/plezy.sh
+        run: cp linux/packaging/plezilo.sh build/linux/x64/release/bundle/plezilo.sh
 
       # Derives what the resolved bundle still needs from the host and proves
       # every one of those libraries is declared. This is the check that would
@@ -752,7 +752,7 @@ jobs:
         run: |
           BUNDLE_DIR=build/linux/x64/release/bundle
           mkdir -p "$OUTPUT_DIR"
-          tar -czf "$OUTPUT_DIR/plezy-linux-x64.tar.gz" -C "$BUNDLE_DIR" .
+          tar -czf "$OUTPUT_DIR/plezilo-linux-x64.tar.gz" -C "$BUNDLE_DIR" .
           echo "=== libmpv travelling in every artifact ==="
           ldd "$BUNDLE_DIR/lib/libmpv.so" | grep -iE 'wayland|libX11|vdpau' || echo '(none)'
         env:
@@ -776,9 +776,9 @@ jobs:
       # here would mean every install sees an update that never goes away.
       - name: Verify the AppImage's update information
         run: |
-          APPIMAGE="$OUTPUT_DIR/plezy-linux-x64.AppImage"
+          APPIMAGE="$OUTPUT_DIR/plezilo-linux-x64.AppImage"
           readelf --string-dump=.upd_info --wide "$APPIMAGE" \
-            | grep -F "gh-releases-zsync|${GITHUB_REPOSITORY%/*}|${GITHUB_REPOSITORY#*/}|latest|plezy-linux-x64.AppImage.zsync"
+            | grep -F "gh-releases-zsync|${GITHUB_REPOSITORY%/*}|${GITHUB_REPOSITORY#*/}|latest|plezilo-linux-x64.AppImage.zsync"
           ZSYNC_SHA1=$(grep -a -m1 '^SHA-1: ' "$APPIMAGE.zsync" | cut -d' ' -f2)
           FILE_SHA1=$(sha1sum "$APPIMAGE" | cut -d' ' -f1)
           if [[ "$ZSYNC_SHA1" != "$FILE_SHA1" ]]; then
@@ -792,6 +792,6 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: linux-packages-smoke
-          path: ${{ github.workspace }}/packages/plezy-linux-x64.*
+          path: ${{ github.workspace }}/packages/plezilo-linux-x64.*
           if-no-files-found: error
           retention-days: 7

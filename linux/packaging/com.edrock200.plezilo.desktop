@@ -2,9 +2,9 @@
 Type=Application
 Name=Plezilo
 Comment=A Plex, Jellyfin, Emby and Silo client
-Exec=plezy
-Icon=plezy
+Exec=plezilo
+Icon=plezilo
 Terminal=false
 Categories=AudioVideo;Video;Player;
 Keywords=plex;jellyfin;media;streaming;video;
-StartupWMClass=plezy
+StartupWMClass=plezilo

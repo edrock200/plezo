@@ -808,13 +808,13 @@ jobs:
 
       - name: Copy wrapper script into bundle
         shell: bash
-        run: cp linux/packaging/plezy.sh "$BUNDLE_DIR/plezy.sh"
+        run: cp linux/packaging/plezilo.sh "$BUNDLE_DIR/plezilo.sh"
 
       # Same check the package smoke build runs, against the artifact that
       # actually ships: a library nobody declares is a broken install, and it is
       # invisible until a user on a clean machine tries to launch.
       #
-      # This also stands in for the `ldd ./plezy | grep "not found"` step that
+      # This also stands in for the `ldd ./plezilo | grep "not found"` step that
       # used to run after packaging. That one folded ldd's stderr into grep's
       # input and dropped its exit status, so ldd failing outright - a missing
       # loader, an exec-format mismatch, no ldd at all - left the match empty and
@@ -863,10 +863,10 @@ jobs:
       - name: Verify installed Flatpak runtime dependencies
         shell: bash
         run: |
-          flatpak install --user --noninteractive "plezy-linux-${{ matrix.arch }}.flatpak"
+          flatpak install --user --noninteractive "plezilo-linux-${{ matrix.arch }}.flatpak"
           dbus-run-session -- python3 linux/packaging/check-flatpak.py --arch ${{ matrix.arch }}
 
-      # The same resolved bundle, launched through plezy.sh as AppRun. The
+      # The same resolved bundle, launched through plezilo.sh as AppRun. The
       # embedded update information names this repository's latest release,
       # which is what Gear Lever and AppImageUpdate follow, so they see a
       # release only once it is published and not marked as a pre-release.
@@ -889,32 +889,32 @@ jobs:
         shell: bash
         run: |
           cd "$BUNDLE_DIR"
-          tar -czf "$GITHUB_WORKSPACE/plezy-linux-${{ matrix.arch }}.tar.gz" *
+          tar -czf "$GITHUB_WORKSPACE/plezilo-linux-${{ matrix.arch }}.tar.gz" *
 
       - name: Attest Linux ${{ matrix.arch }} artifacts
         uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4
         with:
           subject-path: |
-            plezy-linux-${{ matrix.arch }}.tar.gz
-            plezy-linux-${{ matrix.arch }}.deb
-            plezy-linux-${{ matrix.arch }}.rpm
-            plezy-linux-${{ matrix.arch }}.pkg.tar.zst
-            plezy-linux-${{ matrix.arch }}.flatpak
-            plezy-linux-${{ matrix.arch }}.AppImage
-            plezy-linux-${{ matrix.arch }}.AppImage.zsync
+            plezilo-linux-${{ matrix.arch }}.tar.gz
+            plezilo-linux-${{ matrix.arch }}.deb
+            plezilo-linux-${{ matrix.arch }}.rpm
+            plezilo-linux-${{ matrix.arch }}.pkg.tar.zst
+            plezilo-linux-${{ matrix.arch }}.flatpak
+            plezilo-linux-${{ matrix.arch }}.AppImage
+            plezilo-linux-${{ matrix.arch }}.AppImage.zsync
 
       - name: Upload Linux ${{ matrix.arch }} artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: linux-${{ matrix.arch }}
           path: |
-            plezy-linux-${{ matrix.arch }}.tar.gz
-            plezy-linux-${{ matrix.arch }}.deb
-            plezy-linux-${{ matrix.arch }}.rpm
-            plezy-linux-${{ matrix.arch }}.pkg.tar.zst
-            plezy-linux-${{ matrix.arch }}.flatpak
-            plezy-linux-${{ matrix.arch }}.AppImage
-            plezy-linux-${{ matrix.arch }}.AppImage.zsync
+            plezilo-linux-${{ matrix.arch }}.tar.gz
+            plezilo-linux-${{ matrix.arch }}.deb
+            plezilo-linux-${{ matrix.arch }}.rpm
+            plezilo-linux-${{ matrix.arch }}.pkg.tar.zst
+            plezilo-linux-${{ matrix.arch }}.flatpak
+            plezilo-linux-${{ matrix.arch }}.AppImage
+            plezilo-linux-${{ matrix.arch }}.AppImage.zsync
 
   create-release:
     needs: [validate-trusted-ref, build-android, build-ios, build-macos, build-windows, package-windows, build-linux]

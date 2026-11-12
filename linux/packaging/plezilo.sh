@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# Wrapper script for Plezy. Works for both:
+# Wrapper script for Plezilo. Works for both:
 #   - Portable tarball (run from extracted directory)
-#   - System packages (/usr/bin/plezy -> /opt/plezy/)
+#   - System packages (/usr/bin/plezilo -> /opt/plezilo/)
 
 # Resolve the real path of this script, following symlinks
 SCRIPT_PATH="$(readlink -f "$0")"
 INSTALL_DIR="$(dirname "$SCRIPT_PATH")"
 
-# If we're in /usr/bin, the actual install is in /opt/plezy
+# If we're in /usr/bin, the actual install is in /opt/plezilo
 if [[ "$INSTALL_DIR" == "/usr/bin" ]]; then
-    INSTALL_DIR="/opt/plezy"
+    INSTALL_DIR="/opt/plezilo"
 fi
 
 # Prepend bundled libraries to LD_LIBRARY_PATH
@@ -50,4 +50,4 @@ if [[ -d "$INSTALL_DIR/share/glib-2.0/schemas" ]]; then
     export GSETTINGS_SCHEMA_DIR="$INSTALL_DIR/share/glib-2.0/schemas"
 fi
 
-exec "$INSTALL_DIR/plezy" "$@"
+exec "$INSTALL_DIR/plezilo" "$@"

@@ -628,6 +628,6 @@ PIN length (matches Silo's apps). Open follow-ups: an edit screen for an existin
   `checkHealth` never calls `onServerUnreachable` (probe `reportUnreachable: false`, backed-off re-check 30 s → 10 min); a
   re-sign-in that replaces a session logs the old one out; the overlay store is disposed with its client;
   `sortedBySiloBindingPreference` is the only account-order rule. Open: `removeServer` still closes Silo clients without
-  logout; linux packaging/flatpak metainfo still link edde746/plezy.
+  logout. (Linux packaging was renamed to `com.edrock200.plezilo` / `plezilo` on 2026-11-12.)
 
 - Profile tracks on movies (2026-11-12, the user's request): `_seriesStartAudio` / `_seriesStartSubtitle` apply the watch detail's `effective_audio_track_index` / `effective_subtitle_*` to movies too (`profileTracks`: not extras); series pending picks and PUTs stay episode-only. Plezilo's Default subtitles setting (TrackSelectionPriority.appDefault, 1b) still runs before the server's selection (priority 2).
