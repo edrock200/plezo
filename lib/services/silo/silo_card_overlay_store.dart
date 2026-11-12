@@ -73,9 +73,22 @@ class SiloCardOverlayStore extends ValueNotifier<SiloCardOverlaySettings?> {
   String? _signature;
   bool _disposed = false;
 
-  /// Uploaded images that did not load this session; their badges draw
-  /// without them.
-  final _failedImages = <String>{};
+  /// Uploaded images that did not load, with when; their badges draw
+  /// without them until [failedImageRetry] has passed, when the next settings
+  /// read draws them again (a network blip must not strip a badge for the
+  /// client's lifetime).
+  final _failedImages = <String, DateTime>{};
+
+  /// How long a failed overlay image stays left out.
+  static const failedImageRetry = Duration(minutes: 5);
+
+  /// Forget image failures older than [failedImageRetry]; true when any went.
+  bool _dropExpiredImageFailures() {
+    final before = _failedImages.length;
+    final now = clock.now();
+    _failedImages.removeWhere((_, at) => now.difference(at) >= failedImageRetry);
+    return _failedImages.length != before;
+  }
 
   /// Read the settings if this store has not read them yet. Never notifies
   /// synchronously, so a card may call it while building.
@@ -115,12 +128,13 @@ class SiloCardOverlayStore extends ValueNotifier<SiloCardOverlaySettings?> {
     ]);
     if (failed || _disposed) return;
     final signature = _signatureOf(config, values);
-    if (signature == _signature && value != null) return;
+    final retryImages = _dropExpiredImageFailures();
+    if (signature == _signature && value != null && !retryImages) return;
     var settled = SiloCardOverlaySettings.settle(
       values == null ? null : SiloOverlayProfileValues.fromEffective(values),
       config,
     );
-    for (final ref in _failedImages) {
+    for (final ref in _failedImages.keys) {
       settled = settled.withoutImage(ref);
     }
     _signature = signature;
@@ -138,7 +152,10 @@ class SiloCardOverlayStore extends ValueNotifier<SiloCardOverlaySettings?> {
 
   /// An uploaded image ([ref]) failed to load: draw its badges without it.
   void imageFailed(String ref) {
-    if (_disposed || !_failedImages.add(ref)) return;
+    if (_disposed) return;
+    final at = _failedImages[ref];
+    if (at != null && clock.now().difference(at) < failedImageRetry) return;
+    _failedImages[ref] = clock.now();
     // Image errors can arrive while a frame builds; never notify mid-build.
     scheduleMicrotask(() {
       final current = value;

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:clock/clock.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plezy/services/silo/silo_card_overlay_store.dart';
 import 'package:plezy/services/silo/silo_card_overlays.dart';
@@ -763,6 +764,48 @@ void main() {
       store.imageFailed(_ref);
       await Future<void>.delayed(Duration.zero);
       expect(store.value!.prefs.items['resolution']!.image, isNull);
+    });
+
+    test('a failed uploaded image is tried again by a read after the retry delay', () async {
+      var now = DateTime(2026, 11, 12, 20);
+      await withClock(Clock(() => now), () async {
+        final store = SiloCardOverlayStore(
+          cacheKey: 'srv/u/p3b',
+          readConfig: () async => {
+            'enabled': true,
+            'images': [
+              {'ref': _ref, 'width': 10, 'height': 10},
+            ],
+            'defaults': jsonEncode({
+              'version': 2,
+              'preset': 'classic',
+              'items': {
+                'resolution': {'image': _ref},
+              },
+            }),
+          },
+          readValues: () async => null,
+        );
+        await store.ensureLoaded();
+        store.imageFailed(_ref);
+        await Future<void>.delayed(Duration.zero);
+        expect(store.value!.prefs.items['resolution']!.image, isNull);
+
+        // Too soon: the same settings stay without the image.
+        now = now.add(const Duration(minutes: 1));
+        await store.refresh(force: true);
+        expect(store.value!.prefs.items['resolution']!.image, isNull);
+
+        now = now.add(SiloCardOverlayStore.failedImageRetry);
+        await store.refresh(force: true);
+        expect(store.value!.prefs.items['resolution']!.image, _ref);
+
+        // A second failure drops it again.
+        store.imageFailed(_ref);
+        await Future<void>.delayed(Duration.zero);
+        expect(store.value!.prefs.items['resolution']!.image, isNull);
+        store.dispose();
+      });
     });
 
     test('the remembered settings are bounded and forgotten for a removed connection', () async {

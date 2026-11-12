@@ -320,6 +320,46 @@ void main() {
     });
   });
 
+  group('SiloSeriesTrackChoices hand-over and close', () {
+    test('closeGracefully sends a pick still in its debounce, then nothing more', () {
+      fakeAsync((async) {
+        final sent = <Map<String, Object?>>[];
+        final choices = SiloSeriesTrackChoices(send: (path, body) async => sent.add(body));
+        choices.saveAudio('series:s1', {'audio_track_index': 1});
+        async.elapse(const Duration(milliseconds: 200));
+        unawaited(choices.closeGracefully(timeout: const Duration(seconds: 2)));
+        async.flushMicrotasks();
+        expect(sent, [
+          {'audio_track_index': 1},
+        ]);
+        choices.saveAudio('series:s1', {'audio_track_index': 2});
+        async.elapse(const Duration(minutes: 1));
+        expect(sent, hasLength(1));
+      });
+    });
+
+    test('takePending moves picks to a successor, which sends them; its own newer pick wins', () {
+      fakeAsync((async) {
+        final oldSent = <Map<String, Object?>>[];
+        final newSent = <(String, Map<String, Object?>)>[];
+        final previous = SiloSeriesTrackChoices(send: (path, body) async => oldSent.add(body));
+        final next = SiloSeriesTrackChoices(send: (path, body) async => newSent.add((path, body)));
+        previous.saveAudio('series:s1', {'audio_track_index': 1});
+        previous.saveSubtitle('series:s1', SiloTrackPrefs.subtitleOffBody());
+        next.saveSubtitle('series:s1', {'subtitle_mode': 'always', 'subtitle_track_index': 3});
+        next.adopt(previous.takePending());
+        expect(previous.hasPending, isFalse);
+        unawaited(previous.closeGracefully());
+        async.elapse(const Duration(seconds: 2));
+        expect(oldSent, isEmpty);
+        expect(newSent.map((s) => s.$2), [
+          {'subtitle_mode': 'always', 'subtitle_track_index': 3},
+          {'audio_track_index': 1},
+        ]);
+      });
+    });
+  });
+
   group('SiloClient playback', () {
     late List<http.Request> requests;
     late String type;
@@ -506,6 +546,27 @@ void main() {
       expect(subtitle['subtitle_mode'], 'always');
       expect((subtitle['track_signature'] as Map)['hearing_impaired'], isTrue);
       c.close();
+    });
+
+    test('a pick still queued when the client closes gracefully is sent before the API closes', () async {
+      final c = client();
+      await c.getPlaybackInitialization(PlaybackInitializationOptions(metadata: _episode, selectedMediaIndex: 0));
+      c.seriesTrackPickSink(_episode.id).audioPicked(1);
+      await c.closeGracefully();
+      expect(puts().map((r) => r.url.path), ['/api/v2/audio-prefs/series%3As1']);
+    });
+
+    test('a successor on the same login session sends the queued pick instead of the closing client', () async {
+      final c = client();
+      await c.getPlaybackInitialization(PlaybackInitializationOptions(metadata: _episode, selectedMediaIndex: 0));
+      c.seriesTrackPickSink(_episode.id).audioPicked(1);
+      final successor = client();
+      successor.inheritSession(c);
+      await c.closeGracefully();
+      expect(puts(), isEmpty);
+      await Future<void>.delayed(const Duration(milliseconds: 1700));
+      expect(puts().map((r) => r.url.path), ['/api/v2/audio-prefs/series%3As1']);
+      successor.close();
     });
 
     test('a failing write never affects playback, and the unsent pick still applies', () async {

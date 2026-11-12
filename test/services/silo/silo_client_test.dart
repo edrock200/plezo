@@ -759,7 +759,8 @@ void main() {
       expect(requests.single.url.queryParameters['file_id'], '43');
     });
 
-    test('a session the server ended stops taking session progress', () async {
+    Future<SiloClient> sessionAnsweringProgress(http.Response Function() progressAnswer) async {
+      var progressCalls = 0;
       final c = client((request) async {
         final path = Uri.decodeComponent(request.url.path);
         if (path.endsWith('/watch/movie:m1')) {
@@ -788,22 +789,84 @@ void main() {
             },
           }, 201);
         }
-        if (path.endsWith('/playback/sess-9/progress')) return _problem(410, 'playback_session_ended');
+        if (path.endsWith('/playback/sess-9/progress')) {
+          // The start report is accepted; later ones get the answer under test.
+          return progressCalls++ == 0 ? _json({}, 200) : progressAnswer();
+        }
         if (path.endsWith('/sync/progress')) return _json({'items': []});
+        if (path.endsWith('/watched/movie:m1')) return http.Response('', 204);
         return _json({}, 404);
       });
       final metadata = MediaItem.silo(id: 'movie:m1', kind: MediaKind.movie, serverId: 'srv-1');
       await c.getPlaybackInitialization(PlaybackInitializationOptions(metadata: metadata, selectedMediaIndex: 0));
       await c.reportPlaybackStarted(itemId: 'movie:m1', position: Duration.zero, playSessionId: 'sess-9');
       requests.clear();
+      return c;
+    }
+
+    test('a session the server forgot (404) stops taking session progress', () async {
+      final c = await sessionAnsweringProgress(() => _problem(404, 'playback_session_not_found'));
+      Future<void> report() => c.reportPlaybackProgress(
+        itemId: 'movie:m1',
+        position: const Duration(minutes: 5),
+        duration: const Duration(hours: 1),
+        playSessionId: 'sess-9',
+      );
+      await report();
+      expect(requests.single.url.path, endsWith('/playback/sess-9/progress'));
+      requests.clear();
+      await report();
+      // The session row is gone: the resume point is written without it.
+      expect(requests.single.url.path, endsWith('/sync/progress'));
+    });
+
+    test(
+      'a session an administrator ended (410 playback_session_ended) ends playback and writes nothing more',
+      () async {
+        final c = await sessionAnsweringProgress(() => _problem(410, 'playback_session_ended'));
+        await expectLater(
+          c.reportPlaybackProgress(
+            itemId: 'movie:m1',
+            position: const Duration(minutes: 5),
+            duration: const Duration(hours: 1),
+            playSessionId: 'sess-9',
+          ),
+          throwsA(isA<PlaybackSessionTerminatedException>().having((e) => e.leavePlayback, 'leavePlayback', isTrue)),
+        );
+        requests.clear();
+        await c.reportPlaybackProgress(
+          itemId: 'movie:m1',
+          position: const Duration(minutes: 6),
+          duration: const Duration(hours: 1),
+          playSessionId: 'sess-9',
+        );
+        // Past the watched threshold: no watched mark and no stop either.
+        await c.reportPlaybackStopped(
+          itemId: 'movie:m1',
+          position: const Duration(minutes: 58),
+          duration: const Duration(hours: 1),
+          playSessionId: 'sess-9',
+        );
+        expect(requests, isEmpty);
+      },
+    );
+
+    test('any other 410 on progress is treated like a forgotten session', () async {
+      final c = await sessionAnsweringProgress(() => _problem(410, 'gone'));
       await c.reportPlaybackProgress(
         itemId: 'movie:m1',
         position: const Duration(minutes: 5),
         duration: const Duration(hours: 1),
         playSessionId: 'sess-9',
       );
-      // The session row is gone: the resume point is written without it.
-      expect(requests.single.url.path, endsWith('/sync/progress'));
+      requests.clear();
+      await c.reportPlaybackStopped(
+        itemId: 'movie:m1',
+        position: const Duration(minutes: 58),
+        duration: const Duration(hours: 1),
+        playSessionId: 'sess-9',
+      );
+      expect(requests.single.url.path, endsWith('/watched/movie%3Am1'));
     });
 
     test('a capped preset reports a fallback only when the server left a larger source unchanged', () async {
@@ -1397,6 +1460,143 @@ void main() {
       requests.clear();
       await c.fetchRelatedHubs('series:s1');
       expect(requests.where((r) => r.url.path.endsWith('/box-set')), isEmpty);
+    });
+  });
+
+  group('remove from Continue Watching', () {
+    test('a card with a progress stamp leaves continue_watching; one with a series leaves next_up', () async {
+      final c = client((_) async => http.Response('', 204));
+      await c.removeFromContinueWatching(
+        MediaItem.silo(
+          id: 'movie:m1',
+          kind: MediaKind.movie,
+          serverId: 'srv-1',
+          raw: {'progress_updated_at': '2026-11-12T10:00:00Z'},
+        ),
+      );
+      expect(requests.single.url.path, endsWith('/home/dismissals/continue_watching/movie%3Am1'));
+      expect(jsonDecode(requests.single.body), {'progress_updated_at': '2026-11-12T10:00:00Z'});
+
+      requests.clear();
+      await c.removeFromContinueWatching(
+        MediaItem.silo(
+          id: 'episode:e1',
+          kind: MediaKind.episode,
+          serverId: 'srv-1',
+          grandparentId: 'series:s1',
+          raw: {'item_source': 'next_up'},
+        ),
+      );
+      expect(requests.single.url.path, endsWith('/home/dismissals/next_up/episode%3Ae1'));
+      expect(jsonDecode(requests.single.body), {'series_id': 'series:s1'});
+
+      // No stamp, but an episode of a series: next_up, as Silo Android does.
+      requests.clear();
+      await c.removeFromContinueWatching(
+        MediaItem.silo(id: 'episode:e2', kind: MediaKind.episode, serverId: 'srv-1', raw: {'series_id': 'series:s2'}),
+      );
+      expect(requests.single.url.path, endsWith('/home/dismissals/next_up/episode%3Ae2'));
+    });
+
+    test('a card with neither stamp nor series fails instead of pretending', () async {
+      final c = client((_) async => http.Response('', 204));
+      await expectLater(
+        c.removeFromContinueWatching(MediaItem.silo(id: 'movie:m2', kind: MediaKind.movie, serverId: 'srv-1')),
+        throwsA(isA<MediaServerHttpException>().having((e) => e.display, 'display', isNotEmpty)),
+      );
+      expect(requests, isEmpty);
+    });
+  });
+
+  group('library collections tab', () {
+    Map<String, dynamic> tab() => {
+      'library_id': 3,
+      'collections': [
+        {'id': 'c1', 'title': 'Oscar Winners', 'description': 'Best pictures', 'item_count': 12},
+        {'id': 'c2', 'title': 'Heists', 'description': '', 'item_count': 4},
+        {'id': 'c3', 'title': 'Only flat', 'overview': 'Old field', 'item_count': 1},
+      ],
+      'groups': [
+        {
+          'id': 'g2',
+          'name': 'Mine',
+          'kind': 'user_collections',
+          'sort_order': 2,
+          'collections': [
+            {'id': 'u1', 'title': 'Date night', 'item_count': 3, 'creator_profile_id': 'p-owner'},
+            // A personal collection lives in another table: an id equal to a
+            // curated one is still its own card.
+            {'id': 'c1', 'title': 'My winners', 'item_count': 2, 'creator_profile_id': 'p-owner'},
+            {'id': 'u1', 'title': 'Date night', 'item_count': 3, 'creator_profile_id': 'p-owner'},
+          ],
+        },
+        {
+          'id': 'g1',
+          'name': 'Franchises',
+          'kind': 'admin',
+          'sort_order': 0,
+          'collections': [
+            {'id': 'c2', 'title': 'Heists', 'poster_url': '/p/c2.jpg', 'item_count': 4},
+          ],
+        },
+      ],
+      'ungrouped': {
+        'sort_order': 1,
+        'collections': [
+          {'id': 'c1', 'title': 'Oscar Winners', 'item_count': 12},
+        ],
+      },
+    };
+
+    test('lists groups and ungrouped in order, then flat-only rows, keeping personal collections apart', () async {
+      final c = client((request) async {
+        final path = Uri.decodeComponent(request.url.path);
+        if (path.endsWith('/library/3/collections')) return _json(tab());
+        return _json({
+          'items': [],
+          'page': {'has_more': false},
+          'total': 0,
+        });
+      });
+      final page = await c.fetchCollectionsPage('3');
+      expect(page.items.map((i) => i.id), [
+        'silo-collection:3:c2',
+        'silo-collection:3:c1',
+        'silo-user-collection:3:u1',
+        'silo-user-collection:3:c1',
+        'silo-collection:3:c3',
+      ]);
+      final byId = {for (final i in page.items) i.id: i};
+      expect(byId['silo-collection:3:c1']!.summary, 'Best pictures');
+      expect(byId['silo-collection:3:c2']!.summary, isNull);
+      expect(byId['silo-collection:3:c3']!.summary, 'Old field');
+      expect(byId['silo-user-collection:3:u1']!.title, 'Date night');
+      expect(byId['silo-user-collection:3:u1']!.kind, MediaKind.collection);
+    });
+
+    test('a personal collection reads its titles from source=user_collection', () async {
+      final c = client((request) async {
+        final path = Uri.decodeComponent(request.url.path);
+        if (path.endsWith('/library/3/collections')) return _json(tab());
+        return _json({
+          'items': [_movie(1)],
+          'page': {'has_more': false},
+          'total': 1,
+        });
+      });
+      await c.fetchCollectionsPage('3');
+      requests.clear();
+      await c.fetchCollectionPage('silo-user-collection:3:u1');
+      expect(requests.single.url.queryParameters['source'], 'user_collection');
+      expect(requests.single.url.queryParameters['collection_id'], 'u1');
+      expect(requests.single.url.queryParameters['library_id'], '3');
+
+      requests.clear();
+      await c.fetchCollectionPage('silo-collection:3:c1');
+      expect(requests.single.url.queryParameters['source'], 'library_collection');
+
+      final item = await c.fetchItem('silo-user-collection:3:u1');
+      expect(item?.title, 'Date night');
     });
   });
 

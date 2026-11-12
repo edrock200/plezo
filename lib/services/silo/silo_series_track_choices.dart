@@ -171,6 +171,47 @@ class SiloSeriesTrackChoices {
     return 'track=${body['audio_track_index']} lang=${body['audio_language'] ?? ''}';
   }
 
+  /// Remove and return every queued pick, for the client that replaces this
+  /// one on the same login session ([adopt]). Timers stop; a request already
+  /// on the wire still finishes (the new client may send the pick again,
+  /// which writes the same preference).
+  List<SiloPendingTrackChoice> takePending() {
+    final taken = <SiloPendingTrackChoice>[
+      for (final entry in _pending.values)
+        if (!_expired(entry))
+          SiloPendingTrackChoice(kind: entry.kind, seriesKey: entry.seriesKey, body: entry.body, madeAt: entry.madeAt),
+    ];
+    for (final entry in _pending.values) {
+      entry.timer?.cancel();
+    }
+    _pending.clear();
+    return taken;
+  }
+
+  /// Queue picks another client of this login session had not sent yet
+  /// ([takePending]). A pick already queued here is newer and wins. Each
+  /// keeps its age, so [maxAge] still counts from when the viewer made it.
+  void adopt(Iterable<SiloPendingTrackChoice> choices) {
+    if (_closed) return;
+    for (final choice in choices) {
+      final key = _key(choice.kind, choice.seriesKey);
+      if (_pending.containsKey(key)) continue;
+      final entry = _PendingChoice(choice.kind, choice.seriesKey)
+        ..body = choice.body
+        ..generation = 1
+        ..madeAt = choice.madeAt;
+      _pending[key] = entry;
+      entry.timer = Timer(debounce, () => unawaited(_send(key)));
+    }
+  }
+
+  /// Send what is still queued (at most [timeout]), then [close]. For a
+  /// client that closes without a successor taking its picks.
+  Future<void> closeGracefully({Duration timeout = const Duration(milliseconds: 1500)}) async {
+    if (!_closed) await flush(timeout: timeout);
+    close();
+  }
+
   /// Stop every timer; queued picks are dropped (the client is closing).
   void close() {
     _closed = true;
@@ -179,6 +220,16 @@ class SiloSeriesTrackChoices {
     }
     _pending.clear();
   }
+}
+
+/// A queued pick moved between clients of one login session.
+class SiloPendingTrackChoice {
+  const SiloPendingTrackChoice({required this.kind, required this.seriesKey, required this.body, required this.madeAt});
+
+  final String kind;
+  final String seriesKey;
+  final Map<String, Object?> body;
+  final DateTime madeAt;
 }
 
 class _PendingChoice {
