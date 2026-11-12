@@ -3276,9 +3276,20 @@ class DownloadManagerService {
 
     var subtitlesSettled = !downloadSubtitles;
     if (downloadSubtitles) {
+      Future<void> Function()? release;
       try {
         var subtitles = preresolvedSubtitles;
-        if (subtitles == null) {
+        if (subtitles == null && client is DeferredDownloadSubtitles) {
+          // Short-lived subtitle URLs (Silo) are listed only now, right
+          // before they are fetched, and released once the files are in.
+          final fetch = await (client as DeferredDownloadSubtitles).resolveDownloadSubtitlesNow(
+            metadata,
+            mediaIndex: record?.mediaIndex ?? 0,
+            mediaSourceId: record?.mediaSourceId,
+          );
+          release = fetch.release;
+          subtitles = fetch.perPart;
+        } else if (subtitles == null) {
           final resolution = await client.resolveDownload(
             metadata,
             mediaIndex: record?.mediaIndex ?? 0,
@@ -3303,6 +3314,8 @@ class DownloadManagerService {
         }
       } catch (e, st) {
         appLogger.w('Could not resolve subtitles for $globalKey', error: e, stackTrace: st);
+      } finally {
+        if (release != null) unawaited(release());
       }
     }
 

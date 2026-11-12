@@ -3836,6 +3836,18 @@ class ExoPlayerCore(private val activity: Activity) :
     delegate?.onPropertyChange("time-pos", clampedPositionMs / 1000.0)
   }
 
+  /**
+   * New headers for the media at [uri] that is playing (a rotated access token):
+   * the HTTP data sources read the factory's request properties at every request,
+   * so the next segment or range request carries them. Ignored when another media
+   * has opened since, or for media that opened without headers.
+   */
+  fun updateStreamHeaders(uri: String, headers: Map<String, String>) {
+    if (uri != currentMediaUri || currentHeaders.isNullOrEmpty() || headers.isEmpty()) return
+    currentHeaders = headers
+    httpDataSourceFactory?.setDefaultRequestProperties(headers)
+  }
+
   fun setVolume(volume: Float) {
     exoPlayer?.volume = volume.coerceIn(0f, 1f)
     delegate?.onPropertyChange("volume", (volume * 100).toDouble())

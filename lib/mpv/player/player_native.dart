@@ -203,6 +203,30 @@ class PlayerNative extends PlayerBase {
     return 'sub-files=${_fixedLengthQuote(escapedUris.join(separator))}';
   }
 
+  /// The video media whose headers the global list holds; null while a load
+  /// is being prepared or for header-less media.
+  String? _streamHeadersUri;
+
+  /// Rewrites the global header list for the playing video. libav keeps the
+  /// headers an open stream started with, so this reaches the requests mpv
+  /// opens from now on (sidecar loads, reopens); a dead stream is rebuilt by
+  /// a reload, which resolves fresh headers anyway.
+  @override
+  Future<void> updateStreamHeaders(String uri, Map<String, String> headers) async {
+    if (audioOnly || _nativeCoreUnavailable || headers.isEmpty || _streamHeadersUri != uri) return;
+    // Dispatched back to back with no await between the check and the sends,
+    // so a load that starts later rewrites the list after these.
+    await Future.wait([
+      invoke('command', {
+        'args': ['change-list', 'http-header-fields', 'clr', ''],
+      }),
+      for (final entry in headers.entries)
+        invoke('command', {
+          'args': ['change-list', 'http-header-fields', 'append', '${entry.key}: ${entry.value}'],
+        }),
+    ]);
+  }
+
   /// File-local `http-header-fields` for a `loadfile` options arg, so the
   /// entry opens with its own headers rather than the list mpv holds when it
   /// starts, which may belong to another server. The options arg is an
@@ -463,6 +487,7 @@ class PlayerNative extends PlayerBase {
     required List<SubtitleTrack>? externalSubtitles,
     required bool startLivePlaylistFromBeginning,
   }) async {
+    _streamHeadersUri = null;
     if (!audioOnly) await setVisible(true);
 
     // Rebuild the header list via `change-list` items — a plain
@@ -556,6 +581,7 @@ class PlayerNative extends PlayerBase {
     if (_nativeCoreUnavailable) return null;
     final loadfileReply = await invoke<Map>('command', {'args': loadfileArgs});
     if (audioOnly) _prefetchHeaders = media.headers ?? const {};
+    if (!audioOnly && (media.headers?.isNotEmpty ?? false)) _streamHeadersUri = media.uri;
     final playlistEntryId = loadfileReply?['playlistEntryId'];
     return playlistEntryId is int ? playlistEntryId : null;
   }

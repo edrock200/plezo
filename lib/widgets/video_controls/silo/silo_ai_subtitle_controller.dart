@@ -26,9 +26,35 @@ class SiloAiSubtitleController extends ChangeNotifier {
   /// rebuild them; the newest knows how to reach the player).
   static SiloAiSubtitleController of(SiloSubtitleTools tools) {
     final map = _byClient[tools.client] ??= {};
+    // Controllers of items no longer playing that follow nothing hold the
+    // controls and player they were built with: let them go.
+    map.removeWhere((itemId, other) => itemId != tools.itemId && !other.busy && !other._tools.isCurrent());
     final controller = map[tools.itemId] ??= SiloAiSubtitleController._(tools);
     controller._tools = tools;
     return controller;
+  }
+
+  /// The controls that built [tools] are gone: stop following its item's job
+  /// (it keeps running on the server) and drop the controller, unless newer
+  /// controls took the item over. Run after the controls' State has unmounted.
+  static void release(SiloSubtitleTools tools) {
+    final map = _byClient[tools.client];
+    final controller = map?[tools.itemId];
+    if (map == null || controller == null || controller._tools.isCurrent()) return;
+    controller._stopFollowing();
+    map.remove(tools.itemId);
+  }
+
+  @visibleForTesting
+  static bool debugHolds(SiloSubtitleTools tools) => _byClient[tools.client]?.containsKey(tools.itemId) ?? false;
+
+  /// Stops polling and live cues and forgets the job; nothing is cancelled
+  /// on the server.
+  void _stopFollowing() {
+    _stopPolling();
+    _endLive();
+    job = null;
+    if (phase == SiloAiPhase.running || phase == SiloAiPhase.submitting) phase = SiloAiPhase.idle;
   }
 
   @visibleForTesting
@@ -71,6 +97,26 @@ class SiloAiSubtitleController extends ChangeNotifier {
 
   @visibleForTesting
   static Duration liveOpenTimeout = const Duration(seconds: 6);
+
+  /// Reconnects after the socket closes under a running job (Silo closes it
+  /// when the ticket's access token expires): one attempt per delay, then the
+  /// live cues come off screen and the job is followed by polling.
+  @visibleForTesting
+  static List<Duration> liveReconnectDelays = const [
+    Duration(seconds: 1),
+    Duration(seconds: 2),
+    Duration(seconds: 4),
+    Duration(seconds: 8),
+    Duration(seconds: 16),
+  ];
+
+  /// A socket that stayed open this long earns a fresh set of attempts.
+  @visibleForTesting
+  static Duration liveStableAfter = const Duration(seconds: 60);
+
+  SiloAiPlaybackContext? _liveContext;
+  Timer? _liveReconnect;
+  int _liveReconnects = 0;
 
   /// Replaces [SiloClient.openAiLiveSocket] in tests.
   @visibleForTesting
@@ -242,7 +288,15 @@ class SiloAiSubtitleController extends ChangeNotifier {
       unawaited(socket.close());
       return;
     }
+    _liveReconnects = 0;
+    _attachLive(socket, context);
+  }
+
+  void _attachLive(SiloLiveSubtitleSocket socket, SiloAiPlaybackContext context) {
     _live = socket;
+    _liveContext = context;
+    final opened = DateTime.now();
+    unawaited(_liveEvents?.cancel());
     _liveEvents = socket.events.listen((event) {
       if (event.fileId != context.fileId) return;
       if (job == null) {
@@ -253,12 +307,67 @@ class SiloAiSubtitleController extends ChangeNotifier {
     });
     unawaited(
       socket.done.then((_) {
-        if (_live == socket) {
+        if (_live != socket) return;
+        _live = null;
+        if (phase == SiloAiPhase.running && job != null && liveCues != null && _tools.isCurrent()) {
+          if (DateTime.now().difference(opened) >= liveStableAfter) _liveReconnects = 0;
+          appLogger.i('Silo AI subtitles: live socket closed during the job; reconnecting');
+          _scheduleLiveReconnect();
+        } else {
           appLogger.d('Silo AI subtitles: live socket closed; following the job');
-          _live = null;
         }
       }),
     );
+  }
+
+  void _scheduleLiveReconnect() {
+    _liveReconnect?.cancel();
+    if (_liveReconnects >= liveReconnectDelays.length) {
+      appLogger.i('Silo AI subtitles: live socket did not come back; following the job');
+      _endLive();
+      notifyListeners();
+      return;
+    }
+    final delay = liveReconnectDelays[_liveReconnects++];
+    _liveReconnect = Timer(delay, () {
+      _liveReconnect = null;
+      unawaited(_reconnectLive());
+    });
+  }
+
+  /// Re-mints a ticket (the client refreshes the token first) and opens a new
+  /// socket; the cue track is kept, and lines it already has are not added
+  /// twice. The server replays nothing, so lines sent while closed are missed.
+  Future<void> _reconnectLive() async {
+    final context = _liveContext;
+    final current = job;
+    if (context == null || current == null || liveCues == null || phase != SiloAiPhase.running) return;
+    SiloLiveSubtitleSocket? socket;
+    final opening = (debugOpenLive ?? _client.openAiLiveSocket)(context);
+    try {
+      socket = await opening.timeout(liveOpenTimeout);
+    } on TimeoutException {
+      unawaited(opening.then((opened) => opened?.close(), onError: (_) {}));
+    } catch (e) {
+      appLogger.d('Silo AI subtitles: live socket reconnect failed', error: e.runtimeType);
+    }
+    final stillWanted =
+        phase == SiloAiPhase.running &&
+        job?.id == current.id &&
+        liveCues != null &&
+        _live == null &&
+        _tools.isCurrent();
+    if (socket != null && !stillWanted) {
+      unawaited(socket.close());
+      return;
+    }
+    if (!stillWanted) return;
+    if (socket == null) {
+      _scheduleLiveReconnect();
+      return;
+    }
+    appLogger.i('Silo AI subtitles: live socket reconnected');
+    _attachLive(socket, context);
   }
 
   void _onLive(SiloLiveSubtitleEvent event) {
@@ -293,6 +402,9 @@ class SiloAiSubtitleController extends ChangeNotifier {
 
   /// Closes the socket and takes the live cues off screen.
   void _endLive() {
+    _liveReconnect?.cancel();
+    _liveReconnect = null;
+    _liveContext = null;
     _earlyLive.clear();
     unawaited(_liveEvents?.cancel());
     _liveEvents = null;
@@ -344,10 +456,9 @@ class SiloAiSubtitleController extends ChangeNotifier {
     if (phase != SiloAiPhase.running || current == null) return _stopPolling();
     if (!_tools.isCurrent()) {
       // The item is no longer playing here; the job finishes on the server.
-      _stopPolling();
-      _endLive();
-      job = null;
-      phase = SiloAiPhase.idle;
+      _stopFollowing();
+      final map = _byClient[_client];
+      if (map != null && map[_tools.itemId] == this) map.remove(_tools.itemId);
       return;
     }
     if (_polling) return;

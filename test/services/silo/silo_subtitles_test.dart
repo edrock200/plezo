@@ -587,6 +587,158 @@ void main() {
       });
     });
 
+    void liveJobServer() {
+      extra = (request, path) {
+        if (path.endsWith('/subtitles/ai/status')) {
+          return _json({'state': 'available', 'allowed': true, 'enabled': true, 'transcribe_enabled': true});
+        }
+        if (path.endsWith('/subtitles/ai/quota')) return _json({'limited': false});
+        if (path.endsWith('/subtitles/ai/translate')) {
+          return _json({..._job('pending'), 'live_delivery_attached': true}, 202);
+        }
+        if (path.endsWith('/subtitles/ai/jobs/j1')) return _json(_job('running', progress: 0.3));
+        return null;
+      };
+    }
+
+    String liveCues(double start, String text) => jsonEncode({
+      'type': 'event',
+      'session_id': 'sess-1',
+      'name': 'subtitle_translation_cues',
+      'payload': {
+        'file_id': 42,
+        'job_id': 'j1',
+        'track_key': 'k',
+        'cues': [
+          {'start': start, 'end': start + 2, 'text': text},
+        ],
+        'done': 1,
+        'total': 9,
+      },
+    });
+
+    test('a live socket that closes under a running job reconnects and keeps its lines', () async {
+      liveJobServer();
+      final c = await playing();
+      final sockets = [StreamController<String>(), StreamController<String>()];
+      addTearDown(() {
+        for (final s in sockets) {
+          unawaited(s.close());
+        }
+      });
+      var opens = 0;
+      SiloAiSubtitleController.debugOpenLive = (_) async => SiloLiveSubtitleSocket.fromFrames(sockets[opens++].stream);
+      addTearDown(() => SiloAiSubtitleController.debugOpenLive = null);
+      fakeAsync((async) {
+        final showing = <bool>[];
+        final tools = SiloSubtitleTools(
+          client: c,
+          itemId: 'movie:m1',
+          position: () => const Duration(seconds: 30),
+          isCurrent: () => true,
+          applyStored: (_) async => SubtitleDownloadApplyOutcome.applied,
+          notify: (message, {error = false}) {},
+          setLiveCuesShowing: showing.add,
+        );
+        final controller = SiloAiSubtitleController.of(tools);
+        controller.open();
+        async.flushMicrotasks();
+        controller.submit();
+        async.flushMicrotasks();
+        sockets[0].add(liveCues(30, 'Bonjour'));
+        async.flushMicrotasks();
+        expect(controller.showsLiveCues, isTrue);
+
+        // The server closes the socket at the ticket's token expiry.
+        unawaited(sockets[0].close());
+        async.flushMicrotasks();
+        expect(opens, 1);
+        expect(controller.showsLiveCues, isTrue, reason: 'the lines stay while it reconnects');
+        async.elapse(SiloAiSubtitleController.liveReconnectDelays.first);
+        expect(opens, 2);
+        sockets[1].add(liveCues(40, 'Encore'));
+        async.flushMicrotasks();
+        expect(controller.liveTextAt(const Duration(seconds: 31)), 'Bonjour');
+        expect(controller.liveTextAt(const Duration(seconds: 41)), 'Encore');
+        expect(showing, [true]);
+        controller.cancel();
+        controller.dispose();
+      });
+    });
+
+    test('when reconnecting gives up the live lines come off and the subtitle returns', () async {
+      liveJobServer();
+      final c = await playing();
+      final first = StreamController<String>();
+      var opens = 0;
+      SiloAiSubtitleController.debugOpenLive = (_) async =>
+          opens++ == 0 ? SiloLiveSubtitleSocket.fromFrames(first.stream) : null;
+      addTearDown(() => SiloAiSubtitleController.debugOpenLive = null);
+      fakeAsync((async) {
+        final showing = <bool>[];
+        final tools = SiloSubtitleTools(
+          client: c,
+          itemId: 'movie:m1',
+          position: () => const Duration(seconds: 30),
+          isCurrent: () => true,
+          applyStored: (_) async => SubtitleDownloadApplyOutcome.applied,
+          notify: (message, {error = false}) {},
+          setLiveCuesShowing: showing.add,
+        );
+        final controller = SiloAiSubtitleController.of(tools);
+        controller.open();
+        async.flushMicrotasks();
+        controller.submit();
+        async.flushMicrotasks();
+        first.add(liveCues(30, 'Bonjour'));
+        async.flushMicrotasks();
+        unawaited(first.close());
+        async.flushMicrotasks();
+        for (final delay in SiloAiSubtitleController.liveReconnectDelays) {
+          async.elapse(delay);
+        }
+        async.flushMicrotasks();
+        expect(opens, 1 + SiloAiSubtitleController.liveReconnectDelays.length);
+        expect(controller.showsLiveCues, isFalse);
+        expect(showing, [true, false]);
+        expect(controller.phase, SiloAiPhase.running, reason: 'the job is still followed by polling');
+        controller.cancel();
+        controller.dispose();
+      });
+    });
+
+    test('controllers of items no longer playing are let go', () async {
+      final c = client();
+      var firstCurrent = true;
+      SiloSubtitleTools toolsFor(String itemId, bool Function() isCurrent) => SiloSubtitleTools(
+        client: c,
+        itemId: itemId,
+        position: () => Duration.zero,
+        isCurrent: isCurrent,
+        applyStored: (_) async => SubtitleDownloadApplyOutcome.applied,
+        notify: (message, {error = false}) {},
+      );
+      final first = toolsFor('movie:m1', () => firstCurrent);
+      SiloAiSubtitleController.of(first);
+      // Still playing (e.g. a sheet of the same controls): kept.
+      final second = toolsFor('movie:m2', () => true);
+      SiloAiSubtitleController.of(second);
+      expect(SiloAiSubtitleController.debugHolds(first), isTrue);
+      // The next item plays: the idle controller of the first is dropped.
+      firstCurrent = false;
+      SiloAiSubtitleController.of(second);
+      expect(SiloAiSubtitleController.debugHolds(first), isFalse);
+      // Released with its controls once they are gone.
+      var secondCurrent = true;
+      final third = toolsFor('movie:m3', () => secondCurrent);
+      SiloAiSubtitleController.of(third);
+      SiloAiSubtitleController.release(third);
+      expect(SiloAiSubtitleController.debugHolds(third), isTrue, reason: 'still current');
+      secondCurrent = false;
+      SiloAiSubtitleController.release(third);
+      expect(SiloAiSubtitleController.debugHolds(third), isFalse);
+    });
+
     test('without live delivery the socket is closed and the job is polled', () async {
       extra = (request, path) {
         if (path.endsWith('/subtitles/ai/status')) {

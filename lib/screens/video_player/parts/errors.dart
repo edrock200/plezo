@@ -230,6 +230,7 @@ extension _VideoPlayerErrorMethods on VideoPlayerScreenState {
   void _onPlayerLog(PlayerLog log) {
     final status = PlayerError.httpStatusFromLog(log.text);
     if (status != null && fatalPlaybackHttpStatuses.contains(status)) _fatalHttpStatuses.add(status);
+    if (status == 401) _onSiloStreamUnauthorized();
     // An open the server answers with 503 never fails on its own: ffmpeg's
     // reconnect loop retries 503 forever and mpv just reports buffering
     // (#1830). Bound it. Live TV stays out — its ladder owns retries there.

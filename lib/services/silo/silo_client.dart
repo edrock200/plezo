@@ -57,6 +57,7 @@ import 'silo_card_overlay_store.dart';
 import 'silo_card_overlays.dart';
 import 'silo_download_registry.dart';
 import 'silo_managed_downloads.dart';
+import 'silo_stream_auth.dart';
 import 'silo_live_subtitles.dart';
 import 'silo_mappers.dart';
 import 'silo_calendar.dart';
@@ -89,7 +90,12 @@ part 'silo_client_downloads.dart';
 /// forward when asked for one it has not seen.
 class SiloClient
     with MediaServerCacheMixin, _SiloPlaybackMethods, _SiloSubtitleMethods, _SiloTrackPrefsMethods, _SiloDownloadMethods
-    implements MediaServerClient, ScopedMediaServerClient, GracefullyCloseable, RemoteTrailerClient {
+    implements
+        MediaServerClient,
+        ScopedMediaServerClient,
+        GracefullyCloseable,
+        RemoteTrailerClient,
+        DeferredDownloadSubtitles {
   SiloClient._({required this._connection, required this._api});
 
   /// Build a client for [connection]. Network I/O stays lazy.
@@ -200,7 +206,12 @@ class SiloClient
       accessTokenExpiresAt: rotated.accessTokenExpiresAt,
       accessTokenLifetimeSeconds: rotated.accessTokenLifetimeSeconds,
     );
+    streamAuth.tokensChanged();
   }
+
+  /// Keeps a playing stream's `Authorization` header valid (see
+  /// [SiloStreamAuth]); the video player holds it while a Silo stream plays.
+  late final SiloStreamAuth streamAuth = SiloStreamAuth(api: _api, headers: () => streamHeaders);
 
   /// Called when requests suggest the server is down or the login is gone
   /// (see [SiloApi.onServerUnreachable]), and on a backed-off schedule while
@@ -270,6 +281,7 @@ class SiloClient
       accessTokenExpiresAt: tokens.expiresAt,
       accessTokenLifetimeSeconds: tokens.lifetimeSeconds,
     );
+    streamAuth.tokensChanged();
     await onConnectionUpdated?.call(_connection);
   }
 
@@ -324,6 +336,7 @@ class SiloClient
   void _markClosed() {
     _closed = true;
     _cancelOfflineRecheck();
+    streamAuth.close();
     if (_cardOverlaysCreated) cardOverlays.dispose();
   }
 

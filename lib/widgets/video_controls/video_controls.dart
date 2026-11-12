@@ -1,4 +1,4 @@
-import 'dart:async' show StreamSubscription, Timer, unawaited;
+import 'dart:async' show StreamSubscription, Timer, scheduleMicrotask, unawaited;
 import 'dart:io' show Platform;
 
 import '../../media/ids.dart';
@@ -896,6 +896,10 @@ class _PlexVideoControlsState extends State<PlexVideoControls>
 
   /// Live AI cues are drawn over the video, so the player's subtitle is hidden.
   bool _siloLiveCuesShowing = false;
+
+  /// The last Silo subtitle tools these controls built, so the item's AI
+  /// controller can be let go when the controls are disposed.
+  SiloSubtitleTools? _lastSiloSubtitleTools;
   bool _confirmedSubtitlesVisible = true;
   int _subtitleVisibilityWriteGeneration = 0;
   // Skip marker button focus node (for TV D-pad navigation)
@@ -1104,6 +1108,9 @@ class _PlexVideoControlsState extends State<PlexVideoControls>
   @override
   void dispose() {
     ++_subtitleVisibilityWriteGeneration;
+    final siloTools = _lastSiloSubtitleTools;
+    // After this State has unmounted, so the tools no longer read as current.
+    if (siloTools != null) scheduleMicrotask(() => SiloAiSubtitleController.release(siloTools));
     _feedbackTimer?.cancel();
     _feedbackHideTimer?.cancel();
     _accumulatedSkipSeconds.dispose();

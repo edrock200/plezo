@@ -45,6 +45,11 @@ abstract class PlayerBase with PlayerStreamControllersMixin implements Player {
   @override
   Future<void> setNext(Media? media) async {}
 
+  /// Replace the HTTP headers of the playing media [uri] for the requests the
+  /// backend makes from now on (Silo: a rotated access token). Ignored when
+  /// another media has opened since, or by backends that fix headers at open.
+  Future<void> updateStreamHeaders(String uri, Map<String, String> headers) async {}
+
   late final PlayerStreams _streams;
 
   @override

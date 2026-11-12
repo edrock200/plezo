@@ -168,7 +168,15 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
   `checkHealth` reports `authError` only after such a refusal, otherwise `offline`. The token
   lifetime (`expires_in`) is persisted as `SiloConnection.accessTokenLifetimeSeconds`, so
   `refreshTokensIfHalfSpent` (run before each play) does not rotate on every play after a restart
-  (unknown lifetime counts as an hour). A refused refresh token is remembered and not sent again. **Refresh tokens rotate**: persist every new pair
+  (unknown lifetime counts as an hour). A refused refresh token is remembered and not sent again.
+  **Streams:** Silo checks account auth on every stream/segment request. While a Silo stream plays the
+  video player holds `SiloClient.streamAuth` (`silo_stream_auth.dart`): it refreshes at half life and
+  pushes the new stream headers through `PlayerBase.updateStreamHeaders(uri, …)` (ExoPlayer:
+  `setStreamHeaders` → the data source factory's request properties, read per request; mpv: the global
+  `http-header-fields`, which libav only reads when a stream opens). On mpv a logged 401 after the first
+  frame refreshes and reopens at the playhead (once a minute). External-player fallback URLs and the AI
+  control-socket ticket refresh a half-spent token first; a control socket that closes under a running
+  job is re-minted with backoff (1–16 s, 5 tries), keeping the cue track, then the live lines come off. **Refresh tokens rotate**: persist every new pair
   (`SiloClient.onConnectionUpdated` → `ConnectionRegistry.upsert`). `MultiServerManager` keeps the
   live client when a re-bind arrives with an older, already-rotated refresh token
   (`SiloClient.ownsRefreshToken`) — replacing it would revive a dead token. When such a re-bind
@@ -341,8 +349,11 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
   `playback_reload.dart` asks the reload for that `source:<id>` even though the current track list lacks it (Silo only).
 - **Downloads:** `POST /direct-download/links` → header-free link to the original file (Plezy's
   downloader sends no headers). The container rides in the URL fragment (`#container=mkv`), read by
-  `downloadExtensionFromUrl`. External subtitle files are listed from a direct-play session opened
-  only when the file has any, then left to expire. Never put the account token in a download URL.
+  `downloadExtensionFromUrl`. External subtitle files are not listed at queue time
+  (`externalSubtitlesResolved: false`): `SiloClient` implements `DeferredDownloadSubtitles`, so the
+  manager calls `resolveDownloadSubtitlesNow` right before phase 2 fetches them (token refreshed if half
+  spent, a direct-play session opened only when the file has any) and `release()` stops that session
+  once the files are in. Never put the account token in a download URL.
 - **Progress without a session** (downloaded file, offline queue): `POST /sync/progress` with
   `{media_item_id, position_ms, duration_ms, updated_at}`; a stop past `watchedThreshold` posts
   `/watched/{id}` instead.

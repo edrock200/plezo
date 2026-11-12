@@ -166,6 +166,9 @@ mixin _SiloSubtitleMethods on MediaServerCacheMixin, _SiloPlaybackMethods {
     final path = '/api/v2/playback/sessions/${Uri.encodeComponent(context.sessionId)}/control';
     final MediaServerResponse response;
     try {
+      // The server closes the socket when the access token in the ticket
+      // expires: mint it with a token that has most of its life left.
+      await _api.refreshTokensIfHalfSpent();
       response = await _api.request(
         'POST',
         '$path/ws-ticket',
