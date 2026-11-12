@@ -20,6 +20,15 @@ run-name: Silo preview APK ${{ github.sha }}
 # beside the older "Plezy with Silo" previews (com.edde746.plezy) instead of
 # replacing them.
 #
+# The cached keystore is restored and saved only by push runs of this
+# workflow (never pull_request). Without PREVIEW_KEYSTORE_PASSPHRASE it is
+# cached unencrypted, and any workflow run whose cache scope reaches this
+# branch could read it; the run summary says so loudly. Once the passphrase
+# exists, the plaintext entry of this branch is deleted after its key has been
+# saved encrypted. Each build also compares its APK's signing certificate with
+# the previous preview's and puts an "uninstall first" warning at the top of
+# the release notes when it changed (scripts/silo_apk_signer.py).
+#
 # Versions: each preview adds 0.1, <major>.<minor + 1>.0 of the highest existing
 # silo-preview-* tag (2.26.6 -> 2.27.0); the build number is above every earlier
 # preview's (scripts/silo_preview_version.sh). Each release records its build
@@ -67,13 +76,16 @@ jobs:
 
   build-android:
     needs: gate
-    if: ${{ needs.gate.outputs.mode == 'apk' }}
+    # Only pushes build (and touch the cached signing key); never a pull_request.
+    if: ${{ github.event_name == 'push' && needs.gate.outputs.mode == 'apk' }}
     runs-on: ubuntu-latest
     concurrency:
       group: silo-preview-apk-build-${{ github.ref }}
       cancel-in-progress: true
     permissions:
       contents: read
+      # Deletes this branch's plaintext keystore cache entry once an encrypted one exists.
+      actions: write
     outputs:
       tag: ${{ steps.apks.outputs.tag }}
       version: ${{ steps.apks.outputs.version }}
@@ -125,11 +137,14 @@ jobs:
 
       # With a passphrase the cache holds only the encrypted keystore (key
       # silo-preview-keystore-enc-v1). The plaintext entry is the fallback so
-      # a key cached before the secret existed keeps signing; the post step
-      # then saves it, encrypted, under the new key.
+      # a key cached before the secret existed keeps signing; "Save preview
+      # keystore" then stores it, encrypted, under the new key, and the
+      # plaintext entry is deleted. Restore and save are separate steps so
+      # that only push runs of this workflow ever touch the key.
       - name: Restore preview keystore
         id: keystore-cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        if: ${{ github.event_name == 'push' }}
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: .preview-keystore
           key: ${{ steps.keystore-mode.outputs.encrypted == 'true' && 'silo-preview-keystore-enc-v1' || 'silo-preview-keystore-v1' }}
@@ -140,6 +155,7 @@ jobs:
         run: flutter pub get --enforce-lockfile --no-example
 
       - name: Configure Android signing
+        id: signing
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
@@ -148,6 +164,10 @@ jobs:
           PASSPHRASE: ${{ secrets.PREVIEW_KEYSTORE_PASSPHRASE }}
         run: |
           set -euo pipefail
+          if [[ -z "$KEYSTORE_BASE64" && -z "$PASSPHRASE" && "$GITHUB_EVENT_NAME" != push ]]; then
+            echo "::error::Refusing to create or cache an unencrypted signing key outside a push run ($GITHUB_EVENT_NAME)."
+            exit 1
+          fi
           if [[ -n "$KEYSTORE_BASE64" ]]; then
             echo "$KEYSTORE_BASE64" | base64 --decode > android/app/upload-keystore.jks
             store_password="$STORE_PASSWORD"; key_password="$KEY_PASSWORD"; key_alias="$KEY_ALIAS"
@@ -180,11 +200,23 @@ jobs:
               rm -f "$cache/preview.jks" "$cache/password"
             else
               cp "$work/preview.jks" "$work/password" "$cache/"
-              echo "::warning::The preview signing key is cached unencrypted and is lost after 7 days without a build. Add the ANDROID_KEYSTORE_BASE64, ANDROID_STORE_PASSWORD, ANDROID_KEY_PASSWORD and ANDROID_KEY_ALIAS secrets for a stable key (or PREVIEW_KEYSTORE_PASSPHRASE to encrypt the cached one)."
+              echo "::warning title=Signing key cached UNENCRYPTED::Any workflow run that can read this branch's Actions cache can copy the preview signing key and sign APKs that install over Plezilo. Add the PREVIEW_KEYSTORE_PASSPHRASE secret now (or the ANDROID_* secrets for a stable key). The key is also lost after 7 days without a build."
+              {
+                echo "## :warning: The Android signing key is cached unencrypted"
+                echo
+                echo "This build signed with the preview keystore kept in the Actions cache **in plain text** (\`silo-preview-keystore-v1\`)."
+                echo "Any workflow run that can restore this branch's caches (for example a pull request into this branch) could copy it and sign an APK that installs over Plezilo."
+                echo
+                echo "**Fix (repository settings › Secrets and variables › Actions):**"
+                echo "- Best: add \`ANDROID_KEYSTORE_BASE64\`, \`ANDROID_STORE_PASSWORD\`, \`ANDROID_KEY_PASSWORD\` and \`ANDROID_KEY_ALIAS\` (a stable key that never expires)."
+                echo "- At least: add \`PREVIEW_KEYSTORE_PASSPHRASE\` (a long random string). The next build saves the key encrypted and deletes the plaintext cache entry."
+                echo "- Also: Settings › Actions › General › require approval for all outside collaborators' workflow runs."
+              } >> "$GITHUB_STEP_SUMMARY"
             fi
             cp "$work/preview.jks" android/app/upload-keystore.jks
             store_password="$(cat "$work/password")"; key_password="$store_password"; key_alias=preview
             rm -rf "$work"
+            echo "cached=true" >> "$GITHUB_OUTPUT"
           fi
           cat > android/key.properties << EOF
           storePassword=$store_password
@@ -192,6 +224,40 @@ jobs:
           keyAlias=$key_alias
           storeFile=upload-keystore.jks
           EOF
+
+      # Saved right after signing is set up (also when the build later fails), so
+      # a newly generated key is kept for the next preview.
+      - name: Save preview keystore
+        if: ${{ github.event_name == 'push' && steps.signing.outputs.cached == 'true' && steps.keystore-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: .preview-keystore
+          key: ${{ steps.keystore-mode.outputs.encrypted == 'true' && 'silo-preview-keystore-enc-v1' || 'silo-preview-keystore-v1' }}
+
+      # With the passphrase, the plaintext copy of this branch's key has no use
+      # left once the encrypted entry exists: delete it.
+      - name: Delete the plaintext keystore cache entry
+        if: ${{ github.event_name == 'push' && steps.signing.outputs.cached == 'true' && steps.keystore-mode.outputs.encrypted == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          count() {
+            local n
+            n="$(gh api "repos/${GH_REPO}/actions/caches?key=$1&ref=${GITHUB_REF}" \
+              --jq "[.actions_caches[] | select(.key == \"$1\")] | length" 2> /dev/null || true)"
+            [[ "$n" =~ ^[0-9]+$ ]] && echo "$n" || echo 0
+          }
+          if [[ "$(count silo-preview-keystore-enc-v1)" == 0 ]]; then
+            echo "::warning::No encrypted keystore cache entry found yet; the plaintext one (if any) is kept for now."
+            exit 0
+          fi
+          if [[ "$(count silo-preview-keystore-v1)" != 0 ]]; then
+            gh api -X DELETE "repos/${GH_REPO}/actions/caches?key=silo-preview-keystore-v1&ref=${GITHUB_REF}" > /dev/null \
+              && echo "Deleted the plaintext keystore cache entry of ${GITHUB_REF}." \
+              || echo "::warning::Could not delete the plaintext keystore cache entry (silo-preview-keystore-v1); delete it under Actions › Caches."
+          fi
 
       # Each preview adds 0.1: <major>.<minor + 1>.0 of the highest existing
       # silo-preview-* tag (or pubspec's major.minor.0 when higher), with a build number
@@ -244,6 +310,48 @@ jobs:
           # Plain-language notes from the change log's "## Next preview" section.
           python3 scripts/silo_release_notes.py docs/silo-preview-changelog.md "Next preview" release-notes.md \
             "${GITHUB_REF_NAME}" "${GITHUB_SHA}"
+
+      # Android installs a preview over the previous one only when both are
+      # signed with the same certificate. When it changed (the cached key was
+      # evicted, or the ANDROID_* secrets were added), the notes say so first.
+      - name: Compare the signer with the previous preview
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          new_cert="$(python3 scripts/silo_apk_signer.py dist/*-arm64-v8a.apk)"
+          echo "New APK signer SHA-256: ${new_cert}"
+          prev="$(bash scripts/silo_preview_version.sh latest 2> /dev/null | sed -n 's/^tag=//p' || true)"
+          if [[ -z "$prev" ]]; then
+            echo "::notice::No earlier preview release to compare the signer with."
+            exit 0
+          fi
+          mkdir -p "$RUNNER_TEMP/prev-apk"
+          if ! gh release download "$prev" --pattern '*-arm64-v8a.apk' --dir "$RUNNER_TEMP/prev-apk" 2> /dev/null; then
+            echo "::warning::Could not download ${prev}'s arm64-v8a APK; the signer was not compared."
+            exit 0
+          fi
+          old_cert="$(python3 scripts/silo_apk_signer.py "$RUNNER_TEMP"/prev-apk/*.apk || true)"
+          rm -rf "$RUNNER_TEMP/prev-apk"
+          echo "${prev} signer SHA-256: ${old_cert:-unknown}"
+          if [[ -z "$old_cert" || "$old_cert" == "$new_cert" ]]; then
+            echo "Signer unchanged since ${prev}: the preview installs as an update."
+            echo "Signer unchanged since \`${prev}\` (\`${new_cert}\`)." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo "::warning title=New signing key::This APK is signed with a different certificate than ${prev}; Android users must uninstall the previous preview first. The release notes say so."
+          {
+            echo "## :warning: New Android signing key"
+            echo "This APK's signer (\`${new_cert}\`) differs from \`${prev}\`'s (\`${old_cert}\`)."
+            echo "Android will not install it over the previous preview; the release notes start with an uninstall warning."
+          } >> "$GITHUB_STEP_SUMMARY"
+          version="${{ steps.ver.outputs.version }}"
+          {
+            echo "> **Android: uninstall the previous preview first.** Plezilo ${version} is signed with a new key, so Android won't install it over ${prev#silo-preview-} or earlier and says the app conflicts. Uninstalling removes your saved servers and downloads; sign in again afterwards. Windows and macOS install over the previous version as usual."
+            echo
+            cat release-notes.md
+          } > release-notes.new && mv release-notes.new release-notes.md
 
       - name: Keep the APKs for publishing
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
