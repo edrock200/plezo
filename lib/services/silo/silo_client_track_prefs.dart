@@ -3,7 +3,8 @@ part of 'silo_client.dart';
 /// Series-wide audio and subtitle memory (Silo Android #680): a Silo episode
 /// starts with the server's effective choice for its series, and a viewer's
 /// own pick in the player is written back to the series' preferences.
-/// Movies, extras and other backends are untouched. See [SiloTrackPrefs].
+/// Movies start with the profile's effective tracks too (no series pick to
+/// lay over them); extras and other backends are untouched. See [SiloTrackPrefs].
 mixin _SiloTrackPrefsMethods on MediaServerCacheMixin, _SiloPlaybackMethods {
   @override
   late final SiloSeriesTrackChoices _trackChoices = SiloSeriesTrackChoices(
@@ -73,12 +74,13 @@ mixin _SiloTrackPrefsMethods on MediaServerCacheMixin, _SiloPlaybackMethods {
   @override
   int? _seriesStartAudio({
     required String? seriesKey,
+    required bool applies,
     required Map<String, dynamic> version,
     required bool isOriginal,
     required int? planSelected,
   }) {
-    if (seriesKey == null || !isOriginal) return planSelected;
-    final pending = _trackChoices.pendingAudio(seriesKey);
+    if (!applies || !isOriginal) return planSelected;
+    final pending = seriesKey == null ? null : _trackChoices.pendingAudio(seriesKey);
     final tracks = version['audio_tracks'];
     if (pending != null && tracks is List) {
       final resolved = SiloTrackPrefs.resolveAudioBody(pending, tracks);
@@ -96,10 +98,12 @@ mixin _SiloTrackPrefsMethods on MediaServerCacheMixin, _SiloPlaybackMethods {
     required List<SiloSubtitleCandidate> candidates,
     required Object? audioLanguage,
   }) {
-    if (seriesKey == null) return const SiloSubtitleStart.noChange();
-    final prefs = SiloTrackPrefs.subtitlePrefs(watch, pending: _trackChoices.pendingSubtitle(seriesKey));
+    final prefs = SiloTrackPrefs.subtitlePrefs(
+      watch,
+      pending: seriesKey == null ? null : _trackChoices.pendingSubtitle(seriesKey),
+    );
     final start = SiloTrackPrefs.resolveSubtitle(candidates, prefs, audioLanguage: audioLanguage);
-    appLogger.d('Silo series subtitle start: $start (mode=${prefs.mode ?? '-'})');
+    appLogger.d('Silo profile subtitle start: $start (mode=${prefs.mode ?? '-'})');
     return start;
   }
 

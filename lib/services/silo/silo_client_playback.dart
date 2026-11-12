@@ -61,6 +61,7 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
   SiloSeriesTrackChoices get _trackChoices;
   int? _seriesStartAudio({
     required String? seriesKey,
+    required bool applies,
     required Map<String, dynamic> version,
     required bool isOriginal,
     required int? planSelected,
@@ -72,6 +73,7 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
     required Object? audioLanguage,
   });
   MediaSourceInfo _applySubtitleStart(MediaSourceInfo info, SiloSubtitleStart start);
+
   /// Register a download with Silo's managed registry (`_SiloDownloadMethods`).
   Future<_SiloManagedDownload?> _managedDownload(MediaItem item, Map<String, dynamic> watch, String fileId);
 
@@ -309,9 +311,18 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
     // Episodes start with the series' remembered audio (Silo Android #680)
     // unless the viewer asked for a track.
     final seriesKey = extraFileId == null ? SiloTrackPrefs.seriesKey(watch) : null;
+    // Movies and episodes (not extras) start with the profile's effective
+    // tracks, as Silo's apps do; only an episode has a series pick to write.
+    final profileTracks = extraFileId == null && watch != null;
     final selectedAudio = audioIndex != null
         ? planAudio
-        : _seriesStartAudio(seriesKey: seriesKey, version: version, isOriginal: isOriginal, planSelected: planAudio);
+        : _seriesStartAudio(
+            seriesKey: seriesKey,
+            applies: profileTracks,
+            version: version,
+            isOriginal: isOriginal,
+            planSelected: planAudio,
+          );
     _playingFileIds[metadata.id] = fileId;
     _sessions[sessionId] = _SiloPlaybackSession(
       sessionId: sessionId,
@@ -399,7 +410,7 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
       unplayableSubtitleIndexes: unplayableIndexes,
       extraSubtitleTracks: storedTracks,
     );
-    if (seriesKey != null && inventory is List) {
+    if (profileTracks && inventory is List) {
       mediaInfo = _applySubtitleStart(
         mediaInfo,
         _seriesStartSubtitle(

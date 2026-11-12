@@ -458,19 +458,30 @@ void main() {
       c.close();
     });
 
-    test('a movie keeps Plezy\'s own selection', () async {
+    test("a movie starts with the profile's effective audio and subtitle, with no series to write", () async {
       type = 'movie';
       final c = client();
       final result = await c.getPlaybackInitialization(
         PlaybackInitializationOptions(metadata: _movie, selectedMediaIndex: 0),
       );
       final info = result.mediaInfo!;
-      expect(info.audioTracks.map((t) => t.selected), [true, false]);
-      expect(info.subtitleTracks.any((t) => t.selected), isFalse);
-      expect(info.defaultSubtitleStreamIndex, isNull);
+      // The same effective fields an episode gets (the profile's defaults on a movie).
+      expect(info.audioTracks.map((t) => t.selected), [false, true]);
+      expect(info.subtitleTracks.where((t) => t.selected).map((t) => t.id), [1]);
       c.seriesTrackPickSink(_movie.id).audioPicked(2);
       await Future<void>.delayed(const Duration(milliseconds: 1700));
-      expect(puts(), isEmpty);
+      expect(puts(), isEmpty, reason: 'a movie has no series preference to write');
+      c.close();
+    });
+
+    test('a movie whose profile says Off starts with subtitles off', () async {
+      type = 'movie';
+      effective = {'effective_subtitle_mode': 'off', 'effective_show_forced_subtitles': false};
+      final c = client();
+      final result = await c.getPlaybackInitialization(
+        PlaybackInitializationOptions(metadata: _movie, selectedMediaIndex: 0),
+      );
+      expect(result.mediaInfo!.defaultSubtitleStreamIndex, -1);
       c.close();
     });
 

@@ -15,8 +15,10 @@ import 'silo_subtitles.dart';
 /// / `_mode` / `_track_signature` / `effective_show_forced_subtitles` (which
 /// also carry the profile's defaults when the series has no choice).
 ///
-/// Plezilo applies them to Silo **episodes** only (a movie keeps Plezy's
-/// ladder) and writes only a viewer's own pick in the player.
+/// Plezilo applies them to Silo **movies and episodes** (not extras), as Silo's
+/// apps do: a movie's watch detail carries the profile's defaults too. Only an
+/// episode has a series to remember; Plezilo writes only a viewer's own pick
+/// in the player.
 class SiloTrackPrefs {
   const SiloTrackPrefs._();
 

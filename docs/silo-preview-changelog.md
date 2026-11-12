@@ -4,6 +4,8 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **Silo movies follow your Silo profile's subtitles and audio:** a Silo movie now starts with the subtitles and audio language your Silo profile is set to (Off, Auto or Always, its language, forced subtitles), like episodes already did and like Silo's own apps. Before, movies used Plezilo's own rules and ignored the profile. If you have set Settings › Playback › Subtitles › "Default subtitles" to None or a language, that still wins; left on "Server default", the Silo profile decides.
+
 ## silo-preview-2.27.0
 
 Released November 12, 2026. Android and Windows.
