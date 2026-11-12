@@ -4,6 +4,18 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+Fixes from a full review of the app. Things to try on your device are marked *(please test)*.
+
+- **Long Silo films keep playing:** Plezilo now renews its Silo sign-in while a film plays. Before, a long film could stop with an error about 30–60 minutes in, or the first seek after an hour failed. On Android the film plays straight through; on Windows, macOS and iPhone the player reopens where you were once the old sign-in runs out (a short hitch, no error). *(please test: a film longer than an hour)*
+- **Live AI subtitles keep coming:** if the live connection for "Transcribe/Translate with AI" drops during a long job, Plezilo reconnects and keeps the lines you already have. If it can't, your normal subtitles come back instead of staying hidden.
+- **Personal collections open:** a profile's own collections shown on a library's Collections tab now open (they showed an empty page or an error). Collection descriptions now show too.
+- **An administrator stopping a stream stops the player:** Plezilo now says "An administrator ended this playback session." and no longer keeps playing, saving your place or marking the title watched.
+- **Remove from Continue Watching really removes it:** it follows Silo's own apps; before, it could say "Removed" while nothing changed on the server.
+- **Sign-in fixes:** waiting a long time on the profile or PIN screen no longer makes a new server ask you to sign in again at once; re-adding a Silo account and profile you already have signs the old session out; changing a server's address is no longer undone later; a busy or restarting server now says so instead of "No Silo server answered at this address", and errors no longer show raw technical text.
+- **Downloads get their subtitles:** subtitles of a long Silo download are fetched with a fresh sign-in when the video finishes, so they no longer go missing, and no stray playback session is left on the server.
+- **Smaller fixes:** your last subtitle and audio choice for a series is kept when the app reconnects or closes; a Silo badge picture that failed to load is tried again after a few minutes; the external-player fallback gets a fresh sign-in; less memory is kept after AI subtitle jobs.
+- **Downloads and releases:** the fixed Downloader links no longer stop working for a moment while a new version is uploaded. If you install with a Downloader code, keep using the code you installed with: switching from the 64-bit to the 32-bit code needs an uninstall first. Each release now checks that it is signed with the same key as the last one and warns at the top of these notes if you must uninstall first.
+
 ## silo-preview-2.28.0
 
 Released November 12, 2026. Android and Windows.

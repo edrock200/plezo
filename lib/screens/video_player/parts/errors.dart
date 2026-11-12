@@ -136,7 +136,8 @@ extension _VideoPlayerErrorMethods on VideoPlayerScreenState {
     if (!mounted || _shuttingDown || _hasFatalPlaybackError) return;
     appLogger.i('The server ended this playback session; stopping the player');
     _latchFatalPlaybackError(PlaybackFailureAction.fatal);
-    _presentPlaybackFailure(t.messages.playbackSessionEndedByServer);
+    // No Retry: an administrator stopped this stream on purpose, as the audiobook player treats it.
+    _presentPlaybackFailure(t.messages.playbackSessionEndedByServer, allowRetry: false);
   }
 
   /// Raise the persistent failure surface over the player. It stays until
@@ -146,7 +147,7 @@ extension _VideoPlayerErrorMethods on VideoPlayerScreenState {
   /// the view has built (see [_initializationErrorFocusNode]). The backend's
   /// end-file verdict always lands; a thrown open only fills an empty view,
   /// since the verdict that preceded it is the more specific of the two.
-  void _presentPlaybackFailure(String message) {
+  void _presentPlaybackFailure(String message, {bool allowRetry = true}) {
     if (!mounted || _shuttingDown) return;
     _firstFrame.forceUiReadyOnFailure();
     // Nothing plays behind the view, so it must not hold the screen awake
@@ -155,7 +156,7 @@ extension _VideoPlayerErrorMethods on VideoPlayerScreenState {
     unawaited(_wakelockController.setEnabled(false));
     _setPlayerState(() {
       _playbackFailureMessage = message;
-      _playbackFailureRetry = _retryFailedPlayback;
+      _playbackFailureRetry = allowRetry ? _retryFailedPlayback : null;
     });
     _focusFailureActionAfterBuild();
   }

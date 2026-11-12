@@ -3211,7 +3211,7 @@ class VideoPlayerScreenState extends State<VideoPlayerScreen>
           builder: (sheetContext) {
             final playbackFailure = _playbackFailureMessage;
             if (playbackFailure != null) {
-              return _buildPlaybackFailure(playbackFailure, onRetry: _playbackFailureRetry!);
+              return _buildPlaybackFailure(playbackFailure, onRetry: _playbackFailureRetry);
             }
             if (_isPlayerInitialized && player != null) return _buildVideoPlayer(sheetContext);
             final initializationError = _playerInitializationError;

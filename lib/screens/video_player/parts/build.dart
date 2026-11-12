@@ -102,7 +102,7 @@ extension _VideoPlayerBuildMethods on VideoPlayerScreenState {
   /// the screen-level [Focus] claims the scope while the loading spinner is
   /// up and Flutter drops a later autofocus request once the scope already
   /// has a focused child. See [VideoPlayerScreenState._initializationErrorFocusNode].
-  Widget _buildPlaybackFailure(String message, {required VoidCallback onRetry}) {
+  Widget _buildPlaybackFailure(String message, {required VoidCallback? onRetry}) {
     return Scaffold(
       backgroundColor: Colors.black,
       body: Center(
@@ -124,13 +124,17 @@ extension _VideoPlayerBuildMethods on VideoPlayerScreenState {
                 Row(
                   mainAxisAlignment: .center,
                   children: [
+                    if (onRetry != null) ...[
+                      FocusableButton(
+                        focusNode: _initializationErrorFocusNode,
+                        onPressed: onRetry,
+                        child: FilledButton(onPressed: onRetry, child: Text(t.common.retry)),
+                      ),
+                      const SizedBox(width: 12),
+                    ],
                     FocusableButton(
-                      focusNode: _initializationErrorFocusNode,
-                      onPressed: onRetry,
-                      child: FilledButton(onPressed: onRetry, child: Text(t.common.retry)),
-                    ),
-                    const SizedBox(width: 12),
-                    FocusableButton(
+                      // Without Retry (a session the server ended), Back is the one action and takes focus.
+                      focusNode: onRetry == null ? _initializationErrorFocusNode : null,
                       onPressed: () => unawaited(_handleBackButton()),
                       child: OutlinedButton(
                         onPressed: () => unawaited(_handleBackButton()),
