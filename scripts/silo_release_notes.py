@@ -2,13 +2,21 @@
 """Build GitHub release notes for Plezilo (Silo preview) releases from docs/silo-preview-changelog.md.
 
   silo_release_notes.py <changelog> <section> <out-file> [<branch> <sha>]
+  silo_release_notes.py <changelog> <section> <out-file> --keep-from <current-body-file> [<sha>]
 
 <section> is a release tag (`silo-preview-…`) or `Next preview`. Writes the section's text followed
 by the standard install notes. A missing or empty section exits 3, unless <branch> and <sha> are
 given (a new build): then the page gets a placeholder and the install notes, and a warning is printed.
+
+--keep-from rewrites an existing release page: what the build put above "### What's new" (such as
+the "uninstall the previous preview first" warning of a new signing key) and its "Built from" line
+are kept from the current body. Without such a line, `Built from commit <sha>.` is added when <sha>
+is given.
 """
 
 import sys
+
+HEADING = "### What's new"
 
 INSTALL = (
     "Plezilo installs as its own app, beside Plezy and beside the older \"Plezy with Silo\" previews. "
@@ -64,21 +72,39 @@ def section(text: str, name: str) -> str:
     return "\n".join(out).strip()
 
 
+def kept_parts(current: str) -> tuple[str, str]:
+    """(text above the "What's new" heading, the "Built from" line) of an existing release body."""
+    current = current.replace("\r\n", "\n")
+    prefix = current.split(HEADING, 1)[0].strip() if HEADING in current else ""
+    source = next((line.strip() for line in current.splitlines() if line.startswith("Built from ")), "")
+    return prefix, source
+
+
 def main() -> int:
     changelog, name, out_file = sys.argv[1:4]
+    extra = sys.argv[4:]
     with open(changelog, encoding="utf-8") as f:
         body = section(f.read(), name)
-    built = len(sys.argv) >= 6
+    prefix = source = ""
+    built = False
+    if extra[:1] == ["--keep-from"]:
+        with open(extra[1], encoding="utf-8") as f:
+            prefix, source = kept_parts(f.read())
+        if not source and len(extra) > 2:
+            source = f"Built from commit {extra[2]}."
+    elif len(extra) >= 2:
+        built = True
+        source = f"Built from `{extra[0]}` at {extra[1]}."
     if not body:
         if not built:
             return 3
         print(f"::warning::{changelog} has no '{name}' notes.")
         body = "Preview build; see the commit history for changes."
-    source = ""
-    if built:
-        source = f"\n\nBuilt from `{sys.argv[4]}` at {sys.argv[5]}."
+    text = HEADING + "\n\n" + body + (f"\n\n{source}" if source else "") + "\n" + FOOTER
+    if prefix:
+        text = prefix + "\n\n" + text
     with open(out_file, "w", encoding="utf-8") as f:
-        f.write("### What's new\n\n" + body + source + "\n" + FOOTER)
+        f.write(text)
     return 0
 
 

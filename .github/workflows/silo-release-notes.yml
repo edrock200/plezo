@@ -4,6 +4,9 @@ run-name: Silo release notes ${{ github.sha }}
 # Copies each "## silo-preview-…" section of docs/silo-preview-changelog.md
 # onto the GitHub release with that tag, so release pages carry a plain-
 # language change log. Runs when the change log (or this workflow) changes.
+# Each page keeps its "Built from" line and anything the build put above the
+# notes (the new-signing-key warning), and pages whose text would not change
+# are left alone.
 
 on:
   push:
@@ -32,8 +35,9 @@ jobs:
         with:
           persist-credentials: false
 
-      # Previews are tagged silo-preview-<pubspec major.minor>.N by
-      # silo-preview-apk.yml. Releases are never renumbered here (that would
+      # Previews are tagged silo-preview-<major>.<minor>.<patch> by
+      # silo-preview-apk.yml (each preview adds 0.1 since 2.27.0; earlier ones
+      # were <major>.<minor>.N). Releases are never renumbered here (that would
       # move tags under published APKs); only flag ones outside the scheme.
       - name: Check preview tags
         env:
@@ -44,7 +48,7 @@ jobs:
           gh release list --limit 1000 --json tagName \
             --jq '.[].tagName | select(startswith("silo-preview-") and (test("^silo-preview-[0-9]+\\.[0-9]+\\.[0-9]+$") | not))' |
           while read -r tag; do
-            echo "::warning::Release $tag is not numbered silo-preview-<major.minor>.N; later previews ignore it."
+            echo "::warning::Release $tag is not numbered silo-preview-<major>.<minor>.<patch>; later previews ignore it."
           done
 
       - name: Update release pages
@@ -59,7 +63,15 @@ jobs:
               echo "::notice::No release $tag yet; skipped."
               continue
             fi
-            if python3 scripts/silo_release_notes.py docs/silo-preview-changelog.md "$tag" notes.md; then
+            gh release view "$tag" --json body --jq .body > current.md
+            commit="$(gh api "repos/${GH_REPO}/commits/${tag}" --jq .sha 2> /dev/null || true)"
+            if python3 scripts/silo_release_notes.py docs/silo-preview-changelog.md "$tag" notes.md \
+                --keep-from current.md ${commit:+"$commit"}; then
+              # Compare without trailing whitespace: GitHub may normalise line ends.
+              if [[ "$(sed 's/[[:space:]]*$//' notes.md)" == "$(sed 's/[[:space:]]*$//' current.md)" ]]; then
+                echo "$tag unchanged"
+                continue
+              fi
               gh release edit "$tag" --notes-file notes.md
               echo "Updated $tag"
             else
