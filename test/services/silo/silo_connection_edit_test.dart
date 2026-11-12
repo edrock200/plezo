@@ -160,4 +160,56 @@ void main() {
       expect(fake.countOf('/api/v2/auth/logout'), 0);
     });
   });
+
+  group('ConnectionRegistry.updateSiloSession (rotated tokens of a live client)', () {
+    SiloConnection rotated(SiloConnection from) => from.copyWith(
+      accessToken: 'acc-2',
+      refreshToken: 'ref-2',
+      accessTokenExpiresAt: DateTime(2030),
+      accessTokenLifetimeSeconds: 900,
+      isAdministrator: true,
+    );
+
+    test('stores only the tokens and admin role, keeping an address edited meanwhile, encrypted', () async {
+      final client = _connection();
+      await registry.upsert(client.copyWith(baseUrl: 'https://new.example.com'));
+
+      final written = await registry.updateSiloSession(
+        rotated(client),
+        ownsRefreshToken: (t) => t == 'old-ref' || t == 'ref-2',
+      );
+
+      expect(written, isTrue);
+      final stored = await registry.get(client.id) as SiloConnection;
+      expect(stored.baseUrl, 'https://new.example.com', reason: 'the edit is not undone by the stale snapshot');
+      expect(stored.accessToken, 'acc-2');
+      expect(stored.refreshToken, 'ref-2');
+      expect(stored.accessTokenLifetimeSeconds, 900);
+      expect(stored.isAdministrator, isTrue);
+      expect(stored.createdAt, client.createdAt);
+      final row = (await db.select(db.connections).get()).single;
+      expect(row.configJson, isNot(contains('ref-2')), reason: 'tokens are encrypted at rest');
+      expect(row.configJson, isNot(contains('acc-2')));
+    });
+
+    test('a removed row stays removed', () async {
+      final written = await registry.updateSiloSession(rotated(_connection()), ownsRefreshToken: (_) => true);
+      expect(written, isFalse);
+      expect(await registry.get(_connection().id), isNull);
+    });
+
+    test('a row a new sign-in replaced keeps the new session', () async {
+      await registry.upsert(_connection(accessToken: 'new-acc', refreshToken: 'new-ref'));
+
+      final written = await registry.updateSiloSession(
+        rotated(_connection()),
+        ownsRefreshToken: (t) => t == 'old-ref' || t == 'ref-2',
+      );
+
+      expect(written, isFalse);
+      final stored = await registry.get(_connection().id) as SiloConnection;
+      expect(stored.refreshToken, 'new-ref');
+      expect(stored.accessToken, 'new-acc');
+    });
+  });
 }

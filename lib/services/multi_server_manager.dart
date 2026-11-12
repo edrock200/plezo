@@ -86,9 +86,14 @@ class MultiServerManager {
   final Duration _connectivityDebounceDuration;
   FutureOr<void> Function(JellyfinConnection connection)? onJellyfinConnectionUpdated;
 
-  /// Persists Silo connection changes (rotated refresh tokens above all:
-  /// the previous one is dead once a refresh succeeds).
-  FutureOr<void> Function(SiloConnection connection)? onSiloConnectionUpdated;
+  /// Persists Silo session changes (rotated refresh tokens above all: the
+  /// previous one is dead once a refresh succeeds). Only the tokens and the
+  /// admin role of [connection] are meant to be stored, and only into a row
+  /// whose stored refresh token passes `ownsRefreshToken` (the reporting
+  /// client's login session): the client's snapshot may predate an address
+  /// edit, a removal or a new sign-in (`ConnectionRegistry.updateSiloSession`).
+  FutureOr<void> Function(SiloConnection connection, bool Function(String refreshToken) ownsRefreshToken)?
+  onSiloConnectionUpdated;
 
   final Map<String, MediaServerClient> _clients = {};
 
@@ -1118,6 +1123,7 @@ class MultiServerManager {
   void _wireSiloClient(SiloClient client, {required String compoundId, required String machineId}) {
     client.onConnectionUpdated = (updated) async {
       var toPersist = updated;
+      var owns = client.ownsRefreshToken;
       final live = _jellyfinByCompoundId[updated.id];
       if (live != client) {
         // A replaced client still draining can rotate the refresh token of
@@ -1130,9 +1136,10 @@ class MultiServerManager {
         }
         live.adoptTokens(updated);
         toPersist = live.connection;
+        owns = (token) => live.ownsRefreshToken(token) || client.ownsRefreshToken(token);
       }
       try {
-        await onSiloConnectionUpdated?.call(toPersist);
+        await onSiloConnectionUpdated?.call(toPersist, owns);
       } catch (e, st) {
         appLogger.w('Failed to persist Silo connection update', error: e, stackTrace: st);
       }
