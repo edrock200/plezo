@@ -240,7 +240,7 @@ extension _PlexVideoControlsTrackMethods on _PlexVideoControlsState {
     }
     if (client is! SiloClient) return null;
     final itemKey = metadata.globalKey;
-    return SiloSubtitleTools(
+    return _lastSiloSubtitleTools = SiloSubtitleTools(
       client: client,
       itemId: metadata.id,
       position: () => widget.player.state.position,
