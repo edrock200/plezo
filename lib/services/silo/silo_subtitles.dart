@@ -305,14 +305,24 @@ abstract final class SiloSubtitleRules {
   ];
 
   /// A transcribe job whose audio is already in [target] needs no translation;
-  /// one without AI translation can only stay in the spoken language.
+  /// one without AI translation can only stay in the spoken language. An audio
+  /// track with no language tag (or `und`) is transcribed only: the server
+  /// detects the spoken language, and translating it as well made every chunk
+  /// wait for a translation pass that usually changed nothing (the user's
+  /// choice, Nov 12 2026). Silo's apps send transcribe_translate there.
   static SiloAiJobKind transcribeKind({
     required String? audioLanguage,
     required String target,
     required bool canTranslate,
   }) {
-    if (!canTranslate) return SiloAiJobKind.transcribe;
+    if (!canTranslate || untaggedLanguage(audioLanguage)) return SiloAiJobKind.transcribe;
     return sameLanguage(audioLanguage, target) ? SiloAiJobKind.transcribe : SiloAiJobKind.transcribeTranslate;
+  }
+
+  /// No language tag: empty, or one of the ISO 639 codes for "none known".
+  static bool untaggedLanguage(String? code) {
+    final c = code?.trim().toLowerCase() ?? '';
+    return c.isEmpty || const {'und', 'mul', 'mis', 'zxx', 'unknown'}.contains(c);
   }
 
   static const _threeToTwo = {

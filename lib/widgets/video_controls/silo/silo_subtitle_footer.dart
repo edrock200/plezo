@@ -58,7 +58,7 @@ class _SiloSubtitleFooterTilesState extends State<SiloSubtitleFooterTiles> {
               FocusableListTile(
                 leading: const AppIcon(Symbols.translate_rounded),
                 title: Text(t.videoControls.siloSubtitles.translateWithAi),
-                subtitle: running ? Text(t.videoControls.siloSubtitles.progress(percent: percent)) : null,
+                subtitle: running ? Text(ai.progressLabel(percent)) : null,
                 onTap: () => OverlaySheetController.of(context).push(builder: (_) => SiloAiSubtitleSheet(tools: tools)),
               ),
           ],

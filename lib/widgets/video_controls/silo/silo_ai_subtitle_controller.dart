@@ -39,6 +39,9 @@ class SiloAiSubtitleController extends ChangeNotifier {
 
   SiloAiPhase phase = SiloAiPhase.idle;
   SiloAiJob? job;
+
+  /// The kind of the job this controller started, for its progress label.
+  SiloAiJobKind? jobKind;
   String? error;
   SiloAiStatus status = SiloAiStatus.off;
   SiloAiQuota? quota;
@@ -170,6 +173,7 @@ class SiloAiSubtitleController extends ChangeNotifier {
       sourceLanguage = source.language ?? '';
     }
     phase = SiloAiPhase.submitting;
+    jobKind = kind;
     error = null;
     notifyListeners();
     try {
@@ -301,6 +305,17 @@ class SiloAiSubtitleController extends ChangeNotifier {
       _tools.setLiveCuesShowing?.call(false);
       liveRevision.value++;
     }
+  }
+
+  /// The running job's progress line, naming what the job does: a transcribe
+  /// job no longer reads "Translating…".
+  String progressLabel(int percent) {
+    final s = t.videoControls.siloSubtitles;
+    return switch (jobKind) {
+      SiloAiJobKind.transcribe => s.progressTranscribing(percent: percent),
+      SiloAiJobKind.transcribeTranslate => s.progressTranscribingTranslating(percent: percent),
+      _ => s.progress(percent: percent),
+    };
   }
 
   void cancel() {

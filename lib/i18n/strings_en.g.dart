@@ -7537,6 +7537,12 @@ class Translations$videoControls$siloSubtitles$en {
 	/// en: 'Translating… ${percent}%'
 	String progress({required Object percent}) => 'Translating… ${percent}%';
 
+	/// en: 'Transcribing… ${percent}%'
+	String progressTranscribing({required Object percent}) => 'Transcribing… ${percent}%';
+
+	/// en: 'Transcribing and translating… ${percent}%'
+	String progressTranscribingTranslating({required Object percent}) => 'Transcribing and translating… ${percent}%';
+
 	/// en: 'No translatable subtitle tracks, and audio transcription is not available on this server.'
 	String get unavailable => 'No translatable subtitle tracks, and audio transcription is not available on this server.';
 
@@ -10071,6 +10077,8 @@ extension on Translations {
 			'videoControls.siloSubtitles.submitting' => 'Submitting…',
 			'videoControls.siloSubtitles.applying' => 'Loading the new subtitles…',
 			'videoControls.siloSubtitles.progress' => ({required Object percent}) => 'Translating… ${percent}%',
+			'videoControls.siloSubtitles.progressTranscribing' => ({required Object percent}) => 'Transcribing… ${percent}%',
+			'videoControls.siloSubtitles.progressTranscribingTranslating' => ({required Object percent}) => 'Transcribing and translating… ${percent}%',
 			'videoControls.siloSubtitles.unavailable' => 'No translatable subtitle tracks, and audio transcription is not available on this server.',
 			'videoControls.siloSubtitles.spokenLanguageOnly' => 'Subtitles are written in the spoken language. AI translation is turned off on this server.',
 			'videoControls.siloSubtitles.quotaLeft' => ({required Object remaining, required Object limit, required Object period}) => '${remaining} of ${limit} transcriptions left ${period}',
@@ -10223,10 +10231,10 @@ extension on Translations {
 			'profiles.removeConnectionTitle' => 'Remove connection?',
 			'profiles.removeConnectionMessage' => ({required Object displayName, required Object connectionLabel}) => 'Remove ${displayName}\'s access to ${connectionLabel}. Other profiles keep it.',
 			'profiles.deleteProfileTitle' => 'Delete profile?',
-			'profiles.deleteProfileMessage' => ({required Object displayName}) => 'Remove ${displayName} and its connections. Servers stay available.',
-			'profiles.profileNameLabel' => 'Profile name',
 			_ => null,
 		} ?? switch (path) {
+			'profiles.deleteProfileMessage' => ({required Object displayName}) => 'Remove ${displayName} and its connections. Servers stay available.',
+			'profiles.profileNameLabel' => 'Profile name',
 			'profiles.pinProtectionLabel' => 'PIN protection',
 			'profiles.pinManagedByPlex' => 'PIN managed by Plex. Edit on plex.tv.',
 			'profiles.noPinSetEditOnPlex' => 'No PIN set. To require one, edit the home user on plex.tv.',
@@ -10737,10 +10745,10 @@ extension on Translations {
 			'liveTv.searchNoResults' => ({required Object query}) => 'No matches for "${query}"',
 			'liveTv.channelsSection' => 'Channels',
 			'liveTv.programsSection' => 'Programs',
-			'liveTv.now' => 'Now',
-			'liveTv.today' => 'Today',
 			_ => null,
 		} ?? switch (path) {
+			'liveTv.now' => 'Now',
+			'liveTv.today' => 'Today',
 			'liveTv.tomorrow' => 'Tomorrow',
 			'liveTv.midnight' => 'Midnight',
 			'liveTv.overnight' => 'Overnight',
@@ -11251,10 +11259,10 @@ extension on Translations {
 			'videoSettings.hdr' => 'HDR',
 			'videoSettings.hdrUnsupported' => 'HDR isn\'t available here — this desktop compositor or video output can\'t carry it.',
 			'videoSettings.hdrToneMapping' => 'HDR Tone Mapping',
-			'videoSettings.hdrToneMappingCompositor' => 'Compositor',
-			'videoSettings.hdrToneMappingCompositorDescription' => 'Pass the source\'s HDR metadata through and let the desktop compositor map it.',
 			_ => null,
 		} ?? switch (path) {
+			'videoSettings.hdrToneMappingCompositor' => 'Compositor',
+			'videoSettings.hdrToneMappingCompositorDescription' => 'Pass the source\'s HDR metadata through and let the desktop compositor map it.',
 			'videoSettings.hdrToneMappingPlayer' => 'Player',
 			'videoSettings.hdrToneMappingPlayerDescription' => 'Map to the display\'s peak brightness in the player, then tell the compositor the result.',
 			'videoSettings.hdrToneMappingFailed' => 'Couldn\'t change HDR tone mapping — the previous mode is still active.',
@@ -11765,10 +11773,10 @@ extension on Translations {
 			'siloRequests.reasonQuotaExceeded' => 'Request limit reached',
 			'siloRequests.reasonRequestsDisabled' => 'Requests are turned off',
 			'siloRequests.reasonBlocked' => 'You can\'t request media right now',
-			'siloRequests.reasonInvalid' => 'That request couldn\'t be submitted',
-			'siloRequests.reasonNotFound' => 'This title is no longer available',
 			_ => null,
 		} ?? switch (path) {
+			'siloRequests.reasonInvalid' => 'That request couldn\'t be submitted',
+			'siloRequests.reasonNotFound' => 'This title is no longer available',
 			'siloRequests.request' => 'Request',
 			'siloRequests.cancelRequest' => 'Cancel request',
 			'siloRequests.openInLibrary' => 'Open in library',

@@ -4,6 +4,9 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **AI subtitles from audio say what they are doing:** the progress line now reads "Transcribing…" for a transcription and "Transcribing and translating…" only when the subtitles are also being translated, instead of "Translating…" for everything.
+- **Untagged audio is transcribed only:** when the audio track has no language tag, Plezilo now asks Silo just to transcribe it (the server works out the language) instead of transcribing and translating, which slowed every part of the job. If the audio turns out to be in a different language from the one you picked, the subtitles stay in the spoken language; pick a tagged audio track or translate them afterwards.
+
 ## silo-preview-2.26.5
 
 Released November 11, 2026. Android and Windows.

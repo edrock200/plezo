@@ -225,6 +225,19 @@ void main() {
         SiloSubtitleRules.transcribeKind(audioLanguage: 'jpn', target: 'en', canTranslate: false),
         SiloAiJobKind.transcribe,
       );
+      // An untagged audio track is transcribed only; the server detects its language.
+      for (final untagged in [null, '', 'und', 'UND', 'mul', 'zxx']) {
+        expect(
+          SiloSubtitleRules.transcribeKind(audioLanguage: untagged, target: 'en', canTranslate: true),
+          SiloAiJobKind.transcribe,
+          reason: 'audio language $untagged',
+        );
+      }
+      // A tagged language Plezilo cannot map still translates.
+      expect(
+        SiloSubtitleRules.transcribeKind(audioLanguage: 'cat', target: 'en', canTranslate: true),
+        SiloAiJobKind.transcribeTranslate,
+      );
       expect(SiloSubtitleRules.twoLetter('en-US'), 'en');
       expect(SiloSubtitleRules.twoLetter('ger'), 'de');
     });

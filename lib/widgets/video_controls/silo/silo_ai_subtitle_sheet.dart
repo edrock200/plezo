@@ -120,7 +120,7 @@ class _SiloAiSubtitleSheetState extends State<SiloAiSubtitleSheet> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(s.progress(percent: percent)),
+                Text(c.progressLabel(percent)),
                 const SizedBox(height: 8),
                 LinearProgressIndicator(value: percent / 100),
                 if (job?.progressMessage != null) ...[
