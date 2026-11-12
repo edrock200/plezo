@@ -118,9 +118,11 @@ agent needs. The code still says "Plezy" in internal names (Dart package `plezy`
   is lost after 7 days without a build (it was, for 2.22.5); a `PREVIEW_KEYSTORE_PASSPHRASE` secret
   encrypts that cached key. Always compare the new APK's signer
   with the last release and warn in the notes when users must uninstall first.
-- Previews are versioned `<pubspec major.minor>.N` (e.g. 2.25.1 after the 2.25.0 merge; N is one above
-  the highest existing tag of that major.minor) with a build number above every earlier preview's,
-  recorded in each release's `silo-preview-build.txt` (`scripts/silo_preview_version.sh`). Never
+- Previews are versioned by **adding 0.1 each release** (the user's decision, 2026-11-12): the next preview is
+  `<major>.<minor + 1>.0` of the highest existing `silo-preview-*` tag (2.26.6 was followed by 2.27.0, then 2.28.0),
+  or pubspec's `<major>.<minor>.0` when upstream has moved past it; the build number is above every earlier
+  preview's, recorded in each release's `silo-preview-build.txt` (`scripts/silo_preview_version.sh`). So the
+  number no longer says which upstream Plezy a preview is based on (CLAUDE.md's "Last upstream merge" does). Never
   hand-pick tags.
 - Release pages show the plain-language change log in `docs/silo-preview-changelog.md`; update it
   for every preview (see the `android-preview-release` skill).

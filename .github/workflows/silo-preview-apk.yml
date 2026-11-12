@@ -20,8 +20,8 @@ run-name: Silo preview APK ${{ github.sha }}
 # beside the older "Plezy with Silo" previews (com.edde746.plezy) instead of
 # replacing them.
 #
-# Versions: <pubspec major.minor>.N, where N is one above the highest existing
-# silo-preview-<major.minor>.* tag; the build number is above every earlier
+# Versions: each preview adds 0.1, <major>.<minor + 1>.0 of the highest existing
+# silo-preview-* tag (2.26.6 -> 2.27.0); the build number is above every earlier
 # preview's (scripts/silo_preview_version.sh). Each release records its build
 # in the silo-preview-build.txt asset.
 #
@@ -193,8 +193,8 @@ jobs:
           storeFile=upload-keystore.jks
           EOF
 
-      # The preview after the highest existing silo-preview-<major.minor>.*
-      # tag of pubspec's major.minor (<major.minor>.N), with a build number
+      # Each preview adds 0.1: <major>.<minor + 1>.0 of the highest existing
+      # silo-preview-* tag (or pubspec's major.minor.0 when higher), with a build number
       # above every earlier preview's so it installs as an update even after
       # an upstream merge resets pubspec's version.
       - name: Pick preview version

@@ -13,11 +13,11 @@ description: Build, publish and verify Plezilo's Android preview APKs (the Silo-
 - It builds `flutter build apk --release --split-per-abi` (Java 21, the Flutter version upstream's
   `build.yml` pins in `FLUTTER_VERSION`, read by `scripts/silo_flutter_version.sh`, which also
   checks `setup-flutter-git` names the same one) in about 13 minutes and publishes a GitHub
-  **pre-release** versioned `<pubspec major.minor>.N` (the user's choice): N is one above the highest
-  existing `silo-preview-<major.minor>.*` **tag** (tags of deleted releases count, so a number is
-  never reused), at least pubspec's patch + 1. After the 2.25.0 upstream merge the first preview is
-  2.25.1. Tagged `silo-preview-<version>`, titled "Plezilo <version> (Silo preview)".
-- Build number (Android versionCode) = max(pubspec build + N, last preview's build + 1), so a
+  **pre-release** whose version **adds 0.1** to the last one (the user's decision, 2026-11-12):
+  `<major>.<minor + 1>.0` of the highest existing `silo-preview-*` **tag** (tags of deleted releases
+  count, so a number is never reused), or pubspec's `<major>.<minor>.0` when upstream is ahead.
+  2.26.6 was followed by 2.27.0, then 2.28.0. (Until 2.26.6 it was `<pubspec major.minor>.N`.) Tagged `silo-preview-<version>`, titled "Plezilo <version> (Silo preview)".
+- Build number (Android versionCode) = max(pubspec build + 1, last preview's build + 1), so a
   preview always installs as an update, even when an upstream merge moves pubspec's version (2.22.5
   was build 157; pubspec 2.25.0+157 makes 2.25.1 build 158). Each release records its build in a
   `silo-preview-build.txt` asset (`build=<n>`) that the next preview and the desktop builds read

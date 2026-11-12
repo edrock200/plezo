@@ -3,12 +3,13 @@
 #
 #   silo_preview_version.sh next <pubspec version> <commit>
 #       The next preview of <commit>: prints version=, build=, tag= and reused=.
-#       The version is <pubspec major.minor>.<highest existing silo-preview-<major.minor>.* tag
-#       patch + 1> (at least pubspec's patch + 1), so a deleted release never hands its tag out
-#       again. If that highest tag already points at <commit> (the APK build published first),
-#       it is reused (reused=true) instead of numbering a new one.
-#       The build is max(pubspec build + (version patch - pubspec patch), last preview build + 1),
-#       so an upstream merge that resets pubspec's version still installs as an update.
+#       Every preview adds 0.1 (the user's decision, 2026-11-12): the version is
+#       <major>.<minor + 1>.0 of the highest existing silo-preview-* tag (2.26.6 -> 2.27.0 ->
+#       2.28.0), or pubspec's <major>.<minor>.0 when that is higher, so a deleted release never
+#       hands its tag out again. If the highest tag already points at <commit> (the APK build
+#       published first), it is reused (reused=true) instead of numbering a new one.
+#       The build is max(pubspec build + 1, last preview build + 1), so an upstream merge that
+#       resets pubspec's version still installs as an update.
 #   silo_preview_version.sh build-of <tag>
 #       The build number recorded for an existing preview release (prints the number).
 #   silo_preview_version.sh latest
@@ -71,29 +72,37 @@ case "$cmd" in
     name="${pub%%+*}"; pub_build="${pub#*+}"
     [[ "$pub" == *+* && "$name" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ && "$pub_build" =~ ^[0-9]+$ ]] \
       || { echo "::error::Unexpected pubspec version '$pub'" >&2; exit 1; }
-    major_minor="${name%.*}"; patch="${name##*.}"
+    pub_major="${name%%.*}"; rest="${name#*.}"; pub_minor="${rest%%.*}"
     ALL_TAGS="$(tag_commits)"
-    highest_patch=-1; highest_commit=""
-    while read -r tag sha; do
-      [[ "$tag" =~ ^silo-preview-${major_minor//./\\.}\.([0-9]+)$ ]] || continue
-      if (( BASH_REMATCH[1] > highest_patch )); then highest_patch=${BASH_REMATCH[1]}; highest_commit="$sha"; fi
-    done <<< "$ALL_TAGS"
-    if (( highest_patch > patch )) && [[ "$highest_commit" == "$commit" ]]; then
-      tag="silo-preview-${major_minor}.${highest_patch}"
-      build="$(build_of "$tag")"
-      [[ -n "$build" ]] || { echo "::error::$tag was made from this commit but records no build number" >&2; exit 1; }
-      printf 'version=%s\nbuild=%s\ntag=%s\nreused=true\n' "${major_minor}.${highest_patch}" "$build" "$tag"
-      exit 0
+    highest="$(awk '{print $1}' <<< "$ALL_TAGS" | grep -E '^silo-preview-[0-9]+\.[0-9]+\.[0-9]+$' \
+      | sed 's/^silo-preview-//' | sort -V | tail -n1)"
+    if [[ -n "$highest" ]]; then
+      highest_commit="$(awk -v t="silo-preview-$highest" '$1 == t {print $2}' <<< "$ALL_TAGS")"
+      if [[ "$highest_commit" == "$commit" ]]; then
+        tag="silo-preview-${highest}"
+        build="$(build_of "$tag")"
+        [[ -n "$build" ]] || { echo "::error::$tag was made from this commit but records no build number" >&2; exit 1; }
+        printf 'version=%s\nbuild=%s\ntag=%s\nreused=true\n' "$highest" "$build" "$tag"
+        exit 0
+      fi
+      h_major="${highest%%.*}"; h_rest="${highest#*.}"; h_minor="${h_rest%%.*}"
+      next_major=$h_major; next_minor=$(( h_minor + 1 ))
+    else
+      next_major=$pub_major; next_minor=$pub_minor
     fi
-    next_patch=$(( (highest_patch > patch ? highest_patch : patch) + 1 ))
-    tag="silo-preview-${major_minor}.${next_patch}"
+    # pubspec's major.minor wins when upstream has moved past the previews.
+    if (( pub_major > next_major || (pub_major == next_major && pub_minor > next_minor) )); then
+      next_major=$pub_major; next_minor=$pub_minor
+    fi
+    version="${next_major}.${next_minor}.0"
+    tag="silo-preview-${version}"
     if grep -q "^${tag} " <<< "$ALL_TAGS"; then
       echo "::error::Tag $tag already exists" >&2; exit 1
     fi
     last="$(last_build)"
-    build=$(( pub_build + next_patch - patch ))
+    build=$(( pub_build + 1 ))
     (( build > last )) || build=$(( last + 1 ))
-    printf 'version=%s\nbuild=%s\ntag=%s\nreused=false\n' "${major_minor}.${next_patch}" "$build" "$tag"
+    printf 'version=%s\nbuild=%s\ntag=%s\nreused=false\n' "$version" "$build" "$tag"
     ;;
   build-of)
     tag="${2:?tag}"
