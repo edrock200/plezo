@@ -24,7 +24,7 @@ Plezilo is published as pre-releases on [GitHub Releases](https://github.com/edr
 | Windows 10/11 (x64, ARM) | Installer and portable `.7z` on each [release](https://github.com/edrock200/plezo/releases) |
 | macOS (Apple silicon, Intel) | `.dmg` on each [release](https://github.com/edrock200/plezo/releases) |
 
-Fire TV Downloader codes: **5985619** (32-bit, every Fire TV) and **8032572** (64-bit). Plezilo installs as a new app (`com.edrock200.plezilo`) beside Plezy and beside the older "Plezy with Silo" previews: sign in again in Plezilo, then uninstall the old one.
+Fire TV Downloader codes: **5985619** (32-bit, every Fire TV) and **8032572** (64-bit). Keep using the code you installed with: the 32-bit APK cannot update a 64-bit install. Plezilo installs as a new app (`com.edrock200.plezilo`) beside Plezy and beside the older "Plezy with Silo" previews: sign in again in Plezilo, then uninstall the old one.
 
 iOS, tvOS and Linux build from this source but are not published.
 
@@ -178,6 +178,8 @@ The newest Android preview is always at the same links, so they can be typed int
 | 64-bit phones, tablets and newer TV devices | **8032572** ([aftv.news/8032572](http://aftv.news/8032572)) | [plezilo-arm64-v8a.apk](https://github.com/edrock200/plezo/releases/download/plezilo-android-latest/plezilo-arm64-v8a.apk) |
 | Emulators and x86 devices | | [plezilo-x86_64.apk](https://github.com/edrock200/plezo/releases/download/plezilo-android-latest/plezilo-x86_64.apk) |
 
+Keep using the code or link you installed with. Each APK has its own version numbers and the 64-bit one's are higher, so Android will not let the 32-bit APK update an install of the 64-bit one. To switch from 64-bit to 32-bit, uninstall Plezilo first (this removes its saved servers and downloads).
+
 The old Downloader codes (7329550, 4196538) and `silo-android-latest` links serve the last "Plezy with Silo" preview and are no longer updated. Windows and macOS builds are on each numbered `silo-preview-*` release.
 
 ### Connecting
@@ -220,11 +222,11 @@ Music, audiobooks and e-books (those libraries are hidden), playlists, live TV, 
 
 Plezilo previews are published as [pre-releases](https://github.com/edrock200/plezo/releases):
 
-- **Android:** `arm64-v8a` for most phones, tablets and Android TV boxes; `armeabi-v7a` for older or 32-bit devices such as Chromecast with Google TV; `x86_64` for emulators. Plezilo is its own app (`com.edrock200.plezilo`) and installs beside Plezy. Later previews install over earlier ones as updates only while they share a signing key: with the repository's `ANDROID_*` signing secrets always, otherwise only for builds of the same branch within about a week (the key lives in the GitHub Actions cache). If an update is refused, uninstall the previous preview first.
+- **Android:** `arm64-v8a` for most phones, tablets and Android TV boxes; `armeabi-v7a` for older or 32-bit devices such as Chromecast with Google TV; `x86_64` for emulators. Plezilo is its own app (`com.edrock200.plezilo`) and installs beside Plezy. Later previews install over earlier ones as updates only while they share a signing key: with the repository's `ANDROID_*` signing secrets always, otherwise only for builds of the same branch within about a week (the key lives in the GitHub Actions cache). If an update is refused, uninstall the previous preview first; each build compares its signing key with the previous preview's and says so at the top of its notes when it changed.
 - **macOS:** a `.dmg` for Apple silicon and Intel Macs. It is not signed by Apple (allow it once in System Settings › Privacy & Security › Open Anyway) and never updates itself.
 - **Windows:** a Windows 10/11 installer (x64 and ARM) and portable `.7z` downloads. They are not code-signed (SmartScreen may warn) and never update themselves.
-- Previews are numbered from the Plezy version they are built on: one patch step per preview, so previews of Plezy 2.25.0 are 2.25.1, 2.25.2, … The app's About screen shows the same number.
-- A push to a `ccr-*` or `silo/*` branch whose commit message's first line contains `[release-apk]` builds and publishes a new preview (`.github/workflows/silo-preview-apk.yml`). A newer push to the same branch cancels a build still in progress, so wait for the release before pushing again.
+- Each preview adds 0.1 to the last one's number (2.27.0, 2.28.0, …), so the number no longer says which Plezy version a preview is based on. The app's About screen shows the same number.
+- A push to a `ccr-*` or `silo/*` branch whose commit message's first line contains `[release-apk]` builds and publishes a new preview (`.github/workflows/silo-preview-apk.yml`). A newer push to the same branch cancels a build still in progress, so wait for the release (and its Windows files) before pushing again.
 
 ### Changes in this fork
 

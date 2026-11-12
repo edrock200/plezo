@@ -34,7 +34,10 @@ description: Build, publish and verify Plezilo's Android preview APKs (the Silo-
   `PREVIEW_KEYSTORE_PASSPHRASE` secret the cached keystore and password are encrypted
   (`openssl enc -aes-256-cbc -pbkdf2`, cache key `silo-preview-keystore-enc-v1`); a plaintext key
   cached earlier (`silo-preview-keystore-v1`) is restored as a fallback, keeps signing, and is saved
-  encrypted under the new key. Without the secret the key stays plaintext and the job warns.
+  encrypted under the new key, after which the job deletes the branch's plaintext entry. Without the
+  secret the key stays plaintext and the run summary shows a large warning naming the secrets to add.
+  The keystore cache is restored and saved (`actions/cache/restore` + `actions/cache/save`) only by
+  push runs; never add a `pull_request` trigger to this workflow or restore `.preview-keystore` elsewhere.
   Caches are branch-scoped and evicted after 7 days unused: a new branch, or a gap of a week,
   generates a new key and the next preview will not install over the last one. Recommend that the
   user add the `ANDROID_*` secrets for a stable key; never promise updates without them. Without `key.properties` a release
@@ -47,13 +50,17 @@ description: Build, publish and verify Plezilo's Android preview APKs (the Silo-
 - Fixed links: the workflow's last step (`scripts/silo_android_latest.sh`) copies the APKs to the
   rolling `plezilo-android-latest` release as `plezilo-<abi>.apk`. The old `silo-android-latest`
   release (`plezy-silo-<abi>.apk`, Downloader codes 7329550 / 4196538) is frozen; never update it.
-  New Downloader codes are pending (`DOWNLOADER_CODES` in `scripts/silo_announce_discord.py` is
-  empty, so announcements show the direct links).
+  Plezilo's Downloader codes are 5985619 (armeabi-v7a) and 8032572 (arm64-v8a), in `DOWNLOADER_CODES`
+  in `scripts/silo_announce_discord.py`. The script uploads the new APKs as `next-plezilo-<abi>.apk`
+  (with retries), then deletes each old asset and renames its replacement, and edits the notes last,
+  so the links never 404 for the length of an upload. A failed run leaves `next-*` assets behind; the
+  next run replaces them. The 32-bit code cannot update a 64-bit install (split version codes are
+  `abi*1000 + build`): the notes tell users to keep the code they installed with.
 
 ## Windows and macOS builds
 - Workflow: `.github/workflows/silo-preview-desktop.yml`. A `gate` job reads the release marker from
   the commit's first line; `resolve` picks the code and version; then:
-  - Windows (`SUPPORTER_MODE=msstore`, as upstream): x64 on `windows-latest`, arm64 on
+  - Windows (`SUPPORTER_MODE=unlocked`; msstore would sell the Plezy project's own Store product): x64 on `windows-latest`, arm64 on
     `windows-11-arm` (Flutter from `setup-flutter-git`), bundle checked like upstream's (required
     files present (`plezilo.exe`); no `*.pdb`, `plezilo.lib`, `plezilo.exp`, `simdutf.lib`), packaged with
     `windows/build-installer.ps1` into `plezilo-<v>-windows-installer.exe` and
@@ -76,12 +83,22 @@ description: Build, publish and verify Plezilo's Android preview APKs (the Silo-
   (`com.edrock200.plezilo`, Windows installer AppId), so they install beside Plezy.
 - Each build takes 10–25 minutes; verify the attached files and checksums. Running the apps is the
   user's step.
+- Concurrency: `gate` (one job per Windows architecture), `resolve` and `build` are in per-architecture
+  cancelling groups (`silo-preview-desktop-build-<ref>-<arch>`), so any later push cancels a Windows build
+  still running. `package` (attach), `announce` and `macos` are in groups that never cancel.
+- Discord: the `announce` job (needs gate, resolve, build, package; `if: always()`) waits for the Android
+  release of the commit, then posts with `WINDOWS_STATUS` attached/failed/cancelled (the post says when the
+  Windows files are missing) and uploads `silo-preview-announced.txt` to the release. Both the job and the
+  script skip a release that has the marker, so a re-run never posts twice (`--force` reposts on purpose).
+  The script reads the release with `GH_TOKEN` and retries briefly.
 
 ## Lessons from past previews
 - **2.22.5:** the cached preview keystore had been evicted (no build for 18 days), so the APK got
-  a new signing key and cannot update 2.22.4. Before announcing a preview, compare
-  `apksigner verify --print-certs` with the previous release; if the SHA-256 differs, say in the
-  notes that Android users must uninstall first. Only the `ANDROID_*` secrets prevent this.
+  a new signing key and cannot update 2.22.4. The build now does the comparison itself (step "Compare
+  the signer with the previous preview", `scripts/silo_apk_signer.py <apk>` prints the same SHA-256 as
+  `apksigner verify --print-certs`): when it differs, the release notes start with an "uninstall the
+  previous preview first" quote and the run summary shows both fingerprints. The notes workflow keeps
+  that quote when it rewrites the page. Only the `ANDROID_*` secrets prevent a new key.
 - **2.22.5:** in a `set -euo pipefail` step, `curl/gh … | base64 -d | grep -m1 …` fails at
   random with "base64: Broken pipe" (grep exits early, base64 gets SIGPIPE). Decode into a
   variable first, then search it.
@@ -95,10 +112,17 @@ description: Build, publish and verify Plezilo's Android preview APKs (the Silo-
 - Before a `[release-apk]` push, write the notes under `## Next preview`. The build puts that
   section (plus the "Which APK" and install notes from `scripts/silo_release_notes.py`) on the new
   release.
+- Upstream merges bring upstream's release notes; strip anything that does not apply to Plezilo
+  before it goes in the change log: purchases or the Supporter/"Theme & Icon Pack" product (Plezilo
+  sells nothing), alternate app icons or the icon picker (Plezilo has only its own icon), and features
+  that use Plezy's services (Trakt/MAL/AniList/Simkl/MDBList, Discord presence, log upload, crash
+  reports, the update check), which stay off.
 - After the release is published, rename `## Next preview` to `## <tag>` and add a fresh empty
   `## Next preview`. Pushing the file runs `.github/workflows/silo-release-notes.yml`, which
   rewrites every listed release's page with its section (`gh release edit` with the workflow's
-  token). Fix an old release's notes the same way: edit its section and push.
+  token), keeping the page's "Built from" line and anything above "### What's new" (the new-key
+  warning), and skipping pages whose text would not change (`--keep-from`). Fix an old release's notes
+  the same way: edit its section and push.
 - The session cannot edit releases itself (the GitHub MCP tools have no release edit and `gh` has
   no valid token); always go through the change log file.
 
@@ -106,9 +130,11 @@ description: Build, publish and verify Plezilo's Android preview APKs (the Silo-
 1. Make sure `flutter analyze lib test` and `scripts/run_tests.sh` pass; CI does not run tests in
    this workflow.
 2. Write the `## Next preview` notes in the change log. Commit with `[release-apk]` in the message (a real change, not an empty commit) and push.
-   The workflow's concurrency group cancels an in-progress build on **any** later push to the same
-   branch (even one without `[release-apk]`, whose own job is skipped). Commit follow-up docs
-   locally and push them only after the release is published.
+   The workflows cancel an in-progress APK or Windows build on **any** later push to the same
+   branch (even one without `[release-apk]`, whose own jobs are skipped); publishing, attaching and
+   the announcement are never cancelled. Commit follow-up docs locally and push them only after the
+   desktop run's `announce` job has finished (or at least after the release is published, accepting
+   that a still-running Windows build is cancelled and the post says so).
 3. Watch it with the GitHub MCP tools: `actions_list` (`list_workflow_runs`, branch filter) →
    `list_workflow_jobs`; on failure `get_job_logs` with `failed_only`. `gh` is installed but has no
    valid token, so it cannot be used.

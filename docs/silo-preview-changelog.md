@@ -55,7 +55,6 @@ Released November 9, 2026. Android and Windows.
 - **Fixes from upstream Plezy (version 2.26):**
   - Dolby Vision no longer plays green on a Fire TV Stick 4K with mpv and "Match content frame rate" on: the TV switches its refresh rate before the video starts.
   - Pausing, leaving Plezilo and coming back no longer leaves the picture black on Android until you press play.
-  - The cosmetic purchase is now called "Theme & Icon Pack".
 
 ## silo-preview-2.25.22
 
@@ -252,7 +251,7 @@ Released November 3, 2026.
   - Leaving sign-in before picking a profile signs that session out on the server, and the profile step has "Change server".
   - A refused PIN shows the server's reason, Kids profiles are labelled, and screen readers read the sign-in code digit by digit.
   - On Apple TV the keyboard no longer covers the server address screen, and the code screen fits small TVs with the QR code beside the code.
-- **Windows and macOS:** the Supporter themes and app icons are available, as in upstream Plezy's own downloads.
+- **Windows and macOS:** the Supporter themes are available.
 
 ## silo-preview-2.22.5
 
