@@ -48,6 +48,12 @@ SiloConnection _connection({String accessToken = 'acc-1', String refreshToken = 
   createdAt: DateTime(2026),
 );
 
+/// A connection whose hour-long token has ten minutes left.
+SiloConnection _halfSpentConnection() => _connection().copyWith(
+  accessTokenExpiresAt: DateTime.now().add(const Duration(minutes: 10)),
+  accessTokenLifetimeSeconds: 3600,
+);
+
 http.Response _json(Object body, [int status = 200]) =>
     http.Response(jsonEncode(body), status, headers: {'content-type': 'application/json'});
 
@@ -854,6 +860,45 @@ void main() {
       expect(await play(), TranscodeFallbackReason.directPlayOnly);
     });
 
+    test('the external-player fallback refreshes a half-spent token before putting it in the URL', () async {
+      final c = client((request) async {
+        final path = Uri.decodeComponent(request.url.path);
+        if (path.endsWith('/auth/refresh')) {
+          return _json({'access_token': 'acc-2', 'refresh_token': 'ref-2', 'expires_in': 3600});
+        }
+        if (path.endsWith('/watch/movie:m1')) {
+          return _json({
+            'content_id': 'movie:m1',
+            'versions': [
+              {'file_id': '42'},
+            ],
+          });
+        }
+        if (path.endsWith('/direct-download/links')) return _problem(404, 'not_found');
+        if (path.endsWith('/playback/capabilities')) {
+          return _json({
+            'state': 'available',
+            'installation_id': 'inst-1',
+            'protocol_versions': [3],
+            'features': ['sequenced_progress_v1'],
+          });
+        }
+        if (path.endsWith('/playback/start')) {
+          return _json({
+            'outcome': 'playable',
+            'session_id': 'sess-x',
+            'playback_plan': {
+              'delivery': 'original_http',
+              'stream': {'url': '/api/v2/stream/s?st=sig'},
+            },
+          }, 201);
+        }
+        return _json({}, 404);
+      }, connection: _halfSpentConnection());
+      final target = await c.resolveExternalPlayback(MediaItem.silo(id: 'movie:m1', kind: MediaKind.movie));
+      expect(target!.url, 'https://silo.example.com/api/v2/stream/s?st=sig&token=acc-2');
+    });
+
     test('an external player gets a direct link and no playback session', () async {
       final c = client((request) async {
         final path = Uri.decodeComponent(request.url.path);
@@ -961,16 +1006,82 @@ void main() {
       );
       expect(downloadExtensionFromUrl(resolution.videoUrl!), 'mkv');
       expect(resolution.mediaSourceId, '42');
-      expect(resolution.externalSubtitlesResolved, isTrue);
-      final subtitle = resolution.externalSubtitles.single;
+      // External subtitles are listed only when they are fetched, after the
+      // video: their URLs carry a short-lived token.
+      expect(resolution.externalSubtitlesResolved, isFalse);
+      expect(resolution.externalSubtitles, isEmpty);
+      expect(requests.where((r) => r.url.path.endsWith('/playback/start')), isEmpty);
+    });
+
+    test('external subtitles are listed just before they are fetched, then their session stops', () async {
+      final c = downloadClient();
+      final item = MediaItem.silo(id: 'movie:m1', kind: MediaKind.movie, serverId: 'srv-1');
+      final fetch = await c.resolveDownloadSubtitlesNow(item, mediaSourceId: '42');
+      final subtitle = fetch.perPart.single.single;
       expect(
         subtitle.url,
         contains('/api/v2/stream/sess-dl/subtitles/0.vtt?file_id=42&external_subtitle_key=k&token=acc-1'),
       );
       expect(subtitle.codec, 'webvtt');
       expect(subtitle.language, 'eng');
-      // The session only lists external subtitles; it is left to expire.
-      expect(requests.where((r) => r.method == 'DELETE'), isEmpty);
+      expect(requests.where((r) => r.method == 'DELETE'), isEmpty, reason: 'kept until the files are in');
+
+      await fetch.release();
+      final stop = requests.singleWhere((r) => r.method == 'DELETE');
+      expect(Uri.decodeComponent(stop.url.path), endsWith('/api/v2/playback/sess-dl'));
+      expect((jsonDecode(stop.body) as Map)['installation_id'], 'inst-1');
+    });
+
+    test('listing download subtitles refreshes a half-spent token first', () async {
+      var refreshed = false;
+      final c = client((request) async {
+        final path = Uri.decodeComponent(request.url.path);
+        if (path.endsWith('/auth/refresh')) {
+          refreshed = true;
+          return _json({'access_token': 'acc-2', 'refresh_token': 'ref-2', 'expires_in': 3600});
+        }
+        if (path.endsWith('/watch/movie:m1')) return _json(watchDetail());
+        if (path.endsWith('/playback/capabilities')) {
+          return _json({
+            'state': 'available',
+            'installation_id': 'inst-1',
+            'protocol_versions': [3],
+            'features': ['sequenced_progress_v1'],
+          });
+        }
+        if (path.endsWith('/playback/start')) {
+          expect(refreshed, isTrue);
+          return _json({
+            'outcome': 'playable',
+            'session_id': 'sess-dl',
+            'playback_plan': {
+              'delivery': 'original_http',
+              'stream': {'url': '/api/v2/stream/sess-dl?st=x'},
+              'subtitle': {
+                'inventory': [
+                  {
+                    'combined_index': 0,
+                    'source': 'external',
+                    'codec': 'srt',
+                    'delivery': 'sidecar',
+                    'url': '/api/v2/stream/sess-dl/subtitles/0.vtt?file_id=42',
+                  },
+                ],
+              },
+            },
+          }, 201);
+        }
+        return _json({}, 404);
+      }, connection: _halfSpentConnection());
+      final fetch = await c.resolveDownloadSubtitlesNow(MediaItem.silo(id: 'movie:m1', kind: MediaKind.movie));
+      expect(fetch.perPart.single.single.url, endsWith('&token=acc-2'));
+    });
+
+    test('a file without external subtitles opens no session to list them', () async {
+      final c = downloadClient(externalSubs: false);
+      final fetch = await c.resolveDownloadSubtitlesNow(MediaItem.silo(id: 'movie:m1', kind: MediaKind.movie));
+      expect(fetch.perPart.single, isEmpty);
+      expect(requests.where((r) => r.url.path.endsWith('/playback/start')), isEmpty);
     });
 
     test('no playback session is opened when the file has no external subtitles', () async {

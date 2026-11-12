@@ -90,7 +90,12 @@ part 'silo_client_downloads.dart';
 /// forward when asked for one it has not seen.
 class SiloClient
     with MediaServerCacheMixin, _SiloPlaybackMethods, _SiloSubtitleMethods, _SiloTrackPrefsMethods, _SiloDownloadMethods
-    implements MediaServerClient, ScopedMediaServerClient, GracefullyCloseable, RemoteTrailerClient {
+    implements
+        MediaServerClient,
+        ScopedMediaServerClient,
+        GracefullyCloseable,
+        RemoteTrailerClient,
+        DeferredDownloadSubtitles {
   SiloClient._({required this._connection, required this._api});
 
   /// Build a client for [connection]. Network I/O stays lazy.

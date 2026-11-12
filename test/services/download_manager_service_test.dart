@@ -1497,6 +1497,36 @@ void main() {
       expect(await fixture.db.getPendingSupplementaryQueueItems(), isEmpty);
     });
 
+    test('short-lived subtitles are listed just before the fetch and released after it', () async {
+      final fixture = await _createSupplementaryFixture();
+      final httpClient = _ScriptedSubtitleClient();
+      final events = <String>[];
+      final client = _DeferredSubtitleClient(
+        metadata: fixture.metadata,
+        resolution: () =>
+            const DownloadResolution(videoUrl: 'https://example.test/video', externalSubtitlesResolved: false),
+        events: events,
+      );
+      await _seedCompletedPendingDownload(fixture, downloadSubtitles: true);
+      await fixture.db.updateDownloadMediaSource(fixture.metadata.globalKey, 'source-2');
+      final manager = DownloadManagerService(
+        database: fixture.db,
+        storageService: fixture.storage,
+        clientResolver: (serverId, {clientScopeId}) => client,
+        http: MediaServerHttpClient(client: httpClient),
+        downloadsSupportedOverride: false,
+      );
+      addTearDown(manager.dispose);
+
+      await manager.repairPendingSupplementaryDownloads();
+      await pumpEventQueue();
+
+      expect(events, ['list source-2', 'release']);
+      expect(httpClient.trackRequests, [7]);
+      expect(client.lastMediaSourceId, isNull, reason: 'no full resolve just for subtitles');
+      expect(await fixture.db.getPendingSupplementaryQueueItems(), isEmpty);
+    });
+
     test('supplementary repair reuses the persisted media source', () async {
       final fixture = await _createSupplementaryFixture();
       final client = _SupplementaryClient(
@@ -3894,6 +3924,27 @@ class _SupplementaryClient implements MediaServerClient {
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _DeferredSubtitleClient extends _SupplementaryClient implements DeferredDownloadSubtitles {
+  _DeferredSubtitleClient({required super.metadata, required super.resolution, required this.events});
+
+  final List<String> events;
+
+  @override
+  Future<DeferredSubtitleFetch> resolveDownloadSubtitlesNow(
+    MediaItem item, {
+    int mediaIndex = 0,
+    String? mediaSourceId,
+  }) async {
+    events.add('list $mediaSourceId');
+    return DeferredSubtitleFetch(
+      perPart: const [
+        [DownloadSubtitleSpec(id: 7, url: 'https://example.test/subtitle/7', codec: 'srt')],
+      ],
+      release: () async => events.add('release'),
+    );
+  }
 }
 
 class _ScriptedSubtitleClient extends http.BaseClient {

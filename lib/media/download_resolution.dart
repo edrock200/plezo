@@ -5,6 +5,8 @@
 /// Plex or Jellyfin.
 library;
 
+import 'media_item.dart';
+
 /// Spec for a single external subtitle track that should be downloaded
 /// alongside the video file.
 ///
@@ -138,4 +140,36 @@ abstract final class DownloadServerTrackers {
       call().catchError((Object _) {});
     } catch (_) {}
   }
+}
+
+/// External subtitles listed just before they are fetched, with the work to
+/// undo once the files are in (see [DeferredDownloadSubtitles]).
+class DeferredSubtitleFetch {
+  /// Each file's external subtitles, in playback order.
+  final List<List<DownloadSubtitleSpec>> perPart;
+
+  /// Called once after the subtitle files were fetched (or failed).
+  final Future<void> Function() release;
+
+  const DeferredSubtitleFetch({required this.perPart, required this.release});
+
+  static Future<void> _nothing() async {}
+
+  /// Nothing to fetch and nothing to release.
+  static const none = DeferredSubtitleFetch(perPart: [[]], release: _nothing);
+}
+
+/// A client whose external subtitle URLs are only valid for a short while
+/// (Silo: sidecars of a playback session, authorised by a short-lived access
+/// token). Its `MediaServerClient.resolveDownload` leaves them unresolved, and
+/// the download manager lists them through this right before fetching them,
+/// after the video has downloaded.
+abstract interface class DeferredDownloadSubtitles {
+  /// The subtitles of the chosen version, ready to fetch now. Throws when
+  /// they cannot be listed now; the manager tries again later.
+  Future<DeferredSubtitleFetch> resolveDownloadSubtitlesNow(
+    MediaItem item, {
+    int mediaIndex = 0,
+    String? mediaSourceId,
+  });
 }

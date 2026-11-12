@@ -488,12 +488,12 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
   /// `downloadExtensionFromUrl` reads it and no request ever carries it.
   ///
   /// Embedded subtitles travel inside the original file. External subtitle
-  /// files exist only as playback-session sidecars, so when the version has
-  /// any, a direct-play session is opened just to list them; it is left to
-  /// expire on the server because the sidecars are fetched after the video.
-  /// That leg is best-effort: a failure reports
-  /// [DownloadResolution.externalSubtitlesResolved] false so the manager
-  /// retries subtitles later.
+  /// files exist only as playback-session sidecars authorised by the
+  /// short-lived access token, and they are fetched after the video, maybe
+  /// hours later. So a version with any reports
+  /// [DownloadResolution.externalSubtitlesResolved] false here, and the
+  /// manager lists them through [resolveDownloadSubtitlesNow] right before it
+  /// fetches them.
   @override
   Future<DownloadResolution> resolveDownload(MediaItem item, {int mediaIndex = 0, String? mediaSourceId}) async {
     final watch = await _watchDetail(item.id, forceRefresh: true);
@@ -520,25 +520,60 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
     final container = managed?.container ?? version['container']?.toString().trim().toLowerCase();
     if (container != null && container.isNotEmpty && !url.contains('#')) url = '$url#container=$container';
 
-    var subtitles = const <DownloadSubtitleSpec>[];
-    var subtitlesResolved = true;
-    final rawSubs = version['subtitle_tracks'];
-    final hasExternal = rawSubs is List && rawSubs.whereType<Map>().any((track) => track['external'] == true);
-    if (hasExternal) {
-      try {
-        subtitles = await _externalSubtitleSpecs(fileId);
-      } catch (e) {
-        appLogger.d('SiloClient: external subtitles for a download unavailable', error: e.runtimeType);
-        subtitlesResolved = false;
-      }
-    }
     return DownloadResolution(
       videoUrl: url,
       mediaSourceId: fileId,
-      externalSubtitles: subtitles,
-      externalSubtitlesResolved: subtitlesResolved,
+      externalSubtitlesResolved: !_hasExternalSubtitles(version),
       headers: managed?.headers ?? const {},
     );
+  }
+
+  static bool _hasExternalSubtitles(Map<String, dynamic> version) {
+    final rawSubs = version['subtitle_tracks'];
+    return rawSubs is List && rawSubs.whereType<Map>().any((track) => track['external'] == true);
+  }
+
+  /// A download's external subtitles, listed just before they are fetched:
+  /// a direct-play session is opened only to list its sidecars (their URLs
+  /// carry a freshly refreshed access token), and [DeferredSubtitleFetch.release]
+  /// stops it once the files are in.
+  Future<DeferredSubtitleFetch> resolveDownloadSubtitlesNow(
+    MediaItem item, {
+    int mediaIndex = 0,
+    String? mediaSourceId,
+  }) async {
+    final watch = await _watchDetail(item.id, forceRefresh: true);
+    final versions = SiloMappers.watchVersions(watch);
+    if (watch == null || versions.isEmpty) return DeferredSubtitleFetch.none;
+    final index = SiloMappers.selectVersionIndex(
+      versions,
+      watch,
+      requestedIndex: mediaIndex,
+      requestedFileId: mediaSourceId,
+    );
+    final version = versions[index];
+    final fileId = version['file_id']?.toString();
+    if (fileId == null || fileId.isEmpty || !_hasExternalSubtitles(version)) return DeferredSubtitleFetch.none;
+    await _api.refreshTokensIfHalfSpent();
+    final decision = await _startPlayback(fileId: fileId, preset: TranscodeQualityPreset.original, originalOnly: true);
+    final sessionId = decision['session_id']?.toString();
+    Future<void> release() async {
+      if (sessionId == null || sessionId.isEmpty) return;
+      final session = _SiloPlaybackSession(
+        sessionId: sessionId,
+        installationId: decision['_installation_id'].toString(),
+        itemId: item.id,
+        fileId: fileId,
+      );
+      try {
+        await _stopSession(session, position: null, isPaused: true);
+      } catch (e) {
+        // It expires on the server anyway.
+        appLogger.d('SiloClient: stopping the subtitle listing session failed', error: e.runtimeType);
+      }
+    }
+
+    return DeferredSubtitleFetch(perPart: [_externalSubtitleSpecsOf(decision)], release: release);
   }
 
   /// A signed, header-free link to the original file. The account token is
@@ -560,8 +595,7 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
     return _api.resolveUrl(url);
   }
 
-  Future<List<DownloadSubtitleSpec>> _externalSubtitleSpecs(String fileId) async {
-    final decision = await _startPlayback(fileId: fileId, preset: TranscodeQualityPreset.original, originalOnly: true);
+  List<DownloadSubtitleSpec> _externalSubtitleSpecsOf(Map<String, dynamic> decision) {
     final plan = decision['playback_plan'];
     final subtitle = plan is Map ? plan['subtitle'] : null;
     final inventory = subtitle is Map ? subtitle['inventory'] : null;
@@ -626,6 +660,9 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
       if (e.statusCode != 403) rethrow;
       appLogger.d('SiloClient: direct-download link refused; external player gets a session stream');
     }
+    // The URL carries the access token and the external player keeps it for
+    // the whole film: hand over one with as much life left as possible.
+    await _api.refreshTokensIfHalfSpent();
     final decision = await _startPlayback(fileId: fileId, preset: TranscodeQualityPreset.original, originalOnly: true);
     final plan = decision['playback_plan'];
     final stream = plan is Map ? plan['stream'] : null;
