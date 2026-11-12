@@ -320,13 +320,18 @@ class _StopMarksWatchedClient extends _FakePlexClient {
 class _TerminatingProgressClient extends _FakePlexClient {
   final List<PlaybackReportKind> reportKinds = [];
   bool terminateNextProgress = false;
+  bool leavePlayback = false;
 
   @override
   Future<void> onPlaybackReport(PlaybackReportCall call) async {
     reportKinds.add(call.kind);
     if (call.kind == PlaybackReportKind.progress && terminateNextProgress) {
       terminateNextProgress = false;
-      throw PlaybackSessionTerminatedException(code: 2006, reason: 'Admin terminated playback with reason: Go Away');
+      throw PlaybackSessionTerminatedException(
+        code: 2006,
+        reason: 'Admin terminated playback with reason: Go Away',
+        leavePlayback: leavePlayback,
+      );
     }
     await super.onPlaybackReport(call);
   }
@@ -2005,6 +2010,33 @@ void main() {
   });
 
   group('server-side session termination (#1916)', () {
+    test('hands the termination to onServerTerminated once, with leavePlayback as the server asked', () async {
+      for (final leave in [false, true]) {
+        final client = _TerminatingProgressClient()..leavePlayback = leave;
+        final player = _FakePlayer(position: const Duration(seconds: 50), duration: const Duration(seconds: 100));
+        final seen = <PlaybackSessionTerminatedException>[];
+        final tracker = PlaybackProgressTracker(
+          client: client,
+          metadata: _meta(),
+          player: player,
+          isOffline: false,
+          onServerTerminated: seen.add,
+        );
+        addTearDown(tracker.dispose);
+
+        await tracker.sendProgress('playing');
+        await pumpEventQueue();
+        expect(seen, isEmpty);
+        client.terminateNextProgress = true;
+        await tracker.sendProgress('playing');
+        await pumpEventQueue();
+        await tracker.sendProgress('playing');
+        await pumpEventQueue();
+        expect(seen.map((e) => e.leavePlayback), [leave]);
+        expect(tracker.stoppedByServer, isTrue);
+      }
+    });
+
     test('terminated paused session sends one final stop, goes silent, and re-opens on resume', () {
       fakeAsync((async) {
         final client = _TerminatingProgressClient();

@@ -964,6 +964,7 @@
       "one": "Auto-removed ${n} watched download",
       "other": "Auto-removed ${n} watched downloads"
     },
+    "cannotRemoveFromContinueWatching": "The server can't remove this item from Continue Watching. Open Continue Watching on Home and remove it there.",
     "removedFromContinueWatching": "Removed from Continue Watching",
     "errorLoading": "Error: ${error}",
     "searchPartialResults": "Some media servers could not be searched. Showing available results.",
@@ -1014,6 +1015,7 @@
     "serverBusyTitle": "Stream unavailable",
     "serverBusyBody": "The server kept refusing to stream this file (HTTP 503). It may be restarting, busy, or the file's storage may be offline. Try again in a moment — if it keeps happening, ask the server owner to check the server and the file's storage.",
     "playbackNotAllowedTitle": "Playback not allowed",
+    "playbackSessionEndedByServer": "An administrator ended this playback session.",
     "playbackNotAllowedBody": "The server refused to stream this item (HTTP 403). Your account may not have permission to play it, or the server may only allow playback on its local network.",
     "logsUploaded": "Logs uploaded",
     "logsUploadFailed": "Failed to upload logs",

@@ -259,6 +259,11 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
   has box sets): the films, then the box set card (Silo's "Explore all"). Never send `image_size` or
   other unknown query params to these routes (422 `unknown_parameter`). Silo collections and box sets
   are read-only: Delete / Remove from collection / Add to collection are hidden for Silo items.
+  Library Collections tab: groups and `ungrouped` by `sort_order`, then flat-only rows; cards of a
+  `kind: "user_collections"` group are personal collections, id `silo-user-collection:<lib>:<id>`, read with
+  `source=user_collection` (curated ones `silo-collection:…`, `source=library_collection`; the server 404s a mix-up).
+  Collection text is `description` (fallback `overview`, "" = none). Remove from Continue Watching follows Android's
+  `HomeDismissal`: stamp → `continue_watching`, else series → `next_up`, else it throws (item detail has no stamp).
 - **Sort fields** unknown to the server return 422 — map only known ones (`_sortFields`).
 - **Playback (protocol v3):** `GET /playback/capabilities` must be `available`, list protocol 3
   and the `sequenced_progress_v1` feature (Silo's apps refuse playback otherwise) → keep `installation_id` (409
@@ -281,8 +286,12 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
   and empty ranges dropped; the player skips each range to its own end and offers the next episode
   only from a credits range that reaches the end of the file, i.e. the last one. They are read
   from `GET /watch/{id}?file_id=<playing file>` (the server fills that version's on-demand
-  markers; cached per file) and `playbackExtras` picks that version. A progress 404/410 drops the
-  session row (later reports go through `/sync/progress`).
+  markers; cached per file) and `playbackExtras` picks that version. A progress 404 (or another 410) drops the
+  session row (later reports go through `/sync/progress`). A 410 `playback_session_ended` (an administrator stop)
+  ends it for good: nothing more is written for that session id (no `/sync/progress`, no `/watched`), and
+  `_sendProgress` throws `PlaybackSessionTerminatedException(leavePlayback: true)`; the progress tracker's
+  `onServerTerminated` makes the video player stop and show `messages.playbackSessionEndedByServer` (Retry opens a
+  fresh session).
 - **Resume points:** `SiloMappers.resumeOffsetMs` ports the TV app's `resumePositionSeconds`:
   none at ≤ 30 s or ≥ duration − 5 s; a played item keeps its position (re-watch stopped midway).
 - **External players** get a `/direct-download/links` URL (header-free, Range, no session). Only a
@@ -398,7 +407,7 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
   `top-right` moves to the right rail, the corner belongs to the watch status), `accentColor`, `showIcon`,
   `image` and `valueImages` (refs `<64 hex>.webp`, only those the config lists; loaded from
   `<base>/api/v2/overlay-images/<ref>` through `MediaImageHelper.serverArtworkProvider`, no credentials; a
-  failed one is dropped and its badge draws without it). Caps: 3 a corner, 4 a rail; a badge without a
+  failed one is dropped and its badge draws without it until a settings read 5 min later tries it again). Caps: 3 a corner, 4 a rail; a badge without a
   value takes no slot. An enabled `resolution_hdr_audio` hides resolution, hdr, audio and resolution_hdr;
   `resolution_hdr` hides resolution and hdr (the document is untouched). Data comes from the card's raw JSON
   (`SiloOverlayData.ofRaw(item.raw)`, cached per JSON object): `overlay_summary` (also on season episode
@@ -597,6 +606,7 @@ PIN length (matches Silo's apps). Open follow-ups: an edit screen for an existin
   track_signature?}` (Off = `"", -1, "off"`); episodes only; start applies the server's effective choice (direct play audio;
   subtitles via a port of `resolveAutoSubtitle`, Off reaches the player as `defaultSubtitleStreamIndex: -1`); manual picks are
   debounced 1.5 s, one in flight per series/kind, retried once, held in memory only; no DELETE (no Auto row).
+  `inheritSession` moves queued picks to the successor client; `closeGracefully` sends what is left before the API closes.
 - **Audiobooks** (`silo_audiobook.dart`, `silo_audiobook_player.dart`, part `silo_client_audiobooks.dart`,
   `lib/screens/silo/silo_audiobook_*`): mapped as `MediaKind.album` + `raw['type']=='audiobook'`, opened from
   `navigateToAlbum`; one session per part (`progress_persistence: client`), whole-book `/sync/progress`; #708 rules in

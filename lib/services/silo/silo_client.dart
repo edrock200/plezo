@@ -171,6 +171,9 @@ class SiloClient
   /// session. Call before the first request.
   void inheritSession(SiloClient previous) {
     _knownRefreshTokens.addAll(previous._knownRefreshTokens);
+    // Series track picks the previous client had not sent yet are this
+    // login session's (the same Silo profile): they go out from here.
+    _trackChoices.adopt(previous._trackChoices.takePending());
     final current = previous.connection;
     if (current.refreshToken != _connection.refreshToken) adoptTokens(current);
   }
@@ -308,10 +311,14 @@ class SiloClient
   }
 
   @override
-  Future<void> closeGracefully({Duration drainTimeout = const Duration(seconds: 2)}) {
+  Future<void> closeGracefully({Duration drainTimeout = const Duration(seconds: 2)}) async {
     SiloManagedDownloads.instance.detach(connection.id, _downloadRegistry);
     _markClosed();
-    return _api.closeGracefully(drainTimeout: drainTimeout);
+    // Queued series track picks go out first (a successor that inherited the
+    // session has already taken them): closing the API aborts what is still
+    // on the wire.
+    await _trackChoices.closeGracefully(timeout: drainTimeout);
+    await _api.closeGracefully(drainTimeout: drainTimeout);
   }
 
   void _markClosed() {
@@ -836,6 +843,13 @@ class SiloClient
 
   static const _collectionPrefix = 'silo-collection:';
 
+  /// A personal collection a profile opted into a library's Collections tab
+  /// (a `kind: "user_collections"` group). Its titles come from
+  /// `source=user_collection`; the library source answers 404 for it.
+  static const _userCollectionPrefix = 'silo-user-collection:';
+
+  static bool _isCollectionId(String id) => id.startsWith(_collectionPrefix) || id.startsWith(_userCollectionPrefix);
+
   /// `GET /catalog/items/{id}` rows of recently opened items. The detail
   /// screen reads extras and remote trailers right after loading the item;
   /// both live in the same document, so they reuse it instead of fetching it
@@ -868,7 +882,7 @@ class SiloClient
   /// (synthetic seasons, collections) and for missing items.
   Future<Map<String, dynamic>?> _recentItemDetail(String id) async {
     if (SiloMappers.parseSyntheticSeasonId(id) != null ||
-        id.startsWith(_collectionPrefix) ||
+        _isCollectionId(id) ||
         id.startsWith(SiloMappers.boxSetPrefix)) {
       return null;
     }
@@ -886,7 +900,7 @@ class SiloClient
   Future<MediaItem?> fetchItem(String id) async {
     final synthetic = SiloMappers.parseSyntheticSeasonId(id);
     if (synthetic != null) return _fetchSeason(synthetic.seriesId, synthetic.seasonNumber, id: id);
-    if (id.startsWith(_collectionPrefix)) return _collectionItem(id);
+    if (_isCollectionId(id)) return _collectionItem(id);
     if (SiloMappers.parseBoxSetId(id) != null) return (await _boxSet(id))?.boxSet;
     try {
       final data = await _itemDetail(id);
@@ -1042,7 +1056,7 @@ class SiloClient
   @override
   Future<List<MediaItem>> fetchChildren(String parentId) async {
     if (SiloMappers.parseBoxSetId(parentId) != null) return (await _boxSet(parentId))?.movies ?? const [];
-    if (parentId.startsWith(_collectionPrefix)) {
+    if (_isCollectionId(parentId)) {
       final page = await fetchCollectionPage(parentId, start: 0, size: 200);
       return page.items;
     }
@@ -1076,7 +1090,7 @@ class SiloClient
 
   @override
   Future<List<MediaItem>> fetchPlayableDescendants(String parentId) async {
-    if (parentId.startsWith(_collectionPrefix) || parentId.startsWith(SiloMappers.boxSetPrefix)) {
+    if (_isCollectionId(parentId) || parentId.startsWith(SiloMappers.boxSetPrefix)) {
       return fetchChildren(parentId);
     }
     final seasonRef = SiloMappers.parseSyntheticSeasonId(parentId) ?? _seasonRefs[parentId];
@@ -1693,26 +1707,36 @@ class SiloClient
     throw UnsupportedError('Silo season ${synthetic.seasonNumber} of ${synthetic.seriesId} has no content id');
   }
 
+  /// Silo Android's `HomeDismissal`: a card with a progress stamp leaves
+  /// `continue_watching` against that exact `progress_updated_at` (playing it
+  /// again brings it back); a card without one but with a series (a Next Up
+  /// episode) leaves `next_up`, keyed by its series. Item detail never carries
+  /// the stamp, so a card with neither cannot be removed: that throws rather
+  /// than reporting a removal the server never saw.
   @override
   Future<void> removeFromContinueWatching(MediaItem item) async {
     final raw = item.raw;
-    if (raw?['item_source'] == 'next_up') {
-      final seriesId = raw?['series_id']?.toString() ?? item.grandparentId;
-      await _api.send('PUT', '/api/v2/home/dismissals/next_up/${_seg(item.id)}', body: {'series_id': ?seriesId});
+    final updatedAt = _nonEmpty(raw?['progress_updated_at']);
+    if (updatedAt != null && raw?['item_source'] != 'next_up') {
+      await _api.send(
+        'PUT',
+        '/api/v2/home/dismissals/continue_watching/${_seg(item.id)}',
+        body: {'progress_updated_at': updatedAt},
+      );
       return;
     }
-    var updatedAt = raw?['progress_updated_at']?.toString();
-    if (updatedAt == null || updatedAt.isEmpty) {
-      // Required by the server; cards from other surfaces may lack it.
-      final detail = await _api.getJson('/api/v2/catalog/items/${_seg(item.id)}');
-      updatedAt = detail['progress_updated_at']?.toString();
-      if (updatedAt == null || updatedAt.isEmpty) return;
+    final seriesId =
+        _nonEmpty(raw?['series_id']) ??
+        (item.kind == MediaKind.episode ? _nonEmpty(item.grandparentId) : null) ??
+        (item.kind == MediaKind.show ? item.id : null);
+    if (seriesId == null) {
+      throw MediaServerHttpException(
+        type: MediaServerHttpErrorType.unknown,
+        message: 'Silo cannot remove this card from Continue Watching: it has no progress stamp or series',
+        display: t.messages.cannotRemoveFromContinueWatching,
+      );
     }
-    await _api.send(
-      'PUT',
-      '/api/v2/home/dismissals/continue_watching/${_seg(item.id)}',
-      body: {'progress_updated_at': updatedAt},
-    );
+    await _api.send('PUT', '/api/v2/home/dismissals/next_up/${_seg(item.id)}', body: {'series_id': seriesId});
   }
 
   /// [rating] is Plezy's 0–10 scale; Silo stores 1–5. A non-positive value
@@ -1780,26 +1804,35 @@ class SiloClient
   // Collections (read-only library collections)
   // ---------------------------------------------------------------------------
 
-  String _collectionId(String libraryId, String collectionId) => '$_collectionPrefix$libraryId:$collectionId';
+  String _collectionId(String libraryId, String collectionId, {required bool personal}) =>
+      '${personal ? _userCollectionPrefix : _collectionPrefix}$libraryId:$collectionId';
 
-  ({String libraryId, String collectionId})? _parseCollectionId(String id) {
-    if (!id.startsWith(_collectionPrefix)) return null;
-    final rest = id.substring(_collectionPrefix.length);
+  ({String libraryId, String collectionId, bool personal})? _parseCollectionId(String id) {
+    final personal = id.startsWith(_userCollectionPrefix);
+    if (!personal && !id.startsWith(_collectionPrefix)) return null;
+    final rest = id.substring((personal ? _userCollectionPrefix : _collectionPrefix).length);
     final colon = rest.indexOf(':');
     if (colon <= 0) return null;
-    return (libraryId: rest.substring(0, colon), collectionId: rest.substring(colon + 1));
+    return (libraryId: rest.substring(0, colon), collectionId: rest.substring(colon + 1), personal: personal);
   }
 
   final Map<String, MediaItem> _collections = {};
 
-  MediaItem _mapCollection(String libraryId, Map<String, dynamic> json) {
-    final id = _collectionId(libraryId, json['id'].toString());
+  static String? _nonEmpty(Object? value) {
+    final text = value?.toString().trim();
+    return text == null || text.isEmpty ? null : text;
+  }
+
+  MediaItem _mapCollection(String libraryId, Map<String, dynamic> json, {required bool personal}) {
+    final id = _collectionId(libraryId, json['id'].toString(), personal: personal);
     final poster = json['poster_url'];
     final item = MediaItem.silo(
       id: id,
       kind: MediaKind.collection,
-      title: json['title']?.toString() ?? json['name']?.toString(),
-      summary: json['overview']?.toString(),
+      title: _nonEmpty(json['title']) ?? _nonEmpty(json['name']),
+      // The contract's field is `description`; `overview` is kept for older
+      // answers. The server sends "" for none.
+      summary: _nonEmpty(json['description']) ?? _nonEmpty(json['overview']),
       thumbPath: poster is String && poster.isNotEmpty ? _api.resolveUrl(poster) : null,
       leafCount: (json['item_count'] as num?)?.toInt(),
       childCount: (json['item_count'] as num?)?.toInt(),
@@ -1822,6 +1855,60 @@ class SiloClient
     return _collections[id];
   }
 
+  /// A library's Collections tab in display order: its groups and the
+  /// ungrouped bucket by `sort_order`, then any curated collection only the
+  /// flat `collections` list names (older servers send nothing else). Cards
+  /// of a `user_collections` group are personal collections; a curated card
+  /// takes the flat list's full row under it (the card has no description).
+  /// Each collection appears once per kind.
+  List<({Map<String, dynamic> json, bool personal})> _collectionTabRows(Map<String, dynamic>? data) {
+    final flat = {
+      for (final row in _itemsOf(data, 'collections'))
+        if (row['id'] != null) row['id'].toString(): row,
+    };
+    final sections = <({num order, int index, bool personal, List<Map<String, dynamic>> rows})>[];
+    final groups = _itemsOf(data, 'groups');
+    for (var i = 0; i < groups.length; i++) {
+      final group = groups[i];
+      sections.add((
+        order: (group['sort_order'] as num?) ?? i,
+        index: i,
+        personal: group['kind'] == 'user_collections',
+        rows: _itemsOf(group, 'collections'),
+      ));
+    }
+    final ungrouped = data?['ungrouped'];
+    if (ungrouped is Map<String, dynamic>) {
+      sections.add((
+        order: (ungrouped['sort_order'] as num?) ?? double.infinity,
+        index: groups.length,
+        personal: false,
+        rows: _itemsOf(ungrouped, 'collections'),
+      ));
+    }
+    sections.sort((a, b) {
+      final byOrder = a.order.compareTo(b.order);
+      return byOrder != 0 ? byOrder : a.index.compareTo(b.index);
+    });
+    final seen = <String>{};
+    final out = <({Map<String, dynamic> json, bool personal})>[];
+    void add(Map<String, dynamic> row, {required bool personal}) {
+      final id = row['id']?.toString();
+      if (id == null || !seen.add('${personal ? 'u' : 'c'}:$id')) return;
+      out.add((json: personal ? row : {...?flat[id], ...row}, personal: personal));
+    }
+
+    for (final section in sections) {
+      for (final row in section.rows) {
+        add(row, personal: section.personal);
+      }
+    }
+    for (final row in flat.values) {
+      add(row, personal: false);
+    }
+    return out;
+  }
+
   @override
   Future<LibraryPage<MediaItem>> fetchCollectionsPage(
     String libraryId, {
@@ -1830,18 +1917,8 @@ class SiloClient
     AbortController? abort,
   }) async {
     final data = await _cachedGet('/api/v2/library/${_seg(libraryId)}/collections', abort: abort);
-    final rows = <Map<String, dynamic>>[
-      ..._itemsOf(data, 'collections'),
-      for (final group in _itemsOf(data, 'groups')) ..._itemsOf(group, 'collections'),
-      ..._itemsOf(
-        data?['ungrouped'] is Map<String, dynamic> ? data!['ungrouped'] as Map<String, dynamic> : null,
-        'collections',
-      ),
-    ];
-    final seen = <String>{};
     final items = [
-      for (final row in rows)
-        if (row['id'] != null && seen.add(row['id'].toString())) _mapCollection(libraryId, row),
+      for (final row in _collectionTabRows(data)) _mapCollection(libraryId, row.json, personal: row.personal),
     ];
     return _slice(items, start, size);
   }
@@ -1865,7 +1942,9 @@ class SiloClient
     final page = await _pageAt(
       '/api/v2/catalog',
       {
-        'source': 'library_collection',
+        // Silo Android/TV: a `user_collections` group's card reads its titles
+        // from the personal source, everything else from the library's.
+        'source': parsed.personal ? 'user_collection' : 'library_collection',
         'collection_id': parsed.collectionId,
         'library_id': parsed.libraryId,
         'image_size': _imageSize,
