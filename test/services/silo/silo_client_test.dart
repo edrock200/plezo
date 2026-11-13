@@ -1733,6 +1733,70 @@ void main() {
       expect(requests.where((r) => r.url.path.endsWith('/auth/refresh')), isEmpty);
     });
   });
+
+  group('Continue Watching past the 20-card row', () {
+    Map<String, dynamic> cwCard(int i) => {
+      'content_id': 'movie:cw$i',
+      'type': 'movie',
+      'title': 'Watching $i',
+      'progress_updated_at': '2026-11-12T10:${(59 - i).toString().padLeft(2, '0')}:00Z',
+      'position_seconds': 60,
+      'duration_seconds': 6000,
+    };
+
+    SiloClient cwServer({required int rowCards, required int total, List<Map<String, String>>? catalogQueries}) =>
+        client((request) async {
+          final path = request.url.path;
+          if (path.endsWith('/home/capabilities')) return _json({}, 404);
+          if (path.endsWith('/home/sections')) {
+            return _json({
+              'sections': [
+                {
+                  'id': 'cw',
+                  'section_type': 'continue_watching',
+                  'title': 'Continue Watching',
+                  'total_count': total,
+                  'items': [for (var i = 0; i < rowCards; i++) cwCard(i)],
+                },
+              ],
+            });
+          }
+          if (path.endsWith('/api/v2/catalog')) {
+            catalogQueries?.add(request.url.queryParameters);
+            final limit = int.parse(request.url.queryParameters['limit'] ?? '50');
+            final n = limit < total ? limit : total;
+            return _json({
+              'items': [for (var i = 0; i < n; i++) cwCard(i)],
+              'page': {'has_more': n < total},
+              'total': total,
+            });
+          }
+          return _json({}, 404);
+        });
+
+    test('a capped row reads the section list, so Discover sees a 21st card (View All)', () async {
+      final queries = <Map<String, String>>[];
+      final c = cwServer(rowCards: 20, total: 30, catalogQueries: queries);
+      final items = await c.fetchContinueWatching(count: 21);
+      expect(items, hasLength(21));
+      expect(items.first.id, 'movie:cw0', reason: "Silo's order is kept");
+      expect(queries.single['source'], 'section');
+      expect(queries.single['section_id'], 'cw');
+      expect(queries.single['scope'], 'home');
+    });
+
+    test('View All (no count) reads the whole list', () async {
+      final c = cwServer(rowCards: 20, total: 30);
+      expect(await c.fetchContinueWatching(count: null), hasLength(30));
+    });
+
+    test('a row that holds everything reads nothing more', () async {
+      final queries = <Map<String, String>>[];
+      final c = cwServer(rowCards: 5, total: 5, catalogQueries: queries);
+      expect(await c.fetchContinueWatching(count: 21), hasLength(5));
+      expect(queries, isEmpty);
+    });
+  });
 }
 
 String _same(String url) => url;

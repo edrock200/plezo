@@ -4,6 +4,12 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **View All on Silo's Continue Watching row:** with more than 20 titles in progress, the Continue Watching row now ends with View All (on TVs; on phones and tablets tap the row's title), like Silo's own apps, and View All lists them all. Silo sends each Home row with at most 20 titles, so Plezilo never found out there were more.
+
+## silo-preview-2.30.0
+
+Released November 12, 2026. Android and Windows.
+
 - **Continue Watching is in the same order as Silo's own apps:** the title you watched most recently is first again. Plezilo re-sorted the row by itself and put the next episode of a show you had just finished by the date that episode was added to the library, so it could land far down the row (or jump ahead of what you were watching). Plezilo now keeps Silo's order; with several servers, Silo's rows still slot in by time between the others'.
 
 ## silo-preview-2.29.0

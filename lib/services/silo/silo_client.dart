@@ -1489,11 +1489,40 @@ class SiloClient
     final sections = await _homeSections();
     final perSection = await Future.wait([
       for (final section in sections.where((s) => s['section_type'] == 'continue_watching'))
-        _sectionItems(section, '/api/v2/home/sections/${_seg(section['id'].toString())}/items'),
+        _continueWatchingRows(section, count),
     ]);
     final items = continueWatchingInServerOrder([for (final rows in perSection) ...SiloMappers.items(rows, _ctx)]);
     final visible = items.where((item) => item.libraryId == null || !excludedLibraryIds.contains(item.libraryId));
     return count == null ? visible.toList() : visible.take(count).toList();
+  }
+
+  /// The most Continue Watching cards "View All" reads from one section.
+  static const continueWatchingFullListMax = 200;
+
+  /// A Continue Watching section's cards, [count] of them (all, up to
+  /// [continueWatchingFullListMax], when null). The Home row is capped at
+  /// [sectionRowMaxItems], so Discover's probe for one card more than it shows
+  /// never saw a 21st and the row had no View All, unlike Silo's apps (which
+  /// open the row's full page). When the row may hold more than it carried,
+  /// the section's own catalog list is read instead, in the same order and
+  /// with the same `progress_updated_at` stamps; if that fails, the row's
+  /// cards are kept.
+  Future<List<Map<String, dynamic>>> _continueWatchingRows(Map<String, dynamic> section, int? count) async {
+    final sectionId = section['id'].toString();
+    final rows = await _sectionItems(section, '/api/v2/home/sections/${_seg(sectionId)}/items');
+    final total = (section['total_count'] as num?)?.toInt();
+    final wanted = count ?? continueWatchingFullListMax;
+    final mayHoldMore = (total != null && total > rows.length) || rows.length >= sectionRowMaxItems;
+    if (rows.length >= wanted || !mayHoldMore) return rows;
+    final params = _hubCatalogParams('home:$sectionId');
+    if (params == null) return rows;
+    try {
+      final page = await _pageAt('/api/v2/catalog', params, offset: 0, limit: wanted);
+      return page.items.length > rows.length ? page.items : rows;
+    } catch (e) {
+      appLogger.d('SiloClient: Continue Watching full list unavailable', error: e.runtimeType);
+      return rows;
+    }
   }
 
   /// Silo already orders Continue Watching newest first, mixing resumable
