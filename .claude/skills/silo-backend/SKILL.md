@@ -427,8 +427,13 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
   `resolution_hdr` hides resolution and hdr (the document is untouched). Data comes from the card's raw JSON
   (`SiloOverlayData.ofRaw(item.raw)`, cached per JSON object): `overlay_summary` (also on season episode
   rows), the four ratings, `content_rating`, `advisory_age`, `year`, `runtime`, `original_language`, first
-  `studios`/`networks`, `show_status`; no new `MediaItem` fields (raw already round-trips). A poster scales
-  the web lengths by width/185; wide cards (landscape, episode stills) draw at 1;
+  `studios`/`networks`, `show_status`; no new `MediaItem` fields (raw already round-trips). Overlay scale
+  (Silo Android #912, `SiloOverlayScale`): k = card scale × text factor. Card scale: a poster's width/185; wide
+  cards (landscape, episode stills) the library density's (1→0.86, 2→0.93, 3→1, 4→1.1, 5→1.2, standing in for
+  Silo's poster size). Text factor: `MediaQuery` text scale (at 14 px) held to 1–1.35. Badge text is exact px
+  from k with `TextScaler.noScaling` (and measured with the same style), so it counts once; a wide card's
+  bottom inset never drops below its k=1 size, and Plezy's check on a wide Silo card draws at the same scale
+  (`WatchedIndicator.checkScale`);
   a card with a progress bar (active progress, or a partly watched season's bar) lifts its bottom
   row by one inset, posters too (`SiloOverlayLayoutMath.insets`, Silo Android #882). The top row stops short
   of the top-right corner (38 px × k). Watch status (Silo Android #882, the web's `CardWatchStatus`): on a

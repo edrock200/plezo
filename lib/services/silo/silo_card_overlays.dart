@@ -17,7 +17,8 @@ import '../../utils/language_codes.dart';
 /// Everything here is pure: lengths are the web's, in logical px at the
 /// 185 px reference poster width. A poster scales them by its width over
 /// [SiloCardOverlays.referenceWidth]; a landscape card or episode still draws
-/// them at 1. Colours are `0xAARRGGBB` ints.
+/// them at its card-size scale; both times the text factor
+/// ([SiloOverlayScale]). Colours are `0xAARRGGBB` ints.
 abstract final class SiloCardOverlays {
   static const referenceWidth = 185.0;
   static const edgeInset = 8.0;
@@ -1036,19 +1037,71 @@ class SiloOverlayInsets {
 /// The card-overlay rules that decide placement from measured sizes (the
 /// web's `CardOverlays.tsx`, Silo Android's `OverlayLayoutMath`), free of
 /// widgets so they can be checked on their own.
+/// How large a card's overlay layer draws (Silo Android #912, silo-apple
+/// #1158): every badge length and the watch-status corner are the web's
+/// reference lengths times one overlay scale, the card's scale times a text
+/// factor. Badges grow with the card and, up to [maxTextFactor], with a
+/// larger system text size; smaller text never shrinks them.
+abstract final class SiloOverlayScale {
+  /// Past this much larger text, badges would cover a small poster.
+  static const maxTextFactor = 1.35;
+
+  /// The default text size the system text scale is read at.
+  static const referenceFontSize = 14.0;
+
+  /// The overlay scale: [cardScale] times the text factor for [textScale].
+  static double value(double cardScale, double textScale) => cardScale * textFactor(textScale);
+
+  /// A poster's lengths scale with its width against the 185 px reference;
+  /// a wide card's (landscape cards, episode stills) follow the card-size
+  /// setting from 1 ([wideScale], see [wideScaleForDensity]).
+  static double cardScale({required bool wide, required double width, double wideScale = 1}) =>
+      wide ? wideScale : width / SiloCardOverlays.referenceWidth;
+
+  /// How much text has grown from the default size, held to
+  /// `1..maxTextFactor`; an unset or broken scale counts as 1.
+  static double textFactor(double textScale) =>
+      textScale.isFinite ? textScale.clamp(1.0, maxTextFactor).toDouble() : 1.0;
+
+  /// A wide card's scale for Plezilo's library density (1 compact .. 5
+  /// comfortable, default 3), standing in for Silo's poster size (Compact
+  /// 0.86, Standard 1, Large 1.2): the default is 1 and the ends are Silo's.
+  static double wideScaleForDensity(int density) => switch (density) {
+    <= 1 => 0.86,
+    2 => 0.93,
+    3 => 1.0,
+    4 => 1.1,
+    _ => 1.2,
+  };
+}
+
 abstract final class SiloOverlayLayoutMath {
-  /// A card's insets. A poster scales the web's lengths by its width over
-  /// 185 px, a wide card draws them at 1. A card that draws a progress bar
-  /// along its artwork's bottom lifts the bottom row one inset clear of it.
+  /// A card's insets at its overlay scale ([SiloOverlayScale]): a poster's
+  /// width over 185 px, a wide card's [wideScale], each times the text
+  /// factor for [textScale]. A card that draws a progress bar along its
+  /// artwork's bottom lifts the bottom row one inset clear of it; a wide
+  /// card's bottom inset never drops below its reference size, so a compact
+  /// card's badges still clear Plezy's progress bar, which keeps its size.
   /// The top row always keeps the top-right corner clear: on a poster it is
   /// Silo's watch status, on a wide card Plezilo's own watched check.
-  static SiloOverlayInsets insets({required double width, required bool wide, required bool progress}) {
-    final k = wide ? 1.0 : width / SiloCardOverlays.referenceWidth;
+  static SiloOverlayInsets insets({
+    required double width,
+    required bool wide,
+    required bool progress,
+    double textScale = 1,
+    double wideScale = 1,
+  }) {
+    final k = SiloOverlayScale.value(
+      SiloOverlayScale.cardScale(wide: wide, width: width, wideScale: wideScale),
+      textScale,
+    );
     final edge = SiloCardOverlays.edgeInset * k;
+    var bottom = edge + (progress ? edge : 0);
+    if (wide) bottom = math.max(bottom, SiloCardOverlays.edgeInset * (progress ? 2 : 1));
     return SiloOverlayInsets(
       k: k,
       side: edge,
-      bottom: edge + (progress ? edge : 0),
+      bottom: bottom,
       topRight: (SiloCardOverlays.edgeInset + SiloCardOverlays.watchStatusReserve) * k,
     );
   }

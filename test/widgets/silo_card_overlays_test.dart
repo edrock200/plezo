@@ -437,6 +437,103 @@ void main() {
     expect(paragraph.overflow, TextOverflow.visible, reason: 'a label measured to fit never ellipsizes');
   });
 
+  group('badges follow the system text size, held to 1-1.35x (Silo Android #912)', () {
+    final settings = SiloCardOverlaySettings.settle(
+      SiloOverlayProfileValues(
+        document: {
+          'version': 2,
+          'preset': 'pill',
+          'items': {
+            'runtime': {'enabled': true},
+          },
+        },
+      ),
+      {'enabled': true},
+    );
+
+    Future<void> pumpAt(WidgetTester tester, double textScale) async {
+      await tester.pumpWidget(
+        _app(
+          MediaQuery.withClampedTextScaling(
+            minScaleFactor: textScale,
+            maxScaleFactor: textScale,
+            child: SizedBox(
+              width: 185,
+              height: 277,
+              child: SiloCardOverlayLayer(
+                settings: settings,
+                data: SiloOverlayData.fromJson({'overlay_summary': _summary, 'runtime': 170}),
+                shape: SiloOverlayCardShape.poster,
+                watched: true,
+                imageUrl: (_) => null,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    ({double font, Size badge, Size check, TextScaler scaler}) measured(WidgetTester tester) {
+      final paragraph = tester.renderObject<RenderParagraph>(find.text('2H 50M'));
+      return (
+        font: (paragraph.text as TextSpan).style!.fontSize!,
+        badge: tester.getSize(find.ancestor(of: find.text('2H 50M'), matching: find.byType(SiloOverlayBadgeView))),
+        check: tester.getSize(find.byType(SiloWatchedCheck)),
+        scaler: paragraph.textScaler,
+      );
+    }
+
+    testWidgets('a 2.0 text scale draws badges and the watch status at 1.35x; 0.8 at 1x', (tester) async {
+      await pumpAt(tester, 1);
+      final base = measured(tester);
+      expect(base.font, 10, reason: "the pill look's 10 px at the 185 px reference");
+      expect(base.check, const Size(22, 22));
+
+      // No cache reset between pumps: the text factor is part of the layout's cache key.
+      await pumpAt(tester, 2);
+      final large = measured(tester);
+      expect(large.font, closeTo(13.5, 1e-9), reason: 'exact pixels from the overlay scale');
+      expect(large.scaler, TextScaler.noScaling, reason: 'the text size counts once, not again in the paragraph');
+      expect(large.check.width, closeTo(22 * 1.35, 1e-9));
+      expect(large.badge.height, closeTo(base.badge.height * 1.35, 0.01));
+      expect(large.badge.width, greaterThan(base.badge.width * 1.3));
+      final paragraph = tester.renderObject<RenderParagraph>(find.text('2H 50M'));
+      expect(paragraph.overflow, TextOverflow.visible, reason: 'measured with the drawn style, so it still fits');
+      expect(paragraph.didExceedMaxLines, isFalse);
+
+      await pumpAt(tester, 0.8);
+      final small = measured(tester);
+      expect(small.font, 10, reason: 'smaller text never shrinks badges');
+      expect(small.check, const Size(22, 22));
+      expect(small.badge, base.badge);
+    });
+  });
+
+  testWidgets("a wide Silo card's check follows the library density and text size", (tester) async {
+    await SettingsService.instance.write(SettingsService.libraryDensity, 5);
+    final store = _store({'enabled': true});
+    CardArtworkOverlays.debugStoreResolver = (context, item) => store;
+    await tester.pumpWidget(
+      _app(
+        MediaQuery.withClampedTextScaling(
+          minScaleFactor: 1.1,
+          maxScaleFactor: 1.1,
+          child: MediaCard(
+            item: _movie(MediaBackend.silo, watched: true),
+            width: 320,
+            height: 180,
+            viewModeOverride: ViewMode.grid,
+            cardShapeOverride: CardShape.wide,
+            isOffline: true,
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(indicators(tester).single.checkScale, closeTo(1.2 * 1.1, 1e-9));
+    expect(tester.widget<SiloCardOverlayLayer>(find.byType(SiloCardOverlayLayer)).wideScale, 1.2);
+  });
+
   test('layout: a band look draws scrims and dividers', () {
     final settings = SiloCardOverlaySettings.settle(
       SiloOverlayProfileValues(

@@ -71,12 +71,17 @@ class WatchedIndicator extends StatelessWidget {
   /// progress bars stay): Silo's card overlays draw their own watch status.
   final bool showWatchStatus;
 
+  /// Multiplies the watched check's inset, padding and icon: a wide Silo
+  /// card draws it at its badges' overlay scale.
+  final double checkScale;
+
   const WatchedIndicator({
     super.key,
     required this.item,
     this.size = WatchedIndicatorSize.standard,
     this.showUnwatchedCount,
     this.showWatchStatus = true,
+    this.checkScale = 1,
   });
 
   @override
@@ -96,16 +101,21 @@ class WatchedIndicator extends StatelessWidget {
         // Watched checkmark
         if (showWatched && item.isWatched && !hasActiveProgress)
           Positioned(
-            top: size.checkInset,
-            right: size.checkInset,
+            top: size.checkInset * checkScale,
+            right: size.checkInset * checkScale,
             child: Container(
-              padding: EdgeInsets.all(size.checkPadding),
+              padding: EdgeInsets.all(size.checkPadding * checkScale),
               decoration: BoxDecoration(
                 color: tokens(context).text,
                 shape: BoxShape.circle,
                 boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.3), blurRadius: 4)],
               ),
-              child: AppIcon(Symbols.check_rounded, fill: 1, color: tokens(context).bg, size: size.checkIconSize),
+              child: AppIcon(
+                Symbols.check_rounded,
+                fill: 1,
+                color: tokens(context).bg,
+                size: size.checkIconSize * checkScale,
+              ),
             ),
           ),
         // Unwatched count for shows/seasons

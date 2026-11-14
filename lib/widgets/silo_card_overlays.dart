@@ -20,8 +20,25 @@ import 'silo_overlay_icons.dart';
 import 'watched_indicator.dart';
 
 /// The artwork's shape for card overlays: a poster scales Silo's lengths by
-/// its width over 185 px; a landscape card or episode still draws them at 1.
+/// its width over 185 px; a landscape card or episode still draws them at the
+/// library density's scale ([SiloOverlayScale.wideScaleForDensity]). Both
+/// also follow the system text size, held to 1-1.35x.
 enum SiloOverlayCardShape { poster, wide }
+
+/// The system text scale overlays read: how much the default text size has
+/// grown ([SiloOverlayScale.textFactor] holds it to 1-1.35).
+double siloOverlayTextScaleOf(BuildContext context) {
+  final scaler = MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling;
+  return scaler.scale(SiloOverlayScale.referenceFontSize) / SiloOverlayScale.referenceFontSize;
+}
+
+/// A wide Silo card's overlay scale: the library density's card scale times
+/// the text factor. Plezy's watched check on a wide Silo card (episode
+/// thumbnails, landscape cards) is drawn at it, so it matches the badges.
+double siloWideOverlayScaleOf(BuildContext context) => SiloOverlayScale.value(
+  SiloOverlayScale.wideScaleForDensity(SettingsService.instance.read(SettingsService.libraryDensity)),
+  siloOverlayTextScaleOf(context),
+);
 
 /// Plezy's watch-state overlay for a card's artwork ([WatchedIndicator]),
 /// and on a Silo item Silo's own look, as Silo's apps draw it (Silo Android
@@ -134,7 +151,13 @@ class _CardArtworkOverlaysState extends State<CardArtworkOverlays> {
     final settings = store?.value;
     final badges = settings != null && settings.enabled;
     final poster = widget.shape == SiloOverlayCardShape.poster;
-    if (!poster && !badges) return WatchedIndicator(item: item, size: widget.size);
+    final wideScale = SiloOverlayScale.wideScaleForDensity(
+      SettingsService.instance.read(SettingsService.libraryDensity),
+    );
+    // A wide Silo card keeps Plezy's check, at the badges' scale (Silo
+    // Android #912 scales episode thumbnails' checks the same way).
+    final checkScale = poster ? 1.0 : SiloOverlayScale.value(wideScale, siloOverlayTextScaleOf(context));
+    if (!poster && !badges) return WatchedIndicator(item: item, size: widget.size, checkScale: checkScale);
     // Plezy's "watched indicators" and "unwatched count" settings still gate
     // Silo's corner.
     final showWatched = SettingsService.instance.read(SettingsService.showWatchedIndicators);
@@ -142,11 +165,12 @@ class _CardArtworkOverlaysState extends State<CardArtworkOverlays> {
     return Stack(
       fit: StackFit.expand,
       children: [
-        WatchedIndicator(item: item, size: widget.size, showWatchStatus: !poster),
+        WatchedIndicator(item: item, size: widget.size, showWatchStatus: !poster, checkScale: checkScale),
         SiloCardOverlayLayer(
           settings: badges ? settings : SiloCardOverlaySettings.off,
           data: SiloOverlayData.ofRaw(item.raw),
           shape: widget.shape,
+          wideScale: wideScale,
           progress: siloCardHasProgressBar(item),
           watched: poster && showWatched && item.isWatched,
           episodesLeft: poster && showCount ? siloEpisodesLeftOf(item) : 0,
@@ -181,13 +205,17 @@ int siloEpisodesLeftOf(MediaItem item) {
 /// Silo's badges for one card, laid out as the web's `CardOverlays` lays
 /// them out. Layouts are computed once per (settings, card data, size) and
 /// cached, text widths once per (font, size, text); nothing runs per frame.
-/// Paints no focusable and ignores pointers.
+/// Everything draws at one overlay scale ([SiloOverlayScale]): the card's
+/// scale times the system text size held to 1-1.35x. Badge text is sized in
+/// exact pixels from it and drawn with [TextScaler.noScaling], so the text
+/// size counts once. Paints no focusable and ignores pointers.
 class SiloCardOverlayLayer extends StatelessWidget {
   const SiloCardOverlayLayer({
     super.key,
     required this.settings,
     required this.data,
     required this.shape,
+    this.wideScale = 1,
     this.progress = false,
     this.watched = false,
     this.episodesLeft = 0,
@@ -198,6 +226,10 @@ class SiloCardOverlayLayer extends StatelessWidget {
   final SiloCardOverlaySettings settings;
   final SiloOverlayData data;
   final SiloOverlayCardShape shape;
+
+  /// A wide card's scale before the text factor (the library density's,
+  /// [SiloOverlayScale.wideScaleForDensity]); posters measure their width.
+  final double wideScale;
 
   /// The card shows a progress bar: the bottom row lifts one inset over it.
   final bool progress;
@@ -214,6 +246,7 @@ class SiloCardOverlayLayer extends StatelessWidget {
   Widget build(BuildContext context) {
     final fontFamily = DefaultTextStyle.of(context).style.fontFamily;
     final copy = _copyFor(LocaleSettings.currentLocale);
+    final textScale = SiloOverlayScale.textFactor(siloOverlayTextScaleOf(context));
     // Decorative like the artwork under it: the card announces itself.
     return IgnorePointer(
       child: ExcludeSemantics(
@@ -229,6 +262,8 @@ class SiloCardOverlayLayer extends StatelessWidget {
               width: width,
               height: height,
               shape: shape,
+              textScale: textScale,
+              wideScale: wideScale,
               progress: progress,
               watched: watched,
               episodesLeft: episodesLeft,
@@ -433,6 +468,8 @@ typedef _LayoutKey = (
   double,
   double,
   SiloOverlayCardShape,
+  double,
+  double,
   bool,
   bool,
   int,
@@ -446,7 +483,8 @@ class SiloOverlayLayout {
 
   final SiloOverlayLook look;
 
-  /// The scale of the web's lengths on this card.
+  /// The scale of the web's lengths on this card: its overlay scale, the
+  /// card's scale times the text factor ([SiloOverlayScale]).
   final double k;
   final List<SiloOverlayPart> parts = [];
 
@@ -469,13 +507,28 @@ class SiloOverlayLayout {
     required double width,
     required double height,
     required SiloOverlayCardShape shape,
+    double textScale = 1,
+    double wideScale = 1,
     bool progress = false,
     bool watched = false,
     int episodesLeft = 0,
     String? fontFamily,
     SiloOverlayCopy copy = SiloOverlayCopy.english,
   }) {
-    final key = (settings, data, width, height, shape, progress, watched, episodesLeft, fontFamily, copy);
+    final key = (
+      settings,
+      data,
+      width,
+      height,
+      shape,
+      textScale,
+      wideScale,
+      progress,
+      watched,
+      episodesLeft,
+      fontFamily,
+      copy,
+    );
     final hit = _cache.remove(key);
     if (hit != null) return _cache[key] = hit;
     final layout = compute(
@@ -484,6 +537,8 @@ class SiloOverlayLayout {
       width: width,
       height: height,
       shape: shape,
+      textScale: textScale,
+      wideScale: wideScale,
       progress: progress,
       watched: watched,
       episodesLeft: episodesLeft,
@@ -522,6 +577,8 @@ class SiloOverlayLayout {
     required double width,
     required double height,
     required SiloOverlayCardShape shape,
+    double textScale = 1,
+    double wideScale = 1,
     bool progress = false,
     bool watched = false,
     int episodesLeft = 0,
@@ -533,6 +590,8 @@ class SiloOverlayLayout {
       width: width,
       wide: shape == SiloOverlayCardShape.wide,
       progress: progress,
+      textScale: textScale,
+      wideScale: wideScale,
     );
     final k = insets.k;
     final layout = SiloOverlayLayout._(look, k);
@@ -700,12 +759,12 @@ class _Canvas {
   }
 
   /// The top-right corner (the web's `CardWatchStatus`): the episodes left,
-  /// else the watched check, sized against the 185 px reference like badges.
+  /// else the watched check, at the badges' overlay scale.
   void watchStatus({required bool watched, required int episodesLeft}) {
     final size = SiloCardOverlays.watchStatusSize * k;
     if (episodesLeft > 0) {
       final label = '$episodesLeft';
-      // The web sizes this text from the card alone, without the text ratio.
+      // [k] carries the text factor, so the font size is exact pixels.
       final fontSize = SiloCardOverlays.watchStatusFontSize * k;
       final textW = SiloOverlayLayout._measure(label, siloWatchCountStyle(fontSize, fontFamily));
       final w = SiloOverlayLayoutMath.countWidth(textW, k).ceilToDouble();

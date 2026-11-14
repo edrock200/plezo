@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:clock/clock.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:plezy/services/settings_service.dart' show LibraryDensity;
 import 'package:plezy/services/silo/silo_card_overlay_store.dart';
 import 'package:plezy/services/silo/silo_card_overlays.dart';
 
@@ -505,6 +506,68 @@ void main() {
       expect(wide.side, 8);
       expect(wide.bottom, 16);
       expect(wide.topRight, 38);
+    });
+
+    // Silo Android #912 (OverlayScaleTest): overlay scale = card scale x text factor.
+    test('overlay scale: smaller text never shrinks badges', () {
+      expect(SiloOverlayScale.textFactor(0.85), 1);
+      expect(SiloOverlayScale.textFactor(1), 1);
+    });
+
+    test('overlay scale: larger text grows badges up to 1.35x', () {
+      expect(SiloOverlayScale.textFactor(1.15), 1.15);
+      expect(SiloOverlayScale.textFactor(1.3), 1.3);
+      expect(SiloOverlayScale.textFactor(1.35), 1.35);
+      expect(SiloOverlayScale.textFactor(2), 1.35);
+    });
+
+    test('overlay scale: an unset text scale counts as 1', () {
+      expect(SiloOverlayScale.textFactor(double.nan), 1);
+      expect(SiloOverlayScale.textFactor(double.infinity), 1);
+    });
+
+    test("overlay scale: a poster's card scale is its width against the 185 px reference", () {
+      expect(SiloOverlayScale.cardScale(wide: false, width: 185, wideScale: 1.2), 1);
+      expect(SiloOverlayScale.cardScale(wide: false, width: 92.5, wideScale: 0.86), 0.5);
+    });
+
+    test("overlay scale: a wide card's card scale follows the library density", () {
+      expect(SiloOverlayScale.cardScale(wide: true, width: 280, wideScale: 0.86), 0.86);
+      expect(SiloOverlayScale.wideScaleForDensity(1), 0.86);
+      expect(SiloOverlayScale.wideScaleForDensity(2), 0.93);
+      expect(SiloOverlayScale.wideScaleForDensity(LibraryDensity.defaultValue), 1);
+      expect(SiloOverlayScale.wideScaleForDensity(4), 1.1);
+      expect(SiloOverlayScale.wideScaleForDensity(5), 1.2);
+      expect(SiloOverlayScale.wideScaleForDensity(0), 0.86);
+      expect(SiloOverlayScale.wideScaleForDensity(9), 1.2);
+    });
+
+    test('overlay scale: the value is card scale times text factor', () {
+      expect(SiloOverlayScale.value(1.2, 1.6), closeTo(1.2 * 1.35, 1e-9));
+      expect(SiloOverlayScale.value(0.86, 0.9), 0.86);
+      expect(SiloOverlayScale.value(1, 1.3), 1.3);
+    });
+
+    test('insets: the text factor scales every length; a wide bottom inset keeps its reference size', () {
+      final poster = SiloOverlayLayoutMath.insets(width: 185, wide: false, progress: false, textScale: 2);
+      expect(poster.k, 1.35);
+      expect(poster.side, closeTo(8 * 1.35, 1e-9));
+      expect(poster.topRight, closeTo(38 * 1.35, 1e-9));
+      final small = SiloOverlayLayoutMath.insets(width: 185, wide: false, progress: false, textScale: 0.8);
+      expect(small.k, 1, reason: 'smaller text never shrinks badges');
+      final large = SiloOverlayLayoutMath.insets(
+        width: 320,
+        wide: true,
+        progress: true,
+        wideScale: 1.2,
+        textScale: 1.3,
+      );
+      expect(large.k, closeTo(1.56, 1e-9));
+      expect(large.bottom, closeTo(16 * 1.56, 1e-9));
+      final compact = SiloOverlayLayoutMath.insets(width: 320, wide: true, progress: true, wideScale: 0.86);
+      expect(compact.k, 0.86);
+      expect(compact.side, closeTo(8 * 0.86, 1e-9));
+      expect(compact.bottom, 16, reason: "a compact card's bottom row still clears Plezy's progress bar");
     });
 
     ({List<SiloBadgeOffset> left, List<SiloBadgeOffset> right, double height}) rows(
