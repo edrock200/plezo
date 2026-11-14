@@ -4,6 +4,15 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+From Silo's own apps (November 14, 2026):
+
+- **Silo badges follow your text size:** badges on Silo cards now grow with your device's text size, up to about a third larger, and smaller text never shrinks them.
+- **Badges on landscape cards and episode thumbnails follow the library density setting:** smaller on compact, larger on comfortable, and the watched check matches.
+
+## silo-preview-2.32.0
+
+Released November 14, 2026. Android and Windows.
+
 From Silo's own apps (November 13, 2026):
 
 - **Silo editions:** on a Silo film with several editions (cuts, such as Theatrical and Director's Cut), Play now starts the edition you last watched. "Auto" picks the best copy of that cut for your quality setting and never switches to another cut. *(please test)*
