@@ -4,6 +4,15 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+From Silo's own apps (November 13, 2026):
+
+- **Silo editions:** on a Silo film with several editions (cuts, such as Theatrical and Director's Cut), Play now starts the edition you last watched. "Auto" picks the best copy of that cut for your quality setting and never switches to another cut. *(please test)*
+- **Play Version…** on Silo titles with several editions asks for the edition first, then offers "Auto" or a specific file. The item page shows which edition Play will start.
+
+## silo-preview-2.31.0
+
+Released November 13, 2026. Android and Windows.
+
 - **View All on Silo's Continue Watching row:** with more than 20 titles in progress, the Continue Watching row now ends with View All (on TVs; on phones and tablets tap the row's title), like Silo's own apps, and View All lists them all. Silo sends each Home row with at most 20 titles, so Plezilo never found out there were more.
 
 ## silo-preview-2.30.0
