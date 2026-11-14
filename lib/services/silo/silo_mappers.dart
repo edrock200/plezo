@@ -13,6 +13,7 @@ import '../../media/remote_trailer.dart';
 import '../../utils/json_utils.dart';
 import 'silo_audiobook.dart';
 import 'silo_subtitles.dart';
+import 'silo_version_selector.dart';
 
 /// Everything a mapping needs from the client: who the items belong to and
 /// how to make a server URL absolute.
@@ -316,7 +317,7 @@ abstract final class SiloMappers {
   static MediaVersion? version(Map<String, dynamic> json) {
     final fileId = _string(json['file_id']);
     if (fileId == null) return null;
-    final edition = _string(json['edition_raw']) ?? _string(json['edition_key']);
+    final edition = siloEditionLabel(_string(json['edition_raw']), _string(json['edition_key']));
     return MediaVersion(
       id: fileId,
       height: resolutionHeight(json['resolution']),

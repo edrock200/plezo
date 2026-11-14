@@ -771,7 +771,10 @@
     "mediaFailedToDelete": "Failed to delete media item",
     "rate": "Rate",
     "playFromBeginning": "Play from Beginning",
-    "playVersion": "Play Version..."
+    "playVersion": "Play Version...",
+    "edition": "Edition",
+    "standardEdition": "Standard",
+    "autoVersion": "Auto (${version})"
   },
   "rateSheet": {
     "title": "Rate",

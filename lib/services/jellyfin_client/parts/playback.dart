@@ -108,6 +108,7 @@ mixin _JellyfinPlaybackMethods on _JellyfinClientInternals {
     int mediaIndex = 0,
     String? mediaSourceId,
     String? preferredVersionSignature,
+    TranscodeQualityPreset? qualityPreset,
   }) async {
     final item = await cache.getMetadata(ServerId(cacheServerId), itemId);
     final raw = item?.raw;

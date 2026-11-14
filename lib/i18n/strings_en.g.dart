@@ -2142,6 +2142,15 @@ class Translations$mediaMenu$en {
 
 	/// en: 'Play Version...'
 	String get playVersion => 'Play Version...';
+
+	/// en: 'Edition'
+	String get edition => 'Edition';
+
+	/// en: 'Standard'
+	String get standardEdition => 'Standard';
+
+	/// en: 'Auto (${version})'
+	String autoVersion({required Object version}) => 'Auto (${version})';
 }
 
 // Path: rateSheet
@@ -9941,6 +9950,9 @@ extension on Translations {
 			'mediaMenu.rate' => 'Rate',
 			'mediaMenu.playFromBeginning' => 'Play from Beginning',
 			'mediaMenu.playVersion' => 'Play Version...',
+			'mediaMenu.edition' => 'Edition',
+			'mediaMenu.standardEdition' => 'Standard',
+			'mediaMenu.autoVersion' => ({required Object version}) => 'Auto (${version})',
 			'rateSheet.title' => 'Rate',
 			'rateSheet.server' => 'Server',
 			'rateSheet.favorite' => 'Favorite',
@@ -10237,11 +10249,11 @@ extension on Translations {
 			'profiles.signOutFailed' => 'Sign out failed.',
 			'profiles.sectionTitle' => 'Profiles',
 			'profiles.summarySingle' => 'Add profiles to mix managed users and local identities',
+			_ => null,
+		} ?? switch (path) {
 			'profiles.summaryMultipleWithActive' => ({required Object count, required Object activeName}) => '${count} profiles · active: ${activeName}',
 			'profiles.summaryMultiple' => ({required Object count}) => '${count} profiles',
 			'profiles.removeConnectionTitle' => 'Remove connection?',
-			_ => null,
-		} ?? switch (path) {
 			'profiles.removeConnectionMessage' => ({required Object displayName, required Object connectionLabel}) => 'Remove ${displayName}\'s access to ${connectionLabel}. Other profiles keep it.',
 			'profiles.deleteProfileTitle' => 'Delete profile?',
 			'profiles.deleteProfileMessage' => ({required Object displayName}) => 'Remove ${displayName} and its connections. Servers stay available.',
@@ -10751,11 +10763,11 @@ extension on Translations {
 			'liveTv.live' => 'LIVE',
 			'liveTv.premiereBadge' => 'NEW',
 			'liveTv.reloadGuide' => 'Reload Guide',
+			_ => null,
+		} ?? switch (path) {
 			'liveTv.searchGuide' => 'Search Guide',
 			'liveTv.searchHint' => 'Search channels & programs',
 			'liveTv.searchNoResults' => ({required Object query}) => 'No matches for "${query}"',
-			_ => null,
-		} ?? switch (path) {
 			'liveTv.channelsSection' => 'Channels',
 			'liveTv.programsSection' => 'Programs',
 			'liveTv.now' => 'Now',
@@ -11265,11 +11277,11 @@ extension on Translations {
 			'videoSettings.sleepTimerActive' => ({required Object duration}) => 'Active (${duration})',
 			'videoSettings.zoom' => 'Zoom',
 			'videoSettings.sleepTimer' => 'Sleep Timer',
+			_ => null,
+		} ?? switch (path) {
 			'videoSettings.audioSync' => 'Audio Sync',
 			'videoSettings.subtitleSync' => 'Subtitle Sync',
 			'videoSettings.hdr' => 'HDR',
-			_ => null,
-		} ?? switch (path) {
 			'videoSettings.hdrUnsupported' => 'HDR isn\'t available here — this desktop compositor or video output can\'t carry it.',
 			'videoSettings.hdrToneMapping' => 'HDR Tone Mapping',
 			'videoSettings.hdrToneMappingCompositor' => 'Compositor',
@@ -11779,11 +11791,11 @@ extension on Translations {
 			'siloRequests.queued' => 'Queued for download',
 			'siloRequests.downloading' => 'Downloading',
 			'siloRequests.addingToLibrary' => 'Adding to your library',
+			_ => null,
+		} ?? switch (path) {
 			'siloRequests.partlyInLibrary' => 'Partly in your library',
 			'siloRequests.reasonAlreadyRequested' => 'Already requested',
 			'siloRequests.reasonAlreadyAvailable' => 'Already in your library',
-			_ => null,
-		} ?? switch (path) {
 			'siloRequests.reasonQuotaExceeded' => 'Request limit reached',
 			'siloRequests.reasonRequestsDisabled' => 'Requests are turned off',
 			'siloRequests.reasonBlocked' => 'You can\'t request media right now',

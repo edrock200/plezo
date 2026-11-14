@@ -4,15 +4,18 @@ import '../media/ids.dart';
 
 import 'package:flutter/material.dart';
 
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:provider/provider.dart';
 
 import '../media/media_item.dart';
+import '../media/media_server_client.dart';
 import '../media/media_version.dart';
 import '../media/media_version_preference.dart';
 import '../mpv/mpv.dart';
 import '../models/transcode_quality_preset.dart';
 import '../providers/download_provider.dart';
 import '../providers/multi_server_provider.dart';
+import '../providers/offline_mode_provider.dart';
 import '../providers/watch_state_store.dart';
 import '../watch_together/providers/watch_together_provider.dart';
 import '../watch_together/models/watch_copy.dart';
@@ -21,6 +24,8 @@ import '../services/external_player_service.dart';
 import '../services/local_playback_history.dart';
 import '../services/offline_watch_sync_service.dart';
 import '../services/settings_service.dart';
+import '../services/silo/silo_client.dart';
+import '../services/silo/silo_version_selector.dart';
 import '../services/playback_launch_observer.dart';
 import '../services/playback_coordinator.dart';
 import '../services/music/music_playback_service.dart';
@@ -599,13 +604,19 @@ Future<bool> promptAndPlayVersion(BuildContext context, MediaItem item) async {
   // requires a reachable server: capabilities are static, and a server
   // dropping between surface build and tap must not offer transcodes.
   final canTranscode = itemServerOnline && (client?.capabilities.videoTranscoding ?? false);
-  final versions = client == null
+  // Silo: Edition picks the cut and Version Auto the best file in it
+  // (Silo Android #899). Null when it has no menu (offline, no files).
+  final siloPick = client is SiloClient && itemServerOnline ? await _pickSiloVersion(context, client, item) : null;
+  if (!context.mounted || siloPick == _SiloVersionPick.cancelled) return false;
+  final versions = siloPick != null
+      ? siloPick.versions
+      : client == null
       ? item.mediaVersions ?? const <MediaVersion>[]
       : await resolveMediaVersions(item, client);
   if (!context.mounted) return false;
 
-  int selectedVersionIndex = 0;
-  if (versions.length > 1) {
+  int selectedVersionIndex = siloPick?.index ?? 0;
+  if (siloPick == null && versions.length > 1) {
     final picked = await showVersionPickerDialog(context, versions, t.mediaMenu.playVersion);
     if (picked == null || !context.mounted) return false;
     selectedVersionIndex = picked;
@@ -625,8 +636,13 @@ Future<bool> promptAndPlayVersion(BuildContext context, MediaItem item) async {
   }
 
   // Remember the pick so Continue Watching / plain Play resume this version
-  // (#1492) — same store the in-player version switch writes.
-  if (versions.length > 1) {
+  // (#1492) — same store the in-player version switch writes. A Silo Auto
+  // pick is no pin: it forgets an earlier one, and the server's history
+  // (last played file and edition) opens the page on this edition next time.
+  if (siloPick?.auto ?? false) {
+    await resetSavedMediaVersionPreferenceFor(item);
+    if (!context.mounted) return false;
+  } else if (versions.length > 1) {
     await saveMediaVersionPreferenceFor(item, index: selectedVersionIndex, versions: versions);
     if (!context.mounted) return false;
   }
@@ -640,6 +656,102 @@ Future<bool> promptAndPlayVersion(BuildContext context, MediaItem item) async {
   );
   return true;
 }
+
+/// A Silo Play Version pick: the file to start ([index] into [versions]) and
+/// whether it is an edition's Auto file rather than an explicit pin.
+class _SiloVersionPick {
+  final List<MediaVersion> versions;
+  final int index;
+  final bool auto;
+
+  const _SiloVersionPick(this.versions, this.index, {required this.auto});
+
+  static const cancelled = _SiloVersionPick([], -1, auto: false);
+}
+
+/// The quality a plain Play of [client]'s items would start at: the saved
+/// default, or the cellular one on a cellular-only connection when set.
+/// Null before settings have loaded.
+TranscodeQualityPreset? startupQualityPresetFor(BuildContext context, MediaServerClient? client) {
+  final settings = SettingsService.instanceOrNull;
+  if (settings == null) return null;
+  return TranscodeQualityPreset.resolveStartupDefault(
+    serverSupportsTranscoding: client?.capabilities.videoTranscoding ?? false,
+    onCellularOnly: context.read<OfflineModeProvider?>()?.isCellularOnly ?? false,
+    cellularDefault: settings.read(SettingsService.cellularQualityPreset),
+    generalDefault: settings.read(SettingsService.defaultQualityPreset),
+  );
+}
+
+/// Silo's Edition and Version menus as two pickers: with two or more
+/// editions, Edition first (the shown one ticked), then the edition's files
+/// under an "Auto" row that keeps Version on Auto. Null when the item has no
+/// menu (the generic picker runs); [_SiloVersionPick.cancelled] when the
+/// viewer dismissed a picker.
+Future<_SiloVersionPick?> _pickSiloVersion(BuildContext context, SiloClient client, MediaItem item) async {
+  final preset = startupQualityPresetFor(context, client);
+  final SiloVersionMenu? menu;
+  try {
+    menu = await client.fetchVersionMenu(item, qualityPreset: preset);
+  } catch (e) {
+    appLogger.d('Silo version menu unavailable', error: e);
+    return null;
+  }
+  if (menu == null || !context.mounted) return context.mounted ? null : _SiloVersionPick.cancelled;
+  if (!menu.hasEditionChoices && menu.versions.length < 2) return null;
+
+  var edition = menu.current;
+  if (menu.hasEditionChoices) {
+    final picked = await showOptionPickerDialog<SiloEdition>(
+      context,
+      title: t.mediaMenu.edition,
+      options: [
+        for (final e in menu.editions)
+          (
+            icon: e.id == menu.current.id ? Symbols.check_rounded : Symbols.movie_rounded,
+            label: e.label ?? t.mediaMenu.standardEdition,
+            value: e,
+          ),
+      ],
+    );
+    if (picked == null || !context.mounted) return _SiloVersionPick.cancelled;
+    edition = picked;
+  }
+
+  // The current edition keeps the file the page shows (a resumed later part
+  // included); another edition starts on its own Auto file.
+  final autoIndex = edition.id == menu.current.id ? menu.shownIndex : menu.autoIndex(edition);
+  if (edition.versionIndexes.length < 2) return _SiloVersionPick(menu.versions, autoIndex, auto: true);
+  final picked = await showOptionPickerDialog<int>(
+    context,
+    title: t.mediaMenu.playVersion,
+    options: [
+      (
+        icon: Symbols.auto_awesome_rounded,
+        label: t.mediaMenu.autoVersion(version: _siloFileLabel(menu.versions[autoIndex])),
+        value: -1,
+      ),
+      for (final i in edition.versionIndexes)
+        (icon: Symbols.video_file_rounded, label: _siloFileLabel(menu.versions[i]), value: i),
+    ],
+  );
+  if (picked == null || !context.mounted) return _SiloVersionPick.cancelled;
+  return picked < 0
+      ? _SiloVersionPick(menu.versions, autoIndex, auto: true)
+      : _SiloVersionPick(menu.versions, picked, auto: false);
+}
+
+/// A file's label inside its edition: the edition name is already chosen.
+String _siloFileLabel(MediaVersion version) => MediaVersion(
+  id: version.id,
+  width: version.width,
+  height: version.height,
+  videoResolution: version.videoResolution,
+  videoCodec: version.videoCodec,
+  bitrate: version.bitrate,
+  container: version.container,
+  parts: version.parts,
+).displayLabel;
 
 /// Opens the Watch Together room's file [copy] in a new player. Returns
 /// whether navigation started; false when the item can't be fetched or the

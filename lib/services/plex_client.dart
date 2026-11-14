@@ -4373,6 +4373,7 @@ class PlexClient
     int mediaIndex = 0,
     String? mediaSourceId,
     String? preferredVersionSignature,
+    TranscodeQualityPreset? qualityPreset,
   }) async {
     final cached = await cache.get(profileScopeId.cacheServerId, '/library/metadata/$itemId');
     if (cached == null) return null;

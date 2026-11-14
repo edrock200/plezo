@@ -1,6 +1,7 @@
 import '../exceptions/media_server_exceptions.dart';
 import '../media/media_source_info.dart';
 import '../media/media_sort.dart';
+import '../models/transcode_quality_preset.dart';
 import '../services/api_cache.dart';
 import '../services/playback_initialization_types.dart';
 import '../utils/app_logger.dart';
@@ -766,6 +767,7 @@ abstract class MediaServerClient {
     int mediaIndex = 0,
     String? mediaSourceId,
     String? preferredVersionSignature,
+    TranscodeQualityPreset? qualityPreset,
   });
 
   /// Build a scrub preview source for [item] using [mediaSource]. Plex

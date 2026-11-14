@@ -26,6 +26,10 @@ extension _MediaDetailPlaybackTracksStatus on _MediaDetailScreenState {
     final settings = await SettingsService.getInstance();
     if (!_canUseDetail) return;
     bindListenable(settings.listenableOf(SettingsService.mediaVersionPreferences), _onPlaybackVersionChanged);
+    // Silo's Version Auto ranks files with the startup quality, so the file
+    // the page shows follows it (Silo Android #899).
+    bindListenable(settings.listenableOf(SettingsService.defaultQualityPreset), _onPlaybackVersionChanged);
+    bindListenable(settings.listenableOf(SettingsService.cellularQualityPreset), _onPlaybackVersionChanged);
   }
 
   void _onPlaybackVersionChanged() {
@@ -52,11 +56,12 @@ extension _MediaDetailPlaybackTracksStatus on _MediaDetailScreenState {
     final client = widget.isOffline ? null : _getMediaClientForMetadata(context);
     if (!widget.isOffline && client == null) return;
     final downloads = widget.isOffline ? context.read<DownloadProvider>() : null;
+    final qualityPreset = client == null ? null : startupQualityPresetFor(context, client);
     _playbackProbeTimer?.cancel();
     final generation = _playbackProbeGeneration;
     _playbackProbeTimer = Timer(const Duration(milliseconds: 350), () {
       if (!mounted || generation != _playbackProbeGeneration || _playbackProbeRequests.containsKey(key)) return;
-      unawaited(_probeTarget(client, downloads, target, generation));
+      unawaited(_probeTarget(client, downloads, target, generation, qualityPreset));
     });
   }
 
@@ -65,6 +70,7 @@ extension _MediaDetailPlaybackTracksStatus on _MediaDetailScreenState {
     DownloadProvider? downloads,
     MediaItem target,
     int generation,
+    TranscodeQualityPreset? qualityPreset,
   ) async {
     final key = target.globalKey;
     final request = Object();
@@ -102,6 +108,7 @@ extension _MediaDetailPlaybackTracksStatus on _MediaDetailScreenState {
           mediaIndex: selection?.index ?? 0,
           mediaSourceId: selection?.sourceId,
           preferredVersionSignature: selection?.signature,
+          qualityPreset: qualityPreset,
         );
         if (!current() || source == null) return;
         mediaIndex = source.mediaIndex ?? selection?.index ?? 0;
@@ -176,11 +183,15 @@ extension _MediaDetailPlaybackTracksStatus on _MediaDetailScreenState {
         ? const <String>[]
         : buildMediaVideoLabels(probed!.item, versionIndex: probed.mediaIndex!, partIndex: source?.partIndex);
     if (probed == null) _scheduleTargetProbe(context, target);
-    if (preview == null && videoLabels.isEmpty) return null;
+    // A Silo item with several editions names the one Play starts, which
+    // is the last-played edition (Silo Android #899).
+    final editionLabel = probed?.mediaIndex == null ? null : _siloEditionLabel(probed!.item, probed.mediaIndex!);
+    if (preview == null && videoLabels.isEmpty && editionLabel == null) return null;
 
     final audioLabel = preview?.audio?.label;
     final subtitleLabel = preview?.subtitle?.label;
     final parts = <MetadataLinePart>[
+      ?editionLabel,
       // Shed order on a tight row: the long codec details first (subtitle's,
       // then audio's — the details sheet has them in full), then the short
       // picture labels, then the audio track; the subtitle decision always
@@ -229,5 +240,15 @@ extension _MediaDetailPlaybackTracksStatus on _MediaDetailScreenState {
         child: FittedMetadataLine(textStyle: textStyle, parts: parts, ratingIconSize: textStyle.fontSize! * 1.15),
       ),
     );
+  }
+
+  /// The edition of [item]'s version at [index] when it is a Silo item with
+  /// two or more editions; null otherwise.
+  MetadataLineText? _siloEditionLabel(MediaItem item, int index) {
+    if (item is! SiloMediaItem) return null;
+    final versions = item.mediaVersions;
+    if (versions == null || index < 0 || index >= versions.length) return null;
+    if (versions.map((v) => v.name ?? '').toSet().length < 2) return null;
+    return MetadataLineText(versions[index].name ?? t.mediaMenu.standardEdition, dropPriority: 1);
   }
 }

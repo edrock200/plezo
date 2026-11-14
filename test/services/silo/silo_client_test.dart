@@ -1405,6 +1405,87 @@ void main() {
     });
   });
 
+  group('Version Auto inside the edition (Silo Android #899)', () {
+    final watch = {
+      'content_id': 'movie:ed',
+      'type': 'movie',
+      'user_data': {'last_file_id': '3', 'last_edition_key': 'extended', 'position_seconds': 0},
+      'versions': [
+        {'file_id': '1', 'resolution': '2160p', 'edition_key': 'theatrical', 'edition_raw': 'Theatrical'},
+        {'file_id': '2', 'resolution': '1080p', 'edition_key': 'theatrical', 'edition_raw': 'Theatrical'},
+        {'file_id': '3', 'resolution': '720p', 'edition_key': 'extended', 'edition_raw': 'Extended'},
+        {'file_id': '4', 'resolution': '2160p', 'edition_key': 'extended', 'edition_raw': 'Extended'},
+      ],
+    };
+
+    SiloClient editionClient(void Function(Map<String, dynamic> body) onStart) => client((request) async {
+      final path = Uri.decodeComponent(request.url.path);
+      if (path.endsWith('/watch/movie:ed')) return _json(watch);
+      if (path.endsWith('/playback/capabilities')) {
+        return _json({
+          'state': 'available',
+          'allowed': true,
+          'installation_id': 'inst-1',
+          'protocol_versions': [3],
+          'features': ['sequenced_progress_v1'],
+        });
+      }
+      if (path.endsWith('/playback/start')) {
+        onStart(jsonDecode(request.body) as Map<String, dynamic>);
+        return _json({
+          'protocol_version': 3,
+          'outcome': 'playable',
+          'session_id': 'sess-ed',
+          'playback_plan': {
+            'delivery': 'original_http',
+            'stream': {'url': '/api/v2/stream/sess-ed?st=sig'},
+          },
+        }, 201);
+      }
+      return _json({}, 404);
+    });
+
+    final movie = MediaItem.silo(id: 'movie:ed', kind: MediaKind.movie, serverId: 'srv-1');
+
+    test('plain Play starts the last-played edition\'s best file for the quality', () async {
+      final starts = <String>[];
+      final c = editionClient((body) => starts.add(body['file_id'] as String));
+      await c.getPlaybackInitialization(PlaybackInitializationOptions(metadata: movie, selectedMediaIndex: 0));
+      await c.getPlaybackInitialization(
+        PlaybackInitializationOptions(
+          metadata: movie,
+          selectedMediaIndex: 0,
+          qualityPreset: TranscodeQualityPreset.p1080_8mbps,
+        ),
+      );
+      // Original: the cut's 4K file; a 1080p cap: the cut's 720p file, never Theatrical's 1080p.
+      expect(starts, ['4', '3']);
+
+      // The page reads the same file from the cached watch detail.
+      final shown = await c.fetchCachedMediaSourceInfo('movie:ed', qualityPreset: TranscodeQualityPreset.p1080_8mbps);
+      expect(shown?.mediaIndex, 2);
+    });
+
+    test('a named file, a signature or a non-default index is honoured as before', () async {
+      final starts = <String>[];
+      final c = editionClient((body) => starts.add(body['file_id'] as String));
+      await c.getPlaybackInitialization(
+        PlaybackInitializationOptions(metadata: movie, selectedMediaIndex: 0, selectedMediaSourceId: '2'),
+      );
+      await c.getPlaybackInitialization(PlaybackInitializationOptions(metadata: movie, selectedMediaIndex: 1));
+      expect(starts, ['2', '2']);
+    });
+
+    test('the Play Version menu offers the editions with the shown one current', () async {
+      final c = editionClient((_) {});
+      final menu = (await c.fetchVersionMenu(movie, qualityPreset: TranscodeQualityPreset.p1080_8mbps))!;
+      expect(menu.editions.map((e) => e.label), ['Theatrical', 'Extended']);
+      expect(menu.current.id, 'extended');
+      expect(menu.versions[menu.shownIndex].id, '3');
+      expect(menu.versions[menu.autoIndex(menu.editions.first)].id, '2');
+    });
+  });
+
   group('box sets (Silo Android #646)', () {
     Map<String, dynamic> boxSetFields({String id = '1241', String library = '1'}) => {
       'id': id,

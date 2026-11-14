@@ -263,12 +263,13 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
     if (versions.isEmpty) {
       throw PlaybackException(t.messages.playbackNoMediaSources, reason: PlaybackFailureReason.noPlayableSource);
     }
-    final versionIndex = SiloMappers.selectVersionIndex(
+    final versionIndex = _selectVersionIndex(
       versions,
       watch,
       requestedIndex: options.selectedMediaIndex,
       requestedFileId: options.selectedMediaSourceId ?? extraFileId,
       preferredSignature: options.preferredVersionSignature,
+      qualityPreset: options.qualityPreset,
     );
     final version = versions[versionIndex];
     final fileId = version['file_id']?.toString();
@@ -745,18 +746,59 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
     int mediaIndex = 0,
     String? mediaSourceId,
     String? preferredVersionSignature,
+    TranscodeQualityPreset? qualityPreset,
   }) async {
     final watch = await cache.get(ServerId(cacheServerId), _watchPath(itemId));
     final versions = SiloMappers.watchVersions(watch);
     if (versions.isEmpty) return null;
-    final index = SiloMappers.selectVersionIndex(
+    final index = _selectVersionIndex(
       versions,
       watch,
       requestedIndex: mediaIndex,
       requestedFileId: mediaSourceId,
       preferredSignature: preferredVersionSignature,
+      qualityPreset: qualityPreset,
     );
     return SiloMappers.sourceInfo(versions[index], videoUrl: '', mediaIndex: index, ctx: _ctx);
+  }
+
+  /// The version to play: the caller's (file id, signature, or an index
+  /// other than the default 0), else Version Auto inside the last-played
+  /// edition for [qualityPreset] ([SiloVersionSelector], Silo Android #899),
+  /// so plain Play starts the file the item page shows.
+  int _selectVersionIndex(
+    List<Map<String, dynamic>> versions,
+    Map<String, dynamic>? watch, {
+    required int requestedIndex,
+    String? requestedFileId,
+    String? preferredSignature,
+    TranscodeQualityPreset? qualityPreset,
+  }) {
+    final explicit = requestedFileId != null || preferredSignature != null || requestedIndex != 0;
+    if (explicit) {
+      return SiloMappers.selectVersionIndex(
+        versions,
+        watch,
+        requestedIndex: requestedIndex,
+        requestedFileId: requestedFileId,
+        preferredSignature: preferredSignature,
+      );
+    }
+    final index = SiloVersionSelector.selectForWatch(
+      watch,
+      versions,
+      capRank: SiloVersionSelector.capRank(qualityPreset),
+    );
+    return index < 0 ? 0 : index;
+  }
+
+  /// The edition and version choices of [item] for the Play Version menu,
+  /// from its watch detail (network, then cache). Null when it has no files.
+  Future<SiloVersionMenu?> fetchVersionMenu(MediaItem item, {TranscodeQualityPreset? qualityPreset}) async {
+    final watch = await _watchDetail(item.id);
+    final versions = SiloMappers.watchVersions(watch);
+    if (versions.isEmpty) return null;
+    return SiloVersionMenu.fromWatch(watch, versions, capRank: SiloVersionSelector.capRank(qualityPreset));
   }
 
   @override

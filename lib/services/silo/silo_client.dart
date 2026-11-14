@@ -60,6 +60,7 @@ import 'silo_managed_downloads.dart';
 import 'silo_stream_auth.dart';
 import 'silo_live_subtitles.dart';
 import 'silo_mappers.dart';
+import 'silo_version_selector.dart';
 import 'silo_calendar.dart';
 import 'silo_playback_caps.dart';
 import 'silo_letter_index.dart';

@@ -29,6 +29,7 @@ import 'package:plezy/providers/multi_server_provider.dart';
 import 'package:plezy/providers/watch_state_store.dart';
 import 'package:plezy/screens/media_detail_screen.dart';
 import 'package:plezy/models/download_models.dart';
+import 'package:plezy/models/transcode_quality_preset.dart';
 import 'package:plezy/navigation/profile_navigation_scope.dart';
 import 'package:plezy/services/plex_mappers.dart';
 
@@ -3496,6 +3497,7 @@ class _FakeMediaServerClient implements MediaServerClient {
     int mediaIndex = 0,
     String? mediaSourceId,
     String? preferredVersionSignature,
+    TranscodeQualityPreset? qualityPreset,
   }) async {
     sourceReads++;
     final raw = rawItems[itemId];
