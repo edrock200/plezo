@@ -1211,8 +1211,8 @@
     "minutesLeft": "${minutes} daq qoldi",
     "moreLikeThis": "Oʻxshashlar",
     "titleCount": {
-      "one": "${n} ta nom",
-      "other": "${n} ta nom"
+      "one": "${count} ta nom",
+      "other": "${count} ta nom"
     },
     "person": {
       "born": "Tugʻilgan",

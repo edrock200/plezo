@@ -1339,9 +1339,9 @@ class _Translations$discover$hu extends Translations$discover$en {
 	@override String get tvShow => 'TV-sorozat';
 	@override String minutesLeft({required Object minutes}) => '${minutes} perc van hátra';
 	@override String get moreLikeThis => 'Hasonló tartalmak';
-	@override String titleCount({required num n}) => (_root.$meta.cardinalResolver ?? PluralResolvers.cardinal('hu'))(n,
-		one: '${n} cím',
-		other: '${n} cím',
+	@override String titleCount({required num n, required Object count}) => (_root.$meta.cardinalResolver ?? PluralResolvers.cardinal('hu'))(n,
+		one: '${count} cím',
+		other: '${count} cím',
 	);
 	@override late final _Translations$discover$person$hu person = _Translations$discover$person$hu._(_root);
 }
@@ -4517,7 +4517,7 @@ extension on TranslationsHu {
 			'discover.tvShow' => 'TV-sorozat',
 			'discover.minutesLeft' => ({required Object minutes}) => '${minutes} perc van hátra',
 			'discover.moreLikeThis' => 'Hasonló tartalmak',
-			'discover.titleCount' => ({required num n}) => (_root.$meta.cardinalResolver ?? PluralResolvers.cardinal('hu'))(n, one: '${n} cím', other: '${n} cím', ), 
+			'discover.titleCount' => ({required num n, required Object count}) => (_root.$meta.cardinalResolver ?? PluralResolvers.cardinal('hu'))(n, one: '${count} cím', other: '${count} cím', ), 
 			'discover.person.born' => 'Született',
 			'discover.person.died' => 'Elhunyt',
 			'discover.person.birthplace' => 'Születési hely',

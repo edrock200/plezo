@@ -1219,10 +1219,10 @@
     "minutesLeft": "Осталось ${minutes} мин",
     "moreLikeThis": "Похожее",
     "titleCount": {
-      "one": "${n} название",
-      "few": "${n} названия",
-      "many": "${n} названий",
-      "other": "${n} названия"
+      "one": "${count} название",
+      "few": "${count} названия",
+      "many": "${count} названий",
+      "other": "${count} названия"
     },
     "person": {
       "born": "Дата рождения",

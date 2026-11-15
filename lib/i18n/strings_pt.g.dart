@@ -1339,9 +1339,9 @@ class _Translations$discover$pt extends Translations$discover$en {
 	@override String get tvShow => 'Série de TV';
 	@override String minutesLeft({required Object minutes}) => '${minutes} min restantes';
 	@override String get moreLikeThis => 'Títulos semelhantes';
-	@override String titleCount({required num n}) => (_root.$meta.cardinalResolver ?? PluralResolvers.cardinal('pt'))(n,
-		one: '${n} título',
-		other: '${n} títulos',
+	@override String titleCount({required num n, required Object count}) => (_root.$meta.cardinalResolver ?? PluralResolvers.cardinal('pt'))(n,
+		one: '${count} título',
+		other: '${count} títulos',
 	);
 	@override late final _Translations$discover$person$pt person = _Translations$discover$person$pt._(_root);
 }
@@ -4533,7 +4533,7 @@ extension on TranslationsPt {
 			'discover.tvShow' => 'Série de TV',
 			'discover.minutesLeft' => ({required Object minutes}) => '${minutes} min restantes',
 			'discover.moreLikeThis' => 'Títulos semelhantes',
-			'discover.titleCount' => ({required num n}) => (_root.$meta.cardinalResolver ?? PluralResolvers.cardinal('pt'))(n, one: '${n} título', other: '${n} títulos', ), 
+			'discover.titleCount' => ({required num n, required Object count}) => (_root.$meta.cardinalResolver ?? PluralResolvers.cardinal('pt'))(n, one: '${count} título', other: '${count} títulos', ), 
 			'discover.person.born' => 'Nascimento',
 			'discover.person.died' => 'Falecimento',
 			'discover.person.birthplace' => 'Local de nascimento',

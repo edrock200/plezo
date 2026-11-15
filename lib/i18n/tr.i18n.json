@@ -1211,8 +1211,8 @@
     "minutesLeft": "${minutes} dk kaldı",
     "moreLikeThis": "Buna Benzerler",
     "titleCount": {
-      "one": "${n} başlık",
-      "other": "${n} başlık"
+      "one": "${count} başlık",
+      "other": "${count} başlık"
     },
     "person": {
       "born": "Doğum",

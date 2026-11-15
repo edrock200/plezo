@@ -1211,8 +1211,8 @@
     "minutesLeft": "nog ${minutes} min",
     "moreLikeThis": "Meer zoals dit",
     "titleCount": {
-      "one": "${n} titel",
-      "other": "${n} titels"
+      "one": "${count} titel",
+      "other": "${count} titels"
     },
     "person": {
       "born": "Geboren",

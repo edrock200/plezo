@@ -1211,8 +1211,8 @@
     "minutesLeft": "${minutes} мин қалды",
     "moreLikeThis": "Ұқсастар",
     "titleCount": {
-      "one": "${n} атау",
-      "other": "${n} атау"
+      "one": "${count} атау",
+      "other": "${count} атау"
     },
     "person": {
       "born": "Туған күні",

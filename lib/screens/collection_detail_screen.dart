@@ -20,6 +20,7 @@ import '../utils/content_utils.dart';
 import '../utils/deletion_notifier.dart';
 import '../utils/dialogs.dart';
 import '../utils/error_message_utils.dart';
+import '../utils/formatters.dart';
 import '../utils/download_utils.dart';
 import '../utils/downloads_folder_actions.dart';
 import '../utils/desktop_window_padding.dart';
@@ -268,7 +269,7 @@ class _CollectionDetailScreenState extends BaseMediaListDetailScreen<CollectionD
   /// narrower than the truth.
   String _metaLine() {
     final count = totalSize > 0 ? totalSize : (widget.collection.childCount ?? 0);
-    final parts = <String>[count == 1 ? t.playlists.oneItem : t.playlists.itemCount(count: count)];
+    final parts = <String>[count == 1 ? t.playlists.oneItem : t.playlists.itemCount(count: formatGroupedCount(count))];
     if (totalSize > 0 && loadedItems.length == totalSize) {
       final years = loadedItems.values.map((i) => i.year).nonNulls.toList();
       if (years.isNotEmpty) {

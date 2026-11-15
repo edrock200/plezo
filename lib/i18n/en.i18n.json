@@ -1273,8 +1273,8 @@
     "minutesLeft": "${minutes} min left",
     "moreLikeThis": "More Like This",
     "titleCount": {
-      "one": "${n} title",
-      "other": "${n} titles"
+      "one": "${count} title",
+      "other": "${count} titles"
     },
     "person": {
       "born": "Born",

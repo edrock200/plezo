@@ -11,6 +11,21 @@ String padNumber(int number, int width) {
   return number.toString().padLeft(width, '0');
 }
 
+/// Languages that write a four-digit number without a thousands separator
+/// and group from five digits ("1284", "12.840"): CLDR's minimum grouping
+/// digits of 2, which `NumberFormat` does not apply.
+const _minimumGroupingTwo = {'bg', 'es', 'pl'};
+
+/// A count with the app language's thousands separator ("1,284 titles",
+/// "1.284 Titel"), as Silo's apps show collection and person counts (Silo
+/// Android #916). Only for counts: years, codes and episode numbers stay
+/// ungrouped.
+String formatGroupedCount(int count, {AppLocale? locale}) {
+  final appLocale = locale ?? LocaleSettings.currentLocale;
+  if (count.abs() < 10000 && _minimumGroupingTwo.contains(appLocale.languageCode)) return '$count';
+  return NumberFormat.decimalPattern(appLocale.intlLocaleName).format(count);
+}
+
 class ByteFormatter {
   ByteFormatter._();
 

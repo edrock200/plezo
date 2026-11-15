@@ -1211,8 +1211,8 @@
     "minutesLeft": "${minutes} dəq qaldı",
     "moreLikeThis": "Buna bənzərlər",
     "titleCount": {
-      "one": "${n} başlıq",
-      "other": "${n} başlıq"
+      "one": "${count} başlıq",
+      "other": "${count} başlıq"
     },
     "person": {
       "born": "Doğum tarixi",

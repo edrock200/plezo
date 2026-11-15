@@ -1211,8 +1211,8 @@
     "minutesLeft": "quedan ${minutes} min",
     "moreLikeThis": "Más contenido similar",
     "titleCount": {
-      "one": "${n} título",
-      "other": "${n} títulos"
+      "one": "${count} título",
+      "other": "${count} títulos"
     },
     "person": {
       "born": "Nacimiento",

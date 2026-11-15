@@ -22,6 +22,7 @@ import '../widgets/optimized_media_image.dart';
 import '../utils/media_image_helper.dart';
 import '../i18n/app_locale_utils.dart';
 import '../i18n/strings.g.dart';
+import '../utils/formatters.dart';
 import 'base_media_list_detail_screen.dart';
 import 'focusable_detail_screen_mixin.dart';
 import '../mixins/grid_focus_node_mixin.dart';
@@ -224,7 +225,7 @@ class _ActorMediaScreenState extends BaseMediaListDetailScreen<ActorMediaScreen>
                       if (totalSize > 0) ...[
                         const SizedBox(height: 4),
                         Text(
-                          t.discover.titleCount(n: totalSize),
+                          t.discover.titleCount(n: totalSize, count: formatGroupedCount(totalSize)),
                           style: theme.textTheme.bodySmall?.copyWith(color: mutedColor),
                         ),
                       ],

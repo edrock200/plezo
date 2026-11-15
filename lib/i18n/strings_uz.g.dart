@@ -1339,9 +1339,9 @@ class _Translations$discover$uz extends Translations$discover$en {
 	@override String get tvShow => 'TV Shou';
 	@override String minutesLeft({required Object minutes}) => '${minutes} daq qoldi';
 	@override String get moreLikeThis => 'Oʻxshashlar';
-	@override String titleCount({required num n}) => (_root.$meta.cardinalResolver ?? PluralResolvers.cardinal('uz'))(n,
-		one: '${n} ta nom',
-		other: '${n} ta nom',
+	@override String titleCount({required num n, required Object count}) => (_root.$meta.cardinalResolver ?? PluralResolvers.cardinal('uz'))(n,
+		one: '${count} ta nom',
+		other: '${count} ta nom',
 	);
 	@override late final _Translations$discover$person$uz person = _Translations$discover$person$uz._(_root);
 }
@@ -4517,7 +4517,7 @@ extension on TranslationsUz {
 			'discover.tvShow' => 'TV Shou',
 			'discover.minutesLeft' => ({required Object minutes}) => '${minutes} daq qoldi',
 			'discover.moreLikeThis' => 'Oʻxshashlar',
-			'discover.titleCount' => ({required num n}) => (_root.$meta.cardinalResolver ?? PluralResolvers.cardinal('uz'))(n, one: '${n} ta nom', other: '${n} ta nom', ), 
+			'discover.titleCount' => ({required num n, required Object count}) => (_root.$meta.cardinalResolver ?? PluralResolvers.cardinal('uz'))(n, one: '${count} ta nom', other: '${count} ta nom', ), 
 			'discover.person.born' => 'Tugʻilgan',
 			'discover.person.died' => 'Vafot etgan',
 			'discover.person.birthplace' => 'Tugʻilgan joyi',

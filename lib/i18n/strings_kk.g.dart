@@ -1339,9 +1339,9 @@ class _Translations$discover$kk extends Translations$discover$en {
 	@override String get tvShow => 'TV Шоу';
 	@override String minutesLeft({required Object minutes}) => '${minutes} мин қалды';
 	@override String get moreLikeThis => 'Ұқсастар';
-	@override String titleCount({required num n}) => (_root.$meta.cardinalResolver ?? PluralResolvers.cardinal('kk'))(n,
-		one: '${n} атау',
-		other: '${n} атау',
+	@override String titleCount({required num n, required Object count}) => (_root.$meta.cardinalResolver ?? PluralResolvers.cardinal('kk'))(n,
+		one: '${count} атау',
+		other: '${count} атау',
 	);
 	@override late final _Translations$discover$person$kk person = _Translations$discover$person$kk._(_root);
 }
@@ -4517,7 +4517,7 @@ extension on TranslationsKk {
 			'discover.tvShow' => 'TV Шоу',
 			'discover.minutesLeft' => ({required Object minutes}) => '${minutes} мин қалды',
 			'discover.moreLikeThis' => 'Ұқсастар',
-			'discover.titleCount' => ({required num n}) => (_root.$meta.cardinalResolver ?? PluralResolvers.cardinal('kk'))(n, one: '${n} атау', other: '${n} атау', ), 
+			'discover.titleCount' => ({required num n, required Object count}) => (_root.$meta.cardinalResolver ?? PluralResolvers.cardinal('kk'))(n, one: '${count} атау', other: '${count} атау', ), 
 			'discover.person.born' => 'Туған күні',
 			'discover.person.died' => 'Қайтыс болған күні',
 			'discover.person.birthplace' => 'Туған жері',

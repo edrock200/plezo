@@ -1207,7 +1207,7 @@
     "minutesLeft": "剩余 ${minutes} 分钟",
     "moreLikeThis": "更多类似内容",
     "titleCount": {
-      "other": "${n} 个标题"
+      "other": "${count} 个标题"
     },
     "person": {
       "born": "出生",

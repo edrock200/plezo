@@ -1219,10 +1219,10 @@
     "minutesLeft": "Pozostało ${minutes} min",
     "moreLikeThis": "Więcej podobnych",
     "titleCount": {
-      "one": "${n} tytuł",
-      "few": "${n} tytuły",
-      "many": "${n} tytułów",
-      "other": "${n} tytułu"
+      "one": "${count} tytuł",
+      "few": "${count} tytuły",
+      "many": "${count} tytułów",
+      "other": "${count} tytułu"
     },
     "person": {
       "born": "Data urodzenia",

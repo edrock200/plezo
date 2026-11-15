@@ -1347,11 +1347,11 @@ class _Translations$discover$ru extends Translations$discover$en {
 	@override String get tvShow => 'Сериал';
 	@override String minutesLeft({required Object minutes}) => 'Осталось ${minutes} мин';
 	@override String get moreLikeThis => 'Похожее';
-	@override String titleCount({required num n}) => (_root.$meta.cardinalResolver ?? PluralResolvers.cardinal('ru'))(n,
-		one: '${n} название',
-		few: '${n} названия',
-		many: '${n} названий',
-		other: '${n} названия',
+	@override String titleCount({required num n, required Object count}) => (_root.$meta.cardinalResolver ?? PluralResolvers.cardinal('ru'))(n,
+		one: '${count} название',
+		few: '${count} названия',
+		many: '${count} названий',
+		other: '${count} названия',
 	);
 	@override late final _Translations$discover$person$ru person = _Translations$discover$person$ru._(_root);
 }
@@ -4541,7 +4541,7 @@ extension on TranslationsRu {
 			'discover.tvShow' => 'Сериал',
 			'discover.minutesLeft' => ({required Object minutes}) => 'Осталось ${minutes} мин',
 			'discover.moreLikeThis' => 'Похожее',
-			'discover.titleCount' => ({required num n}) => (_root.$meta.cardinalResolver ?? PluralResolvers.cardinal('ru'))(n, one: '${n} название', few: '${n} названия', many: '${n} названий', other: '${n} названия', ), 
+			'discover.titleCount' => ({required num n, required Object count}) => (_root.$meta.cardinalResolver ?? PluralResolvers.cardinal('ru'))(n, one: '${count} название', few: '${count} названия', many: '${count} названий', other: '${count} названия', ), 
 			'discover.person.born' => 'Дата рождения',
 			'discover.person.died' => 'Дата смерти',
 			'discover.person.birthplace' => 'Место рождения',

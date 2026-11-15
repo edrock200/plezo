@@ -1211,8 +1211,8 @@
     "minutesLeft": "${minutes} min igjen",
     "moreLikeThis": "Mer som dette",
     "titleCount": {
-      "one": "${n} tittel",
-      "other": "${n} titler"
+      "one": "${count} tittel",
+      "other": "${count} titler"
     },
     "person": {
       "born": "Født",

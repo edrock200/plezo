@@ -3406,10 +3406,10 @@ class Translations$discover$en {
 	/// en: 'More Like This'
 	String get moreLikeThis => 'More Like This';
 
-	/// en: '(one) {${n} title} (other) {${n} titles}'
-	String titleCount({required num n}) => (_root.$meta.cardinalResolver ?? PluralResolvers.cardinal('en'))(n,
-		one: '${n} title',
-		other: '${n} titles',
+	/// en: '(one) {${count} title} (other) {${count} titles}'
+	String titleCount({required num n, required Object count}) => (_root.$meta.cardinalResolver ?? PluralResolvers.cardinal('en'))(n,
+		one: '${count} title',
+		other: '${count} titles',
 	);
 
 	late final Translations$discover$person$en person = Translations$discover$person$en.internal(_root);
@@ -10452,7 +10452,7 @@ extension on Translations {
 			'discover.tvShow' => 'TV Show',
 			'discover.minutesLeft' => ({required Object minutes}) => '${minutes} min left',
 			'discover.moreLikeThis' => 'More Like This',
-			'discover.titleCount' => ({required num n}) => (_root.$meta.cardinalResolver ?? PluralResolvers.cardinal('en'))(n, one: '${n} title', other: '${n} titles', ), 
+			'discover.titleCount' => ({required num n, required Object count}) => (_root.$meta.cardinalResolver ?? PluralResolvers.cardinal('en'))(n, one: '${count} title', other: '${count} titles', ), 
 			'discover.person.born' => 'Born',
 			'discover.person.died' => 'Died',
 			'discover.person.birthplace' => 'Birthplace',

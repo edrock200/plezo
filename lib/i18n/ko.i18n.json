@@ -1207,7 +1207,7 @@
     "minutesLeft": "${minutes}분 남음",
     "moreLikeThis": "비슷한 콘텐츠",
     "titleCount": {
-      "other": "${n}개 타이틀"
+      "other": "${count}개 타이틀"
     },
     "person": {
       "born": "출생",

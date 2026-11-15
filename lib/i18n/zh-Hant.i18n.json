@@ -1207,7 +1207,7 @@
     "minutesLeft": "剩餘 ${minutes} 分鐘",
     "moreLikeThis": "更多類似內容",
     "titleCount": {
-      "other": "${n} 部作品"
+      "other": "${count} 部作品"
     },
     "person": {
       "born": "出生",

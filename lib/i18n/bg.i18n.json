@@ -1211,8 +1211,8 @@
     "minutesLeft": "Остават ${minutes} мин",
     "moreLikeThis": "Подобно на това",
     "titleCount": {
-      "one": "${n} заглавие",
-      "other": "${n} заглавия"
+      "one": "${count} заглавие",
+      "other": "${count} заглавия"
     },
     "person": {
       "born": "Дата на раждане",

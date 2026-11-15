@@ -212,4 +212,19 @@ void main() {
       expect(formatFullDate(''), '');
     });
   });
+
+  group('formatGroupedCount', () {
+    test('groups thousands with the language\'s separator', () {
+      expect(formatGroupedCount(1284), '1,284');
+      expect(formatGroupedCount(999), '999');
+      expect(formatGroupedCount(1284, locale: AppLocale.de), '1.284');
+      expect(t.discover.titleCount(n: 1284, count: formatGroupedCount(1284)), '1,284 titles');
+    });
+
+    test('follows a minimum grouping of two digits (Spanish, Polish, Bulgarian)', () {
+      expect(formatGroupedCount(1284, locale: AppLocale.es), '1284');
+      expect(formatGroupedCount(12840, locale: AppLocale.es), '12.840');
+      expect(formatGroupedCount(1284, locale: AppLocale.pl), '1284');
+    });
+  });
 }

@@ -1211,8 +1211,8 @@
     "minutesLeft": "${minutes} perc van hátra",
     "moreLikeThis": "Hasonló tartalmak",
     "titleCount": {
-      "one": "${n} cím",
-      "other": "${n} cím"
+      "one": "${count} cím",
+      "other": "${count} cím"
     },
     "person": {
       "born": "Született",

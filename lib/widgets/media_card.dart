@@ -94,7 +94,7 @@ String _buildMediaMetadataLine(MediaItem item, {CatalogItem? catalogItem, bool c
   if (item.kind == MediaKind.collection) {
     final count = item.childCount ?? item.leafCount;
     if (count != null && count > 0) {
-      parts.add(t.playlists.itemCount(count: count));
+      parts.add(t.playlists.itemCount(count: formatGroupedCount(count)));
     }
     return parts.join(' • ');
   }
@@ -1290,7 +1290,7 @@ class _MediaCardHelpers {
 
     if (mi.kind == MediaKind.collection) {
       final count = mi.childCount ?? mi.leafCount;
-      if (count != null && count > 0) return t.playlists.itemCount(count: count);
+      if (count != null && count > 0) return t.playlists.itemCount(count: formatGroupedCount(count));
     }
 
     if (mi.kind == MediaKind.album && mi.albumArtistTitle != null) return mi.albumArtistTitle;
