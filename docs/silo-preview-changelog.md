@@ -4,6 +4,14 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+From Silo's own apps (November 15, 2026):
+
+- **Seek from the Skip button on TV:** while the Skip Intro or Skip Credits button is selected with the player controls showing, Left and Right now skip back and forward in Silo videos (holding them keeps seeking) instead of doing nothing. OK still skips. *(please test)*
+
+## silo-preview-2.36.0
+
+Released November 15, 2026. Android and Windows.
+
 - **Silo's recommendations really show up on Home now:** in 2.35.0 they could vanish when the server took more than a few seconds to answer, and Silo's own "Recommended for You" Home section could hide the For You row. Home now opens right away and the recommendation rows ("For You", "Because you enjoy …", "Popular on This Server" and more) appear when they arrive. They also show when "Use Home Layout" is off. *(please test)*
 - Settings › Logs now says how many recommendation rows arrived, or why there were none.
 
