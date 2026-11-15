@@ -4,6 +4,12 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **Seek from the Skip button on every server:** on TV, Left and Right now skip back and forward while the Skip Intro or Skip Credits button is selected for Plex and Jellyfin videos too, not just Silo (asked for by a user).
+
+## silo-preview-2.39.0
+
+Released November 15, 2026. Android and Windows.
+
 - **Smoother 25 and 30 fps video on TVs:** with the display refresh rate switching on (Android TV and Fire TV), 25 and 30 fps videos now switch the TV to 50 or 60 Hz instead of 25 or 30 Hz, which some TVs show with flicker or a blank pause (from Plezy).
 
 ## silo-preview-2.38.0

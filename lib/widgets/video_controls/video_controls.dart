@@ -559,11 +559,8 @@ bool shouldStartHiddenDirectionalSeek(KeyEvent event) => event.isActionable;
 /// otherwise reach nothing. Silo items only: Plex and Jellyfin keep their
 /// behaviour. With the chrome down the hidden directional seek already runs.
 @visibleForTesting
-bool shouldSeekFromFocusedSkipMarker({
-  required MediaBackend backend,
-  required bool skipMarkerFocused,
-  required bool controlsVisible,
-}) => backend == MediaBackend.silo && skipMarkerFocused && controlsVisible;
+bool shouldSeekFromFocusedSkipMarker({required bool skipMarkerFocused, required bool controlsVisible}) =>
+    skipMarkerFocused && controlsVisible;
 
 typedef PlaybackSourceChangeCallback =
     Future<PlaybackSourceChangeOutcome> Function({

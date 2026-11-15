@@ -231,7 +231,6 @@ extension _PlexVideoControlsKeyEventMethods on _PlexVideoControlsState {
   }
 
   bool get _skipMarkerSeeksFromFocus => shouldSeekFromFocusedSkipMarker(
-    backend: widget.metadata.backend,
     skipMarkerFocused: _skipMarkerFocusNode.hasPrimaryFocus,
     controlsVisible: _showControls,
   );

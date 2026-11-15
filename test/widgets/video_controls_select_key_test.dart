@@ -719,9 +719,8 @@ void main() {
 
   // Silo Android #928: with the chrome up, a focused Skip Intro / Skip Credits
   // prompt used to swallow Left and Right, so the remote could not seek until
-  // the prompt timed out. On a Silo item Left/Right now seek from the prompt as
-  // they do with the chrome down, and the prompt keeps focus. Plex and Jellyfin
-  // keep their behaviour.
+  // the prompt timed out. Left/Right now seek from the prompt as they do with
+  // the chrome down, and the prompt keeps focus, on every backend.
   group('seeking from a focused skip prompt with the chrome up', () {
     setUp(() async {
       TvDetectionService.debugSetAppleTVOverride(null);
@@ -770,12 +769,27 @@ void main() {
       expect(toggles, 0);
     });
 
-    playerTest('a Plex item keeps its behaviour', markers: intro, (tester) async {
+    playerTest('a Plex item seeks from the prompt too', markers: intro, (tester) async {
       await focusPromptWithChromeUp(tester);
+      final step = settings.read(SettingsService.seekTimeSmall);
 
       await press(tester, LogicalKeyboardKey.arrowRight);
 
-      expect(player.state.position, const Duration(seconds: 15));
+      expect(player.state.position, Duration(seconds: 15 + step));
+      expect(focusLabel(), 'SkipMarkerButton');
+    });
+
+    playerTest('a Jellyfin item seeks from the prompt too', markers: intro, backend: MediaBackend.jellyfin, (
+      tester,
+    ) async {
+      await focusPromptWithChromeUp(tester);
+      player.emitPosition(const Duration(seconds: 40));
+      await tester.pumpAndSettle();
+      final step = settings.read(SettingsService.seekTimeSmall);
+
+      await press(tester, LogicalKeyboardKey.arrowLeft);
+
+      expect(player.state.position, Duration(seconds: 40 - step));
     });
   });
 }
