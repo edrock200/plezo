@@ -4,6 +4,14 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **New For You page for Silo servers:** your Silo recommendations, Favorites and Watchlist in one place, like Silo's own apps. Find it in the side menu below Home on TV and desktop, or with the For You button at the top of Home on phones. *(please test)*
+- **Favorites and Watchlist** can be filtered to Movies or Shows and sorted. When there are no recommendations yet, For You shows your saved titles instead.
+- **Two new switches** in Settings › Appearance › Silo: "Show Silo recommendations on Home" and "Show For You". Both are on by default.
+
+## silo-preview-2.37.0
+
+Released November 15, 2026. Android and Windows.
+
 From Silo's own apps (November 15, 2026):
 
 - **Seek from the Skip button on TV:** while the Skip Intro or Skip Credits button is selected with the player controls showing, Left and Right now skip back and forward in Silo videos (holding them keeps seeking) instead of doing nothing. OK still skips. *(please test)*
