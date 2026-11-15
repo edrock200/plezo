@@ -230,6 +230,12 @@ extension _PlexVideoControlsKeyEventMethods on _PlexVideoControlsState {
     return false;
   }
 
+  bool get _skipMarkerSeeksFromFocus => shouldSeekFromFocusedSkipMarker(
+    backend: widget.metadata.backend,
+    skipMarkerFocused: _skipMarkerFocusNode.hasPrimaryFocus,
+    controlsVisible: _showControls,
+  );
+
   /// Whether primary focus sits on a control outside this one rather than
   /// having drifted to a scope or up to an ancestor of [_focusNode].
   bool _focusRestsOnAnotherControl() {
@@ -253,9 +259,9 @@ extension _PlexVideoControlsKeyEventMethods on _PlexVideoControlsState {
     //    seeks straight through onLiveSeekBy without touching the accumulator;
     //  - any key holding a pending target commits it now, so rebound shortcuts
     //    and Shift+arrow large seeks land promptly rather than on the debounce.
+    final isHorizontal = event.logicalKey.isLeftKey || event.logicalKey.isRightKey;
     if (event is KeyUpEvent &&
-        ((!_showControls && (event.logicalKey.isLeftKey || event.logicalKey.isRightKey)) ||
-            _hiddenSeek.pendingPosition != null)) {
+        (((!_showControls || _skipMarkerSeeksFromFocus) && isHorizontal) || _hiddenSeek.pendingPosition != null)) {
       _flushHiddenDirectionalSeek();
     }
 
@@ -341,6 +347,15 @@ extension _PlexVideoControlsKeyEventMethods on _PlexVideoControlsState {
         } else {
           _flushHiddenDirectionalSeek();
           _showControlsWithFocus();
+        }
+        return KeyEventResult.handled;
+      }
+      // A focused skip prompt is outside the transport row, so Left/Right
+      // would reach nothing: on Silo items they seek from it, tap and hold
+      // alike, and the prompt keeps focus (Silo Android #928).
+      if ((key.isLeftKey || key.isRightKey) && _skipMarkerSeeksFromFocus) {
+        if (shouldStartHiddenDirectionalSeek(event)) {
+          _hiddenDirectionalSeek(forward: key == LogicalKeyboardKey.arrowRight, isRepeat: event is KeyRepeatEvent);
         }
         return KeyEventResult.handled;
       }

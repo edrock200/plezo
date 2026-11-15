@@ -10,6 +10,7 @@ import 'package:provider/provider.dart';
 import 'package:plezy/database/app_database.dart';
 import 'package:plezy/focus/input_mode_tracker.dart';
 import 'package:plezy/i18n/strings.g.dart';
+import 'package:plezy/media/media_backend.dart';
 import 'package:plezy/media/media_source_info.dart';
 import 'package:plezy/mpv/mpv.dart';
 import 'package:plezy/providers/playback_state_provider.dart';
@@ -159,6 +160,7 @@ void main() {
     TargetPlatform platform = TargetPlatform.windows,
     bool canControl = true,
     bool playbackPromptOpen = false,
+    MediaBackend backend = MediaBackend.plex,
   }) async {
     await tester.pumpWidget(shell(const SizedBox.expand(), platform: platform));
     await tester.pump();
@@ -170,7 +172,7 @@ void main() {
         PlexVideoControls(
           player: player,
           volumeController: volume,
-          metadata: testMediaItem(id: 'select-key'),
+          metadata: testMediaItem(id: 'select-key', backend: backend),
           initialMarkers: markers,
           toastController: toast,
           chromeController: chrome,
@@ -206,6 +208,7 @@ void main() {
     TargetPlatform platform = TargetPlatform.windows,
     bool canControl = true,
     bool playbackPromptOpen = false,
+    MediaBackend backend = MediaBackend.plex,
   }) {
     testWidgets(description, (tester) async {
       await pumpPlayer(
@@ -214,6 +217,7 @@ void main() {
         platform: platform,
         canControl: canControl,
         playbackPromptOpen: playbackPromptOpen,
+        backend: backend,
       );
       await body(tester);
       chrome.cancelAutoHide();
@@ -711,6 +715,68 @@ void main() {
         expect(toggles, 1, reason: 'one press must toggle playback, not merely raise the chrome');
       },
     );
+  });
+
+  // Silo Android #928: with the chrome up, a focused Skip Intro / Skip Credits
+  // prompt used to swallow Left and Right, so the remote could not seek until
+  // the prompt timed out. On a Silo item Left/Right now seek from the prompt as
+  // they do with the chrome down, and the prompt keeps focus. Plex and Jellyfin
+  // keep their behaviour.
+  group('seeking from a focused skip prompt with the chrome up', () {
+    setUp(() async {
+      TvDetectionService.debugSetAppleTVOverride(null);
+      await TvDetectionService.getInstance(forceTv: true);
+      TvDetectionService.setForceTVSync(true);
+      PlatformDetector.debugSetIsDesktopOSOverride(false);
+      await setNavigationEnabled(true);
+    });
+
+    Future<void> focusPromptWithChromeUp(WidgetTester tester) async {
+      InputModeTracker.reportNonPointerInput();
+      chrome.show();
+      await tester.pumpAndSettle();
+      player.emitPosition(const Duration(seconds: 15));
+      await tester.pumpAndSettle();
+      expect(chrome.controlsVisible, isTrue, reason: 'precondition: the chrome is up');
+      expect(focusLabel(), 'SkipMarkerButton', reason: 'precondition: TV autofocuses the prompt');
+    }
+
+    final intro = [MediaMarker(id: 1, type: 'intro', startTimeOffset: 10000, endTimeOffset: 45000)];
+
+    playerTest(
+      'Right seeks forward on a Silo item and the prompt keeps focus',
+      markers: intro,
+      backend: MediaBackend.silo,
+      (tester) async {
+        await focusPromptWithChromeUp(tester);
+        final step = settings.read(SettingsService.seekTimeSmall);
+
+        await press(tester, LogicalKeyboardKey.arrowRight);
+
+        expect(player.state.position, Duration(seconds: 15 + step));
+        expect(focusLabel(), 'SkipMarkerButton');
+      },
+    );
+
+    playerTest('Left seeks back on a Silo item', markers: intro, backend: MediaBackend.silo, (tester) async {
+      await focusPromptWithChromeUp(tester);
+      player.emitPosition(const Duration(seconds: 40));
+      await tester.pumpAndSettle();
+      final step = settings.read(SettingsService.seekTimeSmall);
+
+      await press(tester, LogicalKeyboardKey.arrowLeft);
+
+      expect(player.state.position, Duration(seconds: 40 - step));
+      expect(toggles, 0);
+    });
+
+    playerTest('a Plex item keeps its behaviour', markers: intro, (tester) async {
+      await focusPromptWithChromeUp(tester);
+
+      await press(tester, LogicalKeyboardKey.arrowRight);
+
+      expect(player.state.position, const Duration(seconds: 15));
+    });
   });
 }
 

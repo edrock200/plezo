@@ -553,6 +553,18 @@ bool shouldSkipDuplicateTimelineSeek({required Duration? lastDispatchedSeek, req
 @visibleForTesting
 bool shouldStartHiddenDirectionalSeek(KeyEvent event) => event.isActionable;
 
+/// Whether Left/Right on the focused Skip Intro / Skip Credits prompt seek,
+/// with the chrome up, as they do with the chrome down (Silo Android #928).
+/// The prompt sits outside the transport row, so with the chrome up those keys
+/// otherwise reach nothing. Silo items only: Plex and Jellyfin keep their
+/// behaviour. With the chrome down the hidden directional seek already runs.
+@visibleForTesting
+bool shouldSeekFromFocusedSkipMarker({
+  required MediaBackend backend,
+  required bool skipMarkerFocused,
+  required bool controlsVisible,
+}) => backend == MediaBackend.silo && skipMarkerFocused && controlsVisible;
+
 typedef PlaybackSourceChangeCallback =
     Future<PlaybackSourceChangeOutcome> Function({
       int? newMediaIndex,
