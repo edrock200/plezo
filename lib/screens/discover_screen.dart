@@ -36,6 +36,7 @@ import '../widgets/loading_indicator_box.dart';
 import '../widgets/profile_switching_overlay.dart';
 import 'profile/profile_switch_screen.dart';
 import 'silo/silo_feature_entries.dart';
+import 'silo/silo_for_you_screen.dart';
 import 'profile/profile_teardown.dart';
 import '../profiles/active_profile_provider.dart';
 import '../profiles/profile.dart';
@@ -829,6 +830,8 @@ class _DiscoverScreenState extends State<DiscoverScreen>
           Consumer2<WatchTogetherProvider, CompanionRemoteProvider>(
             builder: (context, watchTogether, companionRemote, _) {
               final isDesktop = PlatformDetector.shouldActAsRemoteHost(context);
+              final forYouAvailable = context.select<MultiServerProvider?, bool>(siloForYouAvailable);
+              final showForYouButton = forYouAvailable && !PlatformDetector.shouldUseSideNavigation(context);
               void openWatchTogether() =>
                   Navigator.push(context, MaterialPageRoute(builder: (_) => const WatchTogetherScreen()));
               void openCompanionRemote() {
@@ -844,6 +847,18 @@ class _DiscoverScreenState extends State<DiscoverScreen>
                 onNavigateLeft: _navigateToSidebar,
                 onNavigateDown: _focusContentFromAppBar,
                 actions: [
+                  // Silo's For You page. TV and desktop reach it from the side
+                  // rail; the phone's bottom bar has no room, so it sits here.
+                  if (showForYouButton)
+                    FocusableAction(
+                      onPressed: () => unawaited(openSiloForYou(context)),
+                      child: TextButton.icon(
+                        key: const ValueKey('home-for-you-button'),
+                        onPressed: () => unawaited(openSiloForYou(context)),
+                        icon: AppIcon(personalRecommendationsIcon, fill: 1, color: foregroundColor),
+                        label: Text(t.siloForYou.openForYou, style: TextStyle(color: foregroundColor)),
+                      ),
+                    ),
                   FocusableAction(icon: Symbols.refresh_rounded, iconColor: foregroundColor, onPressed: manualRefresh),
                   // Watch Together
                   FocusableAction(
@@ -945,6 +960,8 @@ class _DiscoverScreenState extends State<DiscoverScreen>
         SettingsService.hideSpoilers,
         SettingsService.libraryDensity,
         SettingsService.episodePosterMode,
+        SettingsService.showSiloForYou,
+        SettingsService.showSiloRecommendationsOnHome,
       ],
       builder: (context) => _buildContent(context),
     );

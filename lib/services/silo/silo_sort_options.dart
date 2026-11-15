@@ -235,4 +235,17 @@ abstract final class SiloSortOptions {
           (field.ratingSource == null || shownRatingSources.contains(field.ratingSource)))
         field,
   ];
+
+  /// Fields that order by the viewer's own playback, which Silo's web client
+  /// leaves out of personal lists and collections (`querySortOptions.ts`).
+  static const _playbackFieldKeys = {'progress', 'dateViewed', 'plays'};
+
+  /// The sort list of a personal list (Favorites, Watchlist): the fields
+  /// shared by movies and series, without Progress, Date Viewed and Plays.
+  /// No sort at all is the list's own order (most recently saved first);
+  /// `added_at` there means the date a title was saved.
+  static List<SiloSortField> forPersonalList({required Set<String> shownRatingSources}) => [
+    for (final field in forScope(null, shownRatingSources: shownRatingSources))
+      if (!_playbackFieldKeys.contains(field.key)) field,
+  ];
 }

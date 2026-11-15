@@ -104,6 +104,7 @@ class Translations with BaseTranslations<AppLocale, Translations> {
 	late final Translations$siloAudio$en siloAudio = Translations$siloAudio$en.internal(_root);
 	late final Translations$reviewFixes$en reviewFixes = Translations$reviewFixes$en.internal(_root);
 	late final Translations$siloSectionTitles$en siloSectionTitles = Translations$siloSectionTitles$en.internal(_root);
+	late final Translations$siloForYou$en siloForYou = Translations$siloForYou$en.internal(_root);
 }
 
 // Path: app
@@ -1381,6 +1382,21 @@ class Translations$settings$en {
 
 	/// en: 'Display the Explore tab with content from Plex Discover and connected trackers'
 	String get showExploreTabDescription => 'Display the Explore tab with content from Plex Discover and connected trackers';
+
+	/// en: 'Silo'
+	String get silo => 'Silo';
+
+	/// en: 'Show Silo recommendations on Home'
+	String get showSiloRecommendationsOnHome => 'Show Silo recommendations on Home';
+
+	/// en: 'Add your Silo server's personal recommendation rows to Home'
+	String get showSiloRecommendationsOnHomeDescription => 'Add your Silo server\'s personal recommendation rows to Home';
+
+	/// en: 'Show For You'
+	String get showSiloForYou => 'Show For You';
+
+	/// en: 'Show the For You page with your Silo recommendations, favorites and watchlist'
+	String get showSiloForYouDescription => 'Show the For You page with your Silo recommendations, favorites and watchlist';
 
 	/// en: 'Default to Favorite Channels'
 	String get liveTvDefaultFavorites => 'Default to Favorite Channels';
@@ -7269,6 +7285,99 @@ class Translations$siloSectionTitles$en {
 	String get recentlyReleasedManga => 'Recently Released Manga';
 }
 
+// Path: siloForYou
+class Translations$siloForYou$en {
+	Translations$siloForYou$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'For You'
+	String get title => 'For You';
+
+	/// en: 'For You'
+	String get openForYou => 'For You';
+
+	/// en: 'Recommendations'
+	String get recommendations => 'Recommendations';
+
+	/// en: 'Favorites'
+	String get favorites => 'Favorites';
+
+	/// en: 'Watchlist'
+	String get watchlist => 'Watchlist';
+
+	/// en: 'All'
+	String get all => 'All';
+
+	/// en: 'Movies'
+	String get movies => 'Movies';
+
+	/// en: 'Shows'
+	String get shows => 'Shows';
+
+	/// en: 'Sort'
+	String get sort => 'Sort';
+
+	/// en: 'Recently saved'
+	String get recentlySaved => 'Recently saved';
+
+	/// en: 'Server'
+	String get server => 'Server';
+
+	/// en: '${server} · ${profile}'
+	String serverProfile({required Object server, required Object profile}) => '${server} · ${profile}';
+
+	/// en: '(one) {${count} title} (other) {${count} titles}'
+	String titleCount({required num n, required Object count}) => (_root.$meta.cardinalResolver ?? PluralResolvers.cardinal('en'))(n,
+		one: '${count} title',
+		other: '${count} titles',
+	);
+
+	/// en: 'No recommendations yet — showing your saved titles.'
+	String get savedFallback => 'No recommendations yet — showing your saved titles.';
+
+	/// en: 'Not enough data yet'
+	String get notEnoughData => 'Not enough data yet';
+
+	/// en: 'Watch and rate more content to unlock personalized recommendations.'
+	String get notEnoughDataBody => 'Watch and rate more content to unlock personalized recommendations.';
+
+	/// en: 'Check again'
+	String get checkAgain => 'Check again';
+
+	/// en: 'Failed to load recommendations'
+	String get loadFailed => 'Failed to load recommendations';
+
+	/// en: 'Try reloading your personalized feed.'
+	String get loadFailedBody => 'Try reloading your personalized feed.';
+
+	/// en: 'Couldn't load this list'
+	String get listLoadFailed => 'Couldn\'t load this list';
+
+	/// en: 'No favorites yet'
+	String get favoritesEmpty => 'No favorites yet';
+
+	/// en: 'No favorite movies yet'
+	String get favoritesEmptyMovies => 'No favorite movies yet';
+
+	/// en: 'No favorite shows yet'
+	String get favoritesEmptyShows => 'No favorite shows yet';
+
+	/// en: 'Your watchlist is empty'
+	String get watchlistEmpty => 'Your watchlist is empty';
+
+	/// en: 'No movies on your watchlist'
+	String get watchlistEmptyMovies => 'No movies on your watchlist';
+
+	/// en: 'No shows on your watchlist'
+	String get watchlistEmptyShows => 'No shows on your watchlist';
+
+	/// en: 'Titles you save on this Silo profile show up here.'
+	String get emptyHint => 'Titles you save on this Silo profile show up here.';
+}
+
 // Path: appIcon.names
 class Translations$appIcon$names$en {
 	Translations$appIcon$names$en.internal(this._root);
@@ -9854,6 +9963,11 @@ extension on Translations {
 			'settings.startupSection' => 'Startup Section',
 			'settings.showExploreTab' => 'Show Explore Tab',
 			'settings.showExploreTabDescription' => 'Display the Explore tab with content from Plex Discover and connected trackers',
+			'settings.silo' => 'Silo',
+			'settings.showSiloRecommendationsOnHome' => 'Show Silo recommendations on Home',
+			'settings.showSiloRecommendationsOnHomeDescription' => 'Add your Silo server\'s personal recommendation rows to Home',
+			'settings.showSiloForYou' => 'Show For You',
+			'settings.showSiloForYouDescription' => 'Show the For You page with your Silo recommendations, favorites and watchlist',
 			'settings.liveTvDefaultFavorites' => 'Default to Favorite Channels',
 			'settings.liveTvDefaultFavoritesDescription' => 'Show only favorite channels when opening Live TV',
 			'settings.general' => 'General',
@@ -9908,13 +10022,13 @@ extension on Translations {
 			'themeEditor.editCustom' => 'Edit custom theme',
 			'themeEditor.editCustomDescription' => 'Choose every color yourself',
 			'themeEditor.locked' => 'Unlock with the Theme & Icon Pack',
+			_ => null,
+		} ?? switch (path) {
 			'themeEditor.savedLocked' => 'Saved — unlocks with the Theme & Icon Pack',
 			'themeEditor.title' => 'Custom Theme',
 			'themeEditor.startFrom' => 'Start from',
 			'themeEditor.startFromDescription' => 'Copy all colors from another theme',
 			'themeEditor.colors' => 'Colors',
-			_ => null,
-		} ?? switch (path) {
 			'themeEditor.preview' => 'Preview',
 			'themeEditor.slots.bg' => 'Background',
 			'themeEditor.slots.surface' => 'Surface',
@@ -10422,13 +10536,13 @@ extension on Translations {
 			'profiles.signOutPlexTitle' => 'Sign out of Plex?',
 			'profiles.signOutPlexMessage' => ({required Object displayName}) => 'Remove ${displayName} and all Plex Home users? Sign back in anytime.',
 			'profiles.signOutPlexDeleteDownloads' => 'Also delete downloads',
+			_ => null,
+		} ?? switch (path) {
 			'profiles.signOutPlexDeleteDownloadsDescription' => 'Otherwise they stay on this device and come back when you sign back in to this account.',
 			'profiles.signedOutPlex' => 'Signed out of Plex.',
 			'profiles.signOutFailed' => 'Sign out failed.',
 			'profiles.sectionTitle' => 'Profiles',
 			'profiles.summarySingle' => 'Add profiles to mix managed users and local identities',
-			_ => null,
-		} ?? switch (path) {
 			'profiles.summaryMultipleWithActive' => ({required Object count, required Object activeName}) => '${count} profiles · active: ${activeName}',
 			'profiles.summaryMultiple' => ({required Object count}) => '${count} profiles',
 			'profiles.removeConnectionTitle' => 'Remove connection?',
@@ -10936,13 +11050,13 @@ extension on Translations {
 			'explore.detail.recommendedByUsers' => ({required num n}) => (_root.$meta.cardinalResolver ?? PluralResolvers.cardinal('en'))(n, one: 'Recommended by ${n} user', other: 'Recommended by ${n} users', ), 
 			'explore.detail.recommendedBy' => ({required Object who}) => 'Recommended by ${who}',
 			'explore.detail.favoritedBy' => ({required Object who}) => 'Favorited by ${who}',
+			_ => null,
+		} ?? switch (path) {
 			'explore.detail.unairedEpisodes' => ({required Object n}) => '${n} not aired yet',
 			'explore.detail.recommendedByPercent' => ({required Object percent}) => 'Recommended by ${percent} of viewers',
 			'explore.detail.relatedTitles' => 'Related titles',
 			'explore.detail.background' => 'Background',
 			'explore.totalResults' => ({required num n}) => (_root.$meta.cardinalResolver ?? PluralResolvers.cardinal('en'))(n, one: '${n} result', other: '${n} results', ), 
-			_ => null,
-		} ?? switch (path) {
 			'liveTv.title' => 'Live TV',
 			'liveTv.guide' => 'Guide',
 			'liveTv.noChannels' => 'No channels available',
@@ -11450,13 +11564,13 @@ extension on Translations {
 			'companionRemote.remote.seekBack' => 'Seek Back',
 			'companionRemote.remote.stop' => 'Stop',
 			'companionRemote.remote.seekForward' => 'Seek Fwd',
+			_ => null,
+		} ?? switch (path) {
 			'companionRemote.remote.volume' => 'Volume',
 			'companionRemote.remote.volumeDown' => 'Down',
 			'companionRemote.remote.volumeUp' => 'Up',
 			'companionRemote.remote.fullscreen' => 'Fullscreen',
 			'companionRemote.remote.subtitles' => 'Subtitles',
-			_ => null,
-		} ?? switch (path) {
 			'companionRemote.remote.audio' => 'Audio',
 			'companionRemote.remote.searchHint' => 'Search on desktop...',
 			'companionRemote.errors.noNetworkInterface' => 'No network interface found',
@@ -11964,13 +12078,13 @@ extension on Translations {
 			'siloRequests.availableToRequest' => 'Available to request',
 			'siloRequests.availableToRequestOnServer' => ({required Object server}) => 'Available to request on ${server}',
 			'siloRequests.noRequests' => 'You haven\'t requested anything yet',
+			_ => null,
+		} ?? switch (path) {
 			'siloRequests.noRequestsSubtitle' => 'Search for a movie or series to request it.',
 			'siloRequests.noResults' => 'No titles found',
 			'siloRequests.loadFailed' => 'Couldn\'t load your requests',
 			'siloRequests.searchFailed' => 'Couldn\'t search for titles to request',
 			'siloRequests.detailLoadFailed' => 'Couldn\'t load this title',
-			_ => null,
-		} ?? switch (path) {
 			'siloRequests.openFailed' => 'Couldn\'t open this title',
 			'siloRequests.movie' => 'Movie',
 			'siloRequests.series' => 'Series',
@@ -12129,6 +12243,33 @@ extension on Translations {
 			'siloSectionTitles.recentlyReleasedAudiobooks' => 'Recently Released Audiobooks',
 			'siloSectionTitles.recentlyReleasedEbooks' => 'Recently Released Ebooks',
 			'siloSectionTitles.recentlyReleasedManga' => 'Recently Released Manga',
+			'siloForYou.title' => 'For You',
+			'siloForYou.openForYou' => 'For You',
+			'siloForYou.recommendations' => 'Recommendations',
+			'siloForYou.favorites' => 'Favorites',
+			'siloForYou.watchlist' => 'Watchlist',
+			'siloForYou.all' => 'All',
+			'siloForYou.movies' => 'Movies',
+			'siloForYou.shows' => 'Shows',
+			'siloForYou.sort' => 'Sort',
+			'siloForYou.recentlySaved' => 'Recently saved',
+			'siloForYou.server' => 'Server',
+			'siloForYou.serverProfile' => ({required Object server, required Object profile}) => '${server} · ${profile}',
+			'siloForYou.titleCount' => ({required num n, required Object count}) => (_root.$meta.cardinalResolver ?? PluralResolvers.cardinal('en'))(n, one: '${count} title', other: '${count} titles', ), 
+			'siloForYou.savedFallback' => 'No recommendations yet — showing your saved titles.',
+			'siloForYou.notEnoughData' => 'Not enough data yet',
+			'siloForYou.notEnoughDataBody' => 'Watch and rate more content to unlock personalized recommendations.',
+			'siloForYou.checkAgain' => 'Check again',
+			'siloForYou.loadFailed' => 'Failed to load recommendations',
+			'siloForYou.loadFailedBody' => 'Try reloading your personalized feed.',
+			'siloForYou.listLoadFailed' => 'Couldn\'t load this list',
+			'siloForYou.favoritesEmpty' => 'No favorites yet',
+			'siloForYou.favoritesEmptyMovies' => 'No favorite movies yet',
+			'siloForYou.favoritesEmptyShows' => 'No favorite shows yet',
+			'siloForYou.watchlistEmpty' => 'Your watchlist is empty',
+			'siloForYou.watchlistEmptyMovies' => 'No movies on your watchlist',
+			'siloForYou.watchlistEmptyShows' => 'No shows on your watchlist',
+			'siloForYou.emptyHint' => 'Titles you save on this Silo profile show up here.',
 			_ => null,
 		};
 	}

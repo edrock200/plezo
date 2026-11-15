@@ -6,7 +6,11 @@ import 'package:plezy/media/ids.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:plezy/connection/connection.dart';
+import 'package:plezy/services/silo/silo_api.dart';
+import 'package:plezy/services/silo/silo_client.dart';
 import 'package:plezy/focus/covered_route_focus_boundary.dart';
 import 'package:plezy/focus/input_mode_tracker.dart';
 import 'package:plezy/connection/connection_registry.dart';
@@ -790,6 +794,69 @@ void main() {
       expect(discover.hubs.map((h) => h.title), ['Recently Added Movies', 'For You']);
       expect(shownRows(), ['Recently Added Movies', 'For You']);
 
+      // "Show Silo recommendations on Home" off: gone on the next build, no restart.
+      await SettingsService.instance.write(SettingsService.showSiloRecommendationsOnHome, false);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(discover.hubs.map((h) => h.title), ['Recently Added Movies']);
+      expect(shownRows(), ['Recently Added Movies']);
+
+      // On again: read at once and shown.
+      await SettingsService.instance.write(SettingsService.showSiloRecommendationsOnHome, true);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(shownRows(), ['Recently Added Movies', 'For You']);
+
+      await tester.pumpWidget(const SizedBox());
+    });
+  }
+
+  testWidgets('with the setting off Home does not read the recommendations', (tester) async {
+    await SettingsService.getInstance();
+    await SettingsService.instance.write(SettingsService.showSiloRecommendationsOnHome, false);
+    final client = _CountingRecommendationsClient(hubs: const []);
+    await _pumpDiscoverShell(tester, isTv: false, client: client);
+    expect(client.recommendationReads, 0);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  for (final isTv in [false, true]) {
+    testWidgets('the Home For You button is phone-only and follows its setting (${isTv ? 'TV' : 'phone'})', (
+      tester,
+    ) async {
+      final silo = SiloClient.forTesting(
+        SiloConnection(
+          id: 'srv-silo/1/p-owner',
+          baseUrl: 'https://silo.example.com',
+          serverName: 'Home Silo',
+          serverId: 'srv-silo',
+          userId: '1',
+          userName: 'laura',
+          accessToken: 'acc',
+          refreshToken: 'ref',
+          deviceId: 'dev-1',
+          profileId: 'p-owner',
+          profileName: 'Laura',
+          createdAt: DateTime(2026),
+        ),
+        headers: const SiloDeviceHeaders(
+          deviceId: 'dev-1',
+          deviceName: 'Test',
+          platform: 'linux',
+          clientFamily: 'mobile',
+          clientVersion: '1.0',
+        ),
+        httpClient: MockClient((_) async => http.Response('{}', 404)),
+      );
+      await _pumpDiscoverShell(tester, isTv: isTv, extraClients: [silo]);
+      final button = find.byKey(const ValueKey('home-for-you-button'), skipOffstage: false);
+      expect(button, isTv ? findsNothing : findsOneWidget);
+
+      await SettingsService.instance.write(SettingsService.showSiloForYou, false);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(button, findsNothing);
+
       await tester.pumpWidget(const SizedBox());
     });
   }
@@ -1103,6 +1170,7 @@ Future<DiscoverProvider> _pumpDiscoverShell(
   required bool isTv,
   WatchTogetherProvider? watchTogether,
   MediaServerClient? client,
+  List<MediaServerClient> extraClients = const [],
 }) async {
   TvDetectionService.debugSetAppleTVOverride(isTv);
   await SettingsService.getInstance();
@@ -1114,6 +1182,9 @@ Future<DiscoverProvider> _pumpDiscoverShell(
   });
 
   final manager = MultiServerManager()..debugRegisterClientForTesting(client ?? _FakeMediaServerClient(hubs: const []));
+  for (final extra in extraClients) {
+    manager.debugRegisterClientForTesting(extra);
+  }
   final multiServerProvider = testMultiServerProvider(manager);
   final hiddenLibrariesProvider = HiddenLibrariesProvider();
   final librariesProvider = LibrariesProvider();
@@ -1203,6 +1274,19 @@ class _RecommendingFakeClient extends _FakeMediaServerClient implements Personal
 
   @override
   Future<List<MediaHub>?> fetchPersonalRecommendationHubs() => recommendations.future;
+}
+
+/// Counts the recommendation reads; answers none.
+class _CountingRecommendationsClient extends _FakeMediaServerClient implements PersonalRecommendationsClient {
+  _CountingRecommendationsClient({required super.hubs});
+
+  int recommendationReads = 0;
+
+  @override
+  Future<List<MediaHub>?> fetchPersonalRecommendationHubs() async {
+    recommendationReads++;
+    return const [];
+  }
 }
 
 class _FakeMediaServerClient implements MediaServerClient {

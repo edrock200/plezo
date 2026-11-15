@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../../i18n/strings.g.dart';
 import '../../providers/catalog_sources_provider.dart';
+import '../../providers/multi_server_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../services/settings_service.dart' hide ThemeMode;
 import '../../focus/focusable_slider.dart';
@@ -17,6 +18,7 @@ import '../../widgets/setting_tile.dart';
 import '../../widgets/settings_page.dart';
 import '../../widgets/settings_builder.dart';
 import '../../widgets/settings_section.dart';
+import '../silo/silo_feature_entries.dart';
 import 'app_icon_setting.dart';
 import 'settings_utils.dart';
 import 'theme_settings_screen.dart';
@@ -36,6 +38,8 @@ class AppearanceSettingsScreen extends StatelessWidget {
     // Nullable watch: hosts without the profile session scope (tests) simply
     // never show the Explore toggle, mirroring the tab's own visibility.
     final hasExplore = context.watch<CatalogSourcesProvider?>()?.hasAnySource ?? false;
+    // Silo's recommendation toggles, shown while a Silo server is saved.
+    final hasSilo = hasSiloServers(context.watch<MultiServerProvider?>());
     return SettingsPage(
       title: Text(t.settings.appearance),
       children: [
@@ -131,6 +135,25 @@ class AppearanceSettingsScreen extends StatelessWidget {
             ),
           ],
         ),
+
+        if (hasSilo)
+          SettingsGroup(
+            title: t.settings.silo,
+            children: [
+              SettingSwitchTile(
+                pref: SettingsService.showSiloRecommendationsOnHome,
+                icon: Symbols.auto_awesome_rounded,
+                title: t.settings.showSiloRecommendationsOnHome,
+                subtitle: t.settings.showSiloRecommendationsOnHomeDescription,
+              ),
+              SettingSwitchTile(
+                pref: SettingsService.showSiloForYou,
+                icon: Symbols.recommend_rounded,
+                title: t.settings.showSiloForYou,
+                subtitle: t.settings.showSiloForYouDescription,
+              ),
+            ],
+          ),
 
         SettingsGroup(
           title: t.settings.navigation,

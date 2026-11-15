@@ -28,6 +28,9 @@ IconData hubIconFor(MediaHub hub) {
 
 const _defaultHubIcon = Symbols.auto_awesome_rounded;
 
+/// The sparkle of personal recommendation rows and Silo's For You entry.
+const personalRecommendationsIcon = _defaultHubIcon;
+
 /// Title keywords in match order — see [hubIconFor].
 const _titleKeywordIcons = <(List<String>, IconData)>[
   // Trending/Popular

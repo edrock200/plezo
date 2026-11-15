@@ -119,6 +119,7 @@ class DiscoverProvider extends ChangeNotifier with DisposableChangeNotifierMixin
     // discover the same way they refresh libraries. Removed in [dispose] so a
     // profile switch can't leave a stale listener on the app-global provider.
     _multiServer.addOnlineServersListener(syncToOnlineServers);
+    _watchRecommendationsSetting();
     _hiddenLibraries.addListener(_onHiddenLibrariesChanged);
     _lastSeenLibraryOrderKeys = _libraryOrderKeys();
     _libraries.addListener(_onLibrariesChanged);
@@ -292,7 +293,54 @@ class DiscoverProvider extends ChangeNotifier with DisposableChangeNotifierMixin
     return [for (final copy in copies) copy.globalKey == item.globalKey ? item : copy];
   }
 
-  List<MediaHub> get hubs => _hubs;
+  /// The rows Home shows: without the personal recommendation rows while
+  /// "Show Silo recommendations on Home" is off. The filtered list is kept
+  /// until [_hubs] or the setting changes, so screens that cache on list
+  /// identity keep their caches.
+  List<MediaHub> get hubs {
+    if (_recommendationsOnHome) return _hubs;
+    if (!identical(_hubsWithoutRecommendationsSource, _hubs)) {
+      _hubsWithoutRecommendationsSource = _hubs;
+      _hubsWithoutRecommendations = [
+        for (final hub in _hubs)
+          if (!hub.personalRecommendations) hub,
+      ];
+    }
+    return _hubsWithoutRecommendations;
+  }
+
+  List<MediaHub>? _hubsWithoutRecommendationsSource;
+  List<MediaHub> _hubsWithoutRecommendations = const [];
+
+  /// "Show Silo recommendations on Home" (on when settings are not loaded).
+  static bool get _recommendationsOnHome =>
+      SettingsService.instanceOrNull?.read(SettingsService.showSiloRecommendationsOnHome) ?? true;
+
+  ValueListenable<bool>? _recommendationsSetting;
+
+  void _watchRecommendationsSetting() {
+    if (_recommendationsSetting != null) return;
+    final settings = SettingsService.instanceOrNull;
+    if (settings == null) return;
+    _recommendationsSetting = settings.listenable(SettingsService.showSiloRecommendationsOnHome)
+      ..addListener(_onRecommendationsSettingChanged);
+  }
+
+  /// Off: Home drops the rows on its next build. On: read them now, so they
+  /// come back without waiting for the next refresh.
+  void _onRecommendationsSettingChanged() {
+    if (isDisposed) return;
+    if (_recommendationsOnHome && _hubsState == DiscoverLoadState.loaded && _multiServer.hasConnectedServers) {
+      _startRecommendations(
+        _multiServer.aggregationService.getRecommendationHubsFromAllServers(
+          hiddenLibraryKeys: _hiddenLibraries.hiddenLibraryKeys,
+        ),
+        after: Future<void>.value(),
+      );
+    }
+    safeNotifyListeners();
+  }
+
   bool get hasMoreContinueWatching => _hasMoreContinueWatching;
 
   /// Raw load failure (unlocalized); the screen wraps it for display.
@@ -481,10 +529,13 @@ class DiscoverProvider extends ChangeNotifier with DisposableChangeNotifierMixin
         useGlobalHubs: useGlobalHubs,
         includePlaybackHubs: false,
       );
-      _startRecommendations(
-        aggregation.getRecommendationHubsFromAllServers(hiddenLibraryKeys: _hiddenLibraries.hiddenLibraryKeys),
-        after: hubsSettled.future,
-      );
+      _watchRecommendationsSetting();
+      if (_recommendationsOnHome) {
+        _startRecommendations(
+          aggregation.getRecommendationHubsFromAllServers(hiddenLibraryKeys: _hiddenLibraries.hiddenLibraryKeys),
+          after: hubsSettled.future,
+        );
+      }
 
       // A pass in which zero servers succeeded is never authoritative: it
       // must not wipe existing content, and it may only commit "loaded,
@@ -686,7 +737,7 @@ class DiscoverProvider extends ChangeNotifier with DisposableChangeNotifierMixin
             );
 
       final hubsSettled = Completer<void>();
-      if (hubIds.isNotEmpty) {
+      if (hubIds.isNotEmpty && _recommendationsOnHome) {
         _startRecommendations(
           aggregation.getRecommendationHubsFromAllServers(
             hiddenLibraryKeys: _hiddenLibraries.hiddenLibraryKeys,
@@ -1311,6 +1362,7 @@ class DiscoverProvider extends ChangeNotifier with DisposableChangeNotifierMixin
   @override
   void dispose() {
     _multiServer.removeOnlineServersListener(syncToOnlineServers);
+    _recommendationsSetting?.removeListener(_onRecommendationsSettingChanged);
     _hiddenLibraries.removeListener(_onHiddenLibrariesChanged);
     _libraries.removeListener(_onLibrariesChanged);
     _watchStateSubscription?.cancel();

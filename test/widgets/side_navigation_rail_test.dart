@@ -1,6 +1,11 @@
 import 'dart:async';
 import 'dart:ui' show PointerDeviceKind;
 import 'package:plezy/media/ids.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:plezy/connection/connection.dart';
+import 'package:plezy/services/silo/silo_api.dart';
+import 'package:plezy/services/silo/silo_client.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -114,6 +119,7 @@ Future<void> _pumpBasicRail(
   double? height,
   CatalogSourcesProvider? catalogSources,
   ValueChanged<bool>? onFloatingPanelChanged,
+  List<MediaServerClient> clients = const [],
 }) async {
   await SettingsService.getInstance();
 
@@ -127,9 +133,14 @@ Future<void> _pumpBasicRail(
   await hiddenLibrariesProvider.ensureInitialized();
   addTearDown(hiddenLibrariesProvider.dispose);
 
-  final manager = MultiServerManager();
-  final multiServerProvider = testMultiServerProvider(manager);
-  addTearDown(multiServerProvider.dispose);
+  // testMultiServer disposes its provider itself.
+  final MultiServerProvider multiServerProvider;
+  if (clients.isEmpty) {
+    multiServerProvider = testMultiServerProvider(MultiServerManager());
+    addTearDown(multiServerProvider.dispose);
+  } else {
+    multiServerProvider = testMultiServer(clients: clients).provider;
+  }
 
   final rail = SideNavigationRail(
     key: sideNavKey,
@@ -467,6 +478,63 @@ void main() {
     await SettingsService.instance.write(SettingsService.showExploreTab, true);
     await tester.pumpAndSettle();
     expect(find.widgetWithText(NavigationRailItem, 'Explore'), findsOneWidget);
+  });
+
+  testWidgets('For You sits below Home while a Silo server is online and follows its setting', (tester) async {
+    final silo = SiloClient.forTesting(
+      SiloConnection(
+        id: 'srv-1/1/p-owner',
+        baseUrl: 'https://silo.example.com',
+        serverName: 'Home Silo',
+        serverId: 'srv-1',
+        userId: '1',
+        userName: 'laura',
+        accessToken: 'acc',
+        refreshToken: 'ref',
+        deviceId: 'dev-1',
+        profileId: 'p-owner',
+        profileName: 'Laura',
+        createdAt: DateTime(2026),
+      ),
+      headers: const SiloDeviceHeaders(
+        deviceId: 'dev-1',
+        deviceName: 'Test',
+        platform: 'linux',
+        clientFamily: 'desktop',
+        clientVersion: '1.0',
+      ),
+      httpClient: MockClient((_) async => http.Response('{}', 404)),
+    );
+    await _pumpBasicRail(tester, alwaysExpanded: true, clients: [silo]);
+    final forYou = find.widgetWithText(NavigationRailItem, 'For You');
+    expect(forYou, findsOneWidget);
+    expect(
+      tester.getTopLeft(forYou).dy,
+      greaterThan(tester.getTopLeft(find.widgetWithText(NavigationRailItem, 'Home')).dy),
+    );
+    expect(
+      tester.getTopLeft(forYou).dy,
+      lessThan(tester.getTopLeft(find.widgetWithText(NavigationRailItem, 'Libraries')).dy),
+    );
+
+    // D-pad: Down from Home lands on For You.
+    tester.widget<NavigationRailItem>(find.widgetWithText(NavigationRailItem, 'Home')).focusNode.requestFocus();
+    await tester.pumpAndSettle();
+    await _press(tester, LogicalKeyboardKey.arrowDown);
+    expect(tester.widget<NavigationRailItem>(forYou).focusNode.hasFocus, isTrue);
+
+    await SettingsService.instance.write(SettingsService.showSiloForYou, false);
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(NavigationRailItem, 'For You'), findsNothing);
+
+    await SettingsService.instance.write(SettingsService.showSiloForYou, true);
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(NavigationRailItem, 'For You'), findsOneWidget);
+  });
+
+  testWidgets('no For You without a Silo server', (tester) async {
+    await _pumpBasicRail(tester, alwaysExpanded: true);
+    expect(find.widgetWithText(NavigationRailItem, 'For You'), findsNothing);
   });
 
   testWidgets('collapsing the Libraries section survives a fresh rail', (tester) async {

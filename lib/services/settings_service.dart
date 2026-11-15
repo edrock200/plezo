@@ -892,6 +892,17 @@ class SettingsService extends BaseSharedPreferencesService {
   /// at all. UI-only: catalog sources stay connected so watchlist surfaces
   /// keep working while the tab is hidden.
   static const showExploreTab = BoolPref('show_explore_tab', defaultValue: true);
+
+  /// Whether Silo's personal recommendation rows (`/recommendations/discover`)
+  /// join Home. Off: Home drops them on its next build and stops reading them.
+  static const showSiloRecommendationsOnHome = BoolPref('show_silo_recommendations_on_home', defaultValue: true);
+
+  /// Whether the For You entry (side rail on TV/desktop, a button on the
+  /// phone Home) is shown while a Silo server is online.
+  static const showSiloForYou = BoolPref('show_silo_for_you', defaultValue: true);
+
+  /// The Silo server whose For You page was shown last (runtime state).
+  static const siloForYouServerId = NullableStringPref('silo_for_you_server_id');
   static const alwaysKeepSidebarOpen = BoolPref('always_keep_sidebar_open');
 
   /// Sidebar Libraries section expansion. Persisted so a collapsed section
@@ -1559,6 +1570,8 @@ class SettingsService extends BaseSharedPreferencesService {
     useExoPlayer,
     startupSection,
     showExploreTab,
+    showSiloRecommendationsOnHome,
+    showSiloForYou,
     alwaysKeepSidebarOpen,
     librariesSectionExpanded,
     showUnwatchedCount,

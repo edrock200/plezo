@@ -1,4 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:plezy/connection/connection.dart';
+import 'package:plezy/providers/multi_server_provider.dart';
+import 'package:plezy/services/silo/silo_api.dart';
+import 'package:plezy/services/silo/silo_client.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plezy/i18n/strings.g.dart';
 import 'package:plezy/providers/theme_provider.dart';
@@ -11,6 +17,7 @@ import 'package:plezy/services/supporter/supporter_service.dart';
 import 'package:plezy/theme/mono_theme.dart';
 import 'package:provider/provider.dart';
 
+import '../../test_helpers/multi_server_fixtures.dart';
 import '../../test_helpers/prefs.dart';
 
 void main() {
@@ -104,4 +111,75 @@ void main() {
       findsOneWidget,
     );
   });
+
+  for (final withSilo in [true, false]) {
+    testWidgets('the Silo toggles are shown ${withSilo ? 'with' : 'without'} a Silo server and default on', (
+      tester,
+    ) async {
+      tester.view.devicePixelRatio = 1;
+      tester.view.physicalSize = const Size(1000, 3000);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      addTearDown(tester.view.resetPhysicalSize);
+
+      final supporter = SupporterService.forTesting(availability: SupporterAvailability.hidden);
+      addTearDown(supporter.dispose);
+      final theme = ThemeProvider(supporter: supporter);
+      addTearDown(theme.dispose);
+      final silo = SiloClient.forTesting(
+        SiloConnection(
+          id: 'srv-1/1/p-owner',
+          baseUrl: 'https://silo.example.com',
+          serverName: 'Home Silo',
+          serverId: 'srv-1',
+          userId: '1',
+          userName: 'laura',
+          accessToken: 'acc',
+          refreshToken: 'ref',
+          deviceId: 'dev-1',
+          profileId: 'p-owner',
+          profileName: 'Laura',
+          createdAt: DateTime(2026),
+        ),
+        headers: const SiloDeviceHeaders(
+          deviceId: 'dev-1',
+          deviceName: 'Test',
+          platform: 'linux',
+          clientFamily: 'desktop',
+          clientVersion: '1.0',
+        ),
+        httpClient: MockClient((_) async => http.Response('{}', 404)),
+      );
+      final servers = testMultiServer(clients: withSilo ? [silo] : const []).provider;
+      await tester.pumpWidget(
+        MultiProvider(
+          providers: [
+            ChangeNotifierProvider<ThemeProvider>.value(value: theme),
+            ChangeNotifierProvider<MultiServerProvider>.value(value: servers),
+          ],
+          child: MaterialApp(theme: monoTheme(MonoPalette.dark), home: const AppearanceSettingsScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final home = find.text(t.settings.showSiloRecommendationsOnHome);
+      final forYou = find.text(t.settings.showSiloForYou);
+      if (!withSilo) {
+        expect(home, findsNothing);
+        expect(forYou, findsNothing);
+        return;
+      }
+      expect(find.text(t.settings.silo), findsOneWidget);
+      expect(home, findsOneWidget);
+      expect(forYou, findsOneWidget);
+      expect(SettingsService.instance.read(SettingsService.showSiloRecommendationsOnHome), isTrue);
+      expect(SettingsService.instance.read(SettingsService.showSiloForYou), isTrue);
+
+      await tester.tap(home);
+      await tester.pumpAndSettle();
+      expect(SettingsService.instance.read(SettingsService.showSiloRecommendationsOnHome), isFalse);
+      await tester.tap(forYou);
+      await tester.pumpAndSettle();
+      expect(SettingsService.instance.read(SettingsService.showSiloForYou), isFalse);
+    });
+  }
 }

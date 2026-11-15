@@ -23,6 +23,9 @@ import '../services/device_performance.dart';
 import '../services/music/music_playback_service.dart';
 import '../services/settings_service.dart';
 import '../utils/music_navigation.dart';
+import '../utils/hub_icons.dart';
+import '../screens/silo/silo_feature_entries.dart';
+import '../screens/silo/silo_for_you_screen.dart';
 import '../utils/content_utils.dart';
 import '../utils/platform_detector.dart';
 import '../utils/scroll_utils.dart';
@@ -469,6 +472,7 @@ class SideNavigationRailState extends State<SideNavigationRail> with MountedSetS
   static const _kHome = 'home';
   static const _kExplore = 'explore';
   static const _kNowPlaying = 'nowPlaying';
+  static const _kForYou = 'forYou';
   static const _kLibraries = 'libraries';
   static const _kSearch = 'search';
   static const _kDownloads = 'downloads';
@@ -677,9 +681,11 @@ class SideNavigationRailState extends State<SideNavigationRail> with MountedSetS
     required bool hasLiveTv,
     required bool hasNowPlaying,
     required bool hasExplore,
+    required bool hasForYou,
   }) {
     return {
       _kHome,
+      if (hasForYou) _kForYou,
       if (hasNowPlaying) _kNowPlaying,
       _kLibraries,
       if (hasExplore) _kExplore,
@@ -758,12 +764,14 @@ class SideNavigationRailState extends State<SideNavigationRail> with MountedSetS
     required bool hasLiveTv,
     required bool hasNowPlaying,
     required bool hasExplore,
+    required bool hasForYou,
     required bool isCollapsed,
   }) {
     return [
       if (widget.isOfflineMode && widget.onReconnect != null) _kReconnect,
       if (!widget.isOfflineMode) ...[
         _kHome,
+        if (hasForYou) _kForYou,
         if (hasNowPlaying) _kNowPlaying,
         _kLibraries,
         // Library rows render inside ExcludeFocus(excluding: !_librariesExpanded
@@ -880,7 +888,8 @@ class SideNavigationRailState extends State<SideNavigationRail> with MountedSetS
     final isCollapsed = !_shouldExpand;
     final effectiveCollapsedWidth = collapsedWidthForContext(context);
     final horizontalPadding = horizontalPaddingForContext(context, isCollapsed: isCollapsed);
-    final hasLiveTv = context.watch<MultiServerProvider>().hasLiveTv;
+    final multiServer = context.watch<MultiServerProvider>();
+    final hasLiveTv = multiServer.hasLiveTv;
     // Nullable watch: rail tests (and any host without the profile session
     // scope) simply never show the Explore item.
     final hasExploreSource = context.watch<CatalogSourcesProvider?>()?.hasAnySource ?? false;
@@ -900,9 +909,14 @@ class SideNavigationRailState extends State<SideNavigationRail> with MountedSetS
         SettingsService.instance.listenable(SettingsService.groupLibrariesByServer),
         SettingsService.instance.listenable(SettingsService.showExploreTab),
         SettingsService.instance.listenable(SettingsService.librariesSectionExpanded),
+        SettingsService.instance.listenable(SettingsService.showSiloForYou),
       ]),
       builder: (context, _) {
         final hasExplore = hasExploreSource && SettingsService.instance.read(SettingsService.showExploreTab);
+        // Silo's For You page: a pushed route (like Now Playing), not a tab,
+        // so tab persistence and the companion remote's tab commands stay as
+        // they are.
+        final hasForYou = !widget.isOfflineMode && siloForYouAvailable(multiServer);
         // Server grouping: only when multi-server AND the user-facing toggle is on.
         final groupByServerSetting = SettingsService.instance.read(SettingsService.groupLibrariesByServer);
         final showServerHeaders = serverIds.length > 1 && groupByServerSetting;
@@ -927,6 +941,7 @@ class SideNavigationRailState extends State<SideNavigationRail> with MountedSetS
             hasLiveTv: hasLiveTv,
             hasNowPlaying: nowPlayingTrack != null,
             hasExplore: hasExplore,
+            hasForYou: hasForYou,
           ),
         );
         final focusOrder = _buildFocusOrder(
@@ -936,6 +951,7 @@ class SideNavigationRailState extends State<SideNavigationRail> with MountedSetS
           hasLiveTv: hasLiveTv,
           hasNowPlaying: nowPlayingTrack != null,
           hasExplore: hasExplore,
+          hasForYou: hasForYou,
           isCollapsed: isCollapsed,
         );
         _debugAssertUniqueFocusOrder(focusOrder);
@@ -1028,6 +1044,18 @@ class SideNavigationRailState extends State<SideNavigationRail> with MountedSetS
                                         isCollapsed: isCollapsed,
                                       ),
                                       const SizedBox(height: _itemGap),
+                                      if (hasForYou) ...[
+                                        _buildNavItem(
+                                          icon: personalRecommendationsIcon,
+                                          selectedIcon: personalRecommendationsIcon,
+                                          label: Translations.of(context).siloForYou.title,
+                                          isSelected: false,
+                                          onTap: () => unawaited(openSiloForYou(context)),
+                                          focusNode: _focusTracker.get(_kForYou),
+                                          isCollapsed: isCollapsed,
+                                        ),
+                                        const SizedBox(height: _itemGap),
+                                      ],
                                       // Now Playing — only while a music session is live.
                                       if (nowPlayingTrack != null && musicService != null) ...[
                                         _buildNowPlayingItem(nowPlayingTrack, musicService, isCollapsed: isCollapsed),

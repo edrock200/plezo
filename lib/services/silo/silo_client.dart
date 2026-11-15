@@ -68,6 +68,7 @@ import 'silo_playback_caps.dart';
 import 'silo_letter_index.dart';
 import 'silo_series_track_choices.dart';
 import 'silo_requests.dart';
+import 'silo_personal_lists.dart';
 import 'silo_sort_options.dart';
 import 'silo_subtitles.dart';
 import 'silo_track_prefs.dart';
@@ -722,6 +723,45 @@ class SiloClient
       libraryId: libraryId,
       libraryTitle: _libraryTitles[libraryId],
     );
+  }
+
+  // ---------------------------------------------------------------------------
+  // Personal lists (For You: Favorites, Watchlist)
+  // ---------------------------------------------------------------------------
+
+  /// The sorts a personal list offers ([SiloSortOptions.forPersonalList]); no
+  /// sort is the list's own order, most recently saved first.
+  Future<List<MediaSort>> fetchPersonalListSortOptions() async {
+    final shown = await _shownRatingSources();
+    return [for (final field in SiloSortOptions.forPersonalList(shownRatingSources: shown)) field.toMediaSort()];
+  }
+
+  /// One page of [list] for this connection's profile:
+  /// `GET /api/v2/catalog?source=favorites|watchlist`, cursor-paged like a
+  /// library. [sort] null sends no `sort` (the server's saved order, most
+  /// recently saved first, as Silo's apps open these lists); [kind] narrows
+  /// to movies (`type=movie`) or series (`type=series`).
+  Future<LibraryPage<MediaItem>> fetchPersonalListPage(
+    SiloPersonalList list, {
+    required int offset,
+    required int limit,
+    LibrarySort? sort,
+    MediaKind? kind,
+    AbortController? abort,
+  }) async {
+    final page = await _pageAt(
+      '/api/v2/catalog',
+      {
+        'source': list.source,
+        if (sort != null) 'sort': _sortParam(sort),
+        'type': ?SiloMappers.catalogType(kind),
+        'image_size': _imageSize,
+      },
+      offset: offset,
+      limit: limit,
+      abort: abort,
+    );
+    return _libraryPage(page, offset: offset, limit: limit);
   }
 
   /// True once the server answered the letter index with 404, 405 or 501:

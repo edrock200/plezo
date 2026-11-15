@@ -6,6 +6,7 @@ import 'package:material_symbols_icons/symbols.dart';
 import '../../i18n/strings.g.dart';
 import '../../media/ids.dart';
 import '../../providers/multi_server_provider.dart';
+import '../../services/settings_service.dart';
 import '../../services/silo/silo_client.dart';
 import '../../widgets/app_menu.dart';
 import 'silo_calendar_screen.dart';
@@ -77,3 +78,17 @@ bool handleSiloFeatureMenuValue(BuildContext context, MultiServerProvider? serve
   );
   return true;
 }
+
+/// Whether the For You entry is offered: "Show For You" is on and a Silo
+/// server is online.
+bool siloForYouAvailable(MultiServerProvider? servers) =>
+    (SettingsService.instanceOrNull?.read(SettingsService.showSiloForYou) ?? true) &&
+    onlineSiloClients(servers).isNotEmpty;
+
+/// Whether any Silo server is saved (online or not), for the settings that
+/// only matter with one.
+bool hasSiloServers(MultiServerProvider? servers) => [
+  if (servers != null)
+    for (final id in servers.serverIds)
+      if (servers.getClientForServer(ServerId(id)) is SiloClient) id,
+].isNotEmpty;
