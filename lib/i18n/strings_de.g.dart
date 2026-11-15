@@ -2807,6 +2807,22 @@ class _Translations$libraries$sortLabels$de extends Translations$libraries$sortL
 	@override String get dateDownloaded => 'Heruntergeladen am';
 	@override String get size => 'Größe';
 	@override String get library => 'Mediathek';
+	@override String get year => 'Jahr';
+	@override String get contentRating => 'Altersfreigabe';
+	@override String get duration => 'Dauer';
+	@override String get imdbRating => 'IMDb-Bewertung';
+	@override String get tmdbRating => 'TMDB-Bewertung';
+	@override String get rtCriticRating => 'RT-Kritikerbewertung';
+	@override String get rtAudienceRating => 'RT-Publikumsbewertung';
+	@override String get resolution => 'Auflösung';
+	@override String get bitrate => 'Bitrate';
+	@override String get progress => 'Fortschritt';
+	@override String get dateViewed => 'Zuletzt angesehen';
+	@override String get plays => 'Wiedergaben';
+	@override String get author => 'Autor';
+	@override String get narrator => 'Sprecher';
+	@override String get series => 'Serie';
+	@override String get latestEpisodeAdded => 'Neueste Folge hinzugefügt';
 }
 
 // Path: libraries.advancedFilters
@@ -4628,6 +4644,22 @@ extension on TranslationsDe {
 			'libraries.sortLabels.dateDownloaded' => 'Heruntergeladen am',
 			'libraries.sortLabels.size' => 'Größe',
 			'libraries.sortLabels.library' => 'Mediathek',
+			'libraries.sortLabels.year' => 'Jahr',
+			'libraries.sortLabels.contentRating' => 'Altersfreigabe',
+			'libraries.sortLabels.duration' => 'Dauer',
+			'libraries.sortLabels.imdbRating' => 'IMDb-Bewertung',
+			'libraries.sortLabels.tmdbRating' => 'TMDB-Bewertung',
+			'libraries.sortLabels.rtCriticRating' => 'RT-Kritikerbewertung',
+			'libraries.sortLabels.rtAudienceRating' => 'RT-Publikumsbewertung',
+			'libraries.sortLabels.resolution' => 'Auflösung',
+			'libraries.sortLabels.bitrate' => 'Bitrate',
+			'libraries.sortLabels.progress' => 'Fortschritt',
+			'libraries.sortLabels.dateViewed' => 'Zuletzt angesehen',
+			'libraries.sortLabels.plays' => 'Wiedergaben',
+			'libraries.sortLabels.author' => 'Autor',
+			'libraries.sortLabels.narrator' => 'Sprecher',
+			'libraries.sortLabels.series' => 'Serie',
+			'libraries.sortLabels.latestEpisodeAdded' => 'Neueste Folge hinzugefügt',
 			'libraries.advancedFilters.include' => 'Einschließen',
 			'libraries.advancedFilters.exclude' => 'Ausschließen',
 			'libraries.advancedFilters.any' => 'Beliebig',
@@ -4922,6 +4954,8 @@ extension on TranslationsDe {
 			'liveTv.recordingRuleDeleted' => 'Aufnahmeregel gelöscht',
 			'liveTv.processRecordingRules' => 'Regeln neu bewerten',
 			'liveTv.recordingInProgress' => 'Wird jetzt aufgenommen',
+			_ => null,
+		} ?? switch (path) {
 			'liveTv.recordingsCount' => ({required Object count}) => '${count} geplant',
 			'liveTv.editRule' => 'Regel bearbeiten',
 			'liveTv.editRuleAction' => 'Bearbeiten',
@@ -4938,8 +4972,6 @@ extension on TranslationsDe {
 			'liveTv.recordSettings.anyTime' => 'Zu jeder Zeit aufnehmen',
 			'liveTv.recordSettings.skipInLibrary' => 'Episoden überspringen, die schon in der Bibliothek sind',
 			'liveTv.recordSettings.keepUpTo' => 'Zu behaltende Episoden',
-			_ => null,
-		} ?? switch (path) {
 			'liveTv.recordSettings.keepUpToHint' => '0 behält alle Episoden',
 			'liveTv.startingInMinutes' => ({required Object minutes}) => 'Beginnt in ${minutes} Min.',
 			'liveTv.dayAtTime' => ({required Object day, required Object time}) => '${day} um ${time}',
@@ -5436,6 +5468,8 @@ extension on TranslationsDe {
 			'performanceOverlay.dvRpuAverage' => 'DV-RPU Ø',
 			'performanceOverlay.dvSampleAverage' => 'DV-Sample Ø',
 			'performanceOverlay.maxLuma' => 'Max. Luma',
+			_ => null,
+		} ?? switch (path) {
 			'performanceOverlay.minLuma' => 'Min. Luma',
 			'performanceOverlay.maxCll' => 'MaxCLL',
 			'performanceOverlay.maxFall' => 'MaxFALL',
@@ -5452,8 +5486,6 @@ extension on TranslationsDe {
 			'performanceOverlay.decoderMediatekHw' => 'MediaTek HW',
 			'performanceOverlay.decoderExynosHw' => 'Exynos HW',
 			'performanceOverlay.decoderSoftware' => 'Software',
-			_ => null,
-		} ?? switch (path) {
 			'performanceOverlay.decoderHardware' => 'Hardware',
 			'performanceOverlay.tunnelingActive' => 'Aktiv',
 			'performanceOverlay.dvRpuFailed' => ({required Object converted, required Object failures}) => '${converted} (${failures} fehlgeschlagen)',

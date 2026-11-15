@@ -276,7 +276,10 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
   `source=user_collection` (curated ones `silo-collection:…`, `source=library_collection`; the server 404s a mix-up).
   Collection text is `description` (fallback `overview`, "" = none). Remove from Continue Watching follows Android's
   `HomeDismissal`: stamp → `continue_watching`, else series → `next_up`, else it throws (item detail has no stamp).
-- **Sort fields** unknown to the server return 422 — map only known ones (`_sortFields`).
+- **Sort fields** unknown to the server return 422 — map only known ones (`SiloSortOptions` in
+  `silo_sort_options.dart`). The lists follow Silo Android #843 / the web client (`querySortOptions.ts`): order,
+  default directions and scopes per library kind (mixed = fields shared by movies, series and episodes); RT sorts
+  only while `GET /capabilities/ratings` lists `rt_critic` / `rt_audience`. Old stored keys stay (`rating` = IMDb).
 - **Playback (protocol v3):** `GET /playback/capabilities` must be `available`, list protocol 3
   and the `sequenced_progress_v1` feature (Silo's apps refuse playback otherwise) → keep `installation_id` (409
   `installation_changed` → refetch and retry once). `POST /playback/start` with `declared` evidence

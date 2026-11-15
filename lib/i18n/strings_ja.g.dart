@@ -2797,6 +2797,22 @@ class _Translations$libraries$sortLabels$ja extends Translations$libraries$sortL
 	@override String get dateDownloaded => 'ダウンロード日';
 	@override String get size => 'サイズ';
 	@override String get library => 'ライブラリ';
+	@override String get year => '年';
+	@override String get contentRating => '年齢制限';
+	@override String get duration => '再生時間';
+	@override String get imdbRating => 'IMDb評価';
+	@override String get tmdbRating => 'TMDB評価';
+	@override String get rtCriticRating => 'RT批評家評価';
+	@override String get rtAudienceRating => 'RT観客評価';
+	@override String get resolution => '解像度';
+	@override String get bitrate => 'ビットレート';
+	@override String get progress => '進行状況';
+	@override String get dateViewed => '視聴日';
+	@override String get plays => '再生回数';
+	@override String get author => '著者';
+	@override String get narrator => 'ナレーター';
+	@override String get series => 'シリーズ';
+	@override String get latestEpisodeAdded => '最新エピソードの追加日';
 }
 
 // Path: libraries.advancedFilters
@@ -4616,6 +4632,22 @@ extension on TranslationsJa {
 			'libraries.sortLabels.dateDownloaded' => 'ダウンロード日',
 			'libraries.sortLabels.size' => 'サイズ',
 			'libraries.sortLabels.library' => 'ライブラリ',
+			'libraries.sortLabels.year' => '年',
+			'libraries.sortLabels.contentRating' => '年齢制限',
+			'libraries.sortLabels.duration' => '再生時間',
+			'libraries.sortLabels.imdbRating' => 'IMDb評価',
+			'libraries.sortLabels.tmdbRating' => 'TMDB評価',
+			'libraries.sortLabels.rtCriticRating' => 'RT批評家評価',
+			'libraries.sortLabels.rtAudienceRating' => 'RT観客評価',
+			'libraries.sortLabels.resolution' => '解像度',
+			'libraries.sortLabels.bitrate' => 'ビットレート',
+			'libraries.sortLabels.progress' => '進行状況',
+			'libraries.sortLabels.dateViewed' => '視聴日',
+			'libraries.sortLabels.plays' => '再生回数',
+			'libraries.sortLabels.author' => '著者',
+			'libraries.sortLabels.narrator' => 'ナレーター',
+			'libraries.sortLabels.series' => 'シリーズ',
+			'libraries.sortLabels.latestEpisodeAdded' => '最新エピソードの追加日',
 			'libraries.advancedFilters.include' => '含める',
 			'libraries.advancedFilters.exclude' => '除外',
 			'libraries.advancedFilters.any' => '指定なし',
@@ -4910,6 +4942,8 @@ extension on TranslationsJa {
 			'liveTv.recordingRuleDeleted' => '録画ルールを削除しました',
 			'liveTv.processRecordingRules' => 'ルールを再評価',
 			'liveTv.recordingInProgress' => '録画中',
+			_ => null,
+		} ?? switch (path) {
 			'liveTv.recordingsCount' => ({required Object count}) => '${count}件予約済み',
 			'liveTv.editRule' => 'ルールを編集',
 			'liveTv.editRuleAction' => '編集',
@@ -4926,8 +4960,6 @@ extension on TranslationsJa {
 			'liveTv.recordSettings.anyTime' => 'すべての時間帯で録画',
 			'liveTv.recordSettings.skipInLibrary' => 'ライブラリにあるエピソードをスキップ',
 			'liveTv.recordSettings.keepUpTo' => '保持するエピソード数',
-			_ => null,
-		} ?? switch (path) {
 			'liveTv.recordSettings.keepUpToHint' => '0 ですべてのエピソードを保持',
 			'liveTv.startingInMinutes' => ({required Object minutes}) => '${minutes}分後に開始',
 			'liveTv.dayAtTime' => ({required Object day, required Object time}) => '${day} ${time}',
@@ -5424,6 +5456,8 @@ extension on TranslationsJa {
 			'performanceOverlay.dvRpuAverage' => 'DV RPU 平均',
 			'performanceOverlay.dvSampleAverage' => 'DV サンプル平均',
 			'performanceOverlay.maxLuma' => '最大輝度',
+			_ => null,
+		} ?? switch (path) {
 			'performanceOverlay.minLuma' => '最小輝度',
 			'performanceOverlay.maxCll' => 'MaxCLL',
 			'performanceOverlay.maxFall' => 'MaxFALL',
@@ -5440,8 +5474,6 @@ extension on TranslationsJa {
 			'performanceOverlay.decoderMediatekHw' => 'MediaTek HW',
 			'performanceOverlay.decoderExynosHw' => 'Exynos HW',
 			'performanceOverlay.decoderSoftware' => 'ソフトウェア',
-			_ => null,
-		} ?? switch (path) {
 			'performanceOverlay.decoderHardware' => 'ハードウェア',
 			'performanceOverlay.tunnelingActive' => '有効',
 			'performanceOverlay.dvRpuFailed' => ({required Object converted, required Object failures}) => '${converted}（${failures}件失敗）',

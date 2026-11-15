@@ -7986,6 +7986,54 @@ class Translations$libraries$sortLabels$en {
 
 	/// en: 'Library'
 	String get library => 'Library';
+
+	/// en: 'Year'
+	String get year => 'Year';
+
+	/// en: 'Content Rating'
+	String get contentRating => 'Content Rating';
+
+	/// en: 'Duration'
+	String get duration => 'Duration';
+
+	/// en: 'IMDb Rating'
+	String get imdbRating => 'IMDb Rating';
+
+	/// en: 'TMDB Rating'
+	String get tmdbRating => 'TMDB Rating';
+
+	/// en: 'RT Critic Rating'
+	String get rtCriticRating => 'RT Critic Rating';
+
+	/// en: 'RT Audience Rating'
+	String get rtAudienceRating => 'RT Audience Rating';
+
+	/// en: 'Resolution'
+	String get resolution => 'Resolution';
+
+	/// en: 'Bitrate'
+	String get bitrate => 'Bitrate';
+
+	/// en: 'Progress'
+	String get progress => 'Progress';
+
+	/// en: 'Date Viewed'
+	String get dateViewed => 'Date Viewed';
+
+	/// en: 'Plays'
+	String get plays => 'Plays';
+
+	/// en: 'Author'
+	String get author => 'Author';
+
+	/// en: 'Narrator'
+	String get narrator => 'Narrator';
+
+	/// en: 'Series'
+	String get series => 'Series';
+
+	/// en: 'Latest Episode Added'
+	String get latestEpisodeAdded => 'Latest Episode Added';
 }
 
 // Path: libraries.advancedFilters
@@ -10520,6 +10568,22 @@ extension on Translations {
 			'libraries.sortLabels.dateDownloaded' => 'Date Downloaded',
 			'libraries.sortLabels.size' => 'Size',
 			'libraries.sortLabels.library' => 'Library',
+			'libraries.sortLabels.year' => 'Year',
+			'libraries.sortLabels.contentRating' => 'Content Rating',
+			'libraries.sortLabels.duration' => 'Duration',
+			'libraries.sortLabels.imdbRating' => 'IMDb Rating',
+			'libraries.sortLabels.tmdbRating' => 'TMDB Rating',
+			'libraries.sortLabels.rtCriticRating' => 'RT Critic Rating',
+			'libraries.sortLabels.rtAudienceRating' => 'RT Audience Rating',
+			'libraries.sortLabels.resolution' => 'Resolution',
+			'libraries.sortLabels.bitrate' => 'Bitrate',
+			'libraries.sortLabels.progress' => 'Progress',
+			'libraries.sortLabels.dateViewed' => 'Date Viewed',
+			'libraries.sortLabels.plays' => 'Plays',
+			'libraries.sortLabels.author' => 'Author',
+			'libraries.sortLabels.narrator' => 'Narrator',
+			'libraries.sortLabels.series' => 'Series',
+			'libraries.sortLabels.latestEpisodeAdded' => 'Latest Episode Added',
 			'libraries.advancedFilters.include' => 'Include',
 			'libraries.advancedFilters.exclude' => 'Exclude',
 			'libraries.advancedFilters.any' => 'Any',
@@ -10747,6 +10811,8 @@ extension on Translations {
 			'explore.detail.relatedTitles' => 'Related titles',
 			'explore.detail.background' => 'Background',
 			'explore.totalResults' => ({required num n}) => (_root.$meta.cardinalResolver ?? PluralResolvers.cardinal('en'))(n, one: '${n} result', other: '${n} results', ), 
+			_ => null,
+		} ?? switch (path) {
 			'liveTv.title' => 'Live TV',
 			'liveTv.guide' => 'Guide',
 			'liveTv.noChannels' => 'No channels available',
@@ -10763,8 +10829,6 @@ extension on Translations {
 			'liveTv.live' => 'LIVE',
 			'liveTv.premiereBadge' => 'NEW',
 			'liveTv.reloadGuide' => 'Reload Guide',
-			_ => null,
-		} ?? switch (path) {
 			'liveTv.searchGuide' => 'Search Guide',
 			'liveTv.searchHint' => 'Search channels & programs',
 			'liveTv.searchNoResults' => ({required Object query}) => 'No matches for "${query}"',
@@ -11261,6 +11325,8 @@ extension on Translations {
 			'companionRemote.remote.volumeUp' => 'Up',
 			'companionRemote.remote.fullscreen' => 'Fullscreen',
 			'companionRemote.remote.subtitles' => 'Subtitles',
+			_ => null,
+		} ?? switch (path) {
 			'companionRemote.remote.audio' => 'Audio',
 			'companionRemote.remote.searchHint' => 'Search on desktop...',
 			'companionRemote.errors.noNetworkInterface' => 'No network interface found',
@@ -11277,8 +11343,6 @@ extension on Translations {
 			'videoSettings.sleepTimerActive' => ({required Object duration}) => 'Active (${duration})',
 			'videoSettings.zoom' => 'Zoom',
 			'videoSettings.sleepTimer' => 'Sleep Timer',
-			_ => null,
-		} ?? switch (path) {
 			'videoSettings.audioSync' => 'Audio Sync',
 			'videoSettings.subtitleSync' => 'Subtitle Sync',
 			'videoSettings.hdr' => 'HDR',
@@ -11775,6 +11839,8 @@ extension on Translations {
 			'siloRequests.loadFailed' => 'Couldn\'t load your requests',
 			'siloRequests.searchFailed' => 'Couldn\'t search for titles to request',
 			'siloRequests.detailLoadFailed' => 'Couldn\'t load this title',
+			_ => null,
+		} ?? switch (path) {
 			'siloRequests.openFailed' => 'Couldn\'t open this title',
 			'siloRequests.movie' => 'Movie',
 			'siloRequests.series' => 'Series',
@@ -11791,8 +11857,6 @@ extension on Translations {
 			'siloRequests.queued' => 'Queued for download',
 			'siloRequests.downloading' => 'Downloading',
 			'siloRequests.addingToLibrary' => 'Adding to your library',
-			_ => null,
-		} ?? switch (path) {
 			'siloRequests.partlyInLibrary' => 'Partly in your library',
 			'siloRequests.reasonAlreadyRequested' => 'Already requested',
 			'siloRequests.reasonAlreadyAvailable' => 'Already in your library',

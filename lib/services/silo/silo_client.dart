@@ -66,6 +66,7 @@ import 'silo_playback_caps.dart';
 import 'silo_letter_index.dart';
 import 'silo_series_track_choices.dart';
 import 'silo_requests.dart';
+import 'silo_sort_options.dart';
 import 'silo_subtitles.dart';
 import 'silo_track_prefs.dart';
 import 'silo_trickplay.dart';
@@ -608,50 +609,41 @@ class SiloClient
   bool _hasBoxSets([String? libraryId]) =>
       libraryId == null ? _boxSetLibraryIds.isNotEmpty : _boxSetLibraryIds.contains(libraryId);
 
-  static const _sortFields = {
-    'title': 'title',
-    'titleSort': 'title',
-    'addedAt': 'added_at',
-    'year': 'year',
-    'productionYear': 'year',
-    'releaseDate': 'release_date',
-    'originallyAvailableAt': 'release_date',
-    'rating': 'rating',
-    'runtime': 'runtime',
-    'duration': 'runtime',
-    'random': 'random',
-  };
-
   @override
-  Future<List<MediaSort>> fetchSortOptions(String libraryId, {String? libraryType}) async => [
-    MediaSort(key: 'title', descKey: 'title:desc', title: t.libraries.sortLabels.title, defaultDirection: 'asc'),
-    MediaSort(
-      key: 'addedAt',
-      descKey: 'addedAt:desc',
-      title: t.libraries.sortLabels.dateAdded,
-      defaultDirection: 'desc',
-    ),
-    MediaSort(
-      key: 'releaseDate',
-      descKey: 'releaseDate:desc',
-      title: t.libraries.sortLabels.releaseDate,
-      defaultDirection: 'desc',
-    ),
-    MediaSort(
-      key: 'year',
-      descKey: 'year:desc',
-      title: t.libraries.sortLabels.productionYear,
-      defaultDirection: 'desc',
-    ),
-    MediaSort(
-      key: 'rating',
-      descKey: 'rating:desc',
-      title: t.libraries.sortLabels.communityRating,
-      defaultDirection: 'desc',
-    ),
-    MediaSort(key: 'runtime', descKey: 'runtime:desc', title: t.libraries.sortLabels.runtime, defaultDirection: 'desc'),
-    MediaSort(key: 'random', title: t.libraries.sortLabels.random, defaultDirection: 'asc'),
-  ];
+  Future<List<MediaSort>> fetchSortOptions(String libraryId, {String? libraryType}) async {
+    final shown = await _shownRatingSources();
+    return [
+      for (final field in SiloSortOptions.forScope(SiloSortOptions.scopeFor(libraryType), shownRatingSources: shown))
+        field.toMediaSort(),
+    ];
+  }
+
+  Future<Set<String>>? _ratingSources;
+
+  /// The rating sources this server shows (`GET /api/v2/capabilities/ratings`,
+  /// shared by concurrent callers). Rotten Tomatoes sorts are listed only
+  /// while their source is shown, as on Silo's own apps. A failed read hides
+  /// them and is tried again on the next sort list.
+  Future<Set<String>> _shownRatingSources() {
+    if (isOfflineMode) return Future.value(const {});
+    return _ratingSources ??= () async {
+      try {
+        final caps = await _api
+            .getJson('/api/v2/capabilities/ratings', timeout: _capabilityReadTimeout)
+            .timeout(_capabilityReadTimeout);
+        final sources = caps['sources'];
+        if (caps['state'] != 'available' || sources is! List) return const <String>{};
+        return {
+          for (final source in sources)
+            if (source is Map && source['source'] is String) source['source'] as String,
+        };
+      } catch (e) {
+        appLogger.d('SiloClient: ratings capability unavailable; no Rotten Tomatoes sorts', error: e.runtimeType);
+        _ratingSources = null;
+        return const <String>{};
+      }
+    }();
+  }
 
   /// `field` / `-field` for a neutral sort; unknown fields fall back to
   /// title so the server never answers 422 for an unknown sort.
@@ -663,7 +655,7 @@ class SiloClient
       field = field.substring(0, field.length - 5);
       descending = true;
     }
-    final silo = _sortFields[field] ?? 'title';
+    final silo = SiloSortOptions.byKey(field)?.wire ?? 'title';
     if (silo == 'random') return silo;
     return descending ? '-$silo' : silo;
   }

@@ -2797,6 +2797,22 @@ class Translations$libraries$sortLabels$zh extends Translations$libraries$sortLa
 	@override String get dateDownloaded => '下载日期';
 	@override String get size => '大小';
 	@override String get library => '媒体库';
+	@override String get year => '年份';
+	@override String get contentRating => '年龄分级';
+	@override String get duration => '时长';
+	@override String get imdbRating => 'IMDb评分';
+	@override String get tmdbRating => 'TMDB评分';
+	@override String get rtCriticRating => 'RT影评人评分';
+	@override String get rtAudienceRating => 'RT观众评分';
+	@override String get resolution => '分辨率';
+	@override String get bitrate => '比特率';
+	@override String get progress => '进度';
+	@override String get dateViewed => '观看日期';
+	@override String get plays => '播放次数';
+	@override String get author => '作者';
+	@override String get narrator => '朗读者';
+	@override String get series => '系列';
+	@override String get latestEpisodeAdded => '最新一集添加时间';
 }
 
 // Path: libraries.advancedFilters
@@ -4616,6 +4632,22 @@ extension on TranslationsZh {
 			'libraries.sortLabels.dateDownloaded' => '下载日期',
 			'libraries.sortLabels.size' => '大小',
 			'libraries.sortLabels.library' => '媒体库',
+			'libraries.sortLabels.year' => '年份',
+			'libraries.sortLabels.contentRating' => '年龄分级',
+			'libraries.sortLabels.duration' => '时长',
+			'libraries.sortLabels.imdbRating' => 'IMDb评分',
+			'libraries.sortLabels.tmdbRating' => 'TMDB评分',
+			'libraries.sortLabels.rtCriticRating' => 'RT影评人评分',
+			'libraries.sortLabels.rtAudienceRating' => 'RT观众评分',
+			'libraries.sortLabels.resolution' => '分辨率',
+			'libraries.sortLabels.bitrate' => '比特率',
+			'libraries.sortLabels.progress' => '进度',
+			'libraries.sortLabels.dateViewed' => '观看日期',
+			'libraries.sortLabels.plays' => '播放次数',
+			'libraries.sortLabels.author' => '作者',
+			'libraries.sortLabels.narrator' => '朗读者',
+			'libraries.sortLabels.series' => '系列',
+			'libraries.sortLabels.latestEpisodeAdded' => '最新一集添加时间',
 			'libraries.advancedFilters.include' => '包含',
 			'libraries.advancedFilters.exclude' => '排除',
 			'libraries.advancedFilters.any' => '不限',
@@ -4910,6 +4942,8 @@ extension on TranslationsZh {
 			'liveTv.recordingRuleDeleted' => '录制规则已删除',
 			'liveTv.processRecordingRules' => '重新评估规则',
 			'liveTv.recordingInProgress' => '正在录制',
+			_ => null,
+		} ?? switch (path) {
 			'liveTv.recordingsCount' => ({required Object count}) => '已安排 ${count} 项录制',
 			'liveTv.editRule' => '编辑规则',
 			'liveTv.editRuleAction' => '编辑',
@@ -4926,8 +4960,6 @@ extension on TranslationsZh {
 			'liveTv.recordSettings.anyTime' => '在任意时间录制',
 			'liveTv.recordSettings.skipInLibrary' => '跳过媒体库中已有的剧集',
 			'liveTv.recordSettings.keepUpTo' => '保留的剧集数',
-			_ => null,
-		} ?? switch (path) {
 			'liveTv.recordSettings.keepUpToHint' => '0 表示保留全部剧集',
 			'liveTv.startingInMinutes' => ({required Object minutes}) => '${minutes} 分钟后开始',
 			'liveTv.dayAtTime' => ({required Object day, required Object time}) => '${day} ${time}',
@@ -5424,6 +5456,8 @@ extension on TranslationsZh {
 			'performanceOverlay.dvRpuAverage' => 'DV RPU 平均',
 			'performanceOverlay.dvSampleAverage' => 'DV 采样平均',
 			'performanceOverlay.maxLuma' => '最大亮度',
+			_ => null,
+		} ?? switch (path) {
 			'performanceOverlay.minLuma' => '最小亮度',
 			'performanceOverlay.maxCll' => 'MaxCLL',
 			'performanceOverlay.maxFall' => 'MaxFALL',
@@ -5440,8 +5474,6 @@ extension on TranslationsZh {
 			'performanceOverlay.decoderMediatekHw' => 'MediaTek 硬件',
 			'performanceOverlay.decoderExynosHw' => 'Exynos 硬件',
 			'performanceOverlay.decoderSoftware' => '软件',
-			_ => null,
-		} ?? switch (path) {
 			'performanceOverlay.decoderHardware' => '硬件',
 			'performanceOverlay.tunnelingActive' => '已启用',
 			'performanceOverlay.dvRpuFailed' => ({required Object converted, required Object failures}) => '${converted}（${failures} 个失败）',

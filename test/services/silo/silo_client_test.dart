@@ -187,6 +187,105 @@ void main() {
     expect(query['source'], 'query');
   });
 
+  group('sort options (Silo Android #843)', () {
+    SiloClient sortClient({List<String> sources = const ['imdb', 'tmdb']}) => client((request) async {
+      if (request.url.path.endsWith('/api/v2/capabilities/ratings')) {
+        return _json({
+          'state': 'available',
+          'sources': [
+            for (final s in sources) {'source': s, 'name': s},
+          ],
+        });
+      }
+      return _json({
+        'items': [],
+        'page': {'has_more': false},
+      });
+    });
+
+    test('a series library lists the web client\'s series sorts in its order', () async {
+      final sorts = await sortClient().fetchSortOptions('3', libraryType: MediaKind.show.id);
+      expect(sorts.map((s) => s.key), [
+        'title',
+        'addedAt',
+        'releaseDate',
+        'lastAirDate',
+        'latestEpisodeAdded',
+        'year',
+        'contentRating',
+        'runtime',
+        'rating',
+        'ratingTmdb',
+        'resolution',
+        'bitrate',
+        'progress',
+        'dateViewed',
+        'plays',
+        'random',
+      ]);
+      expect(sorts.first.isDefaultDescending, isFalse);
+      expect(sorts[1].isDefaultDescending, isTrue);
+    });
+
+    test('a movie library has no episode sorts; a mixed one only shared video sorts', () async {
+      final c = sortClient();
+      final movie = (await c.fetchSortOptions('3', libraryType: MediaKind.movie.id)).map((s) => s.key);
+      expect(movie, isNot(contains('latestEpisodeAdded')));
+      expect(movie, isNot(contains('lastAirDate')));
+      expect(movie, contains('contentRating'));
+      final mixed = (await c.fetchSortOptions('3', libraryType: MediaKind.unknown.id)).map((s) => s.key);
+      expect(mixed, isNot(contains('lastAirDate')));
+      expect(mixed, contains('resolution'));
+      expect(mixed, isNot(contains('author')));
+    });
+
+    test('audiobook libraries list author, narrator and series, not ratings', () async {
+      final keys = (await sortClient().fetchSortOptions('3', libraryType: MediaKind.album.id)).map((s) => s.key);
+      expect(keys, containsAll(['author', 'narrator', 'series', 'runtime']));
+      expect(keys, isNot(contains('rating')));
+      expect(keys, isNot(contains('contentRating')));
+    });
+
+    test('Rotten Tomatoes sorts follow the server\'s shown rating sources', () async {
+      final shown = sortClient(sources: ['imdb', 'tmdb', 'rt_critic', 'rt_audience']);
+      final keys = (await shown.fetchSortOptions('3', libraryType: MediaKind.movie.id)).map((s) => s.key);
+      expect(keys, containsAllInOrder(['rating', 'ratingTmdb', 'ratingRtCritic', 'ratingRtAudience']));
+      final capabilityReads = requests.where((r) => r.url.path.endsWith('/api/v2/capabilities/ratings')).length;
+      await shown.fetchSortOptions('4', libraryType: MediaKind.show.id);
+      expect(requests.where((r) => r.url.path.endsWith('/api/v2/capabilities/ratings')).length, capabilityReads);
+
+      final refused = client((_) async => _problem(404, 'not_found'));
+      final none = (await refused.fetchSortOptions('3', libraryType: MediaKind.movie.id)).map((s) => s.key);
+      expect(none, isNot(contains('ratingRtCritic')));
+      expect(none, contains('rating'));
+    });
+
+    test('sort keys map onto Silo sort fields; unknown ones fall back to title', () async {
+      final c = sortClient();
+      Future<String?> sent(String field, {bool desc = false}) async {
+        requests.clear();
+        await c.fetchLibraryPagedContent(
+          '3',
+          query: LibraryQuery(
+            sort: LibrarySort(
+              field: field,
+              direction: desc ? LibrarySortDirection.descending : LibrarySortDirection.ascending,
+            ),
+          ),
+        );
+        return requests.last.url.queryParameters['sort'];
+      }
+
+      expect(await sent('rating', desc: true), '-rating_imdb');
+      expect(await sent('latestEpisodeAdded:desc'), '-latest_episode_added');
+      expect(await sent('ratingRtAudience', desc: true), '-rating_rt_audience');
+      expect(await sent('dateViewed', desc: true), '-date_viewed');
+      expect(await sent('titleSort'), 'title');
+      expect(await sent('random', desc: true), 'random');
+      expect(await sent('nonsense', desc: true), '-title');
+    });
+  });
+
   test('seeks into an exactly counted list skip the total and keep the exact one', () async {
     final c = client((request) async {
       final q = request.url.queryParameters;
