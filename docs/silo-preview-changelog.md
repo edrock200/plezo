@@ -4,6 +4,13 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **Silo's personalised recommendations on Home:** Silo servers now add your recommendations from Silo ("For You", "Because You Watched …", "Popular on This Server" and more) below Silo's own Home rows, and they refresh with Home. Rows already on your Home aren't shown twice, and servers without recommendations look the same as before. *(please test)*
+- Row names that Silo words itself now use Plezilo's own wording.
+
+## silo-preview-2.34.0
+
+Released November 15, 2026. Android and Windows.
+
 - **Silo sort options like Silo's own apps:** Latest Episode Added and Latest Episode Air Date for shows, separate IMDb and TMDB rating sorts, Rotten Tomatoes critic and audience sorts when your server shows those ratings, plus Content Rating, Resolution, Bitrate, Progress, Date Viewed and Plays. Audiobook libraries can sort by author, narrator and series. Your saved sort still works; "Rating" is now called "IMDb Rating".
 - **Easier-to-read counts** on collections and people pages ("1,284 titles").
 - **Plex servers come back by themselves:** a server that was asleep or unreachable when the app started now reconnects within about a minute, and a reconnecting server no longer interrupts playback or downloads.
