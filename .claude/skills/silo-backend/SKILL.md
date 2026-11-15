@@ -46,6 +46,7 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
 | `lib/connection/connection.dart` | `SiloConnection` (id `serverId/userId/profileId`) |
 | `lib/services/cached_playback_metadata_service.dart` | Offline markers/tracks for downloaded Silo items |
 | `lib/services/silo/silo_discover.dart` | Silo's For You feed (`GET /recommendations/discover`): `SiloDiscover.rows` (parse, ids, For You first); `lib/utils/recommendation_hubs.dart` drops rows Home already shows |
+| `lib/screens/silo/silo_for_you_screen.dart`, `lib/services/silo/silo_personal_lists.dart` | The For You page (Recommendations · Favorites · Watchlist, connection chips, fallbacks) and `SiloPersonalList` (`source=favorites|watchlist`); `openSiloForYou`, entry checks `siloForYouAvailable` / `hasSiloServers` in `silo_feature_entries.dart` |
 | `lib/services/silo/silo_section_titles.dart` | `SiloSectionTitles`: a row's `title_key`/`title_args` (`home.section.*`) → `t.siloSectionTitles.*`, else the server's `title` |
 | `lib/services/silo/silo_card_overlays.dart` | Card overlays, pure: registry, `ui.card_overlays` parsing (v1/v2, style), settle with the overlay config, labels, placement/caps/suppression, looks and colours, `SiloOverlayData` (from a card's raw JSON) |
 | `lib/services/silo/silo_card_overlay_store.dart` | `SiloCardOverlayStore` (`SiloClient.cardOverlays`): the two settings reads under one in-flight future, known value per connection |
@@ -278,8 +279,35 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
   `none, the server has no recommendations feed (status N)` / `unavailable after T s (status N)` / `timed out after T s` /
   `unreadable answer …` / `offline, none saved`, then `Home: recommendation rows shown: N (M left out as already on Home)`.
   Read through `_cachedGet` (offline, or a request timeout, serves the cached answer). Each client is one connection = one
-  Silo profile (headers), so several servers/profiles each bring their own rows. Library tabs show none. No For You page
-  yet, so no Watchlist/Favorites fallback or "Not enough data yet" hint; the taste profile is not read.
+  Silo profile (headers), so several servers/profiles each bring their own rows. Library tabs show none. The taste
+  profile is not read. **Settings › Appearance › Silo** (shown while a Silo server is saved) has two toggles, both on by
+  default: `showSiloRecommendationsOnHome` (off: `DiscoverProvider.hubs` leaves the rows out on the next build, a cached
+  filtered list so identity caches hold, and no Discover read is started; on again: one read at once) and
+  `showSiloForYou` (the For You entry).
+- **For You page (the user's request 2026-11-15; Silo Android TV `TvForYouSelector` / `TvRecommendationsScreen` /
+  `TvFavoritesInline` / `TvWatchlistInline`, Siku's `ForYouPage.brs`):** `SiloForYouScreen`, a **pushed route**
+  (`openSiloForYou`, route name `silo_for_you`, not stacked twice), not a `NavigationTabId`: tab persistence, the startup
+  section and the companion remote's tab commands are untouched. Entry: TV/desktop side rail item right below Home
+  (sparkle `personalRecommendationsIcon`, like Now Playing a non-tab row); phones a "For You" button at the start of
+  Home's top bar (`home-for-you-button`; bottom bar is full). Both only while `showSiloForYou` is on and a Silo server is
+  online. Page: tabs Recommendations · Favorites · Watchlist (`FocusableTabChip`; Left/Right select the neighbour tab,
+  Down → first row / media filter, Up from the first row → tabs). Recommendations = `fetchPersonalRecommendationHubs`
+  rows as `HubSection`s (all rows, no Home de-duplication). Favorites/Watchlist = `SiloClient.fetchPersonalListPage`:
+  `GET /catalog?source=favorites|watchlist&limit=40[&type=movie|series][&sort=…]&image_size=`, cursor-paged with
+  `_pageAt` (no `library_id`; `total` shown as "N titles"); **no sort = the list's own order, most recently saved
+  first** (Silo's "Recently saved"; the Sort sheet's Clear returns to it). Sorts:
+  `SiloSortOptions.forPersonalList` = the mixed-scope fields without Progress / Date Viewed / Plays (the live catalog
+  request takes only the non-personalized vocabulary, `NormalizePersonalSourceSort`); `added_at` there is the date
+  saved. Filter chips All / Movies / Shows (Silo's TV Favorites has Movies/TV Shows without All; Plezilo starts on All
+  for both lists so nothing is hidden). States (Silo's strings): feed `[]` → load Watchlist, else Favorites, and switch
+  there with "No recommendations yet — showing your saved titles." (cleared when the user picks a tab); nothing saved
+  either → "Not enough data yet" + Check again; `null` → "Failed to load recommendations" + Retry. Every return to the
+  page (`RouteAware.didPopNext` via `ProfileNavigationScope.routeObserver`) and every tab switch re-reads the shown
+  part quietly; a failed re-read keeps what is drawn. Several online Silo servers: chips "Server · Profile" at the top
+  (one client per server id, so one chip per server); the pick is `siloForYouServerId`. Tests:
+  `test/services/silo/silo_personal_lists_test.dart`, `test/screens/silo/silo_for_you_screen_test.dart` (TV D-pad tab
+  switching, fallbacks, retry, chips), rail/Home/settings toggles in `side_navigation_rail_test.dart`,
+  `discover_screen_test.dart`, `appearance_settings_screen_test.dart`.
   **Section titles:** `SiloSectionTitles.of(row)` translates `title_key` (`home.section.*`, placeholders from `title_args`;
   unknown keys or a missing argument fall back to `title`) for Discover rows and for Home/library section rows. English is
   in `en.i18n.json` `siloSectionTitles` (the server's English); other locales fall back to it.
@@ -558,8 +586,11 @@ PIN length (matches Silo's apps). Open follow-ups: an edit screen for an existin
   Embedded subtitles drawn from the stream (Silo Android #770: `hls_subtitle_renditions_all_v1`,
   `native_embedded`) are not declared: Plezy keeps server sidecars.
 - For You: Silo's apps give recommendations their own page (phone: rows + Watchlist/Favorites pills, saved-list fallback when
-  empty; TV: a Skyline feed in the top menu). Plezilo puts the same rows on Home after Silo's Home rows (no new tab, nothing
-  shown when the feed is empty or missing), so they also refresh with Home (pull to refresh, the stale-on-return refresh).
+  empty; TV: a Skyline feed in the top menu). Plezilo has both: the rows on Home after Silo's Home rows (toggle), and a
+  For You page (toggle) that is a pushed route rather than a top-level tab, rendered with `HubSection` rows on every
+  platform (the TV `TvBrowseRail`/spotlight layout is built for the full-screen Home and its shell geometry, not a page
+  with a tab header). The saved lists have no facet Filter panel (Silo TV's Sort/Filter row) — only the media chips —
+  and no card menu toggles beyond Plezilo's own.
 - Theme music (Silo Android #678) is not offered: Plezy plays no theme music for any backend.
 - Card overlays: Plezilo only reads the document (no editor, like Silo's TV apps), so Silo Android #882's
   save rules (settings revision, passthrough ids) do not apply. List-mode rows keep Plezy's indicator (no
