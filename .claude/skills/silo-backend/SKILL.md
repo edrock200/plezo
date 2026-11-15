@@ -45,7 +45,7 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
 | `android/app/src/main/kotlin/com/edde746/plezy/silopairing/` | `SiloPairingChannel.kt` (`com.plezy/silo_pairing`: NsdManager registration, LAN listener, one phone at a time, relay to Dart) and `SiloPairingTls.kt` (BouncyCastle TLS-PSK server) |
 | `lib/connection/connection.dart` | `SiloConnection` (id `serverId/userId/profileId`) |
 | `lib/services/cached_playback_metadata_service.dart` | Offline markers/tracks for downloaded Silo items |
-| `lib/services/silo/silo_discover.dart` | Silo's For You feed (`GET /recommendations/discover`): `SiloDiscover.rows` (parse, ids, For You first), `withoutHomeDuplicates` |
+| `lib/services/silo/silo_discover.dart` | Silo's For You feed (`GET /recommendations/discover`): `SiloDiscover.rows` (parse, ids, For You first); `lib/utils/recommendation_hubs.dart` drops rows Home already shows |
 | `lib/services/silo/silo_section_titles.dart` | `SiloSectionTitles`: a row's `title_key`/`title_args` (`home.section.*`) → `t.siloSectionTitles.*`, else the server's `title` |
 | `lib/services/silo/silo_card_overlays.dart` | Card overlays, pure: registry, `ui.card_overlays` parsing (v1/v2, style), settle with the overlay config, labels, placement/caps/suppression, looks and colours, `SiloOverlayData` (from a card's raw JSON) |
 | `lib/services/silo/silo_card_overlay_store.dart` | `SiloCardOverlayStore` (`SiloClient.cardOverlays`): the two settings reads under one in-flight future, known value per connection |
@@ -258,24 +258,33 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
   `GET /api/v2/recommendations/discover` (`RecommendationsViewModel`, phone `RecommendationsScreen`, TV
   `TvRecommendationsScreen`; Siku's `ForYouPage.brs`). Answer `{items: [{type, title, title_key?, title_args?, kind?, key?,
   items: [card]}]}` (not paged; `type` cluster|similar_users_liked|popular|recently_added|top_rated|genre_sampler, `kind`
-  for-you-main|cluster|similar-users|popular|recently-added|top-rated|genre). Plezilo shows the rows **on Home**:
-  `SiloClient.fetchGlobalHubs` reads Discover beside `_homeSections` (one shared wait, 8 s cap) and appends its rows after the
-  Home rows as `MediaHub`s with `personalRecommendations: true` (sparkle icon, `sortMediaHubsByLibraryOrder` leaves them after
-  the library rows in server order), `more: false` (no Explore all, as in Silo's apps), id = identifier =
+  for-you-main|cluster|similar-users|popular|recently-added|top-rated|genre). Plezilo shows the rows **on Home**, but
+  **Home never waits for them** (2.35.0 read them inside `fetchGlobalHubs` with an 8 s cap and logged failures at debug
+  level only, so a slow server showed nothing and left no trace; changed after 2.35.0): `SiloClient` implements
+  `PersonalRecommendationsClient.fetchPersonalRecommendationHubs` (60 s budget, `discoverReadTimeout`; `[]` = settled none:
+  404/405/501, sticky per client, or an empty feed; `null` = failed/timed out/unreadable, keep what is shown).
+  `DataAggregationService.getRecommendationHubsFromAllServers` fans out beside each Discover pass (full and delta, also with
+  "Use Home Layout" off); `DiscoverProvider._startRecommendations` waits for the pass's own rows, then
+  `_applyRecommendations` replaces that server's recommendation rows (a read numbered lower than the one applied is ignored,
+  so a slow old answer never undoes a newer one; a full pass carries the shown rows over until the next answer). Rows are
+  `MediaHub`s with `personalRecommendations: true` (sparkle icon, `sortMediaHubsByLibraryOrder` leaves them after the
+  library rows in server order), `more: false` (no Explore all, as in Silo's apps), id = identifier =
   `silo-discover:<kind><key>` length-prefixed (kind alone for the singleton kinds; else type + title + card ids, Android's
   `stableSectionId`). Order: Android's `toResolvedSections` (empty rows and duplicate ids dropped, the `for-you-main` / "For
-  You" row first, then server order; Silo marks it "featured" but Plezy's hero is Continue Watching, so it is simply the first
-  row). Rows Home already shows are dropped (`withoutHomeDuplicates`: same `title_key`+args or title, a Home
-  `recommended_for_you` / `similar_users_liked` section for `for-you-main` / `similar-users`, or every card in one Home row).
-  404/405/501 = no feed (sticky per client); any other failure, a timeout, an empty or malformed answer shows no rows and never
-  fails Home or its diagnostics. Read through `_cachedGet` (offline Home shows the cached rows). Each client is one
-  connection = one Silo profile (headers), so several servers/profiles each bring their own rows; Plezy profile switches build
-  other clients. Library tabs and "Use Home Layout" off show none (the feed is not per library). No For You page, so no
-  Watchlist/Favorites fallback or "Not enough data yet" hint; the taste profile is not read (Silo's screens do not show it).
+  You" row first, then server order). Rows Home already shows are dropped by **content**
+  (`withoutRecommendationsShownOnHome`, same server: every card or four in five in one Home row, or the same title and half
+  the cards). Silo's default Home has a "Recommended for You" section with other picks, so a title or kind alone never
+  drops a row. Info-level log lines (Settings › Logs, no ids): `Silo recommendations: N rows after T s` / `empty feed …` /
+  `none, the server has no recommendations feed (status N)` / `unavailable after T s (status N)` / `timed out after T s` /
+  `unreadable answer …` / `offline, none saved`, then `Home: recommendation rows shown: N (M left out as already on Home)`.
+  Read through `_cachedGet` (offline, or a request timeout, serves the cached answer). Each client is one connection = one
+  Silo profile (headers), so several servers/profiles each bring their own rows. Library tabs show none. No For You page
+  yet, so no Watchlist/Favorites fallback or "Not enough data yet" hint; the taste profile is not read.
   **Section titles:** `SiloSectionTitles.of(row)` translates `title_key` (`home.section.*`, placeholders from `title_args`;
   unknown keys or a missing argument fall back to `title`) for Discover rows and for Home/library section rows. English is
   in `en.i18n.json` `siloSectionTitles` (the server's English); other locales fall back to it.
-  Tests: `test/services/silo/silo_discover_test.dart`.
+  Tests: `test/services/silo/silo_discover_test.dart` (client → aggregation → provider, slow and stale answers) and
+  `test/screens/discover_screen_test.dart` (rows arriving after Home is shown, TV rail and phone list).
 - **Movie box sets** (Silo Android #646; newer than the scratchpad OpenAPI, so routes follow the
   Android client exactly): `GET /user/libraries` rows may carry `box_sets_enabled`; `fetchLibraries`
   records them (`_boxSetLibraryIds`), and nothing box-set related is ever sent to a server without

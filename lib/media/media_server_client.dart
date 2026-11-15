@@ -1019,6 +1019,17 @@ abstract interface class SeasonEpisodePagingClient {
   });
 }
 
+/// Optional capability for clients whose server builds personalised
+/// recommendation rows of its own (Silo's "For You" feed). Home loads them
+/// beside its rows, never waits for them, and adds them when they arrive.
+abstract interface class PersonalRecommendationsClient {
+  /// The profile's recommendation rows ([MediaHub.personalRecommendations]).
+  /// `[]` is a settled "none" (no feed on this server, or an empty one);
+  /// `null` means the read failed or timed out, so rows shown from an
+  /// earlier read stay. Never throws.
+  Future<List<MediaHub>?> fetchPersonalRecommendationHubs();
+}
+
 /// Optional capability for clients whose server can answer "may the signed-in
 /// user delete *this* item?" per item.
 ///

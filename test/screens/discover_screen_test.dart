@@ -740,6 +740,60 @@ void main() {
     await tester.pumpWidget(const SizedBox());
   });
 
+  for (final isTv in [true, false]) {
+    testWidgets('recommendation rows that arrive after Home is shown join it (${isTv ? 'TV' : 'phone'})', (
+      tester,
+    ) async {
+      MediaItem movie(String id) => testMediaItem(
+        id: id,
+        backend: MediaBackend.silo,
+        kind: MediaKind.movie,
+        title: id,
+        serverId: 'server_1',
+        serverName: 'Server',
+      );
+      final homeRow = MediaHub(
+        id: 'home:ra',
+        title: 'Recently Added Movies',
+        type: 'movie',
+        items: [movie('movie:a')],
+        size: 1,
+        serverId: 'server_1',
+      );
+      final forYou = MediaHub(
+        id: 'silo-discover:13:for-you-main0:',
+        identifier: 'silo-discover:13:for-you-main0:',
+        title: 'For You',
+        type: 'movie',
+        items: [movie('movie:b'), movie('movie:c')],
+        size: 2,
+        serverId: 'server_1',
+        personalRecommendations: true,
+      );
+      final client = _RecommendingFakeClient(hubs: [homeRow]);
+      final discover = await _pumpDiscoverShell(tester, isTv: isTv, client: client);
+
+      List<String> shownRows() => isTv
+          ? [for (final hub in tester.widget<TvBrowseRail>(find.byType(TvBrowseRail)).hubs) hub.title]
+          : [
+              for (final title in ['Recently Added Movies', 'For You'])
+                if (find.text(title, skipOffstage: false).evaluate().isNotEmpty) title,
+            ];
+
+      // Home is up while the recommendations are still on their way.
+      expect(discover.areHubsLoading, isFalse);
+      expect(shownRows(), ['Recently Added Movies']);
+
+      client.recommendations.complete([forYou]);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(discover.hubs.map((h) => h.title), ['Recently Added Movies', 'For You']);
+      expect(shownRows(), ['Recently Added Movies', 'For You']);
+
+      await tester.pumpWidget(const SizedBox());
+    });
+  }
+
   testWidgets('the home clock is TV-only chrome', (tester) async {
     await _pumpDiscoverShell(tester, isTv: false);
     expect(find.text(t.discover.title), findsOneWidget);
@@ -1044,7 +1098,12 @@ Future<_GatedDiscover> _pumpGatedDiscover(WidgetTester tester, {bool underRootCo
 /// Mounts [DiscoverScreen] in the smallest graph both layout branches need, so
 /// one test can compare the TV and non-TV chrome without rebuilding it twice.
 /// Takes ownership of [watchTogether].
-Future<void> _pumpDiscoverShell(WidgetTester tester, {required bool isTv, WatchTogetherProvider? watchTogether}) async {
+Future<DiscoverProvider> _pumpDiscoverShell(
+  WidgetTester tester, {
+  required bool isTv,
+  WatchTogetherProvider? watchTogether,
+  MediaServerClient? client,
+}) async {
   TvDetectionService.debugSetAppleTVOverride(isTv);
   await SettingsService.getInstance();
   tester.view.devicePixelRatio = 1.0;
@@ -1054,8 +1113,7 @@ Future<void> _pumpDiscoverShell(WidgetTester tester, {required bool isTv, WatchT
     tester.view.resetPhysicalSize();
   });
 
-  final client = _FakeMediaServerClient(hubs: const []);
-  final manager = MultiServerManager()..debugRegisterClientForTesting(client);
+  final manager = MultiServerManager()..debugRegisterClientForTesting(client ?? _FakeMediaServerClient(hubs: const []));
   final multiServerProvider = testMultiServerProvider(manager);
   final hiddenLibrariesProvider = HiddenLibrariesProvider();
   final librariesProvider = LibrariesProvider();
@@ -1133,6 +1191,18 @@ Future<void> _pumpDiscoverShell(WidgetTester tester, {required bool isTv, WatchT
   // pumpAndSettle would never settle.
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 100));
+  return discoverProvider;
+}
+
+/// A server with personal recommendations (Silo's For You feed) that answer
+/// only when the test completes [recommendations].
+class _RecommendingFakeClient extends _FakeMediaServerClient implements PersonalRecommendationsClient {
+  _RecommendingFakeClient({required super.hubs});
+
+  final recommendations = Completer<List<MediaHub>?>();
+
+  @override
+  Future<List<MediaHub>?> fetchPersonalRecommendationHubs() => recommendations.future;
 }
 
 class _FakeMediaServerClient implements MediaServerClient {

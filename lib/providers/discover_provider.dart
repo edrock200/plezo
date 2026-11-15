@@ -18,6 +18,7 @@ import '../utils/deletion_notifier.dart';
 import '../utils/media_event_keys.dart';
 import '../utils/global_key_utils.dart';
 import '../utils/media_hub_ordering.dart';
+import '../utils/recommendation_hubs.dart';
 import '../utils/watch_state_notifier.dart';
 import '../utils/library_content_notifier.dart';
 import '../utils/refresh_pacer.dart';
@@ -260,6 +261,21 @@ class DiscoverProvider extends ChangeNotifier with DisposableChangeNotifierMixin
 
   Set<String> get _fullyLoadedServerIds => _loadedOnDeckServerIds.intersection(_loadedHubServerIds);
 
+  /// Personal recommendation rows ([PersonalRecommendationsClient]) load
+  /// beside each pass and are added to [hubs] when they arrive, after the
+  /// pass's own rows: Home never waits for them. Each read gets the next
+  /// number; a server's rows are replaced only by a read started after the
+  /// one that produced them, so a slow read landing late never undoes a
+  /// newer one.
+  int _recommendationsGeneration = 0;
+  final Map<String, int> _recommendationsAppliedGeneration = {};
+  final Set<Future<void>> _recommendationsInFlight = {};
+
+  /// Completes when every recommendation read started so far has been applied
+  /// (or dropped).
+  @visibleForTesting
+  Future<void> get recommendationsSettled => Future.wait(_recommendationsInFlight.toList());
+
   late final CoalescedLoadCoordinator<String> _loadCoordinator;
 
   Future<void>? _systemShelfSyncFuture;
@@ -402,6 +418,8 @@ class DiscoverProvider extends ChangeNotifier with DisposableChangeNotifierMixin
     var onDeckFetchCompleted = false;
     var hubFetchCompleted = false;
     var replacedOnDeck = false;
+    // Recommendation rows wait for this pass's own rows before joining them.
+    final hubsSettled = Completer<void>();
 
     // Shared tail of every settled hub pass: classify the outcome, bump the
     // load generation when a replaced on-deck committed, and mark the pass as
@@ -462,6 +480,10 @@ class DiscoverProvider extends ChangeNotifier with DisposableChangeNotifierMixin
         hiddenLibraryKeys: _hiddenLibraries.hiddenLibraryKeys,
         useGlobalHubs: useGlobalHubs,
         includePlaybackHubs: false,
+      );
+      _startRecommendations(
+        aggregation.getRecommendationHubsFromAllServers(hiddenLibraryKeys: _hiddenLibraries.hiddenLibraryKeys),
+        after: hubsSettled.future,
       );
 
       // A pass in which zero servers succeeded is never authoritative: it
@@ -536,7 +558,16 @@ class DiscoverProvider extends ChangeNotifier with DisposableChangeNotifierMixin
         return;
       }
 
-      final filteredHubs = _filterDiscoverHubs(fetchedHubs.hubs);
+      final freshHubs = _filterDiscoverHubs(fetchedHubs.hubs);
+      // Recommendation rows already on screen stay until their next read
+      // lands, so a refresh does not make them blink out and back.
+      final filteredHubs = [
+        ...freshHubs,
+        ...withoutRecommendationsShownOnHome([
+          for (final hub in _hubs)
+            if (hub.personalRecommendations && fetchedHubs.succeededServerIds.contains(hub.serverId)) hub,
+        ], freshHubs).kept,
+      ];
       sortMediaHubsByLibraryOrder(filteredHubs, _libraries.libraries);
 
       appLogger.d('DiscoverProvider: ${_onDeck.length} on-deck items, ${filteredHubs.length} hubs');
@@ -606,6 +637,7 @@ class DiscoverProvider extends ChangeNotifier with DisposableChangeNotifierMixin
       _hubsState = DiscoverLoadState.loaded;
       safeNotifyListeners();
     } finally {
+      hubsSettled.complete();
       _lastOutcome = outcome;
       if (passClearedExceptionBoundary && _commitRevision == expectedCommitRevision && !isDisposed) {
         _recordObservations(observation, pendingObservations, observedServerIds);
@@ -653,8 +685,24 @@ class DiscoverProvider extends ChangeNotifier with DisposableChangeNotifierMixin
               serverIds: hubIds,
             );
 
-      final freshOnDeck = await onDeckFuture;
-      final freshHubs = await hubsFuture;
+      final hubsSettled = Completer<void>();
+      if (hubIds.isNotEmpty) {
+        _startRecommendations(
+          aggregation.getRecommendationHubsFromAllServers(
+            hiddenLibraryKeys: _hiddenLibraries.hiddenLibraryKeys,
+            serverIds: hubIds,
+          ),
+          after: hubsSettled.future,
+        );
+      }
+      final OnDeckAggregationResult? freshOnDeck;
+      final HubAggregationResult? freshHubs;
+      try {
+        freshOnDeck = await onDeckFuture;
+        freshHubs = await hubsFuture;
+      } finally {
+        hubsSettled.complete();
+      }
       if (isDisposed) return;
       // Staged, not recorded here: the merge below can still throw, and the
       // catch keeps the previous rows. Suppressing patches against rows that
@@ -685,9 +733,14 @@ class DiscoverProvider extends ChangeNotifier with DisposableChangeNotifierMixin
 
       if (freshHubs != null) {
         final succeededHubIds = freshHubs.succeededServerIds;
+        final serverHubs = _filterDiscoverHubs(freshHubs.hubs);
         final mergedHubs = [
           ..._hubs.where((hub) => hub.serverId == null || !succeededHubIds.contains(hub.serverId)),
-          ..._filterDiscoverHubs(freshHubs.hubs),
+          ...serverHubs,
+          ...withoutRecommendationsShownOnHome([
+            for (final hub in _hubs)
+              if (hub.personalRecommendations && succeededHubIds.contains(hub.serverId)) hub,
+          ], serverHubs).kept,
         ];
         sortMediaHubsByLibraryOrder(mergedHubs, _libraries.libraries);
         _replaceHubs(mergedHubs);
@@ -714,6 +767,71 @@ class DiscoverProvider extends ChangeNotifier with DisposableChangeNotifierMixin
       // Keep the loaded state — stale rows beat an error flash.
       appLogger.w('DiscoverProvider: delta load failed for $ids', error: e);
     }
+  }
+
+  /// Runs one recommendation read: once it has answered and the pass that
+  /// started it has settled its own rows ([after]), its rows replace the
+  /// recommendation rows shown for each server that answered.
+  void _startRecommendations(Future<RecommendationAggregationResult> read, {required Future<void> after}) {
+    final generation = ++_recommendationsGeneration;
+    final observation = _beginObservation();
+    late final Future<void> run;
+    run = () async {
+      try {
+        final (result, _) = await (read, after).wait;
+        if (isDisposed) return;
+        _applyRecommendations(result, generation: generation, observation: observation);
+      } catch (e, stackTrace) {
+        if (!isDisposed) appLogger.w('DiscoverProvider: recommendations not applied', error: e, stackTrace: stackTrace);
+      } finally {
+        _recommendationsInFlight.remove(run);
+      }
+    }();
+    _recommendationsInFlight.add(run);
+  }
+
+  void _applyRecommendations(
+    RecommendationAggregationResult result, {
+    required int generation,
+    required ({int watermark, Object epoch})? observation,
+  }) {
+    // Only once Home has rows of its own (a failed first load shows its
+    // error, not a lone recommendation row), and never over a newer read.
+    if (_hubsState != DiscoverLoadState.loaded) return;
+    final servers = {
+      for (final serverId in result.settledServerIds)
+        if ((_recommendationsAppliedGeneration[serverId] ?? 0) < generation) serverId,
+    };
+    if (servers.isEmpty) return;
+    for (final serverId in servers) {
+      _recommendationsAppliedGeneration[serverId] = generation;
+    }
+    final base = [
+      for (final hub in _hubs)
+        if (!(hub.personalRecommendations && servers.contains(hub.serverId))) hub,
+    ];
+    final fresh = _hubsWithoutHiddenLibraries(
+      _filterDiscoverHubs([
+        for (final hub in result.hubs)
+          if (servers.contains(hub.serverId)) hub,
+      ]),
+      _hiddenLibraries.hiddenLibraryKeys,
+    );
+    final beside = withoutRecommendationsShownOnHome(fresh, base);
+    appLogger.i(
+      'Home: recommendation rows shown: ${beside.kept.length}'
+      '${beside.dropped == 0 ? '' : ' (${beside.dropped} left out as already on Home)'}',
+    );
+    final hadRows = _hubs.length != base.length;
+    if (!hadRows && beside.kept.isEmpty) return;
+    final merged = [...base, ...beside.kept];
+    sortMediaHubsByLibraryOrder(merged, _libraries.libraries);
+    _replaceHubs(merged);
+    _recordObservations(observation, [
+      for (final row in result.observedItems)
+        if (servers.contains(row.item.serverId)) row,
+    ], servers);
+    safeNotifyListeners();
   }
 
   /// Playback-progress hubs duplicate the top Continue Watching row.

@@ -99,7 +99,8 @@ class SiloClient
         ScopedMediaServerClient,
         GracefullyCloseable,
         RemoteTrailerClient,
-        DeferredDownloadSubtitles {
+        DeferredDownloadSubtitles,
+        PersonalRecommendationsClient {
   SiloClient._({required this._connection, required this._api});
 
   /// Build a client for [connection]. Network I/O stays lazy.
@@ -437,14 +438,19 @@ class SiloClient
   static const _imageSize = 'medium';
 
   /// GET [path] through the cache-fallback helper, returning the JSON object.
-  Future<Map<String, dynamic>?> _cachedGet(String path, {Map<String, dynamic>? query, AbortController? abort}) {
+  Future<Map<String, dynamic>?> _cachedGet(
+    String path, {
+    Map<String, dynamic>? query,
+    AbortController? abort,
+    Duration? timeout,
+  }) {
     // `item_limit` depends on a capability read that fails offline, so it
     // stays out of the key: an offline Home still finds the cached rows.
     final keyQuery = query == null ? null : (Map.of(query)..remove('item_limit'));
     final cacheKey = keyQuery == null || keyQuery.isEmpty ? path : '$path?${encodeQueryParameters(keyQuery)}';
     return fetchWithCacheFallback<Map<String, dynamic>>(
       cacheKey: cacheKey,
-      networkCall: () => _api.request('GET', path, query: query, abort: abort),
+      networkCall: () => _api.request('GET', path, query: query, abort: abort, timeout: timeout),
       parseCache: (data) => data is Map<String, dynamic> ? data : null,
       parseResponse: (response) => response.data is Map<String, dynamic> ? response.data as Map<String, dynamic> : null,
       shouldFallback: (error) => error is MediaServerHttpException && error.isTransient,
@@ -1559,10 +1565,6 @@ class SiloClient
     bool includePlaybackHubs = true,
     HubFetchDiagnostics? diagnostics,
   }) async {
-    // Silo's personalised recommendations load beside the Home rows and
-    // follow them; they never fail the Home rows and hold them back at most
-    // [_discoverReadTimeout].
-    final discover = _discoverRows();
     final List<Map<String, dynamic>> sections;
     try {
       sections = await _homeSections();
@@ -1570,20 +1572,16 @@ class SiloClient
       diagnostics?.recordFailure(e);
       return const [];
     }
-    final (hubs, discoverRows) = await (
-      Future.wait([
-        for (final section in sections)
-          if (section['id']?.toString() case final sectionId?)
-            if (includePlaybackHubs || !_playbackSectionTypes.contains(section['section_type']))
-              _sectionItems(
-                section,
-                '/api/v2/home/sections/${_seg(sectionId)}/items',
-              ).then((rows) => _hub(id: 'home:$sectionId', section: section, rows: rows, limit: limit)),
-      ]),
-      discover,
-    ).wait;
-    final homeHubs = hubs.where((hub) => hub.items.isNotEmpty).toList();
-    return [...homeHubs, ..._discoverHubs(SiloDiscover.withoutHomeDuplicates(discoverRows, sections))];
+    final hubs = await Future.wait([
+      for (final section in sections)
+        if (section['id']?.toString() case final sectionId?)
+          if (includePlaybackHubs || !_playbackSectionTypes.contains(section['section_type']))
+            _sectionItems(
+              section,
+              '/api/v2/home/sections/${_seg(sectionId)}/items',
+            ).then((rows) => _hub(id: 'home:$sectionId', section: section, rows: rows, limit: limit)),
+    ]);
+    return hubs.where((hub) => hub.items.isNotEmpty).toList();
   }
 
   // ---------------------------------------------------------------------------
@@ -1594,30 +1592,67 @@ class SiloClient
   /// it is not asked again for this client's life.
   bool _discoverUnsupported = false;
 
-  /// The longest Home waits for the recommendations.
-  static const _discoverReadTimeout = Duration(seconds: 8);
+  /// The longest a Discover read may take. Home never waits for it (the rows
+  /// are added when they arrive), and the server blends upcoming airings and
+  /// renders every card, which can take a while on a large library.
+  static const discoverReadTimeout = Duration(seconds: 60);
+
+  @visibleForTesting
+  Duration recommendationsReadTimeout = discoverReadTimeout;
 
   /// The rows of `GET /recommendations/discover` for this connection's
-  /// profile (the feed of Silo's For You page), or none: a server without the
-  /// route, an empty feed (not enough watch history yet), a failure or a slow
-  /// answer all show no recommendation rows. Never throws. Read through the
-  /// offline cache like the Home rows.
-  Future<List<SiloDiscoverRow>> _discoverRows() async {
+  /// profile (the feed of Silo's For You page), read through the offline
+  /// cache like the Home rows (a failed read serves the last answer when
+  /// there is one). Each outcome is logged at info level, without ids.
+  @override
+  Future<List<MediaHub>?> fetchPersonalRecommendationHubs() async {
     if (_discoverUnsupported) return const [];
+    final stopwatch = Stopwatch()..start();
+    String took() => '${(stopwatch.elapsedMilliseconds / 1000).toStringAsFixed(1)} s';
+    final abort = AbortController();
     try {
-      final data = await _cachedGet(SiloDiscover.path, query: {'image_size': _imageSize}).timeout(_discoverReadTimeout);
-      return SiloDiscover.rows(data);
+      final data = await _cachedGet(
+        SiloDiscover.path,
+        query: {'image_size': _imageSize},
+        abort: abort,
+        timeout: recommendationsReadTimeout,
+        // A little past the request's own budget, so a request that times
+        // out there can still be answered from the last cached feed.
+      ).timeout(recommendationsReadTimeout + const Duration(seconds: 5));
+      if (data == null) {
+        appLogger.i(
+          isOfflineMode
+              ? 'Silo recommendations: offline, none saved'
+              : 'Silo recommendations: unreadable answer after ${took()}',
+        );
+        return null;
+      }
+      final hubs = _discoverHubs(SiloDiscover.rows(data));
+      if (hubs.isEmpty) {
+        appLogger.i('Silo recommendations: empty feed after ${took()} (no recommendations for this profile yet)');
+      } else {
+        appLogger.i('Silo recommendations: ${hubs.length} rows after ${took()}');
+      }
+      return hubs;
+    } on TimeoutException {
+      abort.abort();
+      appLogger.i('Silo recommendations: timed out after ${took()}');
+      return null;
     } on MediaServerHttpException catch (e) {
       if (const {404, 405, 501}.contains(e.statusCode)) {
         _discoverUnsupported = true;
-        appLogger.d('SiloClient: the server has no recommendations feed (${e.statusCode})');
-      } else {
-        appLogger.d('SiloClient: recommendations unavailable', error: e.runtimeType);
+        appLogger.i('Silo recommendations: none, the server has no recommendations feed (status ${e.statusCode})');
+        return const [];
       }
-      return const [];
+      final status = e.statusCode;
+      appLogger.i(
+        'Silo recommendations: unavailable after ${took()} '
+        '(${status == null ? e.type.name : 'status $status'})',
+      );
+      return null;
     } catch (e) {
-      appLogger.d('SiloClient: recommendations unavailable', error: e.runtimeType);
-      return const [];
+      appLogger.i('Silo recommendations: unavailable after ${took()} (${e.runtimeType})');
+      return null;
     }
   }
 

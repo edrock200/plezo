@@ -65,12 +65,6 @@ abstract final class SiloDiscover {
   /// `discoverRowSectionKey`); `cluster` and `genre` repeat and carry a key.
   static const _singletonKinds = {forYouMainKind, 'similar-users', 'popular', 'recently-added', 'top-rated'};
 
-  /// Home section types that hold the same rows as a Discover kind.
-  static const _homeSectionTypeForKind = {
-    forYouMainKind: 'recommended_for_you',
-    'similar-users': 'similar_users_liked',
-  };
-
   /// The rows of a Discover answer `{items: [{type, title, title_key?,
   /// title_args?, kind?, key?, items: [card]}]}`.
   static List<SiloDiscoverRow> rows(Map<String, dynamic>? data) {
@@ -135,62 +129,6 @@ abstract final class SiloDiscover {
     ]..sort();
     return '${hubIdPrefix}legacy:${_part(type)}${_part(title)}${_part(cards.join())}';
   }
-
-  /// [rows] without those Home already shows: the same title (key and
-  /// arguments, or text), the Home section type that holds the same row
-  /// (`recommended_for_you`, `similar_users_liked`), or cards that are all in
-  /// one Home section. Silo's Home can carry recommendation sections of its
-  /// own, and Plezilo shows Discover's rows on Home too.
-  static List<SiloDiscoverRow> withoutHomeDuplicates(
-    List<SiloDiscoverRow> rows,
-    List<Map<String, dynamic>> homeSections,
-  ) {
-    if (rows.isEmpty || homeSections.isEmpty) return rows;
-    final keys = <String>{};
-    final titles = <String>{};
-    final types = <String>{};
-    final cardSets = <Set<String>>[];
-    for (final section in homeSections) {
-      if (_text(section['title_key']) case final key?) keys.add(_keySignature(key, section['title_args']));
-      titles.add(_normalized(SiloSectionTitles.of(section)));
-      if (section['title'] case final String title) titles.add(_normalized(title));
-      if (_text(section['section_type']) case final type?) types.add(type);
-      final cards = section['items'];
-      if (cards is List) {
-        final ids = {for (final card in cards.whereType<Map>()) ?_text(card['content_id'])};
-        if (ids.isNotEmpty) cardSets.add(ids);
-      }
-    }
-    titles.remove('');
-    return [
-      for (final row in rows)
-        if (!_duplicates(row, keys: keys, titles: titles, types: types, cardSets: cardSets)) row,
-    ];
-  }
-
-  static bool _duplicates(
-    SiloDiscoverRow row, {
-    required Set<String> keys,
-    required Set<String> titles,
-    required Set<String> types,
-    required List<Set<String>> cardSets,
-  }) {
-    if (row.titleKey case final key? when keys.contains(_keySignature(key, row.titleArgs))) return true;
-    if (titles.contains(_normalized(row.title)) || titles.contains(_normalized(row.serverTitle))) return true;
-    if (_homeSectionTypeForKind[row.kind?.toLowerCase()] case final type? when types.contains(type)) return true;
-    final ids = {for (final card in row.items) card['content_id'].toString()};
-    return cardSets.any((home) => home.containsAll(ids));
-  }
-
-  static String _keySignature(String key, Object? args) {
-    final entries = [
-      if (args is Map)
-        for (final MapEntry(:key, :value) in args.entries) '${_part(key.toString())}${_part(value?.toString() ?? '')}',
-    ]..sort();
-    return '${_part(key)}${entries.join()}';
-  }
-
-  static String _normalized(String title) => title.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
 
   static String? _text(Object? value) {
     final text = value?.toString().trim();

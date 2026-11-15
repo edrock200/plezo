@@ -57,6 +57,16 @@ typedef HubAggregationResult = ({
   Set<String> cancelledServerIds,
   Set<String> failedServerIds,
 });
+
+/// Personal recommendation rows ([PersonalRecommendationsClient]):
+/// `settledServerIds` are the servers whose answer replaces the rows shown
+/// for them (rows, or a settled "none"); a server that failed or timed out is
+/// not in it, so its earlier rows stay.
+typedef RecommendationAggregationResult = ({
+  List<MediaHub> hubs,
+  List<ObservedRow> observedItems,
+  Set<String> settledServerIds,
+});
 typedef LibraryAggregationResult = ({
   List<MediaLibrary> libraries,
   Set<String> succeededServerIds,
@@ -713,6 +723,49 @@ class DataAggregationService {
       cancelledServerIds: {...fetched.cancelledServerIds, ...legCancelledServerIds},
       failedServerIds: {...fetched.failedServerIds, ...legFailedServerIds},
     );
+  }
+
+  /// Personal recommendation rows from every server that has them
+  /// ([PersonalRecommendationsClient], Silo's "For You" feed), filtered for
+  /// hidden libraries. Separate from [getHubsFromAllServers] so Home never
+  /// waits for them: they are slow on some servers and optional. Never throws.
+  Future<RecommendationAggregationResult> getRecommendationHubsFromAllServers({
+    Set<String>? hiddenLibraryKeys,
+    Set<String>? serverIds,
+  }) async {
+    final clients = {
+      for (final entry in _clientsFor(serverIds).entries)
+        if (entry.value is PersonalRecommendationsClient) entry.key: entry.value,
+    };
+    final hubsByServer = <String, List<MediaHub>>{};
+    final observedRows = <ObservedRow>[];
+    final settled = <String>{};
+    await Future.wait([
+      for (final MapEntry(key: serverId, value: client) in clients.entries)
+        () async {
+          try {
+            final fetched = await (client as PersonalRecommendationsClient).fetchPersonalRecommendationHubs();
+            if (fetched == null) return;
+            final processed = _postProcessHubs(
+              fetched,
+              serverId: ServerId(serverId),
+              hiddenLibraryKeys: hiddenLibraryKeys,
+            );
+            settled.add(serverId);
+            hubsByServer[serverId] = processed;
+            final scope = client.cacheServerId;
+            observedRows.addAll([
+              for (final hub in processed)
+                for (final item in hub.items) (item: item, clientScope: scope),
+            ]);
+          } catch (e, stackTrace) {
+            appLogger.w('Recommendations unavailable from $serverId', error: e, stackTrace: stackTrace);
+          }
+        }(),
+    ]);
+    // Server order, like the Home rows: completion order would shuffle them.
+    final hubs = [for (final serverId in clients.keys) ...?hubsByServer[serverId]];
+    return (hubs: hubs, observedItems: observedRows, settledServerIds: settled);
   }
 
   /// Per-library hub fetch for a single client. Filters to visible libraries
