@@ -5,6 +5,9 @@ import 'global_key_utils.dart';
 
 /// Sorts home hubs by the user's library order. Hubs without a known library
 /// stay after known-library hubs, preserving their relative server order.
+/// Personal recommendation rows ([MediaHub.personalRecommendations]) count
+/// as having no library: their cards span libraries, and the server's order
+/// of them is the point.
 bool sortMediaHubsByLibraryOrder(List<MediaHub> hubs, List<MediaLibrary> libraryOrder) {
   if (hubs.length < 2 || libraryOrder.isEmpty) return false;
 
@@ -36,6 +39,7 @@ bool sortMediaHubsByLibraryOrder(List<MediaHub> hubs, List<MediaLibrary> library
 }
 
 int? _hubLibraryOrderIndex(MediaHub hub, Map<String, int> orderByGlobalKey) {
+  if (hub.personalRecommendations) return null;
   final hubLibraryKey = _globalKey(serverIdOrNull(hub.serverId), hub.libraryId);
   final hubIndex = hubLibraryKey == null ? null : orderByGlobalKey[hubLibraryKey];
   if (hubIndex != null) return hubIndex;

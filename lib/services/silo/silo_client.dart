@@ -55,8 +55,10 @@ import 'silo_api_cache.dart';
 import 'silo_audiobook.dart';
 import 'silo_card_overlay_store.dart';
 import 'silo_card_overlays.dart';
+import 'silo_discover.dart';
 import 'silo_download_registry.dart';
 import 'silo_managed_downloads.dart';
+import 'silo_section_titles.dart';
 import 'silo_stream_auth.dart';
 import 'silo_live_subtitles.dart';
 import 'silo_mappers.dart';
@@ -1466,7 +1468,7 @@ class SiloClient
     return MediaHub(
       id: id,
       identifier: section['section_type']?.toString() ?? section['id']?.toString(),
-      title: (section['title'] as String?) ?? '',
+      title: SiloSectionTitles.of(section),
       type: _hubType(items),
       items: items,
       size: total,
@@ -1557,6 +1559,10 @@ class SiloClient
     bool includePlaybackHubs = true,
     HubFetchDiagnostics? diagnostics,
   }) async {
+    // Silo's personalised recommendations load beside the Home rows and
+    // follow them; they never fail the Home rows and hold them back at most
+    // [_discoverReadTimeout].
+    final discover = _discoverRows();
     final List<Map<String, dynamic>> sections;
     try {
       sections = await _homeSections();
@@ -1564,17 +1570,74 @@ class SiloClient
       diagnostics?.recordFailure(e);
       return const [];
     }
-    final hubs = await Future.wait([
-      for (final section in sections)
-        if (section['id']?.toString() case final sectionId?)
-          if (includePlaybackHubs || !_playbackSectionTypes.contains(section['section_type']))
-            _sectionItems(
-              section,
-              '/api/v2/home/sections/${_seg(sectionId)}/items',
-            ).then((rows) => _hub(id: 'home:$sectionId', section: section, rows: rows, limit: limit)),
-    ]);
-    return hubs.where((hub) => hub.items.isNotEmpty).toList();
+    final (hubs, discoverRows) = await (
+      Future.wait([
+        for (final section in sections)
+          if (section['id']?.toString() case final sectionId?)
+            if (includePlaybackHubs || !_playbackSectionTypes.contains(section['section_type']))
+              _sectionItems(
+                section,
+                '/api/v2/home/sections/${_seg(sectionId)}/items',
+              ).then((rows) => _hub(id: 'home:$sectionId', section: section, rows: rows, limit: limit)),
+      ]),
+      discover,
+    ).wait;
+    final homeHubs = hubs.where((hub) => hub.items.isNotEmpty).toList();
+    return [...homeHubs, ..._discoverHubs(SiloDiscover.withoutHomeDuplicates(discoverRows, sections))];
   }
+
+  // ---------------------------------------------------------------------------
+  // Recommendations (Silo's "For You")
+  // ---------------------------------------------------------------------------
+
+  /// Set once the server answered that it has no Discover feed (404/405/501):
+  /// it is not asked again for this client's life.
+  bool _discoverUnsupported = false;
+
+  /// The longest Home waits for the recommendations.
+  static const _discoverReadTimeout = Duration(seconds: 8);
+
+  /// The rows of `GET /recommendations/discover` for this connection's
+  /// profile (the feed of Silo's For You page), or none: a server without the
+  /// route, an empty feed (not enough watch history yet), a failure or a slow
+  /// answer all show no recommendation rows. Never throws. Read through the
+  /// offline cache like the Home rows.
+  Future<List<SiloDiscoverRow>> _discoverRows() async {
+    if (_discoverUnsupported) return const [];
+    try {
+      final data = await _cachedGet(SiloDiscover.path, query: {'image_size': _imageSize}).timeout(_discoverReadTimeout);
+      return SiloDiscover.rows(data);
+    } on MediaServerHttpException catch (e) {
+      if (const {404, 405, 501}.contains(e.statusCode)) {
+        _discoverUnsupported = true;
+        appLogger.d('SiloClient: the server has no recommendations feed (${e.statusCode})');
+      } else {
+        appLogger.d('SiloClient: recommendations unavailable', error: e.runtimeType);
+      }
+      return const [];
+    } catch (e) {
+      appLogger.d('SiloClient: recommendations unavailable', error: e.runtimeType);
+      return const [];
+    }
+  }
+
+  List<MediaHub> _discoverHubs(List<SiloDiscoverRow> rows) => [
+    for (final row in rows)
+      if (SiloMappers.items(row.items, _ctx) case final items when items.isNotEmpty)
+        MediaHub(
+          id: row.id,
+          identifier: row.id,
+          title: row.title.isEmpty ? t.siloSectionTitles.recommendedForYou : row.title,
+          type: _hubType(items),
+          items: items,
+          size: items.length,
+          // Discover rows have no full page in Silo's apps (no "Explore all").
+          more: false,
+          serverId: serverId,
+          serverName: serverName,
+          personalRecommendations: true,
+        ),
+  ];
 
   @override
   Future<List<MediaHub>> fetchLibraryHubs(

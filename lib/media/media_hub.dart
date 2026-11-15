@@ -31,6 +31,11 @@ class MediaHub {
   final String? serverId;
   final String? serverName;
 
+  /// A row of the server's personalised recommendations (Silo's "For You"
+  /// feed) rather than one of its Home or library rows: it keeps the server's
+  /// order after the library rows and shows the recommendations icon.
+  final bool personalRecommendations;
+
   const MediaHub({
     required this.id,
     required this.title,
@@ -42,6 +47,7 @@ class MediaHub {
     this.libraryId,
     this.serverId,
     this.serverName,
+    this.personalRecommendations = false,
   });
 
   /// True for hubs that represent the user's resumable Continue Watching row.
@@ -71,6 +77,7 @@ class MediaHub {
       libraryId: libraryId,
       serverId: serverId,
       serverName: serverName,
+      personalRecommendations: personalRecommendations,
     );
   }
 }

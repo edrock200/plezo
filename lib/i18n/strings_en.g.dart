@@ -103,6 +103,7 @@ class Translations with BaseTranslations<AppLocale, Translations> {
 	late final Translations$siloManagedDownloads$en siloManagedDownloads = Translations$siloManagedDownloads$en.internal(_root);
 	late final Translations$siloAudio$en siloAudio = Translations$siloAudio$en.internal(_root);
 	late final Translations$reviewFixes$en reviewFixes = Translations$reviewFixes$en.internal(_root);
+	late final Translations$siloSectionTitles$en siloSectionTitles = Translations$siloSectionTitles$en.internal(_root);
 }
 
 // Path: app
@@ -7139,6 +7140,135 @@ class Translations$reviewFixes$en {
 	String get plainHttpBadge => 'Not encrypted (HTTP)';
 }
 
+// Path: siloSectionTitles
+class Translations$siloSectionTitles$en {
+	Translations$siloSectionTitles$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'For You'
+	String get forYou => 'For You';
+
+	/// en: 'Recommended for You'
+	String get recommendedForYou => 'Recommended for You';
+
+	/// en: 'Because You Watched'
+	String get becauseYouWatched => 'Because You Watched';
+
+	/// en: 'Because You Watched ${title}'
+	String becauseYouWatchedTitle({required Object title}) => 'Because You Watched ${title}';
+
+	/// en: 'Because you enjoy ${genres}'
+	String becauseYouEnjoy({required Object genres}) => 'Because you enjoy ${genres}';
+
+	/// en: 'Picked from your history'
+	String get pickedFromYourHistory => 'Picked from your history';
+
+	/// en: 'Profiles Like You Enjoyed'
+	String get profilesLikeYouEnjoyed => 'Profiles Like You Enjoyed';
+
+	/// en: 'Popular on This Server'
+	String get popularOnServer => 'Popular on This Server';
+
+	/// en: 'Trending on Server'
+	String get trendingOnServer => 'Trending on Server';
+
+	/// en: 'Trending This Week'
+	String get trendingThisWeek => 'Trending This Week';
+
+	/// en: 'Top Picks Today'
+	String get topPicksToday => 'Top Picks Today';
+
+	/// en: 'Top Rated'
+	String get topRated => 'Top Rated';
+
+	/// en: 'Top Rated Movies'
+	String get topRatedMovies => 'Top Rated Movies';
+
+	/// en: 'Top Rated TV'
+	String get topRatedTv => 'Top Rated TV';
+
+	/// en: 'Top ${genre}'
+	String topGenre({required Object genre}) => 'Top ${genre}';
+
+	/// en: 'Highly Rated in Your Library'
+	String get highlyRatedInLibrary => 'Highly Rated in Your Library';
+
+	/// en: 'Hidden Gems'
+	String get hiddenGems => 'Hidden Gems';
+
+	/// en: 'Random Picks'
+	String get randomPicks => 'Random Picks';
+
+	/// en: 'Seasonal Picks'
+	String get seasonalPicks => 'Seasonal Picks';
+
+	/// en: 'Returning Shows'
+	String get returningShows => 'Returning Shows';
+
+	/// en: 'Continue Watching'
+	String get continueWatching => 'Continue Watching';
+
+	/// en: 'Continue Listening'
+	String get continueListening => 'Continue Listening';
+
+	/// en: 'Continue Reading'
+	String get continueReading => 'Continue Reading';
+
+	/// en: 'Next Up'
+	String get nextUp => 'Next Up';
+
+	/// en: 'Next in Your Series'
+	String get nextInYourSeries => 'Next in Your Series';
+
+	/// en: 'Recently Added'
+	String get recentlyAdded => 'Recently Added';
+
+	/// en: 'Recently Added in ${library}'
+	String recentlyAddedIn({required Object library}) => 'Recently Added in ${library}';
+
+	/// en: 'Recently Added Movies'
+	String get recentlyAddedMovies => 'Recently Added Movies';
+
+	/// en: 'Recently Added TV'
+	String get recentlyAddedTv => 'Recently Added TV';
+
+	/// en: 'Recently Added Audiobooks'
+	String get recentlyAddedAudiobooks => 'Recently Added Audiobooks';
+
+	/// en: 'Recently Added Ebooks'
+	String get recentlyAddedEbooks => 'Recently Added Ebooks';
+
+	/// en: 'Recently Added Manga'
+	String get recentlyAddedManga => 'Recently Added Manga';
+
+	/// en: 'Recently Released'
+	String get recentlyReleased => 'Recently Released';
+
+	/// en: 'Recently Released in ${library}'
+	String recentlyReleasedIn({required Object library}) => 'Recently Released in ${library}';
+
+	/// en: 'Recently Released Movies'
+	String get recentlyReleasedMovies => 'Recently Released Movies';
+
+	/// en: 'Recently Released Episodes'
+	String get recentlyReleasedEpisodes => 'Recently Released Episodes';
+
+	/// en: 'Recently Released Episodes in ${library}'
+	String recentlyReleasedEpisodesIn({required Object library}) => 'Recently Released Episodes in ${library}';
+
+	/// en: 'Recently Released Audiobooks'
+	String get recentlyReleasedAudiobooks => 'Recently Released Audiobooks';
+
+	/// en: 'Recently Released Ebooks'
+	String get recentlyReleasedEbooks => 'Recently Released Ebooks';
+
+	/// en: 'Recently Released Manga'
+	String get recentlyReleasedManga => 'Recently Released Manga';
+}
+
 // Path: appIcon.names
 class Translations$appIcon$names$en {
 	Translations$appIcon$names$en.internal(this._root);
@@ -11959,6 +12089,46 @@ extension on Translations {
 			'reviewFixes.plainHttpMessage' => ({required Object server}) => '${server} answered only over plain HTTP. Your password, sign-in code and what you watch will be sent unencrypted. Only do this on a network you trust.',
 			'reviewFixes.plainHttpConfirm' => 'Connect',
 			'reviewFixes.plainHttpBadge' => 'Not encrypted (HTTP)',
+			'siloSectionTitles.forYou' => 'For You',
+			'siloSectionTitles.recommendedForYou' => 'Recommended for You',
+			'siloSectionTitles.becauseYouWatched' => 'Because You Watched',
+			'siloSectionTitles.becauseYouWatchedTitle' => ({required Object title}) => 'Because You Watched ${title}',
+			'siloSectionTitles.becauseYouEnjoy' => ({required Object genres}) => 'Because you enjoy ${genres}',
+			'siloSectionTitles.pickedFromYourHistory' => 'Picked from your history',
+			'siloSectionTitles.profilesLikeYouEnjoyed' => 'Profiles Like You Enjoyed',
+			'siloSectionTitles.popularOnServer' => 'Popular on This Server',
+			'siloSectionTitles.trendingOnServer' => 'Trending on Server',
+			'siloSectionTitles.trendingThisWeek' => 'Trending This Week',
+			'siloSectionTitles.topPicksToday' => 'Top Picks Today',
+			'siloSectionTitles.topRated' => 'Top Rated',
+			'siloSectionTitles.topRatedMovies' => 'Top Rated Movies',
+			'siloSectionTitles.topRatedTv' => 'Top Rated TV',
+			'siloSectionTitles.topGenre' => ({required Object genre}) => 'Top ${genre}',
+			'siloSectionTitles.highlyRatedInLibrary' => 'Highly Rated in Your Library',
+			'siloSectionTitles.hiddenGems' => 'Hidden Gems',
+			'siloSectionTitles.randomPicks' => 'Random Picks',
+			'siloSectionTitles.seasonalPicks' => 'Seasonal Picks',
+			'siloSectionTitles.returningShows' => 'Returning Shows',
+			'siloSectionTitles.continueWatching' => 'Continue Watching',
+			'siloSectionTitles.continueListening' => 'Continue Listening',
+			'siloSectionTitles.continueReading' => 'Continue Reading',
+			'siloSectionTitles.nextUp' => 'Next Up',
+			'siloSectionTitles.nextInYourSeries' => 'Next in Your Series',
+			'siloSectionTitles.recentlyAdded' => 'Recently Added',
+			'siloSectionTitles.recentlyAddedIn' => ({required Object library}) => 'Recently Added in ${library}',
+			'siloSectionTitles.recentlyAddedMovies' => 'Recently Added Movies',
+			'siloSectionTitles.recentlyAddedTv' => 'Recently Added TV',
+			'siloSectionTitles.recentlyAddedAudiobooks' => 'Recently Added Audiobooks',
+			'siloSectionTitles.recentlyAddedEbooks' => 'Recently Added Ebooks',
+			'siloSectionTitles.recentlyAddedManga' => 'Recently Added Manga',
+			'siloSectionTitles.recentlyReleased' => 'Recently Released',
+			'siloSectionTitles.recentlyReleasedIn' => ({required Object library}) => 'Recently Released in ${library}',
+			'siloSectionTitles.recentlyReleasedMovies' => 'Recently Released Movies',
+			'siloSectionTitles.recentlyReleasedEpisodes' => 'Recently Released Episodes',
+			'siloSectionTitles.recentlyReleasedEpisodesIn' => ({required Object library}) => 'Recently Released Episodes in ${library}',
+			'siloSectionTitles.recentlyReleasedAudiobooks' => 'Recently Released Audiobooks',
+			'siloSectionTitles.recentlyReleasedEbooks' => 'Recently Released Ebooks',
+			'siloSectionTitles.recentlyReleasedManga' => 'Recently Released Manga',
 			_ => null,
 		};
 	}

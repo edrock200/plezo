@@ -665,6 +665,8 @@ void main() {
         }
         // Home loads also read the card overlay settings.
         if (request.url.path.contains('/api/v2/settings/')) return http.Response('', 404);
+        // ...and the recommendations (a server without them here).
+        if (request.url.path.endsWith('/recommendations/discover')) return http.Response('', 404);
         final limit = request.url.queryParameters['item_limit'];
         limits.add(limit);
         if (limit != null) {

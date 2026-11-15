@@ -45,6 +45,8 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
 | `android/app/src/main/kotlin/com/edde746/plezy/silopairing/` | `SiloPairingChannel.kt` (`com.plezy/silo_pairing`: NsdManager registration, LAN listener, one phone at a time, relay to Dart) and `SiloPairingTls.kt` (BouncyCastle TLS-PSK server) |
 | `lib/connection/connection.dart` | `SiloConnection` (id `serverId/userId/profileId`) |
 | `lib/services/cached_playback_metadata_service.dart` | Offline markers/tracks for downloaded Silo items |
+| `lib/services/silo/silo_discover.dart` | Silo's For You feed (`GET /recommendations/discover`): `SiloDiscover.rows` (parse, ids, For You first), `withoutHomeDuplicates` |
+| `lib/services/silo/silo_section_titles.dart` | `SiloSectionTitles`: a row's `title_key`/`title_args` (`home.section.*`) → `t.siloSectionTitles.*`, else the server's `title` |
 | `lib/services/silo/silo_card_overlays.dart` | Card overlays, pure: registry, `ui.card_overlays` parsing (v1/v2, style), settle with the overlay config, labels, placement/caps/suppression, looks and colours, `SiloOverlayData` (from a card's raw JSON) |
 | `lib/services/silo/silo_card_overlay_store.dart` | `SiloCardOverlayStore` (`SiloClient.cardOverlays`): the two settings reads under one in-flight future, known value per connection |
 | `lib/widgets/silo_card_overlays.dart` | `CardArtworkOverlays` (Plezy's `WatchedIndicator`, or Silo's layer on Silo items), `SiloCardOverlayLayer` and the cached `SiloOverlayLayout` |
@@ -252,6 +254,28 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
   Every row with cards has `more: true` (Silo's "Explore all"): rows are capped and Home drops
   titles other rows show, so `total_count` cannot tell whether the page holds more. The full page
   is `fetchMoreHubItemsPage` → `GET /catalog?source=section&section_id=&scope=home|library`.
+- **Recommendations (Silo's "For You", the user's request 2026-11-15):** Silo's apps have a For You page built from
+  `GET /api/v2/recommendations/discover` (`RecommendationsViewModel`, phone `RecommendationsScreen`, TV
+  `TvRecommendationsScreen`; Siku's `ForYouPage.brs`). Answer `{items: [{type, title, title_key?, title_args?, kind?, key?,
+  items: [card]}]}` (not paged; `type` cluster|similar_users_liked|popular|recently_added|top_rated|genre_sampler, `kind`
+  for-you-main|cluster|similar-users|popular|recently-added|top-rated|genre). Plezilo shows the rows **on Home**:
+  `SiloClient.fetchGlobalHubs` reads Discover beside `_homeSections` (one shared wait, 8 s cap) and appends its rows after the
+  Home rows as `MediaHub`s with `personalRecommendations: true` (sparkle icon, `sortMediaHubsByLibraryOrder` leaves them after
+  the library rows in server order), `more: false` (no Explore all, as in Silo's apps), id = identifier =
+  `silo-discover:<kind><key>` length-prefixed (kind alone for the singleton kinds; else type + title + card ids, Android's
+  `stableSectionId`). Order: Android's `toResolvedSections` (empty rows and duplicate ids dropped, the `for-you-main` / "For
+  You" row first, then server order; Silo marks it "featured" but Plezy's hero is Continue Watching, so it is simply the first
+  row). Rows Home already shows are dropped (`withoutHomeDuplicates`: same `title_key`+args or title, a Home
+  `recommended_for_you` / `similar_users_liked` section for `for-you-main` / `similar-users`, or every card in one Home row).
+  404/405/501 = no feed (sticky per client); any other failure, a timeout, an empty or malformed answer shows no rows and never
+  fails Home or its diagnostics. Read through `_cachedGet` (offline Home shows the cached rows). Each client is one
+  connection = one Silo profile (headers), so several servers/profiles each bring their own rows; Plezy profile switches build
+  other clients. Library tabs and "Use Home Layout" off show none (the feed is not per library). No For You page, so no
+  Watchlist/Favorites fallback or "Not enough data yet" hint; the taste profile is not read (Silo's screens do not show it).
+  **Section titles:** `SiloSectionTitles.of(row)` translates `title_key` (`home.section.*`, placeholders from `title_args`;
+  unknown keys or a missing argument fall back to `title`) for Discover rows and for Home/library section rows. English is
+  in `en.i18n.json` `siloSectionTitles` (the server's English); other locales fall back to it.
+  Tests: `test/services/silo/silo_discover_test.dart`.
 - **Movie box sets** (Silo Android #646; newer than the scratchpad OpenAPI, so routes follow the
   Android client exactly): `GET /user/libraries` rows may carry `box_sets_enabled`; `fetchLibraries`
   records them (`_boxSetLibraryIds`), and nothing box-set related is ever sent to a server without
@@ -524,6 +548,9 @@ PIN length (matches Silo's apps). Open follow-ups: an edit screen for an existin
   that one film), and the movie page's row shows every film (Silo fits as many as the screen holds).
   Embedded subtitles drawn from the stream (Silo Android #770: `hls_subtitle_renditions_all_v1`,
   `native_embedded`) are not declared: Plezy keeps server sidecars.
+- For You: Silo's apps give recommendations their own page (phone: rows + Watchlist/Favorites pills, saved-list fallback when
+  empty; TV: a Skyline feed in the top menu). Plezilo puts the same rows on Home after Silo's Home rows (no new tab, nothing
+  shown when the feed is empty or missing), so they also refresh with Home (pull to refresh, the stale-on-return refresh).
 - Theme music (Silo Android #678) is not offered: Plezy plays no theme music for any backend.
 - Card overlays: Plezilo only reads the document (no editor, like Silo's TV apps), so Silo Android #882's
   save rules (settings revision, passthrough ids) do not apply. List-mode rows keep Plezy's indicator (no

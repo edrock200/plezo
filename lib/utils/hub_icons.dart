@@ -17,6 +17,9 @@ IconData hubIconFor(MediaHub hub) {
   if (hub.isContinueWatchingHub || title.contains('continue watching') || title.contains('on deck')) {
     return Symbols.play_circle_rounded;
   }
+  // Recommendation rows are titled "Because you watched …", "Popular on This
+  // Server" and the like; they all get the sparkle Silo's For You page uses.
+  if (hub.personalRecommendations) return _defaultHubIcon;
   for (final (keywords, icon) in _titleKeywordIcons) {
     if (keywords.any(title.contains)) return icon;
   }
