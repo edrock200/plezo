@@ -4,6 +4,12 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **Smoother 25 and 30 fps video on TVs:** with the display refresh rate switching on (Android TV and Fire TV), 25 and 30 fps videos now switch the TV to 50 or 60 Hz instead of 25 or 30 Hz, which some TVs show with flicker or a blank pause (from Plezy).
+
+## silo-preview-2.38.0
+
+Released November 15, 2026. Android and Windows.
+
 - **New For You page for Silo servers:** your Silo recommendations, Favorites and Watchlist in one place, like Silo's own apps. Find it in the side menu below Home on TV and desktop, or with the For You button at the top of Home on phones. *(please test)*
 - **Favorites and Watchlist** can be filtered to Movies or Shows and sorted. When there are no recommendations yet, For You shows your saved titles instead.
 - **Two new switches** in Settings › Appearance › Silo: "Show Silo recommendations on Home" and "Show For You". Both are on by default.
