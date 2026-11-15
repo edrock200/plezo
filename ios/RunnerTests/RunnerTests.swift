@@ -834,6 +834,32 @@ final class MpvPlayerContractTests: XCTestCase {
     XCTAssertEqual(results, [true])
   }
 
+  func testPipStartWaitsOutTheTurnThatCreatedItsController() {
+    // AVKit drops a start issued in the turn that created its controller,
+    // with no delegate callback, while PiP already reads as possible (#3016).
+    let fake = FakePictureInPictureController()
+    var settle: (() -> Void)?
+    var retries: [() -> Void] = []
+    let controller = MpvPipController(
+      controller: fake,
+      readiness: { (true, true, true) },
+      retryScheduler: { retries.append($0) },
+      controllerSettles: { settle = $0 }
+    )
+    var results: [Bool] = []
+
+    controller.startPip { results.append($0) }
+    XCTAssertEqual(fake.startCount, 0, "A start in the creating turn never reports back")
+    XCTAssertEqual(retries.count, 1)
+
+    settle?()
+    retries[0]()
+    XCTAssertEqual(fake.startCount, 1)
+    controller.pictureInPictureWillStart()
+    controller.pictureInPictureDidStart()
+    XCTAssertEqual(results, [true])
+  }
+
   func testRepeatedAutoStartDuringCurrentControllerStartDoesNotRejectDidStart() {
     let fake = FakePictureInPictureController()
     let controller = MpvPipController(

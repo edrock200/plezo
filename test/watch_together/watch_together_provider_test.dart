@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openwatchparty/openwatchparty.dart' as owp;
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:plezy/media/ids.dart';
 import 'package:plezy/media/media_backend.dart';
 import 'package:plezy/media/media_item.dart';
@@ -14,6 +15,7 @@ import 'package:plezy/media/media_version.dart';
 import 'package:plezy/media/title_copies.dart';
 import 'package:plezy/services/data_aggregation_service.dart';
 import 'package:plezy/services/settings_service.dart';
+import 'package:plezy/utils/app_version.dart';
 import 'package:plezy/utils/external_ids.dart';
 import 'package:plezy/watch_together/models/watch_copy.dart';
 import 'package:plezy/watch_together/models/watch_notice.dart';
@@ -421,6 +423,25 @@ void main() {
       expect(await world.refusal(g.provider.joinRoom('K7M-Q2Y')), owp.ErrorCode.roomNotFound);
       expect(g.provider.isInSession, isFalse);
       expect(h.provider.participants.single.name, 'Plezilo');
+    });
+
+    _roomTest('a build without a package version creates rooms as Plezilo/unknown', (world) async {
+      // A distro package that splits the Linux bundle leaves package_info_plus
+      // no version.json, and the SDK refuses a `client` of `Plezilo/` (#3074).
+      PackageInfo.setMockInitialValues(
+        appName: 'Plezy',
+        packageName: 'com.plezy.test',
+        version: '',
+        buildNumber: '',
+        buildSignature: '',
+      );
+      AppVersion.resetForTesting();
+      addTearDown(AppVersion.resetForTesting);
+      final h = _Member(WatchTogetherProvider(partyFactory: world.relay.party, displayName: () => 'Host'));
+      world._members.add(h);
+
+      expect(await world.settle(h.provider.createRoom()), FakeOwpRelay.code);
+      expect(h.provider.participants.single.client, 'Plezilo/${AppVersion.unknown}');
     });
 
     _roomTest('host transfer, control mode and lock; a guest is refused host commands', (world) async {

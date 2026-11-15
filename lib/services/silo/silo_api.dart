@@ -3,11 +3,11 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:http/http.dart' as http;
-import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../exceptions/media_server_exceptions.dart';
 import '../../i18n/strings.g.dart';
 import '../../utils/app_logger.dart';
+import '../../utils/app_version.dart';
 import '../../utils/device_identity.dart';
 import '../../utils/media_server_http_client.dart';
 import '../../utils/media_server_timeouts.dart';
@@ -37,13 +37,9 @@ class SiloDeviceHeaders {
   /// Resolve the headers for this install. Never throws: tests and
   /// non-platform contexts fall back to generic values.
   static Future<SiloDeviceHeaders> resolve(String deviceId) async {
-    var version = '1.0';
-    try {
-      final pkg = await PackageInfo.fromPlatform();
-      if (pkg.version.isNotEmpty) version = pkg.version;
-    } catch (_) {
-      // Keep the fallback version.
-    }
+    // A build that can't report its version (a split Linux package) still
+    // sends a version Silo accepts.
+    final version = (await AppVersion.current()).version ?? '1.0';
     final identity = await DeviceIdentityService.resolve();
     final platform = identity.platform.toLowerCase();
     final name = [

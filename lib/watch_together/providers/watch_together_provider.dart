@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:clock/clock.dart';
 import 'package:flutter/foundation.dart';
 import 'package:openwatchparty/openwatchparty.dart' as owp;
-import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../media/media_item.dart';
 import '../../media/media_server_client.dart';
@@ -12,6 +11,7 @@ import '../../media/title_copies.dart';
 import '../../services/data_aggregation_service.dart';
 import '../../services/settings_service.dart';
 import '../../utils/app_logger.dart';
+import '../../utils/app_version.dart';
 import '../../utils/media_server_http_client.dart';
 import '../models/watch_copy.dart';
 import '../models/watch_notice.dart';
@@ -127,10 +127,7 @@ class WatchTogetherProvider extends ChangeNotifier {
   /// Opens the room's file when no player is open; set by the main screen.
   ChoiceOpener? navigatorOpener;
 
-  static Future<String> _plezyClientName() async {
-    final info = await PackageInfo.fromPlatform();
-    return 'Plezilo/${info.version}';
-  }
+  static Future<String> _plezyClientName() async => 'Plezilo/${(await AppVersion.current()).versionOrUnknown}';
 
   static owp.WatchParty<WatchCopy> _defaultParty({
     required owp.Relays relays,
@@ -254,8 +251,7 @@ class WatchTogetherProvider extends ChangeNotifier {
   /// Creates a room and joins it as host; returns its code. Throws
   /// [owp.PartyException] with the SDK's code when it fails.
   Future<String> createRoom() async {
-    final party = await _newParty();
-    final code = await _logFailure('create', party.create());
+    final code = await _logFailure('create', () async => (await _newParty()).create());
     await _rememberRoom(code);
     _shareOpenPlayer();
     return code;
@@ -268,16 +264,20 @@ class WatchTogetherProvider extends ChangeNotifier {
   Future<void> joinRoom(String code, {bool create = false}) async {
     final normalized = normalizeRoomCode(code);
     if (normalized == null) throw const owp.PartyException(owp.ErrorCode.invalidCode, 'not a room code');
-    final party = await _newParty();
-    await _logFailure(create ? 'join or create' : 'join', party.join(normalized, create: create));
+    final party = await _logFailure(create ? 'join or create' : 'join', () async {
+      final party = await _newParty();
+      await party.join(normalized, create: create);
+      return party;
+    });
     await _rememberRoom(normalized);
     if (create && party.state.isHost && party.state.media == null) _shareOpenPlayer();
   }
 
-  /// Logs why a create or join failed: the user sees only the code's text.
-  Future<T> _logFailure<T>(String action, Future<T> attempt) async {
+  /// Logs why a create or join failed, from setting up the party to the
+  /// relay's answer: the user sees only the code's text.
+  Future<T> _logFailure<T>(String action, Future<T> Function() attempt) async {
     try {
-      return await attempt;
+      return await attempt();
     } on owp.PartyException catch (error) {
       if (error.code != owp.ErrorCode.cancelled) {
         final relays = _customRelayBaseUrl() == null ? 'the public relays' : 'the custom relay';
