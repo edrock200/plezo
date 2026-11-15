@@ -4,6 +4,13 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **Silo's recommendations really show up on Home now:** in 2.35.0 they could vanish when the server took more than a few seconds to answer, and Silo's own "Recommended for You" Home section could hide the For You row. Home now opens right away and the recommendation rows ("For You", "Because you enjoy …", "Popular on This Server" and more) appear when they arrive. They also show when "Use Home Layout" is off. *(please test)*
+- Settings › Logs now says how many recommendation rows arrived, or why there were none.
+
+## silo-preview-2.35.0
+
+Released November 15, 2026. Android and Windows.
+
 - **Silo's personalised recommendations on Home:** Silo servers now add your recommendations from Silo ("For You", "Because You Watched …", "Popular on This Server" and more) below Silo's own Home rows, and they refresh with Home. Rows already on your Home aren't shown twice, and servers without recommendations look the same as before. *(please test)*
 - Row names that Silo words itself now use Plezilo's own wording.
 
