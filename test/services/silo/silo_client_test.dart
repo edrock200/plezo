@@ -11,6 +11,7 @@ import 'package:plezy/media/library_query.dart';
 import 'package:plezy/media/media_item.dart';
 import 'package:plezy/media/media_kind.dart';
 import 'package:plezy/media/media_server_client.dart';
+import 'package:plezy/media/playback_report_metadata.dart';
 import 'package:plezy/media/media_backend.dart';
 import 'package:plezy/media/ids.dart';
 import 'package:plezy/models/transcode_quality_preset.dart';
@@ -1329,6 +1330,53 @@ void main() {
       expect(syncBodies, isEmpty);
       expect(Uri.decodeComponent(requests.single.url.path), endsWith('/api/v2/watched/movie:m1'));
       expect(requests.single.method, 'POST');
+    });
+
+    // Silo Android #847: a position queued offline carries the time it was
+    // played, so the server's newest-write-wins keeps newer progress made on
+    // another device instead of the replay bringing back a stale resume point.
+    test('an offline replay is stamped with the time it was played', () async {
+      final c = progressClient();
+      final playedAt = DateTime.utc(2026, 11, 10, 20, 15, 30);
+      await c.reportPlaybackStopped(
+        itemId: 'movie:m1',
+        position: const Duration(minutes: 10),
+        duration: const Duration(hours: 2),
+        report: PlaybackReportMetadata.offlineReplay(recordedAt: playedAt.toLocal()),
+      );
+      final item = (syncBodies.single['items'] as List).single as Map;
+      expect(item['position_ms'], 600000);
+      expect(DateTime.parse(item['updated_at'] as String), playedAt);
+    });
+
+    test('a finished offline replay lets the server decide completion at its own time', () async {
+      final c = progressClient();
+      final playedAt = DateTime.utc(2026, 11, 10, 22);
+      await c.reportPlaybackStopped(
+        itemId: 'movie:m1',
+        position: const Duration(hours: 2),
+        duration: const Duration(hours: 2),
+        report: PlaybackReportMetadata.offlineReplay(recordedAt: playedAt),
+      );
+      expect(requests.where((r) => r.url.path.contains('/watched/')), isEmpty);
+      final item = (syncBodies.single['items'] as List).single as Map;
+      expect(item['position_ms'], 7200000);
+      expect(DateTime.parse(item['updated_at'] as String), playedAt);
+    });
+
+    test('a replay time ahead of the clock is sent as now', () async {
+      final c = progressClient();
+      final before = DateTime.now().toUtc();
+      await c.reportPlaybackStopped(
+        itemId: 'movie:m1',
+        position: const Duration(minutes: 10),
+        duration: const Duration(hours: 2),
+        report: PlaybackReportMetadata.offlineReplay(recordedAt: DateTime.now().add(const Duration(days: 1))),
+      );
+      final item = (syncBodies.single['items'] as List).single as Map;
+      final sent = DateTime.parse(item['updated_at'] as String);
+      expect(sent.isBefore(before.subtract(const Duration(seconds: 1))), isFalse);
+      expect(sent.isAfter(DateTime.now().toUtc().add(const Duration(seconds: 1))), isFalse);
     });
   });
 

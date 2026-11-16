@@ -945,10 +945,20 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
     if (_endedSessionIds.contains(playSessionId)) return;
     final session = playSessionId == null ? null : _sessions[playSessionId];
     if (session == null) {
-      // A downloaded file, or progress queued offline: no session to stop.
-      // Past the watched threshold the item is marked played, as a session
-      // stop would have done; otherwise the resume point is written.
       final total = duration;
+      if (report.isOfflineReplay) {
+        // Progress queued offline (Silo Android #847): sent with the time it
+        // was played, so the server's newest-write-wins keeps progress made
+        // since on another device, and its own watched threshold decides
+        // completion (a finished offline play arrives at the full duration).
+        // Stamping it with the send time let a stale queued position beat
+        // newer progress and bring back a resume point.
+        await _syncProgress(itemId, position: position, duration: total, updatedAt: report.recordedAt);
+        return;
+      }
+      // A downloaded file played online: no session to stop. Past the watched
+      // threshold the item is marked played, as a session stop would have
+      // done; otherwise the resume point is written.
       if (total != null &&
           total > Duration.zero &&
           position.inMilliseconds >= total.inMilliseconds * watchedThreshold) {
@@ -962,9 +972,17 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
   }
 
   /// `POST /api/v2/sync/progress`: a resume point written without a playback
-  /// session, stamped with the event time so an offline write merges
-  /// last-write-wins.
-  Future<void> _syncProgress(String itemId, {required Duration position, Duration? duration}) async {
+  /// session, stamped with the event time ([updatedAt], else now) so an
+  /// offline write merges last-write-wins. A time ahead of this device's clock
+  /// is sent as now.
+  Future<void> _syncProgress(
+    String itemId, {
+    required Duration position,
+    Duration? duration,
+    DateTime? updatedAt,
+  }) async {
+    final now = DateTime.now();
+    final eventTime = updatedAt == null || updatedAt.isAfter(now) ? now : updatedAt;
     final response = await _api.send(
       'POST',
       '/api/v2/sync/progress',
@@ -974,7 +992,7 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
             'media_item_id': itemId,
             'position_ms': position.inMilliseconds < 0 ? 0 : position.inMilliseconds,
             'duration_ms': duration == null || duration.isNegative ? 0 : duration.inMilliseconds,
-            'updated_at': DateTime.now().toUtc().toIso8601String(),
+            'updated_at': eventTime.toUtc().toIso8601String(),
           },
         ],
       },
