@@ -20,6 +20,61 @@ extension _MediaDetailActionButtons on _MediaDetailScreenState {
     return Builder(builder: (context) => _buildAvailableActionButtons(context, metadata));
   }
 
+  /// Play while the page waits for the full item: a disabled button with a
+  /// spinner and "Loading...". [style] comes from the live row's styling; the
+  /// TV seed preview passes none and gets the row's idle look.
+  Widget _buildSeedLoadingPlayButton(BuildContext context, {ButtonStyle? style}) {
+    final isTv = PlatformDetector.isTV();
+    final tvScale = TvLayoutConstants.scaleOf(context);
+    final actionSize = isTv ? _tvDetailActionSize * tvScale : 48.0;
+    final iconSize = isTv ? 22 * tvScale : 20.0;
+    final colorScheme = Theme.of(context).colorScheme;
+    final foreground = colorScheme.onSecondaryContainer;
+    final effectiveStyle =
+        style ??
+        ButtonStyle(
+          padding: WidgetStatePropertyAll(
+            EdgeInsets.symmetric(horizontal: isTv ? 17 * tvScale : 16, vertical: isTv ? 9 * tvScale : 0),
+          ),
+          minimumSize: WidgetStatePropertyAll(Size(0, actionSize)),
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          visualDensity: VisualDensity.compact,
+          backgroundColor: WidgetStatePropertyAll(colorScheme.secondaryContainer.withValues(alpha: isTv ? 0.38 : 1)),
+          foregroundColor: WidgetStatePropertyAll(foreground),
+        );
+    return Semantics(
+      label: t.common.loading,
+      button: true,
+      enabled: false,
+      excludeSemantics: true,
+      child: SizedBox(
+        height: actionSize,
+        child: FilledButton(
+          key: mediaDetailSeedPlayKey,
+          onPressed: null,
+          style: effectiveStyle,
+          child: Row(
+            mainAxisSize: .min,
+            children: [
+              SizedBox.square(
+                dimension: iconSize * 0.8,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: effectiveStyle.foregroundColor?.resolve({WidgetState.disabled}),
+                ),
+              ),
+              SizedBox(width: isTv ? 7 * tvScale : 8),
+              Text(
+                t.common.loading,
+                style: TextStyle(fontSize: isTv ? 17 * tvScale : 16, fontWeight: .w700),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildAvailableActionButtons(BuildContext context, MediaItem metadata) {
     final isTv = PlatformDetector.isTV();
     final tvScale = TvLayoutConstants.scaleOf(context);
@@ -174,6 +229,35 @@ extension _MediaDetailActionButtons on _MediaDetailScreenState {
         : null;
 
     final gap = isTv ? 8.0 * tvScale : 12.0;
+
+    // Drawn from the tapped card (Silo Android #971): until the full item
+    // arrives Play reads "Loading..." and does nothing, and the actions that
+    // need the full item (versions, trailer, shuffle, download, watched, ⋮)
+    // stay hidden. Play keeps its focus node, so focus stays put when the
+    // full row replaces this one.
+    if (_seedPending) {
+      return FocusableActionBar(
+        actions: [
+          FocusableAction(
+            debugLabel: 'detail_play',
+            focusNode: _playButtonFocusNode,
+            autofocus: isKeyboardMode,
+            onPressed: () {},
+            builder: (context, state) => _buildSeedLoadingPlayButton(
+              context,
+              style: actionButtonStyle(
+                showFocus: state.showFocus,
+                padding: .symmetric(horizontal: isTv ? 17 * tvScale : 16, vertical: isTv ? 9 * tvScale : 0),
+              ),
+            ),
+          ),
+        ],
+        spacing: gap,
+        onFocusChange: isTv ? _setTvDetailActionRowFocus : null,
+        onNavigateUp: _focusAboveActionRow,
+        onNavigateDown: _focusBelowActionRow,
+      );
+    }
 
     Widget playButton(FocusableActionBuildState state) {
       return Semantics(

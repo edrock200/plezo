@@ -297,13 +297,19 @@ Future<MediaNavigationResult> navigateToMediaItem(
         }
         return MediaNavigationResult.navigated;
       }
-      return navigateToMediaItemDetails(context, mi, isOffline: isOffline, onRefresh: onRefresh);
+      return navigateToMediaItemDetails(context, mi, isOffline: isOffline, onRefresh: onRefresh, seedFromCard: true);
 
     case MediaKind.season:
       return navigateToMediaItemDetails(context, mi, isOffline: isOffline, onRefresh: onRefresh);
 
     default:
-      return navigateToMediaItemDetails(context, mi, isOffline: isOffline, onRefresh: onRefresh);
+      return navigateToMediaItemDetails(
+        context,
+        mi,
+        isOffline: isOffline,
+        onRefresh: onRefresh,
+        seedFromCard: mi.kind == MediaKind.show,
+      );
   }
 }
 
@@ -313,6 +319,7 @@ Future<MediaNavigationResult> navigateToMediaItemDetails(
   bool isOffline = false,
   void Function(MediaItem source)? onRefresh,
   MediaItem? metadataOverride,
+  bool seedFromCard = false,
 }) async {
   // Catalog stand-ins (Explore tab) must never reach MediaDetailScreen — it
   // hard-requires a server id. Guarded here (not only in navigateToMediaItem)
@@ -333,6 +340,7 @@ Future<MediaNavigationResult> navigateToMediaItemDetails(
       initialSeasonIndex: target.initialSeasonIndex,
       initialSeasonId: target.initialSeasonId,
       initialEpisodeId: target.initialEpisodeId,
+      seededFromCard: seedFromCard && detailSeedable(mi, isOffline: isOffline, metadataOverride: metadataOverride),
     ),
   );
   if (result == true && context.mounted) {
@@ -340,6 +348,14 @@ Future<MediaNavigationResult> navigateToMediaItemDetails(
   }
   return MediaNavigationResult.navigated;
 }
+
+/// Whether a detail page for [mi] can be drawn from the card itself while the
+/// full item loads (Silo Android #971, Siku's `Nav_detailSeed`): a movie or a
+/// show card, online, opened as itself. Episodes and seasons open their
+/// parent through a stub, downloads read their own cache and keep today's
+/// loading screen.
+bool detailSeedable(MediaItem mi, {bool isOffline = false, MediaItem? metadataOverride}) =>
+    !isOffline && metadataOverride == null && (mi.kind == MediaKind.movie || mi.kind == MediaKind.show);
 
 /// Opens [ActorMediaScreen] — the filmography of the person [personId] on
 /// [serverId]. [personId] is the id `MediaServerClient.fetchPersonMediaPage`

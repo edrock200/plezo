@@ -264,6 +264,15 @@ class _SeasonEpisodePager {
 @visibleForTesting
 const tvDetailRevealGateKey = ValueKey<String>('tvDetailRevealGate');
 
+/// The TV seed preview's opacity wrapper (see `_buildTvDetailSeedPreview`).
+@visibleForTesting
+const tvDetailSeedPreviewKey = ValueKey<String>('tvDetailSeedPreview');
+
+/// The "Loading..." Play button a page drawn from its card shows until the
+/// full item arrives.
+@visibleForTesting
+const mediaDetailSeedPlayKey = ValueKey<String>('mediaDetailSeedPlay');
+
 /// Geometry of the non-TV hero's chip rows. Every chip — plain text, the
 /// scores pill, the tappable rating chip — sizes its content to
 /// [chipContentHeight] so icons and text never make one chip taller than its
@@ -303,6 +312,15 @@ class MediaDetailScreen extends StatefulWidget {
   final String? initialSeasonId;
   final String? initialEpisodeId;
 
+  /// [metadata] is the card the viewer picked (a movie or a show from Home, a
+  /// library, search or a recommendation row), complete enough to draw the
+  /// page while the full item loads: title, facts, overview and artwork show
+  /// at once, Play reads "Loading..." and the actions that need the full item
+  /// wait for it (Silo Android #971). False (deep links, downloads, stub
+  /// parents built from an episode) keeps the loading screen until the item
+  /// arrives.
+  final bool seededFromCard;
+
   const MediaDetailScreen({
     super.key,
     required this.metadata,
@@ -310,6 +328,7 @@ class MediaDetailScreen extends StatefulWidget {
     this.initialSeasonIndex,
     this.initialSeasonId,
     this.initialEpisodeId,
+    this.seededFromCard = false,
   });
 
   @override
@@ -322,6 +341,7 @@ PageRoute<bool> mediaDetailRoute({
   int? initialSeasonIndex,
   String? initialSeasonId,
   String? initialEpisodeId,
+  bool seededFromCard = false,
 }) {
   final page = MediaDetailScreen(
     metadata: metadata,
@@ -329,6 +349,7 @@ PageRoute<bool> mediaDetailRoute({
     initialSeasonIndex: initialSeasonIndex,
     initialSeasonId: initialSeasonId,
     initialEpisodeId: initialEpisodeId,
+    seededFromCard: seededFromCard,
   );
   if (!PlatformDetector.isTV()) return MaterialPageRoute<bool>(builder: (_) => page);
 
@@ -375,6 +396,11 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
   MediaItem? _onDeckEpisode;
   bool _isLoadingMetadata = true;
   bool _isDeleted = false;
+
+  /// The page is drawn from the tapped card ([MediaDetailScreen.seededFromCard])
+  /// and the full item has not arrived yet. A failed read ends it too: the
+  /// page then falls back to the card's item as it always has.
+  bool get _seedPending => widget.seededFromCard && !widget.isOffline && _isLoadingMetadata && _fullMetadata == null;
   StreamSubscription<LibraryChangeEvent>? _libraryContentSubscription;
 
   bool get _canUseDetail => mounted && !_isDeleted;
@@ -402,6 +428,8 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
   final ValueNotifier<double> _scrollOffset = ValueNotifier<double>(0);
   bool _suppressBackAfterPop = false;
   bool _tvDetailRevealed = false;
+  // The seed preview (see [_buildTvDetailSeedPreview]) has faded out.
+  bool _tvSeedPreviewDone = false;
   bool _tvDetailRevealScheduled = false;
   // Whether the route's push fade has finished. Until it has, and until the
   // reveal gate opens, the hidden foreground and rail are not built: every
@@ -3605,8 +3633,9 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
     final theme = Theme.of(context);
     final sectionTitleStyle = theme.textTheme.titleLarge?.copyWith(fontWeight: .bold, fontSize: isTv ? 28 : null);
 
-    // Show loading state while fetching full metadata
-    if (_isLoadingMetadata) {
+    // Show loading state while fetching full metadata, unless the page can be
+    // drawn from the card it was opened from.
+    if (_isLoadingMetadata && !_seedPending) {
       // A bare AppBar's auto-implied back button ignores the macOS traffic
       // lights; route the leading through the shared desktop padding logic.
       final backButton = AppBarBackButton(
@@ -3749,7 +3778,7 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
                               // Seasons / Episodes (for TV shows and seasons)
                               if (isShow && !_showEpisodesDirectly) ...[
                                 // Season tabs + inline episodes
-                                if (_isLoadingSeasons)
+                                if (_isLoadingSeasons || _seedPending)
                                   _sectionLoading
                                 else if (_seasonsLoadFailed)
                                   _sectionError(t.messages.seasonsLoadFailed, () => unawaited(_loadSeasons()))
@@ -4042,6 +4071,17 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
                     : null,
                 allowNetwork: !widget.isOffline,
               ),
+              if (widget.seededFromCard && !widget.isOffline && !_tvSeedPreviewDone)
+                _buildTvDetailSeedPreview(
+                  context,
+                  metadata,
+                  hideSpoilers: hideSpoilers,
+                  scale: detailScale,
+                  left: spotlightLeft,
+                  right: size.width * 0.40,
+                  top: spotlightTop,
+                  bottom: foregroundBottom,
+                ),
               _buildTvDetailRevealGate(revealContent, handleBack),
             ],
           ),
@@ -4052,11 +4092,49 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
     return content;
   }
 
+  /// Silo Android #971 on TV: the reveal gate keeps the live hero hidden until
+  /// the page's rows have loaded, so a page opened from a card shows the
+  /// card's title, facts and overview here meanwhile, with a "Loading..." Play
+  /// that cannot be focused. It fades out as the gate fades in.
+  Widget _buildTvDetailSeedPreview(
+    BuildContext context,
+    MediaItem metadata, {
+    required bool hideSpoilers,
+    required double scale,
+    required double left,
+    required double right,
+    required double top,
+    required double bottom,
+  }) {
+    final revealed = _tvDetailRevealed;
+    return Positioned(
+      left: left,
+      right: right,
+      top: top,
+      bottom: bottom,
+      child: ExcludeFocus(
+        child: IgnorePointer(
+          child: AnimatedOpacity(
+            key: tvDetailSeedPreviewKey,
+            opacity: revealed ? 0 : 1,
+            duration: const Duration(milliseconds: 160),
+            curve: Curves.easeOutCubic,
+            onEnd: () {
+              if (_tvDetailRevealed && !_tvSeedPreviewDone) setStateIfMounted(() => _tvSeedPreviewDone = true);
+            },
+            child: _buildTvDetailForeground(context, metadata, hideSpoilers: hideSpoilers, scale: scale, preview: true),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildTvDetailForeground(
     BuildContext context,
     MediaItem metadata, {
     required bool hideSpoilers,
     required double scale,
+    bool preview = false,
   }) {
     final theme = Theme.of(context);
     final description = _tvDetailDescription(metadata, hideSpoilers: hideSpoilers);
@@ -4140,8 +4218,8 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
                       container: true,
                       button: true,
                       label: _tvDetailInformationSemanticLabel(metadata, description: description, genres: genres),
-                      hint: t.mediaMenu.viewDetails,
-                      onTap: openDetails,
+                      hint: preview ? null : t.mediaMenu.viewDetails,
+                      onTap: preview ? null : openDetails,
                       child: ExcludeSemantics(
                         // One announcement, one action: activating it opens the
                         // full-information sheet. The action buttons below
@@ -4173,8 +4251,11 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
                             // Background-only focus chrome: zero layout delta,
                             // so the hero height budget above stays exact.
                             FocusableWrapper(
-                              focusNode: _tvDetailInfoFocusNode,
-                              onSelect: openDetails,
+                              // The seed preview is a picture of this block
+                              // under an ExcludeFocus; it must not take the
+                              // live block's node.
+                              focusNode: preview ? null : _tvDetailInfoFocusNode,
+                              onSelect: preview ? null : openDetails,
                               onNavigateUp: _backButtonFocusNode.requestFocus,
                               onNavigateDown: _focusTvDetailActionRow,
                               onBack: _popMediaDetailIfBackNotSuppressed,
@@ -4185,7 +4266,7 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
                               descendantsAreFocusable: false,
                               child: GestureDetector(
                                 behavior: HitTestBehavior.opaque,
-                                onTap: openDetails,
+                                onTap: preview ? null : openDetails,
                                 child: Column(
                                   mainAxisSize: .min,
                                   crossAxisAlignment: .start,
@@ -4243,7 +4324,12 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
                       ),
                     ),
                     SizedBox(height: actionGap),
-                    SizedBox(height: actionHeight, child: _buildActionButtons(metadata)),
+                    SizedBox(
+                      height: actionHeight,
+                      child: preview
+                          ? Align(alignment: .centerLeft, child: _buildSeedLoadingPlayButton(context))
+                          : _buildActionButtons(metadata),
+                    ),
                   ],
                 ),
               ),

@@ -6,6 +6,13 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 From Silo's own apps (November 16, 2026):
 
+- **Silo row titles in your language:** the rows your Silo server names itself (Home sections such as Continue Watching and Recently Added in Movies, and the For You recommendations) now follow Plezilo's language, using Silo's own translations. They are available in Danish, Dutch, French, German, Italian, Norwegian, Polish, Portuguese, Russian, Spanish, Swedish and Turkish; other languages show Silo's English. Titles your server administrator typed stay as written.
+- **Title pages open instantly:** opening a movie or show from Home, a library, search or a recommendation row now shows its title, year, overview and picture straight away instead of a loading spinner, on every server type. Play reads "Loading…" for the moment it takes to fetch the rest, and the other buttons appear once it has. *(please test)*
+
+## silo-preview-2.42.0
+
+Released November 16, 2026. Android and Windows.
+
 - **WAV audiobooks play:** Silo audiobooks stored as WAV files, including 8-bit, 32-bit and floating-point WAV, now play instead of failing with "No validated playback route". *(please test)*
 
 ## silo-preview-2.41.0
