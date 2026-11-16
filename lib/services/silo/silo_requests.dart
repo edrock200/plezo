@@ -633,6 +633,16 @@ class SiloRequestFailure implements Exception {
   String toString() => 'SiloRequestFailure($kind, $statusCode)';
 }
 
+/// Whether [error] is the server refusing a requests call because requests
+/// are off for this profile (Silo Android #855: `capability_disabled`,
+/// `capability_not_configured`, `capability_unsupported`, `permission_denied`).
+bool siloRequestsOffRefusal(Object error) {
+  if (error is SiloRequestFailure) return error.kind == SiloRequestFailureKind.disabled;
+  if (error is! MediaServerHttpException) return false;
+  final code = siloProblemCode(error.responseData);
+  return code != null && (code.startsWith('capability_') || code == 'permission_denied');
+}
+
 /// The request calls of one Silo client (one account acting as one profile),
 /// and the feature gate its entry points read.
 class SiloRequestsApi {
@@ -666,16 +676,27 @@ class SiloRequestsApi {
   bool get resolved => _resolvedAt != null;
   DateTime? _resolvedAt;
   Future<bool>? _statusInFlight;
+  Future<bool>? _statusAgain;
 
   static const statusFreshness = Duration(seconds: 30);
 
   /// Read `GET /requests/status` (one read in flight; skipped while the last
-  /// answer is younger than [statusFreshness] unless [force]).
+  /// answer is younger than [statusFreshness] unless [force]). A forced read
+  /// asked while another is in flight runs again after it, since the one in
+  /// flight may have left before requests were turned off.
   Future<bool> refreshStatus({bool force = false}) {
     if (isOffline?.call() ?? false) return Future.value(enabled.value);
     final at = _resolvedAt;
     if (!force && at != null && DateTime.now().difference(at) < statusFreshness) return Future.value(enabled.value);
-    return _statusInFlight ??= () async {
+    final inFlight = _statusInFlight;
+    if (inFlight != null) {
+      if (!force) return inFlight;
+      return _statusAgain ??= inFlight.then((_) {
+        _statusAgain = null;
+        return refreshStatus(force: true);
+      });
+    }
+    return _statusInFlight = () async {
       try {
         final data = await _api.getJson('/api/v2/requests/status', timeout: const Duration(seconds: 8));
         final status = SiloRequestsStatus.fromJson(data);
@@ -694,9 +715,8 @@ class SiloRequestsApi {
   /// `GET /requests/search?q=&media_type=&page=`; unsupported media types are
   /// dropped.
   Future<List<SiloRequestMediaResult>> search(String query, {String mediaType = 'all', int page = 1}) async {
-    final data = await _api.getJson(
-      '/api/v2/requests/search',
-      query: {'q': query, 'media_type': mediaType, 'page': page},
+    final data = await _read(
+      () => _api.getJson('/api/v2/requests/search', query: {'q': query, 'media_type': mediaType, 'page': page}),
     );
     final results = data['results'] is List ? data['results'] as List : const [];
     return [
@@ -708,7 +728,7 @@ class SiloRequestsApi {
 
   /// `GET /requests/detail/{media_type}/{tmdb_id}`.
   Future<SiloRequestMediaDetail> detail(String mediaType, int tmdbId) async {
-    final data = await _api.getJson('/api/v2/requests/detail/${Uri.encodeComponent(mediaType)}/$tmdbId');
+    final data = await _read(() => _api.getJson('/api/v2/requests/detail/${Uri.encodeComponent(mediaType)}/$tmdbId'));
     final detail = SiloRequestMediaDetail.fromJson(data);
     if (detail == null) throw const FormatException('Request detail without identity');
     return detail;
@@ -744,6 +764,21 @@ class SiloRequestsApi {
     return record;
   }
 
+  /// A read whose refusal as requests-off re-reads the status (Silo Android
+  /// #855), so open request screens close while the app stays in front.
+  Future<T> _read<T>(Future<T> Function() call) async {
+    try {
+      return await call();
+    } catch (e) {
+      _recheckStatusAfter(e);
+      rethrow;
+    }
+  }
+
+  void _recheckStatusAfter(Object error) {
+    if (siloRequestsOffRefusal(error)) unawaited(refreshStatus(force: true));
+  }
+
   /// One mutation, never resent; a non-2xx answer or a transport failure
   /// becomes a [SiloRequestFailure].
   Future<MediaServerResponse> _send(String method, String path, Map<String, dynamic>? body) async {
@@ -751,17 +786,18 @@ class SiloRequestsApi {
     try {
       response = await _api.request(method, path, body: body);
     } catch (e) {
+      _recheckStatusAfter(e);
       throw SiloRequestFailure.classify(e);
     }
     if (response.statusCode >= 400) {
-      throw SiloRequestFailure.classify(
-        MediaServerHttpException(
-          type: MediaServerHttpErrorType.unknown,
-          statusCode: response.statusCode,
-          responseData: response.data,
-          requestUri: response.requestUri,
-        ),
+      final error = MediaServerHttpException(
+        type: MediaServerHttpErrorType.unknown,
+        statusCode: response.statusCode,
+        responseData: response.data,
+        requestUri: response.requestUri,
       );
+      _recheckStatusAfter(error);
+      throw SiloRequestFailure.classify(error);
     }
     return response;
   }
@@ -774,7 +810,7 @@ class SiloRequestsApi {
     final seen = <String>{};
     String? cursor;
     for (var page = 0; page < maxPages; page++) {
-      final data = await _api.getJson('/api/v2/requests/mine', query: {'limit': 50, 'cursor': ?cursor});
+      final data = await _read(() => _api.getJson('/api/v2/requests/mine', query: {'limit': 50, 'cursor': ?cursor}));
       final items = data['items'] is List ? data['items'] as List : const [];
       records.addAll([for (final raw in items) ?SiloMediaRequest.fromJson(raw)]);
       final info = _map(data['page']);

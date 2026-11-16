@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../focus/focusable_wrapper.dart';
@@ -315,4 +317,70 @@ Future<void> openSiloRequestTitle(
       ),
     ),
   );
+}
+
+/// Closes a request page once its server answers that requests are off
+/// (Silo Android #855), whether that answer comes from a status read on
+/// return to the foreground or from a request the server refused as
+/// requests-off. A failed status read keeps the page (the gate keeps its last
+/// answer), and only a change from on to off closes it. Every request page of
+/// that server closes at once, with anything stacked over them (a dialog).
+mixin SiloRequestsAvailabilityGuard<T extends StatefulWidget> on State<T>, WidgetsBindingObserver {
+  SiloRequestsApi get guardedRequests;
+
+  /// Open request pages and the server gate each one follows.
+  static final Map<Route<dynamic>, SiloRequestsApi> _openPages = {};
+
+  Route<dynamic>? _route;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    guardedRequests.enabled.addListener(_onAvailabilityChanged);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route == _route) return;
+    if (_route != null) _openPages.remove(_route);
+    _route = route;
+    if (route != null) _openPages[route] = guardedRequests;
+  }
+
+  @override
+  void dispose() {
+    if (_route != null) _openPages.remove(_route);
+    guardedRequests.enabled.removeListener(_onAvailabilityChanged);
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) unawaited(guardedRequests.refreshStatus(force: true));
+  }
+
+  void _onAvailabilityChanged() {
+    final route = _route;
+    // The first page to hear it closes them all; the others find theirs gone.
+    if (guardedRequests.enabled.value || !mounted || route == null || _openPages[route] != guardedRequests) return;
+    final navigator = route.navigator;
+    if (navigator == null || !route.isActive) return;
+    final closing = {
+      for (final entry in _openPages.entries)
+        if (identical(entry.value, guardedRequests) && entry.key.navigator == navigator && entry.key.isActive)
+          entry.key,
+    };
+    _openPages.removeWhere((page, _) => closing.contains(page));
+    appLogger.i('Silo requests: turned off on the server; closing ${closing.length} request page(s)');
+    final remaining = {...closing};
+    navigator.popUntil((top) {
+      if (remaining.isEmpty) return true;
+      remaining.remove(top);
+      return false;
+    });
+  }
 }

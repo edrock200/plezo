@@ -34,7 +34,10 @@ class SiloRequestsScreen extends StatefulWidget {
 }
 
 class _SiloRequestsScreenState extends State<SiloRequestsScreen>
-    with DebouncedMediaSearch<SiloRequestsScreen, SiloRequestMediaResult> {
+    with
+        DebouncedMediaSearch<SiloRequestsScreen, SiloRequestMediaResult>,
+        WidgetsBindingObserver,
+        SiloRequestsAvailabilityGuard {
   List<SiloMediaRequest>? _mine;
   bool _mineLoading = true;
   bool _mineFailed = false;
@@ -51,6 +54,9 @@ class _SiloRequestsScreenState extends State<SiloRequestsScreen>
   String get searchDebugLabel => 'SiloRequestsSearch';
 
   SiloRequestsApi get _requests => widget.client.requests;
+
+  @override
+  SiloRequestsApi get guardedRequests => _requests;
 
   @override
   Future<List<SiloRequestMediaResult>> performSearchQuery(String query) => _requests.search(query);
@@ -184,7 +190,6 @@ class _SiloRequestsScreenState extends State<SiloRequestsScreen>
             fallback: t.siloRequests.removeFailed,
           ),
         );
-        if (failure.kind == SiloRequestFailureKind.disabled) unawaited(_requests.refreshStatus(force: true));
       }
     } finally {
       if (mounted) setState(() => _removingId = null);

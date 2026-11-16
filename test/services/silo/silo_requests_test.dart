@@ -158,6 +158,61 @@ void main() {
       expect(requests, hasLength(1));
     });
 
+    // Silo Android #855: a requests call refused as requests-off re-reads the
+    // status, so the open screens close while the app stays in front.
+    for (final code in ['capability_disabled', 'capability_not_configured', 'permission_denied']) {
+      test('a read refused with $code re-reads the status', () async {
+        var on = true;
+        final c = client((request) {
+          if (request.url.path == '/api/v2/requests/status') {
+            return _json({'requests_enabled': on, 'allowed': on, 'state': on ? 'available' : 'disabled'});
+          }
+          return _problem(403, code);
+        });
+        await c.requests.refreshStatus();
+        expect(c.requests.enabled.value, isTrue);
+        on = false;
+        await expectLater(c.requests.search('heat'), throwsA(anything));
+        await Future<void>.delayed(Duration.zero);
+        await pumpEventQueue();
+        expect(requests.where((r) => r.url.path == '/api/v2/requests/status'), hasLength(2));
+        expect(c.requests.enabled.value, isFalse);
+      });
+    }
+
+    test('another refusal does not re-read the status', () async {
+      final c = client((request) {
+        if (request.url.path == '/api/v2/requests/status') {
+          return _json({'requests_enabled': true, 'allowed': true, 'state': 'available'});
+        }
+        return _problem(404, 'not_found');
+      });
+      await c.requests.refreshStatus();
+      await expectLater(c.requests.detail('movie', 1), throwsA(anything));
+      await pumpEventQueue();
+      expect(requests.where((r) => r.url.path == '/api/v2/requests/status'), hasLength(1));
+    });
+
+    test('a forced read asked during another read runs again after it', () async {
+      final first = Completer<void>();
+      var on = true;
+      var reads = 0;
+      final c = client((_) async {
+        reads++;
+        if (reads == 1) await first.future;
+        return _json({'requests_enabled': on, 'allowed': on, 'state': on ? 'available' : 'disabled'});
+      });
+      final a = c.requests.refreshStatus();
+      on = false;
+      final b = c.requests.refreshStatus(force: true);
+      final b2 = c.requests.refreshStatus(force: true);
+      first.complete();
+      expect(await a, isFalse, reason: 'the first read answered after the change in this fake');
+      expect(await b, isFalse);
+      expect(await b2, isFalse);
+      expect(reads, 2, reason: 'one read again for both forced asks');
+    });
+
     test('each client has its own gate', () {
       final a = client((_) => _json({}));
       final b = client((_) => _json({}));

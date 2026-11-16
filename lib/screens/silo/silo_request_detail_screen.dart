@@ -42,7 +42,8 @@ class SiloRequestDetailScreen extends StatefulWidget {
   State<SiloRequestDetailScreen> createState() => _SiloRequestDetailScreenState();
 }
 
-class _SiloRequestDetailScreenState extends State<SiloRequestDetailScreen> {
+class _SiloRequestDetailScreenState extends State<SiloRequestDetailScreen>
+    with WidgetsBindingObserver, SiloRequestsAvailabilityGuard {
   SiloRequestMediaDetail? _detail;
   SiloMediaRequest? _ownRecord;
   bool _loading = true;
@@ -58,6 +59,9 @@ class _SiloRequestDetailScreenState extends State<SiloRequestDetailScreen> {
   final _secondaryFocus = FocusNode(debugLabel: 'SiloRequestSecondary');
 
   SiloRequestsApi get _requests => widget.client.requests;
+
+  @override
+  SiloRequestsApi get guardedRequests => _requests;
 
   StreamSubscription<SiloMediaRequest>? _removals;
 
@@ -223,9 +227,9 @@ class _SiloRequestDetailScreenState extends State<SiloRequestDetailScreen> {
       _message = siloRequestFailureText(failure, unconfirmed: unconfirmed, fallback: fallback);
       if (failure.kind == SiloRequestFailureKind.uncertain) _held = true;
     });
-    if (failure.kind == SiloRequestFailureKind.disabled) {
-      unawaited(_requests.refreshStatus(force: true));
-    } else if (failure.kind == SiloRequestFailureKind.refused && failure.statusCode == 409) {
+    // A requests-off refusal re-reads the status in SiloRequestsApi, which
+    // closes this page once the server answers that requests are off.
+    if (failure.kind == SiloRequestFailureKind.refused && failure.statusCode == 409) {
       // A conflict: the title was requested or arrived meanwhile.
       unawaited(_load());
     }

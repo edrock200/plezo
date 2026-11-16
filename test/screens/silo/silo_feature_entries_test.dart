@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -63,6 +64,12 @@ class _FakeSilo {
   /// nothing, "Alien" delivered 1080p before its 4K copy failed.
   bool withFailed;
 
+  /// Status reads answer 500 (a failed read, not an answer).
+  bool statusFails = false;
+
+  /// Request writes answer 403 `capability_disabled`.
+  bool refuseRequestsOff = false;
+
   /// The answer to `DELETE /requests/{id}`: 204, or a problem's status.
   int deleteStatus = 204;
   final paths = <String>[];
@@ -98,6 +105,10 @@ class _FakeSilo {
     final path = Uri.decodeComponent(request.url.path);
     paths.add('${request.method} $path');
     if (request.method == 'POST') posts.add(path);
+    if (refuseRequestsOff && request.method == 'POST') {
+      return _json({'type': 'capability_disabled', 'title': 'Requests are off', 'status': 403}, 403);
+    }
+    if (statusFails && path == '/api/v2/requests/status') return http.Response('oops', 500);
     if (request.method == 'DELETE') {
       deletes.add(path);
       if (deleteStatus != 204) {
@@ -643,5 +654,77 @@ void main() {
     expect(find.text(t.siloRequests.detailPending), findsOneWidget);
     expect(find.text(t.siloRequests.request), findsNothing);
     expect(find.text(t.siloRequests.cancelRequest), findsOneWidget);
+  });
+
+  // Silo Android #855: request screens close whenever the server turns
+  // requests off, on return to the foreground or after a refused call.
+  group('requests turned off on the server', () {
+    Future<void> settle(WidgetTester tester) async {
+      await tester.pump();
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+      await tester.pumpAndSettle();
+    }
+
+    /// A home page that opened Requests, and the title page opened over it.
+    Future<SiloClient> pumpStack(WidgetTester tester, _FakeSilo silo) async {
+      final client = silo.client('srv-1');
+      await tester.runAsync(() => client.requests.refreshStatus());
+      final servers = testMultiServer(clients: [client]).provider;
+      await tester.pumpWidget(_app(servers, const Scaffold(body: Text('home'))));
+      final navigator = tester.state<NavigatorState>(find.byType(Navigator));
+      unawaited(navigator.push(MaterialPageRoute<void>(builder: (_) => SiloRequestsScreen(client: client))));
+      await settle(tester);
+      unawaited(
+        navigator.push(
+          MaterialPageRoute<void>(
+            builder: (_) =>
+                SiloRequestDetailScreen(client: client, mediaType: 'movie', tmdbId: 1, initialTitle: 'Starfall'),
+          ),
+        ),
+      );
+      await settle(tester);
+      expect(find.byType(SiloRequestDetailScreen), findsOneWidget);
+      return client;
+    }
+
+    testWidgets('returning to the app closes every request page once the server says off', (tester) async {
+      final silo = _FakeSilo();
+      await pumpStack(tester, silo);
+
+      silo.requestsEnabled = false;
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await settle(tester);
+
+      expect(find.byType(SiloRequestDetailScreen), findsNothing);
+      expect(find.byType(SiloRequestsScreen), findsNothing);
+      expect(find.text('home'), findsOneWidget);
+    });
+
+    testWidgets('a failed status read keeps the pages open', (tester) async {
+      final silo = _FakeSilo();
+      final client = await pumpStack(tester, silo);
+
+      silo.statusFails = true;
+      await tester.runAsync(() => client.requests.refreshStatus(force: true));
+      await settle(tester);
+
+      expect(find.byType(SiloRequestDetailScreen), findsOneWidget);
+    });
+
+    testWidgets('a request refused as requests-off re-reads the status and closes the pages', (tester) async {
+      final silo = _FakeSilo();
+      await pumpStack(tester, silo);
+
+      silo.requestsEnabled = false;
+      silo.refuseRequestsOff = true;
+      await tester.tap(find.text(t.siloRequests.request));
+      await settle(tester);
+
+      expect(silo.paths.where((p) => p == 'GET /api/v2/requests/status').length, greaterThanOrEqualTo(2));
+      expect(find.byType(SiloRequestDetailScreen), findsNothing);
+      expect(find.byType(SiloRequestsScreen), findsNothing);
+      expect(find.text('home'), findsOneWidget);
+    });
   });
 }
