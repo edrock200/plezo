@@ -1751,7 +1751,9 @@ class SiloClient
         MediaHub(
           id: row.id,
           identifier: row.id,
-          title: row.title.isEmpty ? t.siloSectionTitles.recommendedForYou : row.title,
+          title: row.title.isEmpty
+              ? SiloSectionTitles.localize(titleKey: 'home.section.recommendedForYou', fallback: 'Recommended for You')
+              : row.title,
           type: _hubType(items),
           items: items,
           size: items.length,

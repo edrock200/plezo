@@ -17,6 +17,7 @@ import 'discord_rpc_service.dart';
 import 'companion_remote/companion_remote_host_controller.dart';
 import 'music/music_playback_service.dart';
 import 'settings_service.dart';
+import 'silo/silo_catalog_strings.dart';
 import 'trackers/anilist/anilist_tracker.dart';
 import 'trackers/mal/mal_tracker.dart';
 import 'trackers/mdblist/mdblist_tracker.dart';
@@ -135,6 +136,7 @@ class SettingsMutationService {
   ) async {
     final locale = settings.read(SettingsService.appLocale);
     await LocaleSettings.setLocale(locale);
+    await SiloCatalogStrings.load(locale);
     checkCurrent?.call();
     if (context.mounted) {
       context.read<MultiServerProvider?>()?.serverManager.updatePlexLanguage(locale.plexLanguageCode);

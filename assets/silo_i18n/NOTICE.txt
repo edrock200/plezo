@@ -1,0 +1,28 @@
+SILO TRANSLATIONS — NOTICE
+==========================
+
+The translated titles of the rows a Silo server words itself (Home sections
+and recommendation rows, catalog keys "home.section.*") in this folder are
+taken from Silo's translation catalogs:
+
+  Silo-Server/silo-roku at e09a5e0 (catalog release 2026.11.15-0ba1666)
+  locale/<language>/strings.json
+
+Languages: English, Danish, German, Spanish, French, Italian, Norwegian
+Bokmål, Dutch, Polish, Brazilian Portuguese, Russian, Swedish, Turkish.
+
+Copyright (c) their authors (Silo Media L.L.C. and contributors).
+
+These strings are licensed under the GNU Affero General Public License,
+version 3 or (at your option) any later version; the full text is in
+LICENSE.txt beside this file and at https://www.gnu.org/licenses/agpl-3.0.html.
+Plezilo itself is licensed under the GNU General Public License, version 3,
+whose section 13 permits combining it with work under the AGPL.
+
+Only the "home.section.*" entries are included, unmodified apart from being
+copied into one JSON file per language. The source of these files is the
+catalogs named above; scripts/silo_catalog_strings.py in Plezilo's source
+regenerates them.
+
+"Silo" is a trademark of Silo Media L.L.C. Plezilo is not made or endorsed by
+Silo Media L.L.C.

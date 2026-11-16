@@ -83,6 +83,7 @@ import 'services/connectivity_probe.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'services/jellyfin_api_cache.dart';
 import 'services/silo/silo_api_cache.dart';
+import 'services/silo/silo_catalog_strings.dart';
 import 'services/silo/silo_managed_downloads.dart';
 import 'services/plex_api_cache.dart';
 import 'services/plezy_server.dart';
@@ -960,6 +961,7 @@ Future<_StartupDependencies> _initializeStartup(SettingsService settings) async 
     await _optionalGatePhase(StartupPhase.locale, () async {
       final savedLocale = settings.read(SettingsService.appLocale);
       await LocaleSettings.setLocale(savedLocale);
+      await SiloCatalogStrings.load(savedLocale);
     });
     markStartupPhase('locale');
 
@@ -1214,6 +1216,7 @@ FutureOr<SentryEvent?> _beforeSend(SentryEvent event, Hint _) {
 void _registerAppLicenses() {
   _registerShaderLicenses();
   _registerSiloBrandNotice();
+  _registerSiloTranslationsNotice();
   _registerLucideLicense();
   // iOS covers iPhone, iPad, and Apple TV; mpv-build links SpatialAudioBridge
   // into libmpv there and not on macOS.
@@ -1235,6 +1238,16 @@ void _registerSiloBrandNotice() {
   LicenseRegistry.addLicense(() async* {
     final notice = await rootBundle.loadString('assets/brand/silo/NOTICE.txt');
     yield LicenseEntryWithLineBreaks(const ['Silo icon'], notice);
+  });
+}
+
+/// Silo's translation catalogs, the source of the bundled row-title
+/// translations (`assets/silo_i18n/`, AGPL-3.0; scripts/silo_catalog_strings.py).
+void _registerSiloTranslationsNotice() {
+  LicenseRegistry.addLicense(() async* {
+    final notice = await rootBundle.loadString('assets/silo_i18n/NOTICE.txt');
+    final license = await rootBundle.loadString('assets/silo_i18n/LICENSE.txt');
+    yield LicenseEntryWithLineBreaks(const ['Silo translations'], '$notice\n$license');
   });
 }
 

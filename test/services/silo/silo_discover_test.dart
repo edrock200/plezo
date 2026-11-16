@@ -8,6 +8,7 @@ import 'package:http/testing.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:plezy/connection/connection.dart';
 import 'package:plezy/database/app_database.dart';
+import 'package:plezy/i18n/strings.g.dart';
 import 'package:plezy/media/media_hub.dart';
 import 'package:plezy/media/media_library.dart';
 import 'package:plezy/media/media_backend.dart';
@@ -23,8 +24,8 @@ import 'package:plezy/services/settings_service.dart';
 import 'package:plezy/services/silo/silo_api.dart';
 import 'package:plezy/services/silo/silo_api_cache.dart';
 import 'package:plezy/services/silo/silo_client.dart';
+import 'package:plezy/services/silo/silo_catalog_strings.dart';
 import 'package:plezy/services/silo/silo_discover.dart';
-import 'package:plezy/services/silo/silo_section_titles.dart';
 import 'package:plezy/utils/hub_icons.dart';
 import 'package:plezy/utils/media_hub_ordering.dart';
 import 'package:plezy/utils/recommendation_hubs.dart';
@@ -199,6 +200,8 @@ Map<String, dynamic> _homeSections() => {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  // Row titles with a title_key come from Silo's bundled English catalog.
+  setUpAll(() => SiloCatalogStrings.load(AppLocale.en));
 
   late List<http.Request> requests;
   late AppDatabase db;
@@ -232,37 +235,6 @@ void main() {
         // Capabilities, card overlay settings: a server without them.
         return http.Response('', 404);
       }, connection: connection);
-
-  group('section titles', () {
-    test('a known key is shown in the app language with its arguments', () {
-      expect(
-        SiloSectionTitles.localize(
-          titleKey: 'home.section.becauseYouWatchedTitle',
-          titleArgs: {'title': 'Heat'},
-          fallback: 'x',
-        ),
-        'Because You Watched Heat',
-      );
-      expect(
-        SiloSectionTitles.localize(titleKey: 'home.section.topGenre', titleArgs: {'genre': 'Drama'}, fallback: 'x'),
-        'Top Drama',
-      );
-      expect(SiloSectionTitles.localize(titleKey: 'home.section.forYou', fallback: 'x'), 'For You');
-    });
-
-    test('an unknown key, a missing argument or no key shows the server title', () {
-      expect(
-        SiloSectionTitles.localize(titleKey: 'home.section.seasonal.winter.cozy', fallback: 'Cozy Winter'),
-        'Cozy Winter',
-      );
-      expect(
-        SiloSectionTitles.localize(titleKey: 'home.section.becauseYouWatchedTitle', fallback: 'Because you watched X'),
-        'Because you watched X',
-      );
-      expect(SiloSectionTitles.localize(titleKey: 'error.notFound', fallback: 'Mine'), 'Mine');
-      expect(SiloSectionTitles.of({'title': 'Picked by Laura'}), 'Picked by Laura');
-    });
-  });
 
   group('Discover rows', () {
     test('rows keep server order with For You first; empty rows and blank cards are dropped', () {

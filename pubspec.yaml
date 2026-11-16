@@ -168,6 +168,7 @@ flutter:
     - assets/emby_icon.svg
     - assets/brand/silo/silo-project-icon.png
     - assets/brand/silo/NOTICE.txt
+    - assets/silo_i18n/
     - assets/trakt_circlemark.svg
     - assets/mal_mark.svg
     - assets/anilist_mark.svg
