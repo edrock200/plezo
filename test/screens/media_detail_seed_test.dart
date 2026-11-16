@@ -18,6 +18,7 @@ import 'package:plezy/screens/media_detail_screen.dart';
 import 'package:plezy/services/download_manager_service.dart';
 import 'package:plezy/services/download_storage_service.dart';
 import 'package:plezy/services/jellyfin_api_cache.dart';
+import 'package:plezy/services/multi_server_manager.dart';
 import 'package:plezy/services/offline_watch_sync_service.dart';
 import 'package:plezy/services/plex_api_cache.dart';
 import 'package:plezy/services/settings_service.dart';
@@ -102,7 +103,9 @@ void main() {
     serverName: 'Home Silo',
   );
 
-  Future<void> pumpDetail(WidgetTester tester, {required bool seeded, bool tv = false}) async {
+  late MultiServerManager manager;
+
+  Future<void> pumpDetail(WidgetTester tester, {required bool seeded, bool tv = false, bool withServer = true}) async {
     await SettingsService.getInstance();
     tester.view.physicalSize = tv ? const Size(1920, 1080) : const Size(1100, 2400);
     tester.view.devicePixelRatio = 1;
@@ -117,7 +120,8 @@ void main() {
     downloadManager.recoveryFuture = Future<void>.value();
     final downloadProvider = DownloadProvider.forTesting(downloadManager: downloadManager, database: db);
     await downloadProvider.ensureInitialized();
-    final multi = testMultiServer(clients: [server()]);
+    final multi = testMultiServer(clients: [if (withServer) server()]);
+    manager = multi.manager;
     final store = WatchStateStore();
     final offlineWatch = OfflineWatchSyncService(database: db, serverManager: multi.manager);
     addTearDown(() async {
@@ -243,6 +247,40 @@ void main() {
       expect(find.byKey(mediaDetailSeedPlayKey), findsNothing);
       expect(find.text('The full overview.'), findsOneWidget);
       expect(watchedButton(), findsOneWidget);
+    });
+  });
+
+  testWidgets('with its server gone a seeded page shows the error; Retry finds the server again', (tester) async {
+    await tester.runAsync(() async {
+      await pumpDetail(tester, seeded: true, withServer: false);
+
+      expect(find.byKey(mediaDetailSeedErrorKey), findsOneWidget);
+      expect(find.text('The card overview.'), findsNothing, reason: "the card's copy is cleared");
+      expect(retryHasFocus(), isTrue);
+
+      // The server reconnects; Retry looks the client up again.
+      manager.debugRegisterClientForTesting(server(), online: true);
+      await tester.tap(retryButton());
+      await settle(tester);
+      expect(find.byKey(mediaDetailSeedPlayKey), findsOneWidget);
+
+      detailAnswer.complete(
+        _json({'content_id': 'movie:m1', 'type': 'movie', 'title': 'Heat', 'overview': 'The full overview.'}),
+      );
+      await settle(tester);
+
+      expect(find.byKey(mediaDetailSeedErrorKey), findsNothing);
+      expect(find.text('The full overview.'), findsOneWidget);
+      expect(watchedButton(), findsOneWidget);
+    });
+  });
+
+  testWidgets('without a seed and with its server gone the page still shows the given item', (tester) async {
+    await tester.runAsync(() async {
+      await pumpDetail(tester, seeded: false, withServer: false);
+
+      expect(find.byKey(mediaDetailSeedErrorKey), findsNothing);
+      expect(find.text('The card overview.'), findsOneWidget);
     });
   });
 

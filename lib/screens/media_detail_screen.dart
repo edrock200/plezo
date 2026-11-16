@@ -1901,6 +1901,12 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
       // populates resume separately if needed.
       final client = getServerBoundMediaClient(context);
       if (client == null) {
+        // A page drawn from its card shows the error page instead; Retry
+        // looks the client up again (the server may have reconnected).
+        if (widget.seededFromCard) {
+          _showSeedFailure(noServer: true);
+          return;
+        }
         // Truly orphaned item (server gone) — fall back to widget metadata
         // and let downstream loaders no-op gracefully.
         setState(() {
@@ -2010,8 +2016,8 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
     }
   }
 
-  void _showSeedFailure() {
-    appLogger.i("Media detail: detail read failed; the card's copy is cleared");
+  void _showSeedFailure({bool noServer = false}) {
+    appLogger.i("Media detail: detail read failed${noServer ? ' (no server)' : ''}; the card's copy is cleared");
     setState(() {
       _seedFailed = true;
       _isLoadingMetadata = false;

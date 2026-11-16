@@ -4,6 +4,12 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **A title page whose server is offline says so:** opening a movie or show from a card while its server is not connected now shows "Couldn't load this title" with Retry, which works once the server is back.
+
+## silo-preview-2.44.0
+
+Released November 16, 2026. Android and Windows.
+
 - **A title page that cannot load says so:** if a movie or show opened from a card cannot be loaded, the page now shows "Couldn't load this title" with a Retry button instead of a half-filled page.
 
 ## silo-preview-2.43.0
