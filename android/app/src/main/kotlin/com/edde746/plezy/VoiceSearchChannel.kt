@@ -33,8 +33,10 @@ import io.flutter.plugin.common.MethodChannel
  * answering {status: "ok", text} with the recogniser's top result,
  * {status: "cancelled"} or {status: "unavailable"}.
  *
- * Android 11 Google TV (Silo Android #860): the TV search app's recognition
- * activity fails its own permission check there, so on that release with that
+ * Google TV (Silo Android #860, #945): the TV search app's recognition activity
+ * cannot hand a result back. On Android 11 it fails its own permission check;
+ * on later releases (a Google TV Streamer on Android 14) it stays open after
+ * its final result without returning it. So on Android 11 and later with that
  * recogniser Plezilo calls the recognition service itself (SpeechRecognizer),
  * asks for RECORD_AUDIO first, and shows a small listening dialog.
  */
@@ -50,7 +52,7 @@ internal class VoiceSearchChannel(private val activity: Activity) {
 
   private var pendingResult: MethodChannel.Result? = null
 
-  // Android 11 Google TV path: the service recogniser, its dialog and the
+  // Google TV path: the service recogniser, its dialog and the
   // prompt waiting for the microphone permission answer.
   private var recognizer: SpeechRecognizer? = null
   private var listeningDialog: AlertDialog? = null
@@ -134,9 +136,9 @@ internal class VoiceSearchChannel(private val activity: Activity) {
     pendingResult = null
   }
 
-  /** Android 11 with the Google TV search app as the recogniser (Silo Android #860). */
+  /** Android 11 or later with the Google TV search app as the recogniser (Silo Android #860, #945). */
   private fun usesServiceRecognizer(): Boolean {
-    if (Build.VERSION.SDK_INT != Build.VERSION_CODES.R) return false
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return false
     val pkg = preferredRecognizerPackage(activity)
       ?: Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).resolveActivity(activity.packageManager)?.packageName
     return pkg == GOOGLE_TV_RECOGNIZER && SpeechRecognizer.isRecognitionAvailable(activity)
@@ -255,7 +257,8 @@ internal class VoiceSearchChannel(private val activity: Activity) {
       }
     })
     dialog.show()
-    // Android 11 can drop binding errors before the listener is installed.
+    // A binding error can be dropped before the listener is installed (seen
+    // on Android 11), so bound the wait for the recogniser to start.
     val timeout = Runnable {
       if (recognizer === speech) {
         finish(mapOf("status" to "unavailable"))
