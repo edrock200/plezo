@@ -104,6 +104,7 @@ class Translations with BaseTranslations<AppLocale, Translations> {
 	late final Translations$siloAudio$en siloAudio = Translations$siloAudio$en.internal(_root);
 	late final Translations$reviewFixes$en reviewFixes = Translations$reviewFixes$en.internal(_root);
 	late final Translations$siloForYou$en siloForYou = Translations$siloForYou$en.internal(_root);
+	late final Translations$siloMemberships$en siloMemberships = Translations$siloMemberships$en.internal(_root);
 }
 
 // Path: app
@@ -7251,6 +7252,42 @@ class Translations$siloForYou$en {
 	String get emptyHint => 'Titles you save on this Silo profile show up here.';
 }
 
+// Path: siloMemberships
+class Translations$siloMemberships$en {
+	Translations$siloMemberships$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Add to Favorites'
+	String get addToFavorites => 'Add to Favorites';
+
+	/// en: 'Remove from Favorites'
+	String get removeFromFavorites => 'Remove from Favorites';
+
+	/// en: 'Added to Favorites'
+	String get addedToFavorites => 'Added to Favorites';
+
+	/// en: 'Removed from Favorites'
+	String get removedFromFavorites => 'Removed from Favorites';
+
+	/// en: 'Couldn't add to Watchlist. ${reason}'
+	String addToWatchlistFailed({required Object reason}) => 'Couldn\'t add to Watchlist. ${reason}';
+
+	/// en: 'Couldn't remove from Watchlist. ${reason}'
+	String removeFromWatchlistFailed({required Object reason}) => 'Couldn\'t remove from Watchlist. ${reason}';
+
+	/// en: 'Couldn't add to Favorites. ${reason}'
+	String addToFavoritesFailed({required Object reason}) => 'Couldn\'t add to Favorites. ${reason}';
+
+	/// en: 'Couldn't remove from Favorites. ${reason}'
+	String removeFromFavoritesFailed({required Object reason}) => 'Couldn\'t remove from Favorites. ${reason}';
+
+	/// en: 'Try again.'
+	String get tryAgain => 'Try again.';
+}
+
 // Path: appIcon.names
 class Translations$appIcon$names$en {
 	Translations$appIcon$names$en.internal(this._root);
@@ -12104,6 +12141,15 @@ extension on Translations {
 			'siloForYou.watchlistEmptyMovies' => 'No movies on your watchlist',
 			'siloForYou.watchlistEmptyShows' => 'No shows on your watchlist',
 			'siloForYou.emptyHint' => 'Titles you save on this Silo profile show up here.',
+			'siloMemberships.addToFavorites' => 'Add to Favorites',
+			'siloMemberships.removeFromFavorites' => 'Remove from Favorites',
+			'siloMemberships.addedToFavorites' => 'Added to Favorites',
+			'siloMemberships.removedFromFavorites' => 'Removed from Favorites',
+			'siloMemberships.addToWatchlistFailed' => ({required Object reason}) => 'Couldn\'t add to Watchlist. ${reason}',
+			'siloMemberships.removeFromWatchlistFailed' => ({required Object reason}) => 'Couldn\'t remove from Watchlist. ${reason}',
+			'siloMemberships.addToFavoritesFailed' => ({required Object reason}) => 'Couldn\'t add to Favorites. ${reason}',
+			'siloMemberships.removeFromFavoritesFailed' => ({required Object reason}) => 'Couldn\'t remove from Favorites. ${reason}',
+			'siloMemberships.tryAgain' => 'Try again.',
 			_ => null,
 		};
 	}

@@ -10,6 +10,7 @@ import '../media/media_server_client.dart';
 import '../mixins/disposable_change_notifier_mixin.dart';
 import '../mixins/event_aware.dart';
 import '../services/settings_service.dart';
+import '../services/silo/silo_memberships.dart';
 import '../services/data_aggregation_service.dart';
 import '../services/system_shelf_service.dart';
 import '../utils/app_logger.dart';
@@ -141,6 +142,18 @@ class DiscoverProvider extends ChangeNotifier with DisposableChangeNotifierMixin
     );
     _libraryEventSubscription = LibraryContentNotifier().stream.listen(_onLibraryContentChanged);
     _shelfPublicationSubscription = SystemShelfService().publicationResumed.listen(_onShelfPublicationResumed);
+    _siloMembershipSubscription = SiloMembershipStore.changes.listen(_onSiloMembershipChanged);
+  }
+
+  StreamSubscription<SiloMembershipChange>? _siloMembershipSubscription;
+
+  /// A title went on or off a Silo Watchlist or Favorites list: a Home row
+  /// that shows that list (`section_type` watchlist / favorites) is read
+  /// again so the title appears or goes.
+  void _onSiloMembershipChanged(SiloMembershipChange change) {
+    if (isDisposed) return;
+    final shown = _hubs.any((hub) => hub.serverId == change.serverId && hub.identifier == change.kind.sectionType);
+    if (shown) unawaited(load());
   }
 
   final MultiServerProvider _multiServer;
@@ -1382,6 +1395,8 @@ class DiscoverProvider extends ChangeNotifier with DisposableChangeNotifierMixin
     _libraryEventSubscription = null;
     _shelfPublicationSubscription?.cancel();
     _shelfPublicationSubscription = null;
+    _siloMembershipSubscription?.cancel();
+    _siloMembershipSubscription = null;
     _libraryEventPacer.dispose();
     _loadCoordinator.dispose();
     _pendingSystemShelfItems = null;

@@ -29,7 +29,9 @@ import '../utils/download_utils.dart';
 import '../utils/focus_utils.dart';
 import '../utils/global_key_utils.dart';
 import '../providers/download_provider.dart';
+import '../services/silo/silo_client.dart';
 import '../services/silo/silo_mappers.dart';
+import '../services/silo/silo_memberships.dart';
 import '../providers/multi_server_provider.dart';
 import '../providers/offline_mode_provider.dart';
 import '../providers/catalog_sources_provider.dart';
@@ -59,6 +61,7 @@ import '../widgets/deep_link_dialog.dart';
 import '../widgets/tag_edit_dialog.dart';
 import '../widgets/file_info_bottom_sheet.dart';
 import '../widgets/overlay_sheet.dart';
+import 'silo_membership_actions.dart';
 import 'watchlist_source_chooser.dart';
 import '../widgets/rating_bottom_sheet.dart';
 import '../i18n/strings.g.dart';
@@ -519,7 +522,10 @@ class MediaContextMenuState extends State<MediaContextMenu> {
     final catalogSources = Provider.of<CatalogSourcesProvider?>(context, listen: false);
     var showWatchlistEntry = false;
     var watchlistRemoveOffered = false;
+    // A Silo card offers Silo's own Watchlist instead (below), so the
+    // catalog-source entry would read as a duplicate "Add to Watchlist".
     if (mediaItem != null &&
+        mediaItem.backend != MediaBackend.silo &&
         (mediaKind == MediaKind.movie || mediaKind == MediaKind.show) &&
         catalogSources != null &&
         catalogSources.watchlistCapableSources.isNotEmpty &&
@@ -649,6 +655,25 @@ class MediaContextMenuState extends State<MediaContextMenu> {
         _MenuAction(value: 'watch', icon: Symbols.check_circle_outline_rounded, label: t.mediaMenu.markAsWatched),
       if (mediaItem.isWatched || isPartiallyWatched || hasActiveProgress)
         _MenuAction(value: 'unwatch', icon: Symbols.remove_circle_outline_rounded, label: t.mediaMenu.markAsUnwatched),
+      // Silo's Watchlist and Favorites (Siku's card menu, Silo Android #706).
+      if (_siloMemberships(menu, mediaItem) case final store?) ...[
+        _MenuAction(
+          value: 'silo_watchlist',
+          icon: store.isMember(mediaItem, SiloMembership.watchlist)
+              ? Symbols.bookmark_remove_rounded
+              : Symbols.bookmark_add_rounded,
+          label: store.isMember(mediaItem, SiloMembership.watchlist)
+              ? t.explore.removeFromWatchlist
+              : t.explore.addToWatchlist,
+        ),
+        _MenuAction(
+          value: 'silo_favorite',
+          icon: Symbols.favorite_rounded,
+          label: store.isMember(mediaItem, SiloMembership.favorite)
+              ? t.siloMemberships.removeFromFavorites
+              : t.siloMemberships.addToFavorites,
+        ),
+      ],
       if (widget.isInContinueWatching && menu.canRemoveFromContinueWatching)
         _MenuAction(
           value: 'remove_from_continue_watching',
@@ -765,6 +790,15 @@ class MediaContextMenuState extends State<MediaContextMenu> {
           label: t.externalPlayer.playInExternalPlayer,
         ),
     ];
+  }
+
+  /// The membership store for a Silo movie or show card whose server is
+  /// online, else null (no Watchlist / Favorites entries).
+  SiloMembershipStore? _siloMemberships(_MenuContext menu, MediaItem mediaItem) {
+    final client = menu.mediaClient;
+    if (client is! SiloClient || !menu.itemServerOnline) return null;
+    if (mediaItem.kind != MediaKind.movie && mediaItem.kind != MediaKind.show) return null;
+    return client.memberships;
   }
 
   /// Download, watchlist, add-to and delete entries — the item's place in
@@ -908,6 +942,16 @@ class MediaContextMenuState extends State<MediaContextMenu> {
         break;
       case 'remove_from_continue_watching':
         await _handleRemoveFromContinueWatching(context, mediaItem);
+        break;
+      case 'silo_watchlist' || 'silo_favorite':
+        if (menu.mediaClient case final SiloClient client when context.mounted) {
+          await toggleSiloMembership(
+            context,
+            client,
+            mediaItem,
+            selected == 'silo_watchlist' ? SiloMembership.watchlist : SiloMembership.favorite,
+          );
+        }
         break;
       case 'details':
         outcome.didNavigate = true;

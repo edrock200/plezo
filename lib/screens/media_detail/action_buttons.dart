@@ -17,7 +17,19 @@ extension _MediaDetailActionButtons on _MediaDetailScreenState {
   Widget _buildActionButtons(MediaItem metadata) {
     // Tie asynchronous playback prompts to the actionable subtree, not the
     // route's State: a deleted first-route detail intentionally stays mounted.
-    return Builder(builder: (context) => _buildAvailableActionButtons(context, metadata));
+    Widget row() => Builder(builder: (context) => _buildAvailableActionButtons(context, metadata));
+    // Silo's Watchlist and Favorites toggles follow presses made anywhere.
+    final memberships = _siloMembershipStore(metadata);
+    return memberships == null ? row() : ListenableBuilder(listenable: memberships, builder: (_, _) => row());
+  }
+
+  /// The Watchlist / Favorites state for a Silo movie or show page that is
+  /// online, else null (no toggles).
+  SiloMembershipStore? _siloMembershipStore(MediaItem metadata) {
+    if (widget.isOffline || metadata.backend != MediaBackend.silo) return null;
+    if (!metadata.isMovie && !metadata.isShow) return null;
+    final client = _getMediaClientForMetadata(context);
+    return client is SiloClient ? client.memberships : null;
   }
 
   /// Play while the page waits for the full item: a disabled button with a
@@ -397,6 +409,50 @@ extension _MediaDetailActionButtons on _MediaDetailScreenState {
           _buildWatchedToggleButton(metadata, actionButtonStyle, tvScale, showFocus: state.showFocus),
     );
 
+    // Silo's own Watchlist and Favorites (Siku's DetailScreen toggles). For a
+    // Silo title this is the watchlist button; a catalog source's watchlist
+    // stays in the ⋮ menu.
+    final siloMemberships = _siloMembershipStore(metadata);
+    final siloClient = siloMemberships == null ? null : _getMediaClientForMetadata(context) as SiloClient?;
+    FocusableAction? siloToggle(SiloMembership kind) {
+      final store = siloMemberships;
+      final client = siloClient;
+      if (store == null || client == null) return null;
+      final on = store.isMember(metadata, kind);
+      final isWatchlist = kind == SiloMembership.watchlist;
+      final tooltip = isWatchlist
+          ? (on ? t.explore.removeFromWatchlist : t.explore.addToWatchlist)
+          : (on ? t.siloMemberships.removeFromFavorites : t.siloMemberships.addToFavorites);
+      void toggle() => unawaited(toggleSiloMembership(context, client, metadata, kind));
+      return FocusableAction(
+        debugLabel: isWatchlist ? 'detail_silo_watchlist' : 'detail_silo_favorite',
+        focusNode: isWatchlist ? _siloWatchlistFocusNode : _siloFavoriteFocusNode,
+        onPressed: toggle,
+        builder: (context, state) => Semantics(
+          label: tooltip,
+          button: true,
+          toggled: on,
+          onTap: toggle,
+          excludeSemantics: true,
+          child: iconActionButton(
+            state,
+            onPressed: toggle,
+            icon: AppIcon(
+              isWatchlist
+                  ? (on ? Symbols.bookmark_added_rounded : Symbols.bookmark_add_rounded)
+                  : Symbols.favorite_rounded,
+              fill: isWatchlist || on ? 1 : 0,
+              color: !isWatchlist && on && !state.showFocus ? Colors.redAccent : null,
+            ),
+            tooltip: tooltip,
+          ),
+        ),
+      );
+    }
+
+    final siloWatchlistAction = siloToggle(SiloMembership.watchlist);
+    final siloFavoriteAction = siloToggle(SiloMembership.favorite);
+
     // Watchlist toggle for the connected catalog sources (Trakt, MAL).
     // Membership reads each source's session snapshot — no per-open API
     // call. Filled when the item is on ANY source's watchlist; with several
@@ -411,7 +467,7 @@ extension _MediaDetailActionButtons on _MediaDetailScreenState {
         : watchlistStates.contains(false)
         ? false
         : null;
-    final watchlistAction = _watchlistCandidates.isEmpty
+    final watchlistAction = _watchlistCandidates.isEmpty || siloWatchlistAction != null
         ? null
         : FocusableAction(
             debugLabel: 'detail_watchlist',
@@ -453,6 +509,8 @@ extension _MediaDetailActionButtons on _MediaDetailScreenState {
       ?shuffleAction,
       ?downloadAction,
       watchedAction,
+      ?siloWatchlistAction,
+      ?siloFavoriteAction,
       ?watchlistAction,
       ?moreActionsAction,
     ];

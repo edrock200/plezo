@@ -55,6 +55,7 @@ import '../utils/media_image_helper.dart';
 import '../utils/media_quality_labels.dart';
 import '../services/plex_client.dart';
 import '../services/silo/silo_client.dart';
+import '../services/silo/silo_memberships.dart';
 import '../media/media_server_client.dart';
 import '../services/media_list_playback_launcher.dart';
 import '../utils/content_utils.dart';
@@ -66,6 +67,7 @@ import '../services/settings_service.dart';
 import '../models/transcode_quality_preset.dart';
 import '../services/watch_actions.dart';
 import '../widgets/settings_builder.dart';
+import '../widgets/silo_membership_actions.dart';
 import '../utils/layout_constants.dart';
 import '../providers/catalog_sources_provider.dart';
 import '../providers/download_provider.dart';
@@ -413,6 +415,8 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
   /// falling back to the item they were given.
   bool _seedFailed = false;
   final FocusNode _seedRetryFocusNode = FocusNode(debugLabel: 'media_detail_seed_retry');
+  final FocusNode _siloWatchlistFocusNode = FocusNode(debugLabel: 'detail_silo_watchlist');
+  final FocusNode _siloFavoriteFocusNode = FocusNode(debugLabel: 'detail_silo_favorite');
   StreamSubscription<LibraryChangeEvent>? _libraryContentSubscription;
 
   bool get _canUseDetail => mounted && !_isDeleted;
@@ -1335,6 +1339,8 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
     _lastEpisodeFocusNode.dispose();
     _initialEpisodeFocusNode.dispose();
     _seedRetryFocusNode.dispose();
+    _siloWatchlistFocusNode.dispose();
+    _siloFavoriteFocusNode.dispose();
     super.dispose();
   }
 

@@ -2978,5 +2978,16 @@
     "watchlistEmptyMovies": "No movies on your watchlist",
     "watchlistEmptyShows": "No shows on your watchlist",
     "emptyHint": "Titles you save on this Silo profile show up here."
+  },
+  "siloMemberships": {
+    "addToFavorites": "Add to Favorites",
+    "removeFromFavorites": "Remove from Favorites",
+    "addedToFavorites": "Added to Favorites",
+    "removedFromFavorites": "Removed from Favorites",
+    "addToWatchlistFailed": "Couldn't add to Watchlist. ${reason}",
+    "removeFromWatchlistFailed": "Couldn't remove from Watchlist. ${reason}",
+    "addToFavoritesFailed": "Couldn't add to Favorites. ${reason}",
+    "removeFromFavoritesFailed": "Couldn't remove from Favorites. ${reason}",
+    "tryAgain": "Try again."
   }
 }

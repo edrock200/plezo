@@ -17,6 +17,7 @@ import '../../navigation/profile_navigation_scope.dart';
 import '../../providers/multi_server_provider.dart';
 import '../../services/settings_service.dart';
 import '../../services/silo/silo_client.dart';
+import '../../services/silo/silo_memberships.dart';
 import '../../services/silo/silo_personal_lists.dart';
 import '../../utils/app_logger.dart';
 import '../../utils/hub_icons.dart';
@@ -141,6 +142,22 @@ class SiloForYouScreenState extends State<SiloForYouScreen> with RouteAware {
   final _sheetContextKey = GlobalKey();
 
   RouteObserver<PageRoute<dynamic>>? _routeObserver;
+  StreamSubscription<SiloMembershipChange>? _membershipChanges;
+
+  @override
+  void initState() {
+    super.initState();
+    _membershipChanges = SiloMembershipStore.changes.listen(_onMembershipChanged);
+  }
+
+  /// A title went on or off a Watchlist or Favorites list (a card menu here,
+  /// or a page above): read the shown part again so it appears or goes. A
+  /// page above refreshes this one when it closes ([didPopNext]).
+  void _onMembershipChanged(SiloMembershipChange change) {
+    if (!mounted || _client?.serverId.value != change.serverId) return;
+    if (ModalRoute.of(context)?.isCurrent == false) return;
+    refreshShown();
+  }
 
   /// The tab shown, for tests.
   @visibleForTesting
@@ -160,6 +177,7 @@ class SiloForYouScreenState extends State<SiloForYouScreen> with RouteAware {
 
   @override
   void dispose() {
+    unawaited(_membershipChanges?.cancel());
     _routeObserver?.unsubscribe(this);
     for (final node in [
       ..._tabFocus.values,

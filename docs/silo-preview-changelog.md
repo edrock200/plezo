@@ -4,6 +4,12 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **Watchlist and Favorites for Silo titles:** a Silo movie or show page now has a Watchlist (bookmark) and a Favorite (heart) button, and the long-press / ⋮ menu of Silo movie and show cards (Home, libraries, search, recommendation rows, For You) has Add to / Remove from Watchlist and Favorites. The change shows at once; if the server refuses it, it is undone and the reason is shown. The For You page and Home rows that show your Watchlist or Favorites update to match. *(please test)*
+
+## silo-preview-2.45.0
+
+Released November 16, 2026. Android and Windows.
+
 - **A title page whose server is offline says so:** opening a movie or show from a card while its server is not connected now shows "Couldn't load this title" with Retry, which works once the server is back.
 
 ## silo-preview-2.44.0

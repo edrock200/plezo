@@ -68,6 +68,7 @@ import 'silo_playback_caps.dart';
 import 'silo_letter_index.dart';
 import 'silo_series_track_choices.dart';
 import 'silo_requests.dart';
+import 'silo_memberships.dart';
 import 'silo_personal_lists.dart';
 import 'silo_sort_options.dart';
 import 'silo_subtitles.dart';
@@ -2010,9 +2011,24 @@ class SiloClient
   }
 
   @override
-  Future<void> setFavorite(MediaItem item, bool isFavorite) async {
-    await _api.send(isFavorite ? 'PUT' : 'DELETE', '/api/v2/favorites/${_seg(await _writeId(item))}');
+  Future<void> setFavorite(MediaItem item, bool isFavorite) => setMembership(item, SiloMembership.favorite, isFavorite);
+
+  /// Puts [item] on, or takes it off, the profile's Watchlist.
+  Future<void> setWatchlist(MediaItem item, bool inWatchlist) =>
+      setMembership(item, SiloMembership.watchlist, inWatchlist);
+
+  /// `PUT` (add) or `DELETE` (remove) `/api/v2/{watchlist|favorites}/{content_id}`
+  /// (204), as Silo's apps write them. Throws on a refusal.
+  Future<void> setMembership(MediaItem item, SiloMembership kind, bool value) async {
+    await _api.send(value ? 'PUT' : 'DELETE', '/api/v2/${kind.pathSegment}/${_seg(await _writeId(item))}');
   }
+
+  /// Watchlist and Favorites state for this connection, with the session's
+  /// presses (see [SiloMembershipStore]).
+  late final SiloMembershipStore memberships = SiloMembershipStore(
+    serverId: serverId.value,
+    write: (item, kind, value) => setMembership(item, kind, value),
+  );
 
   // ---------------------------------------------------------------------------
   // Playlists (not in the Silo v2 contract)
