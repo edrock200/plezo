@@ -72,8 +72,11 @@ class SiloLiveCueTrack {
     return added;
   }
 
-  /// The text shown at [seconds] (source time): every cue covering it, in
-  /// start order, one per line. Null when none does.
+  /// The text shown at [seconds] (source time): every cue covering it, one
+  /// per line, stacked the way WebVTT, mpv and Silo's apps (Silo Android #862)
+  /// stack captions on screen together: the earliest at the bottom, each later
+  /// one above it, so a caption that stays keeps its bottom line while a name
+  /// card or a second speaker comes and goes over it. Null when none does.
   String? textAt(double seconds) {
     if (_cues.isEmpty || !seconds.isFinite) return null;
     // Cues start at or before [seconds] up to this index (exclusive).
@@ -82,7 +85,8 @@ class SiloLiveCueTrack {
     // Overlapping cues are rare and short; looking back a few is enough.
     for (var i = upper - 1; i >= 0 && i >= upper - 8; i--) {
       final cue = _cues[i];
-      if (cue.end > seconds) lines.insert(0, cue.text);
+      // Latest start first: the joined block's last line is the earliest.
+      if (cue.end > seconds) lines.add(cue.text);
     }
     return lines.isEmpty ? null : lines.join('\n');
   }

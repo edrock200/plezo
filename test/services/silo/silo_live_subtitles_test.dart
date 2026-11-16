@@ -30,8 +30,23 @@ void main() {
       const batch = [SiloLiveCue(start: 10, end: 14, text: 'first'), SiloLiveCue(start: 12, end: 13, text: 'second')];
       expect(track.addAll(batch), 2);
       expect(track.addAll(batch), 0);
-      expect(track.textAt(12.5), 'first\nsecond');
+      // Stacked like on-screen captions (Silo Android #862): the earliest
+      // stays on the bottom line, the later one goes above it.
+      expect(track.textAt(12.5), 'second\nfirst');
       expect(track.textAt(13.5), 'first');
+    });
+
+    test('a caption that stays keeps the bottom line while others come and go', () {
+      final track = SiloLiveCueTrack()
+        ..addAll(const [
+          SiloLiveCue(start: 0, end: 10, text: 'dialogue'),
+          SiloLiveCue(start: 2, end: 4, text: 'name card'),
+          SiloLiveCue(start: 6, end: 8, text: 'sign'),
+        ]);
+      expect(track.textAt(1), 'dialogue');
+      expect(track.textAt(3), 'name card\ndialogue');
+      expect(track.textAt(5), 'dialogue');
+      expect(track.textAt(7), 'sign\ndialogue');
     });
 
     test('malformed cues are dropped and long text is cut', () {
