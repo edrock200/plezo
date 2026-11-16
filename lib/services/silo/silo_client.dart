@@ -914,8 +914,10 @@ class SiloClient
   static const _detailRowFreshness = Duration(minutes: 10);
 
   /// Fetch an item's detail document, sharing one in-flight request per id.
-  Future<Map<String, dynamic>?> _itemDetail(String id) {
-    final pending = _detailFetches[id];
+  /// [fresh] never joins a request already in flight: it may have left before
+  /// a write the caller needs to see (a playback stop).
+  Future<Map<String, dynamic>?> _itemDetail(String id, {bool fresh = false}) {
+    final pending = fresh ? null : _detailFetches[id];
     if (pending != null) return pending;
     final future = _cachedGet('/api/v2/catalog/items/${_seg(id)}', query: {'image_size': 'large'}).then((data) {
       _detailRows.remove(id);
@@ -928,7 +930,9 @@ class SiloClient
       return data;
     });
     _detailFetches[id] = future;
-    return future.whenComplete(() => _detailFetches.remove(id));
+    return future.whenComplete(() {
+      if (identical(_detailFetches[id], future)) _detailFetches.remove(id);
+    });
   }
 
   /// The detail document for extras: the row [fetchItem] just read when it
@@ -951,13 +955,36 @@ class SiloClient
   }
 
   @override
-  Future<MediaItem?> fetchItem(String id) async {
+  Future<MediaItem?> fetchItem(String id) => _fetchItem(id);
+
+  /// [fetchItem] read with a request of its own, never one already in flight.
+  /// The detail page uses it once the player's stop has landed (Silo Android
+  /// #955), when a read sent before the stop would show the old resume point.
+  Future<MediaItem?> fetchItemFresh(String id) => _fetchItem(id, fresh: true);
+
+  /// The page item and, for a series, its next-up episode, both read fresh
+  /// ([fetchItemFresh]); [fetchItemWithOnDeck]'s shape.
+  Future<({MediaItem? item, MediaItem? onDeckEpisode})> fetchItemWithOnDeckFresh(String id) async {
+    final item = await fetchItemFresh(id);
+    if (item == null || item.kind != MediaKind.show) return (item: item, onDeckEpisode: null);
+    final playId = item.raw?['play_content_id']?.toString();
+    if (playId == null || playId.isEmpty || playId == id) return (item: item, onDeckEpisode: null);
+    MediaItem? onDeck;
+    try {
+      onDeck = await fetchItemFresh(playId);
+    } catch (e) {
+      appLogger.d('SiloClient: next-up episode unavailable', error: e.runtimeType);
+    }
+    return (item: item, onDeckEpisode: onDeck);
+  }
+
+  Future<MediaItem?> _fetchItem(String id, {bool fresh = false}) async {
     final synthetic = SiloMappers.parseSyntheticSeasonId(id);
     if (synthetic != null) return _fetchSeason(synthetic.seriesId, synthetic.seasonNumber, id: id);
     if (_isCollectionId(id)) return _collectionItem(id);
     if (SiloMappers.parseBoxSetId(id) != null) return (await _boxSet(id))?.boxSet;
     try {
-      final data = await _itemDetail(id);
+      final data = await _itemDetail(id, fresh: fresh);
       if (data == null) return null;
       final item = SiloMappers.item(data, _ctx);
       if (item == null) return null;

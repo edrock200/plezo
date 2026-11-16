@@ -31,6 +31,7 @@ import '../media/library_change_event.dart';
 import '../media/media_hub.dart';
 import '../utils/provider_extensions.dart';
 import '../utils/plex_season_display.dart';
+import '../media/media_backend.dart';
 import '../media/media_item.dart';
 import '../media/primary_trailer.dart';
 import '../media/episode_collection.dart';
@@ -53,6 +54,7 @@ import '../widgets/optimized_media_image.dart';
 import '../utils/media_image_helper.dart';
 import '../utils/media_quality_labels.dart';
 import '../services/plex_client.dart';
+import '../services/silo/silo_client.dart';
 import '../media/media_server_client.dart';
 import '../services/media_list_playback_launcher.dart';
 import '../utils/content_utils.dart';
@@ -229,6 +231,9 @@ class _SeasonEpisodePager {
   void retainOnly(Set<String> keepSeasonIds) {
     _states.removeWhere((seasonId, _) => !keepSeasonIds.contains(seasonId));
   }
+
+  /// Ids of every episode row a loaded season page holds.
+  Iterable<String> get loadedEpisodeIds => _states.values.expand((state) => state.items).map((episode) => episode.id);
 
   void removeEpisode(String episodeId) {
     for (final entry in _states.entries.toList()) {
@@ -605,6 +610,13 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
     // visuals need.
     setStateIfMounted(() {});
 
+    if (_siloServerAnswers.remove(event)) return;
+    if (_isSiloPlaybackStop(event)) {
+      _siloPlayedEvents[event.itemId] = event;
+      _queueSiloPlaybackStopRefresh();
+      return;
+    }
+
     if (event.changeType == WatchStateChangeType.progressUpdate && event.isNowWatched != true) return;
 
     if (widget.isOffline) {
@@ -619,6 +631,114 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
     // was already visible.
     unawaited(_refreshWatchState());
   }
+
+  /// A Silo player's progress the server accepted, for this page's item or one
+  /// of its episodes: the stop when playback ends (also the periodic reports
+  /// while the player covers the page).
+  bool _isSiloPlaybackStop(WatchStateEvent event) =>
+      event.changeType == WatchStateChangeType.progressUpdate &&
+      event.serverAcknowledged &&
+      !widget.isOffline &&
+      _metadata.backend == MediaBackend.silo;
+
+  bool _siloStopRefreshPending = false;
+  bool _siloStopRefreshRunning = false;
+
+  /// Silo Android #955 / #954: once the player's stop has landed, the page
+  /// shows the server's answer rather than the player's exit position. Silo
+  /// ignores a stop under its minimum resume share and keeps its earlier
+  /// resume point (or none), so the exit position would offer "Resume 0:40"
+  /// on a title the server holds at 43:37, or barely started. The read runs
+  /// when the page is on top again (a report while the player covers it waits
+  /// for the return); a failed read keeps the exit position, as before.
+  void _queueSiloPlaybackStopRefresh() {
+    _siloStopRefreshPending = true;
+    final route = _route ?? ModalRoute.of(context);
+    if (route != null && !route.isCurrent) return;
+    unawaited(_runSiloPlaybackStopRefresh());
+  }
+
+  Future<void> _runSiloPlaybackStopRefresh() async {
+    if (_siloStopRefreshRunning) return;
+    _siloStopRefreshRunning = true;
+    try {
+      while (_siloStopRefreshPending && _canUseDetail) {
+        _siloStopRefreshPending = false;
+        await _refreshAfterSiloPlaybackStop();
+      }
+    } finally {
+      _siloStopRefreshRunning = false;
+    }
+  }
+
+  Future<void> _refreshAfterSiloPlaybackStop() async {
+    final client = _getMediaClientForMetadata(context);
+    if (client is! SiloClient || _metadata.serverId == null) return;
+    final pageId = _metadata.id;
+    final isShow = _metadata.isShow;
+    final played = Map.of(_siloPlayedEvents);
+    _siloPlayedEvents.clear();
+    try {
+      final page = await client.fetchItemWithOnDeckFresh(pageId);
+      // The played item as the server holds it now, for the hero and the
+      // episode rail (#954), and the season list for its watched counts.
+      final playedRows = <String, MediaItem>{};
+      for (final id in played.keys) {
+        final row = id == pageId
+            ? page.item
+            : id == page.onDeckEpisode?.id
+            ? page.onDeckEpisode
+            : await client.fetchItemFresh(id);
+        if (row != null) playedRows[id] = row;
+      }
+      final seasons = isShow && _seasons.isNotEmpty ? await client.fetchChildren(pageId) : const <MediaItem>[];
+      if (!_canUseDetail || _metadata.id != pageId) return;
+      setStateIfMounted(() {
+        _invalidatePlaybackProbes(refreshItems: true);
+        final item = page.item;
+        if (item != null) {
+          final refreshed = _normalizeRefreshedItem(item, _metadata);
+          _fullMetadata = refreshed;
+          final onDeck = page.onDeckEpisode;
+          _onDeckEpisode = onDeck == null ? null : _normalizeRefreshedItem(onDeck, refreshed);
+        }
+        for (final row in [...playedRows.values.where((row) => row.id != pageId), ...seasons]) {
+          final normalized = _normalizeRefreshedItem(row, _metadata);
+          _patchItemEverywhere(normalized.globalKey, normalized);
+        }
+      });
+      // The player's exit position is a watch-state patch every screen lays
+      // over its rows. Replace it with the server's resume point (none = 0),
+      // so cards elsewhere agree with this page. A played item keeps its
+      // watched patch.
+      for (final MapEntry(key: id, value: stop) in played.entries) {
+        final row = playedRows[id];
+        if (row == null || row.isWatched || stop.isNowWatched == true) continue;
+        final answer = WatchStateEvent(
+          itemId: id,
+          serverId: stop.serverId,
+          cacheServerId: stop.cacheServerId,
+          changeType: WatchStateChangeType.progressUpdate,
+          parentChain: stop.parentChain,
+          viewOffset: row.viewOffsetMs ?? 0,
+          isNowWatched: false,
+          librarySectionID: stop.librarySectionID,
+          serverAcknowledged: true,
+        );
+        _siloServerAnswers.add(answer);
+        WatchStateNotifier().notify(answer);
+      }
+    } catch (e) {
+      appLogger.d('Silo detail refresh after playback failed; keeping the exit position', error: e);
+    }
+  }
+
+  /// The newest accepted Silo progress per played item since the last read.
+  final Map<String, WatchStateEvent> _siloPlayedEvents = {};
+
+  /// Events this page sent with the server's answer, which it must not answer
+  /// again.
+  final Set<WatchStateEvent> _siloServerAnswers = Set.identity();
 
   /// Session-fresh view of [item]: server snapshot + newest watch-state patch.
   MediaItem _fresh(MediaItem item) => context.readFreshWatchState(item);
@@ -1022,6 +1142,7 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
   void didPopNext() {
     _invalidatePlaybackProbes(refreshItems: true);
     setStateIfMounted(() {});
+    if (_siloStopRefreshPending) unawaited(_runSiloPlaybackStopRefresh());
     _suppressBackAfterPop = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
