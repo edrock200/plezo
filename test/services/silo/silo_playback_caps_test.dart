@@ -28,6 +28,16 @@ void main() {
     expect(caps['max_resolution'], '2160p');
   });
 
+  test('PCM is declared so WAV audiobooks can direct-play (Silo Android #707)', () {
+    const pcm = ['pcm_u8', 'pcm_s16le', 'pcm_s24le', 'pcm_s32le', 'pcm_f32le'];
+    final caps = SiloPlaybackCaps.clientCapabilities();
+    expect(caps['codecs_audio'], containsAll(pcm));
+    final context = SiloPlaybackCaps.playbackContext(appVersion: '1.0', formFactor: 'mobile');
+    final deliveries = context['deliveries']! as Map<String, Object?>;
+    final original = deliveries['original_http']! as Map<String, Object?>;
+    expect(original['audio_decode_codecs'], containsAll(pcm));
+  });
+
   test('quality preference never asks for the original, as Silo\'s apps', () {
     expect(SiloPlaybackCaps.qualityPreference(TranscodeQualityPreset.original), 'auto');
     expect(SiloPlaybackCaps.qualityPreference(TranscodeQualityPreset.p1080_8mbps), '1080p');

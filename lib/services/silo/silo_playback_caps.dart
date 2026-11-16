@@ -48,9 +48,15 @@ abstract final class SiloPlaybackCaps {
     'mp3',
     'mp2',
     'alac',
+    // ffmpeg's PCM names, the integer and float layouts a WAV file (or an
+    // MKV/MOV track) carries; the server direct-plays only a codec listed
+    // here, so a WAV audiobook needs them (Silo Android #707). mpv decodes them all.
     'pcm',
+    'pcm_u8',
     'pcm_s16le',
     'pcm_s24le',
+    'pcm_s32le',
+    'pcm_f32le',
     'wmav2',
     'wmapro',
   ];
