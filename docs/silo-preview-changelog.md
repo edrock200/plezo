@@ -4,6 +4,18 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **The right resume point after watching:** back from the player, a Silo title's page now shows where the server will resume (or Play), not just where you stopped. Silo ignores a very short watch and keeps your earlier place. On a show's page the episode list and season watched counts update too. *(please test)*
+- **Offline progress no longer undoes newer progress:** watching a downloaded Silo title offline is sent with the time you watched it, so progress you made since on another device is kept, and finished titles are marked watched by the server's own rule. *(please test)*
+- **Live AI subtitles stack like normal captions:** when two lines are on screen together, the earlier one stays on the bottom line.
+- **Request pages close when requests are turned off** on the Silo server, when you come back to the app or try a request.
+- **No pointless "Explore all"** on a Silo Next Up or Continue Watching row that already shows every title.
+- **Voice search on Google TV:** on a Google TV Streamer and other Google TV devices with Android 12 or later, voice search now fills the search field (Plezilo asks for microphone access the first time). *(please test)*
+- **From Plezy:** with "Ask for profile on app open" on, a PIN-protected profile's Continue Watching no longer shows on the Android TV home screen row. The remote keeps working when the player reopens a video in place (quality switch, waking the TV).
+
+## silo-preview-2.40.0
+
+Released November 15, 2026. Android and Windows.
+
 - **Seek from the Skip button on every server:** on TV, Left and Right now skip back and forward while the Skip Intro or Skip Credits button is selected for Plex and Jellyfin videos too, not just Silo (asked for by a user).
 
 ## silo-preview-2.39.0
