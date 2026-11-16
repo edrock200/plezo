@@ -724,6 +724,57 @@ void main() {
       expect(hub.items, hasLength(1));
       expect(hub.more, isTrue);
     });
+
+    // Silo Android #908: a Continue Watching / In Progress / Next Up row that
+    // shows its whole list has no Explore all page repeating it.
+    group('a playback row showing its whole list', () {
+      Map<String, dynamic> row(String type, {int? total, int? itemLimit}) => {
+        'section_type': type,
+        'total_count': ?total,
+        'item_limit': ?itemLimit,
+      };
+
+      test('has no full page', () {
+        for (final type in ['continue_watching', 'in_progress', 'next_up', 'Next_Up']) {
+          expect(SiloClient.sectionShowsWholeList(row(type, total: 3), 3), isTrue, reason: type);
+        }
+      });
+
+      test('other rows, a missing or larger total and a row cut at its limit keep it', () {
+        expect(SiloClient.sectionShowsWholeList(row('recently_added', total: 3), 3), isFalse);
+        expect(SiloClient.sectionShowsWholeList(row('next_up'), 3), isFalse, reason: 'no total_count');
+        expect(SiloClient.sectionShowsWholeList(row('next_up', total: 0), 3), isFalse);
+        expect(SiloClient.sectionShowsWholeList(row('next_up', total: 25), 20), isFalse);
+        expect(SiloClient.sectionShowsWholeList(row('next_up', total: 20), 20), isFalse, reason: 'cut at 20');
+        expect(SiloClient.sectionShowsWholeList(row('next_up', total: 10, itemLimit: 10), 10), isFalse);
+        expect(SiloClient.sectionShowsWholeList(row('next_up', total: 9, itemLimit: 10), 9), isTrue);
+        expect(SiloClient.sectionShowsWholeList(row('next_up', total: 19, itemLimit: 40), 19), isTrue);
+      });
+
+      test('the hub carries no more', () async {
+        final c = client((request) async {
+          if (request.url.path.endsWith('/home/sections')) {
+            return _json({
+              'sections': [
+                {
+                  'id': 'nu',
+                  'section_type': 'next_up',
+                  'title': 'Next Up',
+                  'total_count': 1,
+                  'items': [
+                    {'content_id': 'movie:m1', 'type': 'movie', 'title': 'Heat'},
+                  ],
+                },
+              ],
+            });
+          }
+          return _json({});
+        });
+        final hub = (await c.fetchGlobalHubs()).single;
+        expect(hub.items, hasLength(1));
+        expect(hub.more, isFalse);
+      });
+    });
   });
 
   group('playback', () {

@@ -253,7 +253,10 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
   `errors[]` has `{location: query.item_limit, code: unknown_parameter}` is read again once without
   it and the parameter is never sent again. `item_limit` is kept out of the offline cache key.
   Every row with cards has `more: true` (Silo's "Explore all"): rows are capped and Home drops
-  titles other rows show, so `total_count` cannot tell whether the page holds more. The full page
+  titles other rows show, so `total_count` cannot tell whether the page holds more. The one
+  exception (Silo Android #908, `SiloClient.sectionShowsWholeList`): a `continue_watching` /
+  `in_progress` / `next_up` row whose `total_count` (≥ 1) is no more than its cards and which holds
+  fewer than its limit (`item_limit` from the section, at most 20) has `more: false`. The full page
   is `fetchMoreHubItemsPage` → `GET /catalog?source=section&section_id=&scope=home|library`.
 - **Recommendations (Silo's "For You", the user's request 2026-11-15):** Silo's apps have a For You page built from
   `GET /api/v2/recommendations/discover` (`RecommendationsViewModel`, phone `RecommendationsScreen`, TV

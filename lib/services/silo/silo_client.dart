@@ -1515,6 +1515,27 @@ class SiloClient
     }
   }
 
+  /// Rows built from playback state, whose `total_count` counts the list
+  /// itself (other rows are counted before Home drops repeated titles).
+  static const _wholeListSectionTypes = {'continue_watching', 'in_progress', 'next_up'};
+
+  /// Whether a Home or library row shows its whole list, so its "Explore all"
+  /// page would only repeat it (Silo Android #908, `showsWholeList`): a
+  /// playback row whose `total_count` (at least 1) is no more than the
+  /// [cards] it shows, holding fewer than its limit (`item_limit` when
+  /// positive, at most [sectionRowMaxItems]). A row filled to its limit was
+  /// cut there and reports the cut size as its total, so it keeps the page;
+  /// a missing total proves nothing.
+  @visibleForTesting
+  static bool sectionShowsWholeList(Map<String, dynamic> section, int cards) {
+    final type = section['section_type']?.toString().toLowerCase();
+    if (!_wholeListSectionTypes.contains(type)) return false;
+    final itemLimit = (section['item_limit'] as num?)?.toInt() ?? 0;
+    final limit = itemLimit > 0 ? math.min(sectionRowMaxItems, itemLimit) : sectionRowMaxItems;
+    final total = (section['total_count'] as num?)?.toInt() ?? 0;
+    return cards < limit && total >= 1 && total <= cards;
+  }
+
   static String _hubType(List<MediaItem> items) {
     final kinds = items.map((item) => item.kind).toSet();
     if (kinds.length == 1) return kinds.single.id;
@@ -1535,9 +1556,10 @@ class SiloClient
       libraryTitle: _libraryTitles[libraryId],
     );
     final total = (section['total_count'] as num?)?.toInt() ?? rows.length;
-    // Every row with cards opens its full page, as in Silo's apps: rows are
-    // capped (`item_limit`) and Home drops titles another row already shows,
-    // so a row can look complete while its page holds more.
+    // A row with cards opens its full page, as in Silo's apps: rows are capped
+    // (`item_limit`) and Home drops titles another row already shows, so a row
+    // can look complete while its page holds more. Only a playback row known
+    // to hold its whole list has none (Silo Android #908).
     return MediaHub(
       id: id,
       identifier: section['section_type']?.toString() ?? section['id']?.toString(),
@@ -1545,7 +1567,7 @@ class SiloClient
       type: _hubType(items),
       items: items,
       size: total,
-      more: items.isNotEmpty,
+      more: items.isNotEmpty && !sectionShowsWholeList(section, items.length),
       libraryId: libraryId,
       serverId: serverId,
       serverName: serverName,
