@@ -4,6 +4,12 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **A title page that cannot load says so:** if a movie or show opened from a card cannot be loaded, the page now shows "Couldn't load this title" with a Retry button instead of a half-filled page.
+
+## silo-preview-2.43.0
+
+Released November 16, 2026. Android and Windows.
+
 From Silo's own apps (November 16, 2026):
 
 - **Silo row titles in your language:** the rows your Silo server names itself (Home sections such as Continue Watching and Recently Added in Movies, and the For You recommendations) now follow Plezilo's language, using Silo's own translations. They are available in Danish, Dutch, French, German, Italian, Norwegian, Polish, Portuguese, Russian, Spanish, Swedish and Turkish; other languages show Silo's English. Titles your server administrator typed stay as written.

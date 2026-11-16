@@ -199,7 +199,11 @@ void main() {
     });
   });
 
-  testWidgets('a failed read ends the seed and falls back to the card item as before', (tester) async {
+  Finder retryButton() => find.descendant(of: find.byKey(mediaDetailSeedErrorKey), matching: find.text(t.common.retry));
+
+  bool retryHasFocus() => FocusManager.instance.primaryFocus?.debugLabel == 'media_detail_seed_retry';
+
+  testWidgets('a failed read clears the card and shows an error with Retry', (tester) async {
     await tester.runAsync(() async {
       await pumpDetail(tester, seeded: true);
       expect(find.byKey(mediaDetailSeedPlayKey), findsOneWidget);
@@ -207,9 +211,66 @@ void main() {
       detailAnswer.complete(_json({'title': 'Server error'}, 500));
       await settle(tester);
 
+      expect(find.byKey(mediaDetailSeedErrorKey), findsOneWidget);
+      expect(find.text(t.messages.detailLoadFailed), findsOneWidget);
+      expect(retryButton(), findsOneWidget);
+      expect(find.text('The card overview.'), findsNothing, reason: "the card's copy is cleared");
       expect(find.byKey(mediaDetailSeedPlayKey), findsNothing);
+      expect(watchedButton(), findsNothing);
+    });
+  });
+
+  testWidgets('Retry shows the loading look again and hands over to the full item', (tester) async {
+    await tester.runAsync(() async {
+      await pumpDetail(tester, seeded: true);
+      detailAnswer.complete(_json({'title': 'Server error'}, 500));
+      await settle(tester);
+      expect(find.byKey(mediaDetailSeedErrorKey), findsOneWidget);
+
+      detailAnswer = Completer<http.Response>();
+      await tester.tap(retryButton());
+      await settle(tester);
+
+      expect(find.byKey(mediaDetailSeedErrorKey), findsNothing);
+      expect(find.byKey(mediaDetailSeedPlayKey), findsOneWidget);
       expect(find.text('The card overview.'), findsOneWidget);
-      expect(watchedButton(), findsOneWidget, reason: 'the full action row is back, as without a seed');
+
+      detailAnswer.complete(
+        _json({'content_id': 'movie:m1', 'type': 'movie', 'title': 'Heat', 'overview': 'The full overview.'}),
+      );
+      await settle(tester);
+
+      expect(find.byKey(mediaDetailSeedPlayKey), findsNothing);
+      expect(find.text('The full overview.'), findsOneWidget);
+      expect(watchedButton(), findsOneWidget);
+    });
+  });
+
+  testWidgets('without a seed a failed read still falls back to the given item', (tester) async {
+    await tester.runAsync(() async {
+      await pumpDetail(tester, seeded: false);
+
+      detailAnswer.complete(_json({'title': 'Server error'}, 500));
+      await settle(tester);
+
+      expect(find.byKey(mediaDetailSeedErrorKey), findsNothing);
+      expect(find.text('The card overview.'), findsOneWidget);
+      expect(watchedButton(), findsOneWidget);
+    });
+  });
+
+  testWidgets('on TV a failed read shows the error in front, with Retry focused', (tester) async {
+    TvDetectionService.debugSetAppleTVOverride(true);
+    await tester.runAsync(() async {
+      await pumpDetail(tester, seeded: true, tv: true);
+
+      detailAnswer.complete(_json({'title': 'Server error'}, 500));
+      await settle(tester);
+
+      expect(find.byKey(mediaDetailSeedErrorKey), findsOneWidget);
+      expect(find.byKey(tvDetailRevealGateKey), findsNothing, reason: 'the error is not behind the reveal gate');
+      expect(find.byKey(tvDetailSeedPreviewKey), findsNothing);
+      expect(retryHasFocus(), isTrue);
     });
   });
 

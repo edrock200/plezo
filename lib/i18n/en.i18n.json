@@ -1006,6 +1006,7 @@
     "logoutConfirm": "Are you sure you want to log out?",
     "noSeasonsFound": "No seasons found",
     "seasonsLoadFailed": "Couldn't load seasons",
+    "detailLoadFailed": "Couldn't load this title. Check your connection and try again.",
     "noEpisodesFound": "No episodes found in first season",
     "noEpisodesFoundGeneral": "No episodes found",
     "episodesLoadFailed": "Couldn't load episodes",

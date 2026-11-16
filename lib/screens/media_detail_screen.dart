@@ -268,6 +268,11 @@ const tvDetailRevealGateKey = ValueKey<String>('tvDetailRevealGate');
 @visibleForTesting
 const tvDetailSeedPreviewKey = ValueKey<String>('tvDetailSeedPreview');
 
+/// The error a page drawn from its card shows when the full item cannot be
+/// read (with Retry).
+@visibleForTesting
+const mediaDetailSeedErrorKey = ValueKey<String>('mediaDetailSeedError');
+
 /// The "Loading..." Play button a page drawn from its card shows until the
 /// full item arrives.
 @visibleForTesting
@@ -401,6 +406,13 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
   /// and the full item has not arrived yet. A failed read ends it too: the
   /// page then falls back to the card's item as it always has.
   bool get _seedPending => widget.seededFromCard && !widget.isOffline && _isLoadingMetadata && _fullMetadata == null;
+
+  /// The full item could not be read for a page drawn from its card: the
+  /// card's copy is cleared and the page shows an error with Retry (Siku's
+  /// `detail read failed; the card's copy is cleared`). Unseeded opens keep
+  /// falling back to the item they were given.
+  bool _seedFailed = false;
+  final FocusNode _seedRetryFocusNode = FocusNode(debugLabel: 'media_detail_seed_retry');
   StreamSubscription<LibraryChangeEvent>? _libraryContentSubscription;
 
   bool get _canUseDetail => mounted && !_isDeleted;
@@ -1322,6 +1334,7 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
     _lastEpisodeFocusNode.removeListener(_onLastEpisodeFocusChanged);
     _lastEpisodeFocusNode.dispose();
     _initialEpisodeFocusNode.dispose();
+    _seedRetryFocusNode.dispose();
     super.dispose();
   }
 
@@ -1953,6 +1966,11 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
       final metadata = result.item;
 
       if (!_canUseDetail) return;
+      // A seeded page never shows the card as if it were the item.
+      if (metadata == null && widget.seededFromCard && _fullMetadata == null) {
+        _showSeedFailure();
+        return;
+      }
       final base = publish(metadata ?? _metadata, onDeckEpisode: result.onDeckEpisode, onDeckSettled: true);
 
       if (base.isShow) {
@@ -1968,8 +1986,13 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
       unawaited(_loadExtras());
       unawaited(_loadRelatedHubs());
     } catch (e) {
-      // Fallback to passed metadata on error
       if (!_canUseDetail) return;
+      // An item published early (before its on-deck lookup failed) stands.
+      if (widget.seededFromCard && _fullMetadata == null) {
+        _showSeedFailure();
+        return;
+      }
+      // Fallback to passed metadata on error
       setState(() {
         _fullMetadata = _metadata;
         _isLoadingMetadata = false;
@@ -1985,6 +2008,63 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
         unawaited(_fetchAllEpisodes());
       }
     }
+  }
+
+  void _showSeedFailure() {
+    appLogger.i("Media detail: detail read failed; the card's copy is cleared");
+    setState(() {
+      _seedFailed = true;
+      _isLoadingMetadata = false;
+    });
+  }
+
+  /// Retry from the seed failure page: back to the card's "Loading..." look
+  /// while the item is read again.
+  void _retrySeededLoad() {
+    if (!_canUseDetail) return;
+    setState(() => _seedFailed = false);
+    unawaited(_loadFullMetadata());
+  }
+
+  /// The page for [_seedFailed]: back button, message and a focused Retry,
+  /// outside the TV reveal gate so it is visible and reachable on every
+  /// layout.
+  Widget _buildSeedFailedPage(BuildContext context) {
+    final backButton = AppBarBackButton(
+      style: BackButtonStyle.plain,
+      onPressed: _popMediaDetail,
+      focusNode: _backButtonFocusNode,
+    );
+    final page = Focus(
+      onKeyEvent: _handleMediaDetailBackKey,
+      child: Scaffold(
+        appBar: AppBar(
+          leading: DesktopAppBarHelper.buildAdjustedLeading(backButton, includeGestureDetector: true, context: context),
+          leadingWidth: DesktopAppBarHelper.calculateLeadingWidth(backButton, context: context),
+        ),
+        body: Center(
+          child: ErrorStateWidget(
+            key: mediaDetailSeedErrorKey,
+            message: t.messages.detailLoadFailed,
+            icon: Symbols.error_outline_rounded,
+            onRetry: _retrySeededLoad,
+            retryLabel: t.common.retry,
+            actionFocusNode: _seedRetryFocusNode,
+            actionAutofocus: true,
+            onActionNavigateUp: _backButtonFocusNode.requestFocus,
+            onActionBack: _popMediaDetailIfBackNotSuppressed,
+          ),
+        ),
+      ),
+    );
+    if (!InputModeTracker.shouldBlockSystemBack(context)) return page;
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) _handleMediaDetailSystemBack();
+      },
+      child: page,
+    );
   }
 
   Future<void> _loadSeasons() async {
@@ -3632,6 +3712,8 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
     final isTv = PlatformDetector.isTV();
     final theme = Theme.of(context);
     final sectionTitleStyle = theme.textTheme.titleLarge?.copyWith(fontWeight: .bold, fontSize: isTv ? 28 : null);
+
+    if (_seedFailed) return _buildSeedFailedPage(context);
 
     // Show loading state while fetching full metadata, unless the page can be
     // drawn from the card it was opened from.

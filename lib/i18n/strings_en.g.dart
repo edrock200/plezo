@@ -2724,6 +2724,9 @@ class Translations$messages$en {
 	/// en: 'Couldn't load seasons'
 	String get seasonsLoadFailed => 'Couldn\'t load seasons';
 
+	/// en: 'Couldn't load this title. Check your connection and try again.'
+	String get detailLoadFailed => 'Couldn\'t load this title. Check your connection and try again.';
+
 	/// en: 'No episodes found in first season'
 	String get noEpisodesFound => 'No episodes found in first season';
 
@@ -10321,6 +10324,7 @@ extension on Translations {
 			'messages.logoutConfirm' => 'Are you sure you want to log out?',
 			'messages.noSeasonsFound' => 'No seasons found',
 			'messages.seasonsLoadFailed' => 'Couldn\'t load seasons',
+			'messages.detailLoadFailed' => 'Couldn\'t load this title. Check your connection and try again.',
 			'messages.noEpisodesFound' => 'No episodes found in first season',
 			'messages.noEpisodesFoundGeneral' => 'No episodes found',
 			'messages.episodesLoadFailed' => 'Couldn\'t load episodes',
@@ -10405,9 +10409,9 @@ extension on Translations {
 			'profiles.signOut' => 'Sign out',
 			'profiles.signOutPlexTitle' => 'Sign out of Plex?',
 			'profiles.signOutPlexMessage' => ({required Object displayName}) => 'Remove ${displayName} and all Plex Home users? Sign back in anytime.',
-			'profiles.signOutPlexDeleteDownloads' => 'Also delete downloads',
 			_ => null,
 		} ?? switch (path) {
+			'profiles.signOutPlexDeleteDownloads' => 'Also delete downloads',
 			'profiles.signOutPlexDeleteDownloadsDescription' => 'Otherwise they stay on this device and come back when you sign back in to this account.',
 			'profiles.signedOutPlex' => 'Signed out of Plex.',
 			'profiles.signOutFailed' => 'Sign out failed.',
@@ -10919,9 +10923,9 @@ extension on Translations {
 			'explore.detail.schedule' => 'Schedule',
 			'explore.detail.recommendedByUsers' => ({required num n}) => (_root.$meta.cardinalResolver ?? PluralResolvers.cardinal('en'))(n, one: 'Recommended by ${n} user', other: 'Recommended by ${n} users', ), 
 			'explore.detail.recommendedBy' => ({required Object who}) => 'Recommended by ${who}',
-			'explore.detail.favoritedBy' => ({required Object who}) => 'Favorited by ${who}',
 			_ => null,
 		} ?? switch (path) {
+			'explore.detail.favoritedBy' => ({required Object who}) => 'Favorited by ${who}',
 			'explore.detail.unairedEpisodes' => ({required Object n}) => '${n} not aired yet',
 			'explore.detail.recommendedByPercent' => ({required Object percent}) => 'Recommended by ${percent} of viewers',
 			'explore.detail.relatedTitles' => 'Related titles',
@@ -11433,9 +11437,9 @@ extension on Translations {
 			'companionRemote.remote.next' => 'Next',
 			'companionRemote.remote.seekBack' => 'Seek Back',
 			'companionRemote.remote.stop' => 'Stop',
-			'companionRemote.remote.seekForward' => 'Seek Fwd',
 			_ => null,
 		} ?? switch (path) {
+			'companionRemote.remote.seekForward' => 'Seek Fwd',
 			'companionRemote.remote.volume' => 'Volume',
 			'companionRemote.remote.volumeDown' => 'Down',
 			'companionRemote.remote.volumeUp' => 'Up',
@@ -11947,9 +11951,9 @@ extension on Translations {
 			'siloRequests.searchResults' => 'Titles to request',
 			'siloRequests.availableToRequest' => 'Available to request',
 			'siloRequests.availableToRequestOnServer' => ({required Object server}) => 'Available to request on ${server}',
-			'siloRequests.noRequests' => 'You haven\'t requested anything yet',
 			_ => null,
 		} ?? switch (path) {
+			'siloRequests.noRequests' => 'You haven\'t requested anything yet',
 			'siloRequests.noRequestsSubtitle' => 'Search for a movie or series to request it.',
 			'siloRequests.noResults' => 'No titles found',
 			'siloRequests.loadFailed' => 'Couldn\'t load your requests',
