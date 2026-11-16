@@ -4,6 +4,14 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+From Silo's own apps (November 16, 2026):
+
+- **WAV audiobooks play:** Silo audiobooks stored as WAV files, including 8-bit, 32-bit and floating-point WAV, now play instead of failing with "No validated playback route". *(please test)*
+
+## silo-preview-2.41.0
+
+Released November 16, 2026. Android and Windows.
+
 - **The right resume point after watching:** back from the player, a Silo title's page now shows where the server will resume (or Play), not just where you stopped. Silo ignores a very short watch and keeps your earlier place. On a show's page the episode list and season watched counts update too. *(please test)*
 - **Offline progress no longer undoes newer progress:** watching a downloaded Silo title offline is sent with the time you watched it, so progress you made since on another device is kept, and finished titles are marked watched by the server's own rule. *(please test)*
 - **Live AI subtitles stack like normal captions:** when two lines are on screen together, the earlier one stays on the bottom line.
