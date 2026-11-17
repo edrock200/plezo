@@ -24,6 +24,7 @@ import 'package:plezy/services/silo/silo_api_cache.dart';
 import 'package:plezy/services/silo/silo_card_overlay_store.dart';
 import 'package:plezy/services/silo/silo_client.dart';
 import 'package:plezy/services/silo/silo_mappers.dart';
+import 'package:plezy/utils/watch_state_notifier.dart';
 import 'package:plezy/exceptions/media_server_exceptions.dart';
 
 const _headers = SiloDeviceHeaders(
@@ -918,7 +919,12 @@ void main() {
       expect(requests.single.url.queryParameters['file_id'], '43');
     });
 
-    Future<SiloClient> sessionAnsweringProgress(http.Response Function() progressAnswer) async {
+    Future<SiloClient> sessionAnsweringProgress(
+      http.Response Function() progressAnswer, {
+      http.Response Function()? stopAnswer,
+      http.Response Function()? watchedAnswer,
+      MediaKind kind = MediaKind.movie,
+    }) async {
       var progressCalls = 0;
       final c = client((request) async {
         final path = Uri.decodeComponent(request.url.path);
@@ -952,11 +958,14 @@ void main() {
           // The start report is accepted; later ones get the answer under test.
           return progressCalls++ == 0 ? _json({}, 200) : progressAnswer();
         }
+        if (path.endsWith('/playback/sess-9') && request.method == 'DELETE' && stopAnswer != null) {
+          return stopAnswer();
+        }
         if (path.endsWith('/sync/progress')) return _json({'items': []});
-        if (path.endsWith('/watched/movie:m1')) return http.Response('', 204);
+        if (path.endsWith('/watched/movie:m1')) return watchedAnswer?.call() ?? http.Response('', 204);
         return _json({}, 404);
       });
-      final metadata = MediaItem.silo(id: 'movie:m1', kind: MediaKind.movie, serverId: 'srv-1');
+      final metadata = MediaItem.silo(id: 'movie:m1', kind: kind, serverId: 'srv-1');
       await c.getPlaybackInitialization(PlaybackInitializationOptions(metadata: metadata, selectedMediaIndex: 0));
       await c.reportPlaybackStarted(itemId: 'movie:m1', position: Duration.zero, playSessionId: 'sess-9');
       requests.clear();
@@ -1026,6 +1035,76 @@ void main() {
         playSessionId: 'sess-9',
       );
       expect(requests.single.url.path, endsWith('/watched/movie%3Am1'));
+    });
+
+    group('a stop past the watched threshold', () {
+      http.Response stopped() => _json({'outcome': 'stopped'});
+      late List<WatchStateEvent> events;
+      late StreamSubscription<WatchStateEvent> subscription;
+      setUp(() {
+        events = [];
+        subscription = WatchStateNotifier().stream.listen(events.add);
+      });
+      tearDown(() => subscription.cancel());
+
+      Future<void> stopAt(SiloClient c, Duration position) async {
+        await c.reportPlaybackStopped(
+          itemId: 'movie:m1',
+          position: position,
+          duration: const Duration(hours: 1),
+          playSessionId: 'sess-9',
+        );
+        await Future<void>.delayed(Duration.zero);
+      }
+
+      test('confirms the watched mark after the stop, so the server drops the resume point', () async {
+        // Silo judges completion by its own rule (the scanned duration, the
+        // administrator's share) and may keep a resume point near the end;
+        // the mark makes it agree with Plezilo's watched check.
+        final c = await sessionAnsweringProgress(() => _json({}), stopAnswer: stopped);
+        await stopAt(c, const Duration(minutes: 58));
+        expect(requests.map((r) => r.method), ['DELETE', 'POST']);
+        expect(requests.first.url.path, endsWith('/api/v2/playback/sess-9'));
+        expect(Uri.decodeComponent(requests.last.url.path), endsWith('/api/v2/watched/movie:m1'));
+        final watched = events.where((e) => e.changeType == WatchStateChangeType.watched).single;
+        expect(watched.itemId, 'movie:m1');
+        expect(watched.isNowWatched, isTrue);
+        expect(watched.serverAcknowledged, isTrue);
+      });
+
+      test('the end of the file counts, an episode too', () async {
+        final c = await sessionAnsweringProgress(() => _json({}), stopAnswer: stopped, kind: MediaKind.episode);
+        await stopAt(c, const Duration(hours: 1));
+        expect(requests.last.url.path, endsWith('/watched/movie%3Am1'));
+      });
+
+      test('a stop short of the threshold only stops the session', () async {
+        final c = await sessionAnsweringProgress(() => _json({}), stopAnswer: stopped);
+        await stopAt(c, const Duration(minutes: 40));
+        expect(requests.single.method, 'DELETE');
+        expect(events.where((e) => e.changeType == WatchStateChangeType.watched), isEmpty);
+      });
+
+      test('a session an administrator ended at the stop is not marked watched', () async {
+        final c = await sessionAnsweringProgress(
+          () => _json({}),
+          stopAnswer: () => _problem(410, 'playback_session_ended'),
+        );
+        await stopAt(c, const Duration(minutes: 59));
+        expect(requests.single.method, 'DELETE');
+        expect(events, isEmpty);
+      });
+
+      test('a failed mark keeps the stop and announces nothing', () async {
+        final c = await sessionAnsweringProgress(
+          () => _json({}),
+          stopAnswer: stopped,
+          watchedAnswer: () => _problem(500, 'internal_error'),
+        );
+        await stopAt(c, const Duration(minutes: 58));
+        expect(requests.map((r) => r.method), ['DELETE', 'POST']);
+        expect(events.where((e) => e.changeType == WatchStateChangeType.watched), isEmpty);
+      });
     });
 
     test('a capped preset reports a fallback only when the server left a larger source unchanged', () async {

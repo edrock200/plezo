@@ -172,7 +172,7 @@ class _CardArtworkOverlaysState extends State<CardArtworkOverlays> {
           shape: widget.shape,
           wideScale: wideScale,
           progress: siloCardHasProgressBar(item),
-          watched: poster && showWatched && item.isWatched,
+          watched: poster && showWatched && siloShowsWatchedCheck(item),
           episodesLeft: poster && showCount ? siloEpisodesLeftOf(item) : 0,
           imageUrl: _imageUrl,
           onImageFailed: store?.imageFailed,
@@ -181,6 +181,15 @@ class _CardArtworkOverlaysState extends State<CardArtworkOverlays> {
     );
   }
 }
+
+/// Whether a Silo poster's watch-status corner draws the watched check: a
+/// watched title without a resume point. A title Silo still holds a resume
+/// point for (a re-watch, or a play the server has not counted as finished)
+/// is in progress: it shows the progress bar and no check, as Plezy's
+/// [WatchedIndicator] and the episode list on its page do. A check above a
+/// resume bar on a Continue Watching card said "watched" while the page said
+/// "not finished".
+bool siloShowsWatchedCheck(MediaItem item) => item.isWatched && !item.hasActiveProgress;
 
 /// Whether [WatchedIndicator] draws a progress bar along the artwork's bottom
 /// for [item]: the bottom badge row lifts clear of it.

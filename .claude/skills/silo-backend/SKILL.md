@@ -379,6 +379,14 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
   Progress: `POST /playback/{sid}/progress` with a strictly increasing `sequence`; stop:
   `DELETE /playback/{sid}` with a JSON body and a `stop_id` (and stop `sequence`) minted once; a
   failed stop keeps the session and is retried with the same `stop_id` on the next reload.
+  A stop past `watchedThreshold` (Plezilo's 90% of the player's duration) is followed by
+  `POST /watched/{id}` and an acknowledged watched event (`_confirmFinished`; not for extras or an
+  administrator-ended session): Silo applies its own completion rule to the stop (scanned
+  duration, admin share, strictly more than 90%), and a played title with a later resume sample
+  stays in Continue Watching as a re-watch. The mark is a no-op on a title the stop completed and
+  records the play + clears the resume point otherwise. Log line: `SiloClient: playback stopped at
+  N s of M s; marking the title watched`. A poster's green check is hidden while the item has an
+  active resume point (`siloShowsWatchedCheck`), matching `WatchedIndicator` and the episode rail.
 - **Subtitles:** the plan's `subtitle.inventory`; for `original_http` only `source:external`
   entries become sidecars (embedded ones are in the file). Subtitle routes have no signed `st`, so
   their URLs carry the short-lived access token as `token=` for players that do not forward
