@@ -89,6 +89,36 @@ void main() {
     expect(requested.single, isA<SiloMediaItem>());
   });
 
+  testWidgets('a played title Silo still holds a resume point for shows its progress bar, not the check', (
+    tester,
+  ) async {
+    // A Continue Watching title Silo reports played with a resume point near
+    // the end (a re-watch, or a play the server did not count as finished):
+    // its page shows the bar without a check, so the poster does too.
+    final store = _store({'enabled': true});
+    CardArtworkOverlays.debugStoreResolver = (context, item) => store;
+    final resumed = testMediaItem(
+      id: 'movie:heat-1995',
+      backend: MediaBackend.silo,
+      kind: MediaKind.movie,
+      viewCount: 1,
+      durationMs: 2580000,
+      viewOffsetMs: 2400000,
+      raw: const {'overlay_summary': _summary},
+    );
+    expect(siloShowsWatchedCheck(resumed), isFalse);
+    expect(siloShowsWatchedCheck(resumed.copyWith(viewOffsetMs: null)), isTrue);
+    expect(siloShowsWatchedCheck(resumed.copyWith(viewCount: 0, viewOffsetMs: null)), isFalse);
+    await tester.pumpWidget(_app(_card(resumed)));
+    await tester.pumpAndSettle();
+    expect(find.byType(SiloWatchedCheck), findsNothing);
+    expect(tester.widget<SiloCardOverlayLayer>(find.byType(SiloCardOverlayLayer)).progress, isTrue);
+
+    await tester.pumpWidget(_app(_card(resumed.copyWith(viewOffsetMs: null))));
+    await tester.pumpAndSettle();
+    expect(find.byType(SiloWatchedCheck), findsOneWidget);
+  });
+
   testWidgets('the combined badge replaces the badges it covers on the card', (tester) async {
     final store = _store({
       'enabled': true,

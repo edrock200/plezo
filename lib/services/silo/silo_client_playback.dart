@@ -6,6 +6,7 @@ class _SiloPlaybackSession {
     required this.sessionId,
     required this.installationId,
     required this.itemId,
+    this.item,
     this.fileId,
     this.subtitleInventory = const [],
     this.audioTracks = const [],
@@ -16,6 +17,11 @@ class _SiloPlaybackSession {
   final String sessionId;
   final String installationId;
   final String itemId;
+
+  /// The played movie or episode, for the watched mark a finished stop
+  /// confirms ([_SiloPlaybackMethods._confirmFinished]); null for an extra
+  /// (a trailer or featurette is never marked watched).
+  final MediaItem? item;
 
   /// The playing file and the tracks the player's AI subtitle sheet offers.
   final String? fileId;
@@ -335,6 +341,7 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
       sessionId: sessionId,
       installationId: decision['_installation_id'].toString(),
       itemId: metadata.id,
+      item: extraFileId == null ? metadata : null,
       fileId: fileId,
       subtitleInventory: inventory is List ? inventory.whereType<Map>().toList() : const [],
       audioTracks: version['audio_tracks'] is List
@@ -816,7 +823,9 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
   double get watchedThreshold => 0.9;
 
   /// Session progress persists the resume point and scrobbles on the server
-  /// (`progress_persistence: server`), so stopping marks the item played.
+  /// (`progress_persistence: server`). Silo applies its own completion rule
+  /// to the stop, so a stop past [watchedThreshold] also confirms the watched
+  /// mark itself ([_confirmFinished]); the tracker issues no mark of its own.
   @override
   bool get marksWatchedOnPlaybackStopped => true;
 
@@ -876,7 +885,11 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
             },
           },
         );
-        if (response.statusCode != 404 && response.statusCode != 410) throwIfHttpError(response);
+        final status = response.statusCode;
+        if (status != 404 && status != 410) throwIfHttpError(response);
+        // An administrator ended it: like a refused progress report, nothing
+        // more is written for it (no watched mark either).
+        if (SiloAudiobookSessionRules.isSessionEnded(status, response.data)) _endedSessionIds.add(session.sessionId);
         session.stopped = true;
       } finally {
         if (session.stopped || ++session.stopAttempts >= _maxStopAttempts) {
@@ -957,11 +970,9 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
         return;
       }
       // A downloaded file played online: no session to stop. Past the watched
-      // threshold the item is marked played, as a session stop would have
-      // done; otherwise the resume point is written.
-      if (total != null &&
-          total > Duration.zero &&
-          position.inMilliseconds >= total.inMilliseconds * watchedThreshold) {
+      // threshold the item is marked played, as a finished session is below;
+      // otherwise the resume point is written.
+      if (_isFinishedPlay(position, total)) {
         await _api.send('POST', '/api/v2/watched/${Uri.encodeComponent(itemId)}');
       } else {
         await _syncProgress(itemId, position: position, duration: total);
@@ -969,6 +980,51 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
       return;
     }
     await _stopSession(session, position: position, isPaused: true);
+    if (_endedSessionIds.contains(session.sessionId)) return;
+    final item = session.item;
+    if (item != null && _isFinishedPlay(position, duration)) await _confirmFinished(item, position, duration!);
+  }
+
+  /// Whether a play that ended at [position] of [duration] counts as watched
+  /// by Plezilo's rule ([watchedThreshold]), the one its own watched check
+  /// uses.
+  bool _isFinishedPlay(Duration position, Duration? duration) =>
+      duration != null &&
+      duration > Duration.zero &&
+      position.inMilliseconds >= duration.inMilliseconds * watchedThreshold;
+
+  /// A session stopped past [watchedThreshold]: `POST /watched/{id}` so the
+  /// server records it as watched too.
+  ///
+  /// The stop alone is not enough. Silo judges completion by its own rule
+  /// (the scanned file's duration, the administrator's watched share, by
+  /// default more than 90%), which can disagree with the player's clock, and
+  /// a title already watched once keeps its played flag while a re-watch's
+  /// resume point puts it back in Continue Watching. Either way Plezilo
+  /// showed the title watched while the server kept a resume point near the
+  /// end and left it in Continue Watching. The mark is a no-op on a title the
+  /// stop completed (no second play is recorded); on one the server still
+  /// holds in progress, or mid-re-watch, it records the play and clears the
+  /// resume point (the contract of `POST /watched/{id}`). The acknowledged
+  /// watched event then drops the card from Continue Watching and reloads
+  /// the row. A failed mark is logged and leaves the stop as it was.
+  Future<void> _confirmFinished(MediaItem item, Duration position, Duration duration) async {
+    appLogger.i(
+      'SiloClient: playback stopped at ${_seconds(position).toStringAsFixed(0)} s of '
+      '${_seconds(duration).toStringAsFixed(0)} s; marking the title watched',
+    );
+    try {
+      await _api.send('POST', '/api/v2/watched/${Uri.encodeComponent(item.id)}');
+    } catch (e) {
+      appLogger.w('SiloClient: watched mark after a finished playback failed', error: e);
+      return;
+    }
+    WatchStateNotifier().notifyWatched(
+      item: item,
+      isNowWatched: true,
+      cacheServerId: cacheServerId,
+      serverAcknowledged: true,
+    );
   }
 
   /// `POST /api/v2/sync/progress`: a resume point written without a playback
