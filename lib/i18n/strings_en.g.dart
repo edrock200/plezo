@@ -104,6 +104,7 @@ class Translations with BaseTranslations<AppLocale, Translations> {
 	late final Translations$siloAudio$en siloAudio = Translations$siloAudio$en.internal(_root);
 	late final Translations$reviewFixes$en reviewFixes = Translations$reviewFixes$en.internal(_root);
 	late final Translations$siloForYou$en siloForYou = Translations$siloForYou$en.internal(_root);
+	late final Translations$siloCollections$en siloCollections = Translations$siloCollections$en.internal(_root);
 	late final Translations$siloMemberships$en siloMemberships = Translations$siloMemberships$en.internal(_root);
 }
 
@@ -7252,6 +7253,18 @@ class Translations$siloForYou$en {
 	String get emptyHint => 'Titles you save on this Silo profile show up here.';
 }
 
+// Path: siloCollections
+class Translations$siloCollections$en {
+	Translations$siloCollections$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'by ${owner}'
+	String byOwner({required Object owner}) => 'by ${owner}';
+}
+
 // Path: siloMemberships
 class Translations$siloMemberships$en {
 	Translations$siloMemberships$en.internal(this._root);
@@ -12141,6 +12154,7 @@ extension on Translations {
 			'siloForYou.watchlistEmptyMovies' => 'No movies on your watchlist',
 			'siloForYou.watchlistEmptyShows' => 'No shows on your watchlist',
 			'siloForYou.emptyHint' => 'Titles you save on this Silo profile show up here.',
+			'siloCollections.byOwner' => ({required Object owner}) => 'by ${owner}',
 			'siloMemberships.addToFavorites' => 'Add to Favorites',
 			'siloMemberships.removeFromFavorites' => 'Remove from Favorites',
 			'siloMemberships.addedToFavorites' => 'Added to Favorites',

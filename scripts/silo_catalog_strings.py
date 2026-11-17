@@ -1,18 +1,23 @@
 #!/usr/bin/env python3
-"""Extract the Silo row titles Plezilo shows from Silo's translation catalogs.
+"""Extract the Silo strings Plezilo shows from Silo's translation catalogs.
 
 Silo's server words some rows itself (Home and library sections, recommendation
 hubs) and sends `title_key` (`home.section.*`) and `title_args` next to the
 English `title`. Silo's apps translate those keys from a shared catalog that
 ships in AGPL-3.0 projects. Plezilo bundles only the `home.section.*` entries,
 one small JSON file per Plezilo locale, in `assets/silo_i18n/`, and resolves
-them in `lib/services/silo/silo_catalog_strings.dart`.
+them in `lib/services/silo/silo_catalog_strings.dart`. A few strings Silo's
+Android app words for the same server data (`ANDROID_KEYS`, e.g. the "by
+{owner}" line of a shared collection's card) come from silo-android's catalog
+(`<catalogs>/android/values*/strings_catalog.xml`, or `--android-catalogs`) and
+are added to the same files under their catalog key.
 
 The catalogs are the ones the Siku Roku project vendors
 (`third_party/silo-translations/roku/<folder>/strings.json`, Silo's silo-roku
 catalogs, with named `{placeholders}`). Re-run after refreshing them:
 
-    python3 scripts/silo_catalog_strings.py [--catalogs ../siku/third_party/silo-translations]
+    python3 scripts/silo_catalog_strings.py [--catalogs ../siku/third_party/silo-translations] \
+        [--android-catalogs <silo-android>/android-shared/src/androidMain/res --android-source "..."]
 
 It rewrites `assets/silo_i18n/<locale>.json` for every Plezilo locale
 (`lib/i18n/<locale>.i18n.json`) that has a Silo catalog, removes files for
@@ -28,6 +33,7 @@ import os
 import re
 import sys
 import textwrap
+import xml.etree.ElementTree as ET
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "assets", "silo_i18n")
@@ -36,6 +42,16 @@ PREFIX = "home.section."
 # Plezilo locale (lib/i18n file name) -> silo-roku catalog folder, where the
 # names differ. Every other locale uses the folder of the same name if present.
 FOLDERS = {"en": "en_US", "pt": "pt_BR"}
+
+# Android string name -> (catalog key, placeholder names in %1$s, %2$s, ... order).
+# Strings Silo's Android app has for server data Plezilo shows; the roku
+# catalogs lack them.
+ANDROID_KEYS = {
+    "collections_posterCard_byOwner": ("collections.posterCard.byOwner", ("owner",)),
+}
+
+# Plezilo locale -> Android resource folder, where it is not values-<locale>.
+ANDROID_FOLDERS = {"en": "values", "pt": "values-pt-rBR"}
 
 LANGUAGE_NAMES = {
     "en": "English",
@@ -69,6 +85,46 @@ def section_titles(path: str) -> dict[str, str]:
     return {k: v for k, v in sorted(data.items()) if k.startswith(PREFIX) and isinstance(v, str) and v.strip()}
 
 
+def android_strings(path: str) -> dict[str, str]:
+    """The ANDROID_KEYS entries of one strings_catalog.xml, as catalog key -> text with {named} placeholders."""
+    try:
+        root = ET.parse(path).getroot()
+    except (OSError, ET.ParseError):
+        return {}
+    out = {}
+    for node in root.iter("string"):
+        spec = ANDROID_KEYS.get(node.get("name", ""))
+        if spec is None:
+            continue
+        key, names = spec
+        text = "".join(node.itertext())
+        # Android resource escapes.
+        text = re.sub(r"\\([\'\"@?\\])", r"\1", text).replace("\\n", "\n")
+
+        def named(m: re.Match) -> str:
+            index = int(m.group(1)) - 1
+            return "{" + names[index] + "}" if 0 <= index < len(names) else m.group(0)
+
+        text = re.sub(r"%(\d+)\$s", named, text)
+        if "%" in text.replace("%%", "") or not text.strip():
+            continue  # a placeholder this script cannot name
+        out[key] = text.replace("%%", "%")
+    return out
+
+
+def android_source_line(catalogs: str) -> str:
+    """'silo-android at <commit> (catalog release <release>)' from the vendored NOTICE.md."""
+    try:
+        with open(os.path.join(catalogs, "NOTICE.md"), encoding="utf-8") as f:
+            notice = f.read()
+    except OSError:
+        return "Silo-Server/silo-android"
+    m = re.search(r"Silo-Server/silo-android at (\w+)\s*\(catalog release ([^,)]+)", notice)
+    if not m:
+        return "Silo-Server/silo-android"
+    return f"Silo-Server/silo-android at {m.group(1)} (catalog release {m.group(2)})"
+
+
 def source_line(catalogs: str) -> str:
     """'silo-roku at <commit> (catalog release <release>)' from the vendored NOTICE.md."""
     try:
@@ -82,9 +138,32 @@ def source_line(catalogs: str) -> str:
     return f"Silo-Server/silo-roku at {m.group(1)} (catalog release {m.group(2)})"
 
 
-def notice_text(source: str, locales: list[str]) -> str:
+def notice_text(source: str, locales: list[str], android_source: str | None) -> str:
     languages = textwrap.fill(
         "Languages: " + ", ".join(LANGUAGE_NAMES.get(loc, loc) for loc in locales) + ".", width=78
+    )
+    keys = '"home.section.*"'
+    android = ""
+    if android_source:
+        extra = ", ".join(f'"{key}"' for key, _ in ANDROID_KEYS.values())
+        keys += f" and {extra}"
+        intro = textwrap.fill(
+            f"The line naming the profile that shared a collection (catalog key {extra}) is "
+            "taken from Silo's Android app catalog:",
+            width=78,
+        )
+        android = f"""
+{intro}
+
+  {android_source}
+  android-shared/src/androidMain/res/values*/strings_catalog.xml
+  (Android's %1$s placeholders written as named {{placeholders}})
+"""
+    included = textwrap.fill(
+        f"Only the {keys} entries are included, unmodified apart from being copied into one JSON file "
+        "per language. The source of these files is the catalogs named above; "
+        "scripts/silo_catalog_strings.py in Plezilo's source regenerates them.",
+        width=78,
     )
     return f"""SILO TRANSLATIONS — NOTICE
 ==========================
@@ -95,7 +174,7 @@ taken from Silo's translation catalogs:
 
   {source}
   locale/<language>/strings.json
-
+{android}
 {languages}
 
 Copyright (c) their authors (Silo Media L.L.C. and contributors).
@@ -106,10 +185,7 @@ LICENSE.txt beside this file and at https://www.gnu.org/licenses/agpl-3.0.html.
 Plezilo itself is licensed under the GNU General Public License, version 3,
 whose section 13 permits combining it with work under the AGPL.
 
-Only the "home.section.*" entries are included, unmodified apart from being
-copied into one JSON file per language. The source of these files is the
-catalogs named above; scripts/silo_catalog_strings.py in Plezilo's source
-regenerates them.
+{included}
 
 "Silo" is a trademark of Silo Media L.L.C. Plezilo is not made or endorsed by
 Silo Media L.L.C.
@@ -128,7 +204,21 @@ def main() -> int:
         default=None,
         help="the AGPL-3.0 text to copy as LICENSE.txt (default: the catalogs' project LICENSE)",
     )
+    parser.add_argument(
+        "--android-catalogs",
+        default=None,
+        help="silo-android's res folder holding values*/strings_catalog.xml (default: <catalogs>/android)",
+    )
+    parser.add_argument(
+        "--android-source",
+        default=None,
+        help="how NOTICE.txt names the Android catalogs (default: read from <catalogs>/NOTICE.md)",
+    )
     args = parser.parse_args()
+    android_dir = args.android_catalogs or os.path.join(args.catalogs, "android")
+    android_english = android_strings(os.path.join(android_dir, ANDROID_FOLDERS["en"], "strings_catalog.xml"))
+    if not android_english:
+        print(f"no {', '.join(ANDROID_KEYS)} in {android_dir}; those strings are left out", file=sys.stderr)
 
     roku = os.path.join(args.catalogs, "roku")
     if not os.path.isdir(roku):
@@ -153,11 +243,14 @@ def main() -> int:
         table = section_titles(path)
         # Only keys the English catalog has: the resolver falls back to English.
         table = {k: v for k, v in table.items() if k in english}
+        android_folder = ANDROID_FOLDERS.get(loc, f"values-{loc}")
+        extra = android_strings(os.path.join(android_dir, android_folder, "strings_catalog.xml"))
+        table.update({k: v for k, v in extra.items() if k in android_english})
         with open(target, "w", encoding="utf-8") as f:
             json.dump(table, f, ensure_ascii=False, indent=2, sort_keys=True)
             f.write("\n")
         written.append(loc)
-        print(f"{loc}: {len(table)} of {len(english)} titles (from {folder})")
+        print(f"{loc}: {len(table)} of {len(english) + len(android_english)} strings (from {folder})")
 
     license_src = args.license or os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(args.catalogs))), "LICENSE")
     try:
@@ -173,7 +266,8 @@ def main() -> int:
 
     ordered = ["en"] + [loc for loc in written if loc != "en"]
     with open(os.path.join(OUT, "NOTICE.txt"), "w", encoding="utf-8") as f:
-        f.write(notice_text(source_line(args.catalogs), ordered))
+        android_source = (args.android_source or android_source_line(args.catalogs)) if android_english else None
+        f.write(notice_text(source_line(args.catalogs), ordered, android_source))
     return 0
 
 

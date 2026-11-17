@@ -270,6 +270,18 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
   the TV spotlight only with art (backdrop, title, item count); without one focus leaves it, and the fallback skips
   it. Menus are the collection ones (Play / Shuffle / Download). Tests: `silo_collection_rows_test.dart`,
   `tv_spotlight_scaffold_test.dart`, `tv_spotlight_ratings_test.dart`, `hub_section_test.dart`.
+  Silo Android #979 (db87f835f) parity, `silo_collection_cards.dart`: each card decodes on its own
+  (`SiloCollectionCards.readable`: a wrongly typed field, an unknown `source` or a server card without `library_id` drops
+  that card, never the row or Home). Home shows a server card only when its library is one Plezilo lists
+  (`_shownLibraryIds` from `fetchLibraries`; read once if Home comes first; a failed read holds server cards back,
+  personal ones stay), so e-book/music/podcast libraries' collections never show. A personal card whose
+  `creator_profile_id` is another profile gets raw `plezy_silo_collection_owner` from `GET /profiles` (profile: false,
+  3 s, 10 min, only read when such a card exists); `SiloCollectionCards.caption` (media_card) shows the exact count
+  (0 included) and "by Name" beside it (phone/desktop) or instead of it (TV); the text is Silo's catalog key
+  `collections.posterCard.byOwner`, which `scripts/silo_catalog_strings.py` takes from silo-android's
+  `strings_catalog.xml` (`ANDROID_KEYS`, `--android-catalogs`). `featured` is ignored (the row stays, never a hero).
+  Home cards have `libraryId` null, so Plezilo's hidden libraries never drop them; Plezilo has no Movies/Series-scoped
+  library pages, and a library row's personal card already opens in that library (`source=user_collection&library_id=`).
 - **Recommendations (Silo's "For You", the user's request 2026-11-15):** Silo's apps have a For You page built from
   `GET /api/v2/recommendations/discover` (`RecommendationsViewModel`, phone `RecommendationsScreen`, TV
   `TvRecommendationsScreen`; Siku's `ForYouPage.brs`). Answer `{items: [{type, title, title_key?, title_args?, kind?, key?,

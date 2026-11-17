@@ -12,7 +12,6 @@ import 'silo_catalog_strings.dart';
 /// order is the app's language, then Silo's English, then the server's title.
 abstract final class SiloSectionTitles {
   static const _prefix = 'home.section.';
-  static final _placeholder = RegExp(r'\{([^{}]+)\}');
 
   /// The title to show for a row whose JSON is [row] (`title`, `title_key`,
   /// `title_args`).
@@ -32,26 +31,11 @@ abstract final class SiloSectionTitles {
       if (titleArgs is List)
         for (final (index, value) in titleArgs.indexed) '$index': ?_arg(value),
     };
-    return _fill(SiloCatalogStrings.current(titleKey), args) ??
-        _fill(SiloCatalogStrings.english(titleKey), args) ??
-        fallback;
+    return SiloCatalogStrings.format(titleKey, args) ?? fallback;
   }
 
   static String? _arg(Object? value) {
     final text = value?.toString().trim();
     return text == null || text.isEmpty ? null : text;
-  }
-
-  /// [template] with every `{name}` replaced from [args], or null when there
-  /// is no template or it needs an argument [args] lacks.
-  static String? _fill(String? template, Map<String, String> args) {
-    if (template == null || template.isEmpty) return null;
-    var missing = false;
-    final filled = template.replaceAllMapped(_placeholder, (m) {
-      final value = args[m.group(1)!.trim()];
-      if (value == null) missing = true;
-      return value ?? '';
-    });
-    return missing ? null : filled;
   }
 }

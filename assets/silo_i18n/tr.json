@@ -1,4 +1,5 @@
 {
+  "collections.posterCard.byOwner": "Oluşturan: {owner}",
   "home.section.becauseYouEnjoy": "{genres} sevdiğiniz için",
   "home.section.becauseYouWatched": "İzlediklerinize göre",
   "home.section.becauseYouWatchedTitle": "{title} içeriğini izlediğiniz için",

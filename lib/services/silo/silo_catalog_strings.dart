@@ -56,6 +56,26 @@ abstract final class SiloCatalogStrings {
   /// The English catalog text for [key], or null.
   static String? english(String key) => _english[key];
 
+  static final _placeholder = RegExp(r'\{([^{}]+)\}');
+
+  /// [key]'s text in the loaded language, else Silo's English, with every
+  /// `{name}` filled from [args]; null when neither catalog has a text whose
+  /// placeholders [args] can all fill.
+  static String? format(String key, Map<String, String> args) => fill(current(key), args) ?? fill(english(key), args);
+
+  /// [template] with every `{name}` replaced from [args], or null when there
+  /// is no template or it needs an argument [args] lacks.
+  static String? fill(String? template, Map<String, String> args) {
+    if (template == null || template.isEmpty) return null;
+    var missing = false;
+    final filled = template.replaceAllMapped(_placeholder, (m) {
+      final value = args[m.group(1)!.trim()];
+      if (value == null) missing = true;
+      return value ?? '';
+    });
+    return missing ? null : filled;
+  }
+
   @visibleForTesting
   static void debugSetTables({Map<String, String> english = const {}, Map<String, String> current = const {}}) {
     _english = english;

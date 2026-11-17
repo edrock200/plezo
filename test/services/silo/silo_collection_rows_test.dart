@@ -11,7 +11,15 @@ import 'package:plezy/media/media_kind.dart';
 import 'package:plezy/services/plex_api_cache.dart';
 import 'package:plezy/services/silo/silo_api.dart';
 import 'package:plezy/services/silo/silo_api_cache.dart';
+import 'package:plezy/services/silo/silo_catalog_strings.dart';
 import 'package:plezy/services/silo/silo_client.dart';
+import 'package:plezy/services/silo/silo_collection_cards.dart';
+import 'package:plezy/media/media_hub.dart';
+import 'package:plezy/services/data_aggregation_service.dart';
+import 'package:plezy/services/multi_server_manager.dart';
+import 'package:plezy/services/settings_service.dart';
+
+import '../../test_helpers/prefs.dart';
 
 const _headers = SiloDeviceHeaders(
   deviceId: 'dev-1',
@@ -74,7 +82,15 @@ Map<String, dynamic> _collectionRow({String id = 'picks', String? libraryId, int
       'item_count': 4,
       'creator_profile_id': 'p-owner',
     },
-    {'id': 'c2', 'source': 'library', 'title': 'Empty', 'poster_url': '', 'poster_is_collage': false, 'item_count': 0},
+    {
+      'id': 'c2',
+      'source': 'library',
+      'title': 'Empty',
+      'poster_url': '',
+      'poster_is_collage': false,
+      'item_count': 0,
+      'library_id': libraryId ?? '3',
+    },
     for (var i = 3; i < cards; i++)
       {
         'id': 'x$i',
@@ -100,11 +116,27 @@ void main() {
     requests = [];
   });
 
-  SiloClient client(Future<http.Response> Function(http.Request request) handler) => SiloClient.forTesting(
+  /// The profile's libraries: Movies (3), Shows (5) and an e-book library
+  /// (7), which Plezilo does not show.
+  Future<http.Response> libraries() async => _json({
+    'items': [
+      {'id': '3', 'name': 'Movies', 'type': 'movies'},
+      {'id': '5', 'name': 'Shows', 'type': 'series'},
+      {'id': '7', 'name': 'Books', 'type': 'ebooks'},
+    ],
+  });
+
+  /// [handler] answers everything but the library list, which [librariesAnswer]
+  /// (default [libraries]) answers.
+  SiloClient client(
+    Future<http.Response> Function(http.Request request) handler, {
+    Future<http.Response> Function()? librariesAnswer,
+  }) => SiloClient.forTesting(
     _connection(),
     headers: _headers,
     httpClient: MockClient((request) {
       requests.add(request);
+      if (request.url.path.endsWith('/api/v2/user/libraries')) return (librariesAnswer ?? libraries)();
       return handler(request);
     }),
   );
@@ -281,6 +313,354 @@ void main() {
       await c.fetchCollectionPage(row.items[1].id);
       expect(requests.single.url.queryParameters['source'], 'user_collection');
       expect(requests.single.url.queryParameters['library_id'], '3');
+    });
+  });
+
+  group('cards (Silo Android #979)', () {
+    Future<List<MediaHub>> homeWith(List<Object?> cards, {List<Map<String, dynamic>> more = const []}) {
+      final c = client((request) async {
+        if (request.url.path.endsWith('/home/sections')) {
+          return _json({
+            'sections': [
+              {..._collectionRow(), 'collections': cards, 'total_count': cards.length},
+              ...more,
+            ],
+          });
+        }
+        return emptyPage();
+      });
+      return c.fetchGlobalHubs();
+    }
+
+    Map<String, dynamic> good(String id, [Map<String, dynamic> extra = const {}]) => {
+      'id': id,
+      'source': 'library',
+      'title': 'Title $id',
+      'poster_url': '',
+      'item_count': 2,
+      'library_id': '3',
+      ...extra,
+    };
+
+    test('a card with a wrongly typed field is left out; the row and Home keep the rest', () async {
+      final hubs = await homeWith(
+        [
+          good('ok-1'),
+          good('bad-count', {'item_count': '3'}),
+          good('bad-fraction', {'item_count': 2.5}),
+          good('bad-title', {'title': 42}),
+          good('bad-poster', {'poster_url': false}),
+          good('bad-backdrop', {'backdrop_url': 7}),
+          good('bad-collage', {'poster_is_collage': 'yes'}),
+          good('bad-library', {'library_id': true}),
+          {...good('bad-creator'), 'source': 'user', 'creator_profile_id': <Object>[]},
+          good('bad-id', {'id': <String, Object>{}}),
+          'not a card',
+          null,
+          good('ok-2', {'item_count': 3.0}),
+        ],
+        more: [
+          {
+            'id': 'ra',
+            'section_type': 'recently_added',
+            'title': 'Recently Added',
+            'total_count': 1,
+            'items': [_movie(2)],
+          },
+        ],
+      );
+      expect(hubs.map((h) => h.id), ['home:picks', 'home:ra']);
+      expect(hubs.first.items.map((i) => i.id), ['silo-collection:~:ok-1', 'silo-collection:~:ok-2']);
+      expect(hubs.first.items.last.leafCount, 3);
+    });
+
+    test('an unknown source or a server collection without a library is left out', () async {
+      final hubs = await homeWith([
+        good('ok'),
+        good('no-source', {'source': null}),
+        good('other-source', {'source': 'smart'}),
+        {...good('no-library')}..remove('library_id'),
+        good('blank-library', {'library_id': ' '}),
+        // A personal collection needs no library.
+        {'id': 'mine', 'source': 'user', 'title': 'Mine', 'item_count': 1, 'creator_profile_id': 'p-owner'},
+      ]);
+      expect(hubs.single.items.map((i) => i.id), ['silo-collection:~:ok', 'silo-user-collection:~:mine']);
+    });
+
+    test('a row whose every card is unreadable is dropped, not Home', () async {
+      final hubs = await homeWith(
+        [
+          good('bad', {'item_count': 'x'}),
+        ],
+        more: [
+          {
+            'id': 'ra',
+            'section_type': 'recently_added',
+            'title': 'Recently Added',
+            'total_count': 1,
+            'items': [_movie(2)],
+          },
+        ],
+      );
+      expect(hubs.map((h) => h.id), ['home:ra']);
+    });
+  });
+
+  group('e-book and other hidden libraries', () {
+    Map<String, dynamic> row() => {
+      ..._collectionRow(),
+      'collections': [
+        {'id': 'm', 'source': 'library', 'title': 'Films', 'item_count': 2, 'library_id': '3'},
+        {'id': 'b', 'source': 'library', 'title': 'Novels', 'item_count': 5, 'library_id': '7'},
+        {'id': 'gone', 'source': 'library', 'title': 'Elsewhere', 'item_count': 5, 'library_id': '99'},
+        {'id': 'u', 'source': 'user', 'title': 'Mine', 'item_count': 1, 'creator_profile_id': 'p-owner'},
+      ],
+    };
+
+    test('Home never shows an e-book library\'s collection', () async {
+      final c = client((request) async {
+        if (request.url.path.endsWith('/home/sections')) {
+          return _json({
+            'sections': [row()],
+          });
+        }
+        return emptyPage();
+      });
+      final items = (await c.fetchGlobalHubs()).single.items;
+      expect(items.map((i) => i.id), ['silo-collection:~:m', 'silo-user-collection:~:u']);
+    });
+
+    test('the library list read for Home is the one the app already read', () async {
+      final c = client((request) async {
+        if (request.url.path.endsWith('/home/sections')) {
+          return _json({
+            'sections': [row()],
+          });
+        }
+        return emptyPage();
+      });
+      await c.fetchLibraries();
+      requests.clear();
+      await c.fetchGlobalHubs();
+      expect(requests.where((r) => r.url.path.endsWith('/user/libraries')), isEmpty);
+    });
+
+    test('without the library list, Home holds server collections back and keeps personal ones', () async {
+      final c = client((request) async {
+        if (request.url.path.endsWith('/home/sections')) {
+          return _json({
+            'sections': [row()],
+          });
+        }
+        return emptyPage();
+      }, librariesAnswer: () async => http.Response('down', 500));
+      final items = (await c.fetchGlobalHubs()).single.items;
+      expect(items.map((i) => i.id), ['silo-user-collection:~:u']);
+    });
+
+    test('a library page keeps its own row\'s cards', () async {
+      final c = client((request) async {
+        if (Uri.decodeComponent(request.url.path).endsWith('/library/3/sections')) {
+          return _json({
+            'sections': [row()],
+          });
+        }
+        return emptyPage();
+      });
+      final items = (await c.fetchLibraryHubs('3', libraryName: 'Movies')).single.items;
+      expect(items, hasLength(4));
+      expect(requests.where((r) => r.url.path.endsWith('/user/libraries')), isEmpty);
+    });
+  });
+
+  group('shared personal collections', () {
+    Map<String, dynamic> row() => {
+      ..._collectionRow(),
+      'collections': [
+        {'id': 'h', 'source': 'library', 'title': 'Heists', 'item_count': 12, 'library_id': '3'},
+        {'id': 'own', 'source': 'user', 'title': 'Mine', 'item_count': 4, 'creator_profile_id': 'p-owner'},
+        {'id': 'alex', 'source': 'user', 'title': 'Alex picks', 'item_count': 3, 'creator_profile_id': 'p-alex'},
+        {'id': 'empty', 'source': 'user', 'title': 'Soon', 'item_count': 0, 'creator_profile_id': 'p-alex'},
+        {'id': 'one', 'source': 'user', 'title': 'Single', 'item_count': 1, 'creator_profile_id': 'p-gone'},
+      ],
+    };
+
+    Future<http.Response> profiles() async => _json({
+      'items': [
+        {'id': 'p-owner', 'name': 'Laura'},
+        {'id': 'p-alex', 'name': 'Alex'},
+      ],
+    });
+
+    tearDown(() => SiloCatalogStrings.debugSetTables());
+
+    test('another profile\'s collection reads "by Name"; the viewer\'s own and the library\'s do not', () async {
+      final c = client((request) async {
+        if (request.url.path.endsWith('/home/sections')) {
+          return _json({
+            'sections': [row()],
+          });
+        }
+        if (request.url.path.endsWith('/api/v2/profiles')) return profiles();
+        return emptyPage();
+      });
+      final items = (await c.fetchGlobalHubs()).single.items;
+      final captions = {for (final i in items) i.title: SiloCollectionCards.caption(i, tv: false)};
+      expect(captions, {
+        'Heists': '12 items',
+        'Mine': '4 items',
+        'Alex picks': '3 items · by Alex',
+        // The row's count is exact: an empty collection says so.
+        'Soon': '0 items · by Alex',
+        // A maker this account has no name for shows the count alone.
+        'Single': '1 item',
+      });
+      final tv = {for (final i in items) i.title: SiloCollectionCards.caption(i, tv: true)};
+      expect(tv['Alex picks'], 'by Alex');
+      expect(tv['Soon'], 'by Alex');
+      expect(tv['Mine'], '4 items');
+      expect(tv['Heists'], '12 items');
+
+      // The account's profiles are read once, without profile headers.
+      final read = requests.where((r) => r.url.path.endsWith('/api/v2/profiles')).toList();
+      expect(read, hasLength(1));
+      expect(read.single.headers.containsKey('X-Profile-Id'), isFalse);
+      requests.clear();
+      await c.fetchGlobalHubs();
+      expect(requests.where((r) => r.url.path.endsWith('/api/v2/profiles')), isEmpty);
+    });
+
+    test('the byline uses Silo\'s catalog text in the app\'s language', () async {
+      SiloCatalogStrings.debugSetTables(
+        english: {'collections.posterCard.byOwner': 'by {owner}'},
+        current: {'collections.posterCard.byOwner': 'von {owner}'},
+      );
+      expect(SiloCollectionCards.byOwner('Alex'), 'von Alex');
+      SiloCatalogStrings.debugSetTables(english: {'collections.posterCard.byOwner': 'by {owner}'});
+      expect(SiloCollectionCards.byOwner('Alex'), 'by Alex');
+      SiloCatalogStrings.debugSetTables();
+      expect(SiloCollectionCards.byOwner('Alex'), 'by Alex');
+    });
+
+    test('a failed profile read shows counts, never fails the row', () async {
+      final c = client((request) async {
+        if (request.url.path.endsWith('/home/sections')) {
+          return _json({
+            'sections': [row()],
+          });
+        }
+        if (request.url.path.endsWith('/api/v2/profiles')) return http.Response('nope', 500);
+        return emptyPage();
+      });
+      final items = (await c.fetchGlobalHubs()).single.items;
+      expect(items, hasLength(5));
+      expect(items.map((i) => SiloCollectionCards.caption(i, tv: true)), [
+        '12 items',
+        '4 items',
+        '3 items',
+        '0 items',
+        '1 item',
+      ]);
+    });
+
+    test('no profile read when every personal collection is the viewer\'s', () async {
+      final c = client((request) async {
+        if (request.url.path.endsWith('/home/sections')) {
+          return _json({
+            'sections': [_collectionRow()],
+          });
+        }
+        return emptyPage();
+      });
+      await c.fetchGlobalHubs();
+      expect(requests.where((r) => r.url.path.endsWith('/api/v2/profiles')), isEmpty);
+    });
+
+    test('a library row names the maker too, and Collections tab cards keep their caption', () async {
+      final c = client((request) async {
+        final path = Uri.decodeComponent(request.url.path);
+        if (path.endsWith('/library/3/sections')) {
+          return _json({
+            'sections': [row()],
+          });
+        }
+        if (path.endsWith('/api/v2/profiles')) return profiles();
+        if (path.endsWith('/library/3/collections')) {
+          return _json({
+            'collections': [
+              {'id': 'h', 'title': 'Heists', 'item_count': 0},
+            ],
+          });
+        }
+        return emptyPage();
+      });
+      final items = (await c.fetchLibraryHubs('3', libraryName: 'Movies')).single.items;
+      expect(SiloCollectionCards.caption(items[2], tv: false), '3 items · by Alex');
+      final tab = await c.fetchCollectionsPage('3');
+      expect(SiloCollectionCards.caption(tab.items.single, tv: false), isNull);
+    });
+  });
+
+  group('library pages', () {
+    test('a featured row of collections stays and opens personal collections in that library', () async {
+      final c = client((request) async {
+        final path = Uri.decodeComponent(request.url.path);
+        if (path.endsWith('/library/5/sections')) {
+          return _json({
+            'sections': [
+              {..._collectionRow(libraryId: '5'), 'featured': true},
+            ],
+          });
+        }
+        return emptyPage();
+      });
+      final row = (await c.fetchLibraryHubs('5', libraryName: 'Shows', libraryKind: MediaKind.show)).single;
+      expect(row.id, 'library:5:picks');
+      expect(row.type, 'collection');
+      final personal = row.items.firstWhere((i) => i.id.startsWith('silo-user-collection:'));
+      expect(personal.id, 'silo-user-collection:5:u1');
+      expect(personal.libraryId, '5');
+      requests.clear();
+      await c.fetchCollectionPage(personal.id);
+      final q = requests.single.url.queryParameters;
+      expect(q['source'], 'user_collection');
+      expect(q['library_id'], '5');
+    });
+  });
+
+  group('Home filters', () {
+    test('hidden libraries leave a Home row of collections in place', () async {
+      resetSharedPreferencesForTest();
+      SettingsService.resetForTesting();
+      final manager = MultiServerManager();
+      addTearDown(manager.dispose);
+      final c = client((request) async {
+        if (request.url.path.endsWith('/home/sections')) {
+          return _json({
+            'sections': [
+              _collectionRow(),
+              {
+                'id': 'ra',
+                'section_type': 'recently_added',
+                'title': 'Recently Added',
+                'total_count': 1,
+                'items': [
+                  {..._movie(2), 'library_id': '3'},
+                ],
+              },
+            ],
+          });
+        }
+        return emptyPage();
+      });
+      manager.debugRegisterClientForTesting(c);
+      final result = await DataAggregationService(
+        manager,
+      ).getHubsFromAllServers(hiddenLibraryKeys: {'srv-1:3'}, includePlaybackHubs: false);
+      // The title row of the hidden library goes; the row of collections,
+      // whose Home cards belong to no one library, stays whole.
+      expect(result.hubs.map((h) => h.id), ['home:picks']);
+      expect(result.hubs.single.items, hasLength(3));
     });
   });
 }

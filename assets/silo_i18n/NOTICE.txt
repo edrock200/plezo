@@ -8,6 +8,13 @@ taken from Silo's translation catalogs:
   Silo-Server/silo-roku at e09a5e0 (catalog release 2026.11.15-0ba1666)
   locale/<language>/strings.json
 
+The line naming the profile that shared a collection (catalog key
+"collections.posterCard.byOwner") is taken from Silo's Android app catalog:
+
+  Silo-Server/silo-android at db87f835f (catalog release 2026.11.17-fe23d4e)
+  android-shared/src/androidMain/res/values*/strings_catalog.xml
+  (Android's %1$s placeholders written as named {placeholders})
+
 Languages: English, Danish, German, Spanish, French, Italian, Norwegian
 Bokmål, Dutch, Polish, Brazilian Portuguese, Russian, Swedish, Turkish.
 
@@ -19,10 +26,10 @@ LICENSE.txt beside this file and at https://www.gnu.org/licenses/agpl-3.0.html.
 Plezilo itself is licensed under the GNU General Public License, version 3,
 whose section 13 permits combining it with work under the AGPL.
 
-Only the "home.section.*" entries are included, unmodified apart from being
-copied into one JSON file per language. The source of these files is the
-catalogs named above; scripts/silo_catalog_strings.py in Plezilo's source
-regenerates them.
+Only the "home.section.*" and "collections.posterCard.byOwner" entries are
+included, unmodified apart from being copied into one JSON file per language.
+The source of these files is the catalogs named above;
+scripts/silo_catalog_strings.py in Plezilo's source regenerates them.
 
 "Silo" is a trademark of Silo Media L.L.C. Plezilo is not made or endorsed by
 Silo Media L.L.C.

@@ -56,6 +56,7 @@ import 'silo_api_cache.dart';
 import 'silo_audiobook.dart';
 import 'silo_card_overlay_store.dart';
 import 'silo_card_overlays.dart';
+import 'silo_collection_cards.dart';
 import 'silo_discover.dart';
 import 'silo_download_registry.dart';
 import 'silo_managed_downloads.dart';
@@ -596,11 +597,18 @@ class SiloClient
   /// nothing below asks them for box sets.
   Set<String> _boxSetLibraryIds = const {};
 
+  /// The libraries Plezilo shows this profile (video and audiobooks; never
+  /// e-books, music or podcasts), from the last library list; null until one
+  /// was read. A Home row of collections shows a server collection only when
+  /// its library is one of these.
+  Set<String>? _shownLibraryIds;
+
   @override
   Future<List<MediaLibrary>> fetchLibraries() async {
     final data = await _cachedGet('/api/v2/user/libraries');
     final libraries = <MediaLibrary>[];
     final boxSetLibraries = <String>{};
+    final shown = <String>{};
     for (final json in _itemsOf(data)) {
       // Video and audiobook libraries only: music has no item types in the
       // v2 contract, and reading/podcast libraries have no Plezy surface.
@@ -609,9 +617,12 @@ class SiloClient
       if (library == null) continue;
       _libraryTitles[library.id] = library.title;
       if (json['box_sets_enabled'] == true) boxSetLibraries.add(library.id);
+      shown.add(library.id);
       libraries.add(library);
     }
     _boxSetLibraryIds = boxSetLibraries;
+    // Only a real answer: an unreadable one (null data) proves nothing.
+    if (data != null) _shownLibraryIds = shown;
     return libraries;
   }
 
@@ -1551,6 +1562,92 @@ class SiloClient
   static bool isCollectionRow(Map<String, dynamic> section) =>
       section['section_type']?.toString().toLowerCase() == 'collection_posters';
 
+  /// The readable cards of a row of collections, in the server's order, each
+  /// once ([SiloCollectionCards.readable]: a card with a wrongly typed field,
+  /// an unknown source or a server collection without a library is left out).
+  static List<Map<String, dynamic>> _collectionCards(Map<String, dynamic> section) {
+    final list = section['collections'];
+    if (list is! List) return const [];
+    final seen = <String>{};
+    return [
+      for (final card in list)
+        if (SiloCollectionCards.readable(card) case final json? when seen.add('${json['source']}:${json['id']}')) json,
+    ];
+  }
+
+  /// What the rows of collections in [sections] need to know before they are
+  /// built. [home]: the libraries Plezilo shows this profile, so a server
+  /// collection of an e-book (or other hidden) library never shows; read
+  /// when no library list was read yet, and when that read fails Home holds
+  /// server collections back (as Silo's Android TV app does). For every row:
+  /// the account's profile names, when a personal collection was made by
+  /// another profile (its card reads "by Name"); a failed read shows the
+  /// count instead.
+  Future<({Set<String>? shownLibraries, Map<String, String> profileNames})> _collectionRowContext(
+    Iterable<Map<String, dynamic>> sections, {
+    required bool home,
+  }) async {
+    final cards = [
+      for (final section in sections)
+        if (isCollectionRow(section)) ..._collectionCards(section),
+    ];
+    if (cards.isEmpty) return (shownLibraries: _shownLibraryIds, profileNames: const <String, String>{});
+    final ownProfile = _connection.profileId;
+    final needsLibraries =
+        home && _shownLibraryIds == null && cards.any((card) => card['source'] == SiloCollectionCards.sourceLibrary);
+    final needsNames = cards.any((card) {
+      final creator = SiloCollectionCards.creatorOf(card);
+      return creator != null && creator != ownProfile;
+    });
+    Future<void> libraries() async {
+      try {
+        await fetchLibraries();
+      } catch (e) {
+        appLogger.d('SiloClient: library list for Home collections unavailable', error: e.runtimeType);
+      }
+    }
+
+    final (_, names) = await (
+      needsLibraries ? libraries() : Future<void>.value(),
+      needsNames ? _accountProfileNames() : Future.value(const <String, String>{}),
+    ).wait;
+    return (shownLibraries: _shownLibraryIds, profileNames: names);
+  }
+
+  Map<String, String>? _profileNames;
+  DateTime? _profileNamesReadAt;
+  Future<Map<String, String>>? _profileNamesInFlight;
+
+  /// The account's profile names by id (`GET /profiles`, without profile
+  /// headers, as the sign-in reads them), kept 10 minutes; concurrent rows
+  /// share one read. A failed or slow read (3 s) answers the last names known,
+  /// or none.
+  Future<Map<String, String>> _accountProfileNames() {
+    final known = _profileNames;
+    final readAt = _profileNamesReadAt;
+    if (known != null && readAt != null && DateTime.now().difference(readAt) < const Duration(minutes: 10)) {
+      return Future.value(known);
+    }
+    return _profileNamesInFlight ??= () async {
+      try {
+        final data = await _api.getJson('/api/v2/profiles', profile: false, timeout: const Duration(seconds: 3));
+        final names = <String, String>{
+          for (final row in _itemsOf(data))
+            if (row['id'] case final id? when id is String || id is int)
+              if (row['name'] case final String name when name.trim().isNotEmpty) id.toString(): name.trim(),
+        };
+        _profileNames = names;
+        _profileNamesReadAt = DateTime.now();
+        return names;
+      } catch (e) {
+        appLogger.d('SiloClient: profile names unavailable', error: e.runtimeType);
+        return _profileNames ?? const <String, String>{};
+      } finally {
+        _profileNamesInFlight = null;
+      }
+    }();
+  }
+
   /// A row of collections as a hub of collection cards, the Collections tab's
   /// (title, item count, the server's poster or collage), in the server's
   /// order. Every card the server sends shows (at most 30; `item_limit` does
@@ -1559,13 +1656,37 @@ class SiloClient
   /// viewer sees, from a library page that library's view, as its
   /// Collections tab reads it. A server collection's `backdrop_url`
   /// (silo-server #4415) is its art, which the TV spotlight shows.
-  MediaHub _collectionRowHub({required String id, required Map<String, dynamic> section, String? libraryId}) {
-    final seen = <String>{};
-    final items = [
-      for (final card in _itemsOf(section, 'collections'))
-        if (_nonEmpty(card['id']) case final cardId? when seen.add('${card['source']}:$cardId'))
-          _mapCollection(libraryId ?? _anyLibrary, card, personal: card['source'] == 'user'),
-    ];
+  ///
+  /// On Home ([libraryId] null) a server collection shows only when its
+  /// library is in [shownLibraries] (none while that is null), so an e-book
+  /// library's collections never show. A personal collection another profile
+  /// made carries that profile's name from [profileNames] ("by Name").
+  /// A `featured` flag changes nothing: the row stays and is never a hero.
+  MediaHub _collectionRowHub({
+    required String id,
+    required Map<String, dynamic> section,
+    String? libraryId,
+    Set<String>? shownLibraries,
+    Map<String, String> profileNames = const {},
+  }) {
+    final ownProfile = _connection.profileId;
+    final items = <MediaItem>[];
+    for (final card in _collectionCards(section)) {
+      final personal = card['source'] == SiloCollectionCards.sourceUser;
+      if (!personal && libraryId == null) {
+        final cardLibrary = SiloCollectionCards.libraryIdOf(card);
+        if (shownLibraries == null || !shownLibraries.contains(cardLibrary)) continue;
+      }
+      final creator = SiloCollectionCards.creatorOf(card);
+      final owner = creator == null || creator == ownProfile ? null : profileNames[creator];
+      items.add(
+        _mapCollection(libraryId ?? _anyLibrary, {
+          ...card,
+          SiloCollectionCards.rowCardKey: true,
+          SiloCollectionCards.ownerNameKey: ?owner,
+        }, personal: personal),
+      );
+    }
     return MediaHub(
       id: id,
       identifier: section['section_type']?.toString() ?? section['id']?.toString(),
@@ -1705,11 +1826,19 @@ class SiloClient
       diagnostics?.recordFailure(e);
       return const [];
     }
+    final collections = await _collectionRowContext(sections, home: true);
     final hubs = await Future.wait([
       for (final section in sections)
         if (section['id']?.toString() case final sectionId?)
           if (isCollectionRow(section))
-            Future.value(_collectionRowHub(id: 'home:$sectionId', section: section))
+            Future.value(
+              _collectionRowHub(
+                id: 'home:$sectionId',
+                section: section,
+                shownLibraries: collections.shownLibraries,
+                profileNames: collections.profileNames,
+              ),
+            )
           else if (includePlaybackHubs || !_playbackSectionTypes.contains(section['section_type']))
             _sectionItems(
               section,
@@ -1829,11 +1958,18 @@ class SiloClient
       return const [];
     }
     final hubs = <MediaHub>[];
-    for (final section in _itemsOf(data, 'sections')) {
+    final sections = _itemsOf(data, 'sections');
+    final collections = await _collectionRowContext(sections, home: false);
+    for (final section in sections) {
       final sectionId = section['id']?.toString();
       if (sectionId == null) continue;
       if (isCollectionRow(section)) {
-        final hub = _collectionRowHub(id: 'library:$libraryId:$sectionId', section: section, libraryId: libraryId);
+        final hub = _collectionRowHub(
+          id: 'library:$libraryId:$sectionId',
+          section: section,
+          libraryId: libraryId,
+          profileNames: collections.profileNames,
+        );
         if (hub.items.isNotEmpty) hubs.add(hub);
         continue;
       }

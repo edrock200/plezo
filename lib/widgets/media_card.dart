@@ -24,6 +24,7 @@ import '../providers/download_provider.dart';
 import '../providers/watch_state_store.dart';
 import '../services/download_storage_service.dart';
 import '../services/settings_service.dart';
+import '../services/silo/silo_collection_cards.dart';
 import 'catalog_context_menu.dart';
 import 'settings_builder.dart';
 import 'silo_card_overlays.dart';
@@ -92,6 +93,7 @@ String _buildMediaMetadataLine(MediaItem item, {CatalogItem? catalogItem, bool c
   final parts = <String>[];
 
   if (item.kind == MediaKind.collection) {
+    if (SiloCollectionCards.caption(item, tv: PlatformDetector.isTV()) case final caption?) return caption;
     final count = item.childCount ?? item.leafCount;
     if (count != null && count > 0) {
       parts.add(t.playlists.itemCount(count: formatGroupedCount(count)));
@@ -1289,6 +1291,7 @@ class _MediaCardHelpers {
     if (catalogMetadata.isNotEmpty) return catalogMetadata;
 
     if (mi.kind == MediaKind.collection) {
+      if (SiloCollectionCards.caption(mi, tv: PlatformDetector.isTV()) case final caption?) return caption;
       final count = mi.childCount ?? mi.leafCount;
       if (count != null && count > 0) return t.playlists.itemCount(count: formatGroupedCount(count));
     }

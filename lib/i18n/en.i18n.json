@@ -2979,6 +2979,9 @@
     "watchlistEmptyShows": "No shows on your watchlist",
     "emptyHint": "Titles you save on this Silo profile show up here."
   },
+  "siloCollections": {
+    "byOwner": "by ${owner}"
+  },
   "siloMemberships": {
     "addToFavorites": "Add to Favorites",
     "removeFromFavorites": "Remove from Favorites",

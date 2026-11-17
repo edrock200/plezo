@@ -4,6 +4,15 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+From Silo's Android app (November 17, 2026):
+
+- **Who shared a collection:** in a row of collections, a personal collection that another profile on your Silo account made and shared now says "by" and that profile's name. On phones, tablets and computers it sits beside the number of titles; on a TV it takes the place of the number, which does not fit beside it. Your own collections and the server's collections show only the number. Every card in such a row now shows its number, an empty collection's "0 items" included. *(please test)*
+- **Rows of collections are sturdier:** a collection the server describes in a way Plezilo cannot read is left out on its own; the rest of the row and the rest of Home still show. Collections from an e-book library (or another kind of library Plezilo does not show) no longer appear in Home's rows of collections, and while Plezilo cannot tell which libraries those are, Home shows only your personal collections in such a row.
+
+## silo-preview-2.48.0
+
+Released November 17, 2026. Android and Windows.
+
 From Silo's own apps (November 17, 2026):
 
 - **Rows of collections:** when your Silo server puts a row of collections on Home or on a library's Recommended page, Plezilo now shows it, one poster per collection with its name and how many titles it holds (its collage when it has no poster of its own, a plain placeholder when it has neither). Opening one shows the collection: from Home every title in it you can see, from a library page that library's titles. The row shows all its collections and has no View All, since there is nothing more to open. On a TV, a collection with a backdrop shows that backdrop, its name and its title count at the top of the screen while it is focused; one without leaves the top as it was. The long-press / ⋮ menu offers Play, Shuffle and Download, as on a library's Collections tab. Needs a Silo server with collection rows. *(please test)*
