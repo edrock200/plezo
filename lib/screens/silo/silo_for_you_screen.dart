@@ -17,6 +17,7 @@ import '../../navigation/profile_navigation_scope.dart';
 import '../../providers/multi_server_provider.dart';
 import '../../services/settings_service.dart';
 import '../../services/silo/silo_client.dart';
+import '../../services/silo/silo_mappers.dart';
 import '../../services/silo/silo_memberships.dart';
 import '../../services/silo/silo_personal_lists.dart';
 import '../../utils/app_logger.dart';
@@ -847,6 +848,8 @@ class SiloForYouScreenState extends State<SiloForYouScreen> with RouteAware {
     return MediaCardSliverLayout(
       // Posters, whatever the library view mode: Silo shows these lists as grids.
       viewMode: ViewMode.grid,
+      // A list of only audiobooks shows square covers (Silo Android #974).
+      shape: SiloMappers.areAllAudiobooks(items) ? CardShape.square : null,
       itemCount: items.length,
       density: density,
       padding: GridLayoutConstants.gridPadding.copyWith(top: GridLayoutConstants.gridPadding.top + 3),

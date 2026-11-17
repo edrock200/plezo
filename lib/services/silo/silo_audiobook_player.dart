@@ -572,7 +572,11 @@ class SiloAudiobookPlayer extends ChangeNotifier {
     );
     final item = mediaItem;
     if (item != null) {
-      unawaited(controls.updateMetadata(metadata: item, client: client, duration: _duration(timeline.totalSeconds)));
+      // The card's title can still carry the series locator; the detail's is clean.
+      final metadata = detail.title.isEmpty ? item : item.copyWith(title: detail.title);
+      unawaited(
+        controls.updateMetadata(metadata: metadata, client: client, duration: _duration(timeline.totalSeconds)),
+      );
     }
   }
 

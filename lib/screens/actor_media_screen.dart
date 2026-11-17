@@ -12,6 +12,7 @@ import '../media/media_person.dart';
 import '../media/media_server_client.dart';
 import '../mixins/paginated_item_loader.dart';
 import '../mixins/standard_paginated_view.dart';
+import '../services/silo/silo_mappers.dart';
 import '../utils/app_logger.dart';
 import '../utils/error_message_utils.dart';
 import '../utils/media_server_http_client.dart';
@@ -292,6 +293,9 @@ class _ActorMediaScreenState extends BaseMediaListDetailScreen<ActorMediaScreen>
             onRefresh: updateItem,
             onSkeletonVisible: (index) => ensureIndexLoaded(index, pageSize: _pageSize),
             onFirstRowNavigateUp: _biographyExpandable ? _focusBiography : null,
+            // An author's or narrator's Silo audiobooks are square covers
+            // (Silo Android #974); a mixed page keeps poster cells.
+            shape: SiloMappers.areAllAudiobooks(loadedItems.values) ? CardShape.square : null,
           ),
       ],
     );

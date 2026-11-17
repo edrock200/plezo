@@ -21,6 +21,7 @@ import '../../../widgets/settings_builder.dart';
 import '../../../services/library_query_translator.dart';
 import '../../../services/plex_constants.dart';
 import '../../../services/silo/silo_client.dart';
+import '../../../services/silo/silo_mappers.dart';
 import '../../../utils/error_message_utils.dart';
 import '../../../utils/app_logger.dart';
 import '../../../utils/grid_size_calculator.dart';
@@ -2140,10 +2141,13 @@ class _LibraryBrowseTabState extends BaseLibraryTabState<MediaItem, LibraryBrows
     final useWideRatio = _selectedGrouping == 'episodes' && episodePosterMode == EpisodePosterMode.episodeThumbnail;
     // Music groupings are homogeneous, so the whole grid shares the square
     // cell shape (artists render circular inside the square cell).
+    // A Silo audiobook library holds only square covers (Silo Android #974),
+    // so it takes the music grids' square cells too.
     final isMusicGrouping =
         _selectedGrouping == browseGroupingArtists ||
         _selectedGrouping == browseGroupingAlbums ||
-        _selectedGrouping == browseGroupingTracks;
+        _selectedGrouping == browseGroupingTracks ||
+        (_selectedGrouping != browseGroupingFolders && SiloMappers.isAudiobookLibrary(widget.library));
     // Clip libraries (MediaBrowser home videos, Plex "Other Videos") hold
     // homogeneous 16:9 items, so the flat grid uses wide cells; poster cells
     // would letterbox every card (#2036).

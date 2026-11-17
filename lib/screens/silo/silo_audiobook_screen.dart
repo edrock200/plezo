@@ -134,7 +134,7 @@ class _SiloAudiobookScreenState extends State<SiloAudiobookScreen> {
   Widget build(BuildContext context) {
     final detail = _detail;
     return Scaffold(
-      appBar: AppBar(title: Text(widget.item.displayTitle)),
+      appBar: AppBar(title: Text(detail?.title ?? widget.item.displayTitle)),
       body: _loading && detail == null
           ? const Center(child: CircularProgressIndicator())
           : detail == null
@@ -176,9 +176,10 @@ class _SiloAudiobookScreenState extends State<SiloAudiobookScreen> {
       if (_chapterFocus.isNotEmpty) _chapterFocus.first.requestFocus();
     }
 
+    // Silo #975: a book marked finished, or listened to its end, plays again.
     final playLabel = resume > 0
         ? t.siloAudio.resumeAt(time: formatDurationTimestamp(Duration(seconds: resume.round())))
-        : (detail.played ? t.siloAudio.listenAgain : t.siloAudio.play);
+        : (detail.playsAgain ? t.siloAudio.listenAgain : t.siloAudio.play);
 
     final cover = ClipRRect(
       borderRadius: BorderRadius.circular(12),

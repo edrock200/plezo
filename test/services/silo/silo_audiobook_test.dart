@@ -131,6 +131,81 @@ void main() {
     });
   });
 
+  group('titles (#975)', () {
+    test('the series prefix and a trailing volume are lifted out', () {
+      expect(
+        SiloAudiobookTitle.clean('Stormlight Archive 5 - Wind and Truth (5 of 5)', 'The Stormlight Archive'),
+        'Wind and Truth',
+      );
+      expect(
+        SiloAudiobookTitle.clean('Black Rose Chronicles 2 - Torment and Treachery', 'Black Rose Chronicles'),
+        'Torment and Treachery',
+      );
+    });
+
+    test('titles without a recognised pattern are untouched', () {
+      expect(SiloAudiobookTitle.clean('Project Hail Mary', null), 'Project Hail Mary');
+      expect(SiloAudiobookTitle.clean('The Way of Kings', 'The Stormlight Archive'), 'The Way of Kings');
+      expect(SiloAudiobookTitle.clean('Some Story (2 of 3)', null), 'Some Story');
+      expect(SiloAudiobookTitle.clean('Some Story (Book 2)', ''), 'Some Story');
+      expect(SiloAudiobookTitle.clean('Some Story (Vol. 4)', null), 'Some Story');
+    });
+
+    test('the series name must end at a word boundary', () {
+      expect(SiloAudiobookTitle.clean('American Gods', 'A'), 'American Gods');
+      expect(SiloAudiobookTitle.clean('Dunes of Arrakis', 'Dune'), 'Dunes of Arrakis');
+      expect(SiloAudiobookTitle.clean('Dune Saga 12 - Dune Messiah', 'Dune Saga'), 'Dune Messiah');
+    });
+
+    test('the series name is lifted out only before a volume number or separator', () {
+      expect(SiloAudiobookTitle.clean('Dune Messiah', 'Dune'), 'Dune Messiah');
+      expect(SiloAudiobookTitle.clean('Children of Dune', 'Dune'), 'Children of Dune');
+      expect(SiloAudiobookTitle.clean('Stormlight Archive: Wind and Truth', 'Stormlight Archive'), 'Wind and Truth');
+      expect(SiloAudiobookTitle.clean('Stormlight Archive 5 Wind and Truth', 'Stormlight Archive'), 'Wind and Truth');
+      expect(SiloAudiobookTitle.clean('Stormlight Archive #5: Wind and Truth', 'Stormlight Archive'), 'Wind and Truth');
+      expect(SiloAudiobookTitle.clean('stormlight archive 2.5 – Edgedancer', 'Stormlight Archive'), 'Edgedancer');
+    });
+
+    test('a title that is only the series name, or only a locator, is kept', () {
+      expect(SiloAudiobookTitle.clean('Mistborn', 'Mistborn'), 'Mistborn');
+      expect(SiloAudiobookTitle.clean('  Mistborn 1  ', 'Mistborn'), 'Mistborn 1');
+      expect(SiloAudiobookTitle.clean('(1 of 3)', null), '(1 of 3)');
+    });
+
+    test('cards lose a trailing volume; details and the player lose the series prefix too', () {
+      final card = SiloMappers.item({
+        'content_id': 'audiobook:wt',
+        'type': 'audiobook',
+        'title': 'Stormlight Archive 5 - Wind and Truth (5 of 5)',
+      }, _ctx)!;
+      expect(card.title, 'Stormlight Archive 5 - Wind and Truth');
+
+      final json = _bookDetail()..['title'] = 'Orbit Cycle 2 - The Long Orbit (2 of 3)';
+      expect(SiloMappers.item(json, _ctx)!.title, 'The Long Orbit');
+      expect(SiloAudiobookDetail.parse(json, resolveUrl: _ctx.resolveUrl).title, 'The Long Orbit');
+
+      final movie = SiloMappers.item({'content_id': 'movie:m', 'type': 'movie', 'title': 'Heat (1 of 2)'}, _ctx)!;
+      expect(movie.title, 'Heat (1 of 2)');
+    });
+  });
+
+  group('card shape (#974)', () {
+    test('audiobook libraries and lists of only audiobooks are square', () {
+      final book = SiloMappers.item({'content_id': 'audiobook:a', 'type': 'audiobook', 'title': 'A'}, _ctx)!;
+      final movie = SiloMappers.item({'content_id': 'movie:m', 'type': 'movie', 'title': 'M'}, _ctx)!;
+      expect(SiloMappers.areAllAudiobooks([book, book]), isTrue);
+      expect(SiloMappers.areAllAudiobooks([book, null]), isTrue);
+      expect(SiloMappers.areAllAudiobooks([book, movie]), isFalse);
+      expect(SiloMappers.areAllAudiobooks(const []), isFalse);
+      expect(SiloMappers.areAllAudiobooks(const [null]), isFalse);
+
+      final audiobooks = SiloMappers.library({'id': '4', 'name': 'Audiobooks', 'type': 'audiobooks'}, _ctx)!;
+      final movies = SiloMappers.library({'id': '1', 'name': 'Movies', 'type': 'movies'}, _ctx)!;
+      expect(SiloMappers.isAudiobookLibrary(audiobooks), isTrue);
+      expect(SiloMappers.isAudiobookLibrary(movies), isFalse);
+    });
+  });
+
   group('timeline', () {
     test('parts are ordered by part index and chapters placed on the book timeline', () {
       final timeline = _detail().timeline!;
@@ -237,6 +312,11 @@ void main() {
       expect(_detail(position: 450).resumeSeconds, 450);
       expect(_detail(position: 0).resumeSeconds, 0);
       expect(_detail(position: 698).resumeSeconds, 0);
+      // #975: the end of the book only changes Play to "Listen again".
+      expect(_detail(position: 698).playsAgain, isTrue);
+      expect(_detail(position: 698).played, isFalse);
+      expect(_detail(position: 450).playsAgain, isFalse);
+      expect(SiloAudiobookDetail.parse(_bookDetail(played: true), resolveUrl: _ctx.resolveUrl).playsAgain, isTrue);
       final detail = _detail(position: 120);
       expect(detail.authors, ['Ava Thornton']);
       expect(detail.narrators, ['Ben Ode']);

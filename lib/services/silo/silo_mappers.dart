@@ -473,6 +473,11 @@ abstract final class SiloMappers {
         final book = _map(json['audiobook']);
         final authors = SiloAudiobookPeople.names(book?['authors'] ?? json['authors']);
         if (authors.isNotEmpty) parentTitle = authors.join(', ');
+        // Without the series locator the server baked in (Silo Android #975).
+        // Cards carry no series, so they lose only a trailing "(N of M)";
+        // a detail also loses a leading "<Series> N -".
+        final series = _map(book?['series']);
+        if (title != null) title = SiloAudiobookTitle.clean(title, _string(series?['name']));
       default:
         break;
     }
@@ -540,6 +545,24 @@ abstract final class SiloMappers {
   /// Whether [item] is a Silo audiobook (opens Silo's audiobook screen).
   static bool isAudiobook(MediaItem item) =>
       item.backend == MediaBackend.silo && item.kind == MediaKind.album && isSiloAudiobookType(item.raw?['type']);
+
+  /// Whether every one of [items] is a Silo audiobook, so a grid or row of
+  /// them squares every card (Silo Android #974 `areAllAudiobooks`). False
+  /// when empty.
+  static bool areAllAudiobooks(Iterable<MediaItem?> items) {
+    var any = false;
+    for (final item in items) {
+      if (item == null) continue;
+      if (!isAudiobook(item)) return false;
+      any = true;
+    }
+    return any;
+  }
+
+  /// Whether [library] is a Silo audiobook library: its browse grid, list and
+  /// loading placeholders are square, like the covers (Silo Android #974).
+  static bool isAudiobookLibrary(MediaLibrary library) =>
+      library.backend == MediaBackend.silo && library.kind == MediaKind.album;
 
   static List<MediaItem> items(
     Iterable<Object?> list,

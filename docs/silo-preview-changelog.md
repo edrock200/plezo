@@ -4,6 +4,16 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+From Silo's own apps (November 16, 2026):
+
+- **Square audiobook covers:** a Silo audiobook library now shows its books as square covers instead of cutting them down to tall posters, in the grid, the list view and while it loads. Your Silo For You lists and a person's page do the same when they hold only audiobooks, and Home and library rows of only audiobooks (a Continue Watching row of books included, with its progress bars) stay square as before. Rows and grids that mix audiobooks with movies or shows keep one card shape. *(please test)*
+- **Cleaner audiobook titles:** when your server bakes the series into a book's title ("Stormlight Archive 5 - Wind and Truth (5 of 5)"), the audiobook page, the player and the system media controls now show just "Wind and Truth". Cards drop a trailing "(5 of 5)". A title that only starts like its series, such as "Dune Messiah" in the Dune series, stays whole.
+- **Listen again at the end of a book:** a Silo audiobook you have listened to the end now offers "Listen again" instead of "Play", even when it is not marked as finished. Mark as Watched / Unwatched in the long-press or ⋮ menu still follows the book's saved finished flag only.
+
+## silo-preview-2.46.0
+
+Released November 17, 2026. Android and Windows.
+
 - **Watchlist and Favorites for Silo titles:** a Silo movie or show page now has a Watchlist (bookmark) and a Favorite (heart) button, and the long-press / ⋮ menu of Silo movie and show cards (Home, libraries, search, recommendation rows, For You) has Add to / Remove from Watchlist and Favorites. The change shows at once; if the server refuses it, it is undone and the reason is shown. The For You page and Home rows that show your Watchlist or Favorites update to match. *(please test)*
 
 ## silo-preview-2.45.0

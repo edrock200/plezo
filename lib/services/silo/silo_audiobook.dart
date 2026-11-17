@@ -266,6 +266,8 @@ class SiloAudiobookDetail {
   });
 
   final String id;
+
+  /// The display title: [SiloAudiobookTitle.clean] of the server's title.
   final String title;
   final List<String> authors;
   final List<String> narrators;
@@ -290,6 +292,11 @@ class SiloAudiobookDetail {
   /// (within the last 5 s, Silo's resume tail) — then from the start.
   double get resumeSeconds => resumeFrom(positionSeconds, totalSeconds);
 
+  /// Whether Play reads "Listen again" (Silo Android #975): the saved played
+  /// flag, or a position in the last 5 s. The position only changes the label;
+  /// it never counts the book as finished.
+  bool get playsAgain => played || (totalSeconds > 0 && positionSeconds > 0 && positionSeconds >= totalSeconds - 5);
+
   static double resumeFrom(double positionSeconds, double totalSeconds) {
     if (positionSeconds.isNaN || positionSeconds <= 0) return 0;
     if (totalSeconds > 0 && positionSeconds >= totalSeconds - 5) return 0;
@@ -311,12 +318,14 @@ class SiloAudiobookDetail {
     }
 
     final series = book?['series'];
+    final seriesName = series is Map ? series['name']?.toString() : json['series_name']?.toString();
     return SiloAudiobookDetail(
       id: (json['content_id'] ?? json['id']).toString(),
-      title: json['title']?.toString() ?? '',
+      // Shown without the series locator the server baked in (Silo #975).
+      title: SiloAudiobookTitle.clean(json['title']?.toString() ?? '', seriesName),
       authors: SiloAudiobookPeople.names(book?['authors'] ?? json['authors']),
       narrators: SiloAudiobookPeople.names(book?['narrators'] ?? json['narrators']),
-      seriesName: series is Map ? series['name']?.toString() : json['series_name']?.toString(),
+      seriesName: seriesName,
       overview: json['overview']?.toString(),
       year: (json['year'] as num?)?.toInt(),
       publisher: book?['publisher']?.toString(),
@@ -331,6 +340,76 @@ class SiloAudiobookDetail {
       played: userData?['played'] == true || userState?['played'] == true,
       lastFileId: lastFileId,
     );
+  }
+}
+
+/// Audiobook titles without the series locator servers bake into them (Silo
+/// Android #975 `AudiobookDetailFormatting.cleanTitle`, ported from Apple's
+/// `AudiobookDetailFormatting`). Conservative: only recognised patterns are
+/// rewritten, so an unfamiliar title comes back unchanged.
+abstract final class SiloAudiobookTitle {
+  /// "Stormlight Archive 5 - Wind and Truth (5 of 5)" in "The Stormlight
+  /// Archive" → "Wind and Truth". The series name is lifted out only when a
+  /// volume number or a separator follows it, so "Dune Messiah" in the "Dune"
+  /// series stays whole. A trailing "(N of M)", "(Book N)" or "(Vol. N)" is
+  /// dropped with or without a series. Never returns an empty title.
+  static String clean(String rawTitle, String? seriesName) {
+    final original = rawTitle.trim();
+    var title = original;
+    if (seriesName != null && seriesName.trim().isNotEmpty) {
+      title = _strippingSeriesPrefix(title, seriesName);
+    }
+    for (final pattern in _trailingVolumes) {
+      title = title.replaceFirst(pattern, '');
+    }
+    title = _trimEdges(title);
+    return title.isEmpty ? original : title;
+  }
+
+  static const _edgeChars = ' -–—:·,';
+
+  static final _trailingVolumes = [
+    RegExp(r'\s*\(\s*\d+\s+of\s+\d+\s*\)$', caseSensitive: false),
+    RegExp(r'\s*\(\s*book\s+\d+\s*\)$', caseSensitive: false),
+    RegExp(r'\s*\(\s*vol(?:ume)?\.?\s*\d+\s*\)$', caseSensitive: false),
+  ];
+
+  /// After the series name: a volume ("5", "#5", "2.5") and/or a separator,
+  /// then the title.
+  static final _seriesLocator = RegExp(r'^\s*(?:#?\d+(?:\.\d+)?\s*[-–—:]?|[-–—:])\s*(.*)$');
+
+  static String _strippingSeriesPrefix(String title, String seriesName) {
+    final core = _droppingLeadingArticle(seriesName).trim();
+    if (core.isEmpty) return title;
+    final hay = _droppingLeadingArticle(title);
+    if (!hay.toLowerCase().startsWith(core.toLowerCase())) return title;
+    final match = _seriesLocator.firstMatch(hay.substring(core.length));
+    if (match == null) return title;
+    final candidate = (match.group(1) ?? '').trim();
+    // Consuming everything means the "prefix" was the title itself.
+    return candidate.isEmpty ? title : candidate;
+  }
+
+  static String _droppingLeadingArticle(String s) {
+    final lower = s.toLowerCase();
+    for (final article in const ['the ', 'a ', 'an ']) {
+      if (lower.startsWith(article)) return s.substring(article.length);
+    }
+    return s;
+  }
+
+  static bool _isEdge(String char) => char.trim().isEmpty || _edgeChars.contains(char);
+
+  static String _trimEdges(String s) {
+    var start = 0;
+    var end = s.length;
+    while (start < end && _isEdge(s[start])) {
+      start++;
+    }
+    while (end > start && _isEdge(s[end - 1])) {
+      end--;
+    }
+    return s.substring(start, end);
   }
 }
 

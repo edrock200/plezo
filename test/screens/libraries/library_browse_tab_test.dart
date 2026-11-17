@@ -17,6 +17,7 @@ import 'package:plezy/media/library_change_event.dart';
 import 'package:plezy/media/library_query.dart';
 import 'package:plezy/media/media_backend.dart';
 import 'package:plezy/media/media_item.dart';
+import 'package:plezy/widgets/media_card_sliver_layout.dart';
 import 'package:plezy/media/media_kind.dart';
 import 'package:plezy/media/media_library.dart';
 import 'package:plezy/media/media_server_client.dart';
@@ -405,6 +406,30 @@ void main() {
         lastColumn.width * (FocusTheme.fullCardFocusScale - 1) / 2 +
         FocusTheme.focusBorderWidth * FocusTheme.fullCardFocusScale;
     expect(focusedRight, lessThanOrEqualTo(bar.left));
+  });
+
+  testWidgets('a Silo audiobook library browses in square cells; a movie library keeps posters', (tester) async {
+    for (final audiobooks in [true, false]) {
+      final harness = _SiloBrowseHarness(audiobooks: audiobooks, lettersStatus: 404);
+      await pumpLibraryTab(
+        tester,
+        provider: harness.provider,
+        size: const Size(1280, 720),
+        tab: LibraryBrowseTab(
+          key: ValueKey(audiobooks),
+          library: harness.library,
+          canGroupByFolders: false,
+          isActive: true,
+        ),
+      );
+      await _pumpUntil(tester, () => harness.pageRequests.isNotEmpty);
+      await pumpRequestFrames(tester);
+      final layout = tester.widget<MediaCardSliverLayout>(find.byType(MediaCardSliverLayout));
+      expect(layout.shape, audiobooks ? CardShape.square : isNull, reason: 'audiobooks=$audiobooks');
+      if (audiobooks) expect(find.text('A Book 0'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+      await harness.dispose();
+    }
   });
 
   testWidgets('Silo with a letter index shows the phone handle like Plex', (tester) async {
@@ -816,13 +841,17 @@ class _SiloBrowseHarness {
 
   final AppDatabase database;
   final int lettersStatus;
+
+  /// An audiobook library of books instead of movies.
+  final bool audiobooks;
   late final MediaLibrary library;
   late final MultiServerManager manager;
   late final MultiServerProvider provider;
   final pageRequests = <Uri>[];
   final letterRequests = <String>[];
 
-  _SiloBrowseHarness({this.lettersStatus = 200}) : database = AppDatabase.forTesting(NativeDatabase.memory()) {
+  _SiloBrowseHarness({this.lettersStatus = 200, this.audiobooks = false})
+    : database = AppDatabase.forTesting(NativeDatabase.memory()) {
     PlexApiCache.initialize(database);
     SiloApiCache.initialize(database);
     final connection = SiloConnection(
@@ -853,8 +882,8 @@ class _SiloBrowseHarness {
     library = MediaLibrary(
       id: '3',
       backend: MediaBackend.silo,
-      title: 'Movies',
-      kind: MediaKind.movie,
+      title: audiobooks ? 'Audiobooks' : 'Movies',
+      kind: audiobooks ? MediaKind.album : MediaKind.movie,
       serverId: client.serverId,
     );
     manager = MultiServerManager()..debugRegisterClientForTesting(client);
@@ -897,7 +926,9 @@ class _SiloBrowseHarness {
         return _json({
           'items': [
             for (final i in all.sublist(start.clamp(0, all.length), end))
-              {'content_id': 'movie:m$i', 'type': 'movie', 'title': '${_letters[i ~/ 50]} Movie $i'},
+              audiobooks
+                  ? {'content_id': 'audiobook:b$i', 'type': 'audiobook', 'title': '${_letters[i ~/ 50]} Book $i'}
+                  : {'content_id': 'movie:m$i', 'type': 'movie', 'title': '${_letters[i ~/ 50]} Movie $i'},
           ],
           'page': {'has_more': end < all.length, 'next_cursor': 'n:$end'},
           'total': all.length,

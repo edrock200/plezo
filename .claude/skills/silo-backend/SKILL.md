@@ -703,7 +703,19 @@ PIN length (matches Silo's apps). Open follow-ups: an edit screen for an existin
 - **Audiobooks** (`silo_audiobook.dart`, `silo_audiobook_player.dart`, part `silo_client_audiobooks.dart`,
   `lib/screens/silo/silo_audiobook_*`): mapped as `MediaKind.album` + `raw['type']=='audiobook'`, opened from
   `navigateToAlbum`; one session per part (`progress_persistence: client`), whole-book `/sync/progress`; #708 rules in
-  `SiloAudiobookSessionRules`. Music stays hidden: the v2 contract has no music kinds. No mini-player/bookmarks/sleep timer.
+  `SiloAudiobookSessionRules`. Music stays hidden: the v2 contract has no music kinds. No mini-player/bookmarks/sleep timer
+  (Silo Android #976's phone mini player is not ported: Plezilo's audiobook player is a pushed route whose
+  `SiloAudiobookPlayer` is disposed on pop; keeping it alive needs an app-level owner, a bar above the shell and the
+  #976 session-end rules — declined 2026-11-17).
+  Card shape (Silo Android #974): audiobooks are `MediaKind.album`, so `cardShape` is square and Home/library rows,
+  hub detail and collection grids of only audiobooks are square already; `SiloMappers.isAudiobookLibrary` squares the
+  library browse grid/list/placeholders, `SiloMappers.areAllAudiobooks` the For You lists and person pages. Mixed rows
+  and grids keep one cell shape (Plezy grids have uniform cells; Silo's mixed rows do the same). Audiobooks are not
+  downloadable in Plezilo, so #974's download thumbnail does not apply.
+  Titles (Silo Android #975): `SiloAudiobookTitle.clean(title, series)` (Apple's `AudiobookDetailFormatting.cleanTitle`):
+  `SiloAudiobookDetail.title` (page, player, OS media session via `copyWith(title:)`) and `SiloMappers.item` (cards carry
+  no series, so they lose only a trailing "(N of M)" / "(Book N)" / "(Vol. N)"). `SiloAudiobookDetail.playsAgain` = played
+  or within the last 5 s ("Listen again"); the card menu's Mark as Watched/Unwatched reads and writes `played` only.
 - **Requests & Calendar** (`silo_requests.dart`, `silo_calendar.dart`, part `silo_client_requests.dart`,
   `lib/screens/silo/silo_feature_entries.dart`): profile-menu rows; requests gated by `/requests/status`
   (`SiloRequestsApi.enabled`, 30 s fresh, keeps the last answer on failure); creates/cancels never resent ("uncertain" holds
