@@ -4,6 +4,8 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **Finished episodes leave Continue Watching:** a Silo title you watch to the end is now marked watched on the server, so it leaves Continue Watching and its page no longer shows it unfinished. The green watched check no longer appears on a card that still has a resume bar. Titles that already got stuck can be marked watched once from their card menu.
+
 From Silo's own apps (November 16, 2026):
 
 - **Square audiobook covers:** a Silo audiobook library now shows its books as square covers instead of cutting them down to tall posters, in the grid, the list view and while it loads. Your Silo For You lists and a person's page do the same when they hold only audiobooks, and Home and library rows of only audiobooks (a Continue Watching row of books included, with its progress bars) stay square as before. Rows and grids that mix audiobooks with movies or shows keep one card shape. *(please test)*
