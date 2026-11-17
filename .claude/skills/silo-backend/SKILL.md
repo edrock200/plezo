@@ -258,6 +258,18 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
   `in_progress` / `next_up` row whose `total_count` (≥ 1) is no more than its cards and which holds
   fewer than its limit (`item_limit` from the section, at most 20) has `more: false`. The full page
   is `fetchMoreHubItemsPage` → `GET /catalog?source=section&section_id=&scope=home|library`.
+- **Rows of collections (silo-server #4410/#4415, silo-roku 8183af8/d240f47):** a Home or library section with
+  `section_type: collection_posters` has `items: []` and its cards in `collections` (`SectionCollectionCard`: `id`,
+  `source` library|user, `title`, `poster_url` (assigned poster, else the viewer's collage, else ""), `item_count`,
+  `library_id` on server cards, `backdrop_url`/`backdrop_thumbhash` on server cards with a backdrop).
+  `SiloClient.isCollectionRow` / `_collectionRowHub` map them with `_mapCollection` (the Collections tab's cards;
+  `backdrop_url` → `artPath`), no items read, every card (≤ 30, no `limit`/20 cap), `more: false` (no row page).
+  Home cards get the library segment `~` (`silo-collection:~:<id>` / `silo-user-collection:~:<id>`, `libraryId`
+  null): their page is read **without** `library_id` (every member the viewer sees, as Silo's Roku app does); library
+  rows use the library id like the Collections tab. `TvSpotlightController.takesSpotlight`: a Silo collection takes
+  the TV spotlight only with art (backdrop, title, item count); without one focus leaves it, and the fallback skips
+  it. Menus are the collection ones (Play / Shuffle / Download). Tests: `silo_collection_rows_test.dart`,
+  `tv_spotlight_scaffold_test.dart`, `tv_spotlight_ratings_test.dart`, `hub_section_test.dart`.
 - **Recommendations (Silo's "For You", the user's request 2026-11-15):** Silo's apps have a For You page built from
   `GET /api/v2/recommendations/discover` (`RecommendationsViewModel`, phone `RecommendationsScreen`, TV
   `TvRecommendationsScreen`; Siku's `ForYouPage.brs`). Answer `{items: [{type, title, title_key?, title_args?, kind?, key?,

@@ -130,4 +130,21 @@ void main() {
     );
     semantics.dispose();
   });
+
+  testWidgets('a Silo collection card shows its title and item count', (tester) async {
+    await _pumpSpotlight(
+      tester,
+      const MediaItem.silo(
+        id: 'silo-collection:~:c1',
+        kind: MediaKind.collection,
+        title: 'Heists',
+        artPath: 'https://cdn.example.com/b/c1.jpg?sig=1',
+        leafCount: 12,
+        childCount: 12,
+      ),
+    );
+
+    expect(find.text('Heists'), findsOneWidget);
+    expect(find.text(t.playlists.itemCount(count: '12')), findsOneWidget);
+  });
 }

@@ -533,6 +533,59 @@ void main() {
 
     expect(focusedItemId, episode2.id);
   });
+  testWidgets('a Silo row of collections shows every card, no View All, and opens a card by D-pad', (tester) async {
+    final collections = [
+      for (var index = 0; index < 3; index++)
+        testMediaItem(
+          id: 'silo-collection:~:c$index',
+          backend: MediaBackend.silo,
+          kind: MediaKind.collection,
+          title: 'Collection $index',
+          leafCount: index,
+          childCount: index,
+        ),
+    ];
+    final hub = MediaHub(
+      id: 'home:picks',
+      title: 'Our Picks',
+      type: 'collection',
+      items: collections,
+      size: collections.length,
+    );
+    final hubKey = GlobalKey<HubSectionState>();
+    MediaItem? opened;
+
+    await tester.pumpWidget(
+      InputModeTracker(
+        child: _TestApp(
+          child: HubSection(
+            key: hubKey,
+            hub: hub,
+            focusMemory: HubFocusMemory(),
+            icon: Symbols.collections_rounded,
+            onItemTap: (value) => opened = value,
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byType(MediaCard), findsNWidgets(3));
+    expect(find.text(t.playlists.itemCount(count: '2')), findsOneWidget);
+    expect(find.text(t.common.viewAll), findsNothing);
+
+    hubKey.currentState!.requestFocusAt(1);
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pump();
+    // The last card stays focused: there is no View All card past it.
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.select);
+    expect(opened, same(collections[2]));
+
+    await tester.tap(find.text('Collection 0'));
+    expect(opened, same(collections[0]));
+  });
 }
 
 MediaHub _hubWith(MediaItem item) {

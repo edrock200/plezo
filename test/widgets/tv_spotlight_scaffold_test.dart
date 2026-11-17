@@ -58,4 +58,71 @@ void main() {
       same(refreshed),
     );
   });
+
+  group('Silo collection cards (rows of collections)', () {
+    MediaItem collection(String id, {String? art}) => testMediaItem(
+      id: id,
+      backend: MediaBackend.silo,
+      kind: MediaKind.collection,
+      title: id,
+      thumbPath: 'https://cdn.example.com/$id.jpg',
+      artPath: art,
+      leafCount: 3,
+    );
+
+    test('a card with a backdrop takes the spotlight; one without leaves it as it was', () {
+      final title = _item('title');
+      final withBackdrop = collection('heists', art: 'https://cdn.example.com/b.jpg?sig=1');
+      final bare = collection('date-night');
+      final controller = TvSpotlightController(settleDelay: Duration.zero);
+      addTearDown(controller.dispose);
+      final hubs = [
+        _hub('titles', [title]),
+        _hub('picks', [bare, withBackdrop]),
+      ];
+
+      controller.select(title);
+      controller.select(bare);
+      expect(controller.value, same(title));
+      expect(controller.resolve(hubs), same(title));
+
+      controller.select(withBackdrop);
+      expect(controller.resolve(hubs), same(withBackdrop));
+    });
+
+    test('the fallback skips collection cards without a backdrop', () {
+      final bare = collection('date-night');
+      final withBackdrop = collection('heists', art: 'https://cdn.example.com/b.jpg');
+      final title = _item('title');
+      final controller = TvSpotlightController(settleDelay: Duration.zero);
+      addTearDown(controller.dispose);
+
+      expect(
+        controller.resolve([
+          _hub('picks', [bare, withBackdrop]),
+          _hub('titles', [title]),
+        ]),
+        same(withBackdrop),
+      );
+      expect(
+        controller.resolve([
+          _hub('picks', [bare]),
+          _hub('titles', [title]),
+        ]),
+        same(title),
+      );
+      expect(
+        controller.resolve([
+          _hub('picks', [bare]),
+        ]),
+        isNull,
+      );
+    });
+
+    test('other backends\' collections are unchanged', () {
+      final plexCollection = testMediaItem(id: 'p', backend: MediaBackend.plex, kind: MediaKind.collection);
+      expect(TvSpotlightController.takesSpotlight(plexCollection), isTrue);
+      expect(TvSpotlightController.takesSpotlight(_item('movie')), isTrue);
+    });
+  });
 }

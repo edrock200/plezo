@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 
 import '../i18n/strings.g.dart';
 import '../media/catalog_item_ref.dart';
+import '../media/media_backend.dart';
 import '../media/media_hub.dart';
+import '../media/media_kind.dart';
 import '../media/media_item.dart';
 import '../media/media_server_client.dart';
 import '../models/catalog/catalog_item.dart';
@@ -24,7 +26,17 @@ class TvSpotlightController extends ValueNotifier<MediaItem?> {
   final Duration _settleDelay;
   final Debouncer _debouncer;
 
+  /// Whether [item] takes the spotlight when focused. A Silo collection card
+  /// (a row of collections) does only with a backdrop (silo-server #4415):
+  /// without one it has nothing to draw, so focus on it leaves the spotlight
+  /// on what it showed, as Silo's Roku app keeps its hero.
+  static bool takesSpotlight(MediaItem item) {
+    if (item.kind != MediaKind.collection || item.backend != MediaBackend.silo) return true;
+    return item.artPath?.isNotEmpty ?? false;
+  }
+
   void select(MediaItem item) {
+    if (!takesSpotlight(item)) return;
     void apply() {
       if (value?.globalKey == item.globalKey) return;
       value = item;
@@ -42,7 +54,7 @@ class TvSpotlightController extends ValueNotifier<MediaItem?> {
     final current = value;
     for (final hub in hubs) {
       if (hub.items.isEmpty) continue;
-      fallback ??= hub.items.first;
+      fallback ??= hub.items.where(takesSpotlight).firstOrNull;
       if (current == null) continue;
       for (final item in hub.items) {
         if (item.globalKey == current.globalKey) return item;

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../i18n/strings.g.dart';
 import '../media/media_item.dart';
 import '../media/media_item_types.dart';
+import '../media/media_kind.dart';
 import '../media/media_server_client.dart';
 import '../services/device_performance.dart';
 import '../utils/content_utils.dart';
@@ -332,6 +333,12 @@ class TvSpotlightBackground extends StatelessWidget {
     );
 
     final parts = <MetadataLinePart>[];
+    if (media.kind == MediaKind.collection) {
+      final count = media.childCount ?? media.leafCount;
+      if (count != null && count > 0) {
+        parts.add(MetadataLineText(t.playlists.itemCount(count: formatGroupedCount(count)), dropPriority: 0));
+      }
+    }
     if (media.isEpisode && episodeLabel != null) parts.add(MetadataLineText(episodeLabel, dropPriority: 0));
     if (media.isMovie) {
       parts.add(MetadataLineText(t.discover.movie, dropPriority: 3));

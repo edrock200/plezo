@@ -4,6 +4,14 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+From Silo's own apps (November 17, 2026):
+
+- **Rows of collections:** when your Silo server puts a row of collections on Home or on a library's Recommended page, Plezilo now shows it, one poster per collection with its name and how many titles it holds (its collage when it has no poster of its own, a plain placeholder when it has neither). Opening one shows the collection: from Home every title in it you can see, from a library page that library's titles. The row shows all its collections and has no View All, since there is nothing more to open. On a TV, a collection with a backdrop shows that backdrop, its name and its title count at the top of the screen while it is focused; one without leaves the top as it was. The long-press / ⋮ menu offers Play, Shuffle and Download, as on a library's Collections tab. Needs a Silo server with collection rows. *(please test)*
+
+## silo-preview-2.47.0
+
+Released November 17, 2026. Android and Windows.
+
 - **Finished episodes leave Continue Watching:** a Silo title you watch to the end is now marked watched on the server, so it leaves Continue Watching and its page no longer shows it unfinished. The green watched check no longer appears on a card that still has a resume bar. Titles that already got stuck can be marked watched once from their card menu.
 
 From Silo's own apps (November 16, 2026):

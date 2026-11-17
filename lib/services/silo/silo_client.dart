@@ -906,6 +906,11 @@ class SiloClient
 
   static bool _isCollectionId(String id) => id.startsWith(_collectionPrefix) || id.startsWith(_userCollectionPrefix);
 
+  /// The library segment of a collection id opened from a Home row of
+  /// collections: its page lists every member the viewer sees, so it is read
+  /// without `library_id` (Silo's Roku app, silo-roku 8183af8).
+  static const _anyLibrary = '~';
+
   /// `GET /catalog/items/{id}` rows of recently opened items. The detail
   /// screen reads extras and remote trailers right after loading the item;
   /// both live in the same document, so they reuse it instead of fetching it
@@ -1538,6 +1543,43 @@ class SiloClient
     return cards < limit && total >= 1 && total <= cards;
   }
 
+  /// Whether a Home or library section is a row of collections
+  /// (`section_type: collection_posters`, silo-server #4410): its cards are in
+  /// `collections`, `items` is empty, and it has no row page (a section page
+  /// of it answers no items).
+  @visibleForTesting
+  static bool isCollectionRow(Map<String, dynamic> section) =>
+      section['section_type']?.toString().toLowerCase() == 'collection_posters';
+
+  /// A row of collections as a hub of collection cards, the Collections tab's
+  /// (title, item count, the server's poster or collage), in the server's
+  /// order. Every card the server sends shows (at most 30; `item_limit` does
+  /// not apply), and there is no View All: the row has no page. A card opens
+  /// the collection's page: from Home ([libraryId] null) every member the
+  /// viewer sees, from a library page that library's view, as its
+  /// Collections tab reads it. A server collection's `backdrop_url`
+  /// (silo-server #4415) is its art, which the TV spotlight shows.
+  MediaHub _collectionRowHub({required String id, required Map<String, dynamic> section, String? libraryId}) {
+    final seen = <String>{};
+    final items = [
+      for (final card in _itemsOf(section, 'collections'))
+        if (_nonEmpty(card['id']) case final cardId? when seen.add('${card['source']}:$cardId'))
+          _mapCollection(libraryId ?? _anyLibrary, card, personal: card['source'] == 'user'),
+    ];
+    return MediaHub(
+      id: id,
+      identifier: section['section_type']?.toString() ?? section['id']?.toString(),
+      title: SiloSectionTitles.of(section),
+      type: MediaKind.collection.id,
+      items: items,
+      size: items.length,
+      more: false,
+      libraryId: libraryId,
+      serverId: serverId,
+      serverName: serverName,
+    );
+  }
+
   static String _hubType(List<MediaItem> items) {
     final kinds = items.map((item) => item.kind).toSet();
     if (kinds.length == 1) return kinds.single.id;
@@ -1666,7 +1708,9 @@ class SiloClient
     final hubs = await Future.wait([
       for (final section in sections)
         if (section['id']?.toString() case final sectionId?)
-          if (includePlaybackHubs || !_playbackSectionTypes.contains(section['section_type']))
+          if (isCollectionRow(section))
+            Future.value(_collectionRowHub(id: 'home:$sectionId', section: section))
+          else if (includePlaybackHubs || !_playbackSectionTypes.contains(section['section_type']))
             _sectionItems(
               section,
               '/api/v2/home/sections/${_seg(sectionId)}/items',
@@ -1788,6 +1832,11 @@ class SiloClient
     for (final section in _itemsOf(data, 'sections')) {
       final sectionId = section['id']?.toString();
       if (sectionId == null) continue;
+      if (isCollectionRow(section)) {
+        final hub = _collectionRowHub(id: 'library:$libraryId:$sectionId', section: section, libraryId: libraryId);
+        if (hub.items.isNotEmpty) hubs.add(hub);
+        continue;
+      }
       if (!includePlaybackHubs && _playbackSectionTypes.contains(section['section_type'])) continue;
       final rows = await _sectionItems(section, '/api/v2/library/${_seg(libraryId)}/sections/${_seg(sectionId)}/items');
       final hub = _hub(
@@ -2097,9 +2146,13 @@ class SiloClient
     return text == null || text.isEmpty ? null : text;
   }
 
+  /// A collection card ([libraryId] [_anyLibrary] for one opened from Home,
+  /// which belongs to no one library here).
   MediaItem _mapCollection(String libraryId, Map<String, dynamic> json, {required bool personal}) {
     final id = _collectionId(libraryId, json['id'].toString(), personal: personal);
     final poster = json['poster_url'];
+    final backdrop = _nonEmpty(json['backdrop_url']);
+    final itemLibraryId = libraryId == _anyLibrary ? null : libraryId;
     final item = MediaItem.silo(
       id: id,
       kind: MediaKind.collection,
@@ -2108,10 +2161,13 @@ class SiloClient
       // answers. The server sends "" for none.
       summary: _nonEmpty(json['description']) ?? _nonEmpty(json['overview']),
       thumbPath: poster is String && poster.isNotEmpty ? _api.resolveUrl(poster) : null,
+      // Only a row of collections' server cards carry one (silo-server
+      // #4415); presigned, so it is used as it came.
+      artPath: backdrop == null ? null : _api.resolveUrl(backdrop),
       leafCount: (json['item_count'] as num?)?.toInt(),
       childCount: (json['item_count'] as num?)?.toInt(),
-      libraryId: libraryId,
-      libraryTitle: _libraryTitles[libraryId],
+      libraryId: itemLibraryId,
+      libraryTitle: _libraryTitles[itemLibraryId],
       serverId: serverId,
       serverName: serverName,
       raw: json,
@@ -2124,7 +2180,8 @@ class SiloClient
     final cached = _collections[id];
     if (cached != null) return cached;
     final parsed = _parseCollectionId(id);
-    if (parsed == null) return null;
+    // A Home card's collection is only known from the Home row it came in.
+    if (parsed == null || parsed.libraryId == _anyLibrary) return null;
     await fetchCollectionsPage(parsed.libraryId);
     return _collections[id];
   }
@@ -2213,6 +2270,9 @@ class SiloClient
     if (parsed == null) return const LibraryPage(items: [], totalCount: 0);
     final offset = start ?? 0;
     final limit = size ?? 50;
+    // Opened from a Home row of collections: every member the viewer sees,
+    // the titles its card counts, so no library narrows it.
+    final pageLibraryId = parsed.libraryId == _anyLibrary ? null : parsed.libraryId;
     final page = await _pageAt(
       '/api/v2/catalog',
       {
@@ -2220,7 +2280,7 @@ class SiloClient
         // from the personal source, everything else from the library's.
         'source': parsed.personal ? 'user_collection' : 'library_collection',
         'collection_id': parsed.collectionId,
-        'library_id': parsed.libraryId,
+        'library_id': ?pageLibraryId,
         'image_size': _imageSize,
       },
       offset: offset,
@@ -2231,8 +2291,8 @@ class SiloClient
       page,
       offset: offset,
       limit: limit,
-      libraryId: parsed.libraryId,
-      libraryTitle: libraryTitle ?? _libraryTitles[parsed.libraryId],
+      libraryId: pageLibraryId,
+      libraryTitle: libraryTitle ?? _libraryTitles[pageLibraryId],
     );
   }
 
