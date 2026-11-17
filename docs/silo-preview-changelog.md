@@ -4,6 +4,12 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **Hidden libraries in rows of collections:** a library you hid in Plezilo now also keeps its collections out of Home's Silo rows of collections. Your personal collections stay, and a row left with nothing to show goes away. Showing the library again brings them back.
+
+## silo-preview-2.49.0
+
+Released November 17, 2026. Android and Windows.
+
 From Silo's Android app (November 17, 2026):
 
 - **Who shared a collection:** in a row of collections, a personal collection that another profile on your Silo account made and shared now says "by" and that profile's name. On phones, tablets and computers it sits beside the number of titles; on a TV it takes the place of the number, which does not fit beside it. Your own collections and the server's collections show only the number. Every card in such a row now shows its number, an empty collection's "0 items" included. *(please test)*

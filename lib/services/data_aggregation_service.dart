@@ -132,9 +132,22 @@ Map<String, int> _searchKindCounts(Iterable<MediaItem> items) {
 List<MediaItem> _withoutHiddenLibraries(List<MediaItem> items, Set<String>? hiddenLibraryKeys) {
   if (hiddenLibraryKeys == null || hiddenLibraryKeys.isEmpty) return items;
   return items.where((item) {
-    final libraryKey = item.libraryGlobalKey;
+    final libraryKey = item.hidingLibraryGlobalKey;
     return libraryKey == null || !hiddenLibraryKeys.contains(libraryKey);
   }).toList();
+}
+
+/// The library key whose hiding hides [item], with [serverId] standing in
+/// for an item that does not name its server ([MediaItem.hidingLibraryGlobalKey]).
+String? _hidingKey(MediaItem item, String serverId) {
+  if (item.hidingLibraryGlobalKey case final key?) return key;
+  final libraryId = item.libraryId ?? _sourceLibraryId(item);
+  return libraryId == null ? null : buildGlobalKey(ServerId(serverId), libraryId);
+}
+
+String? _sourceLibraryId(MediaItem item) {
+  final source = item.raw?[MediaItem.sourceLibraryKey];
+  return source is String && source.isNotEmpty ? source : null;
 }
 
 /// The server-local library ids [serverId] owns within [hiddenLibraryKeys],
@@ -851,10 +864,8 @@ class DataAggregationService {
       filtered = filtered
           .map((hub) {
             final filteredItems = hub.items.where((item) {
-              final libraryId = item.libraryId;
-              if (libraryId == null) return true;
-              final globalKey = buildGlobalKey(ServerId(serverId), libraryId);
-              return !hiddenLibraryKeys.contains(globalKey);
+              final globalKey = _hidingKey(item, serverId);
+              return globalKey == null || !hiddenLibraryKeys.contains(globalKey);
             }).toList();
             if (filteredItems.isEmpty) return null;
             return hub.copyWith(items: filteredItems, size: filteredItems.length);

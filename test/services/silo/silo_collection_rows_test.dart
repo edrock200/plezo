@@ -15,6 +15,7 @@ import 'package:plezy/services/silo/silo_catalog_strings.dart';
 import 'package:plezy/services/silo/silo_client.dart';
 import 'package:plezy/services/silo/silo_collection_cards.dart';
 import 'package:plezy/media/media_hub.dart';
+import 'package:plezy/media/media_item.dart';
 import 'package:plezy/services/data_aggregation_service.dart';
 import 'package:plezy/services/multi_server_manager.dart';
 import 'package:plezy/services/settings_service.dart';
@@ -191,8 +192,13 @@ void main() {
       // backdrop kept exactly as sent.
       expect(heists.thumbPath, 'https://silo.example.com/p/c1.jpg');
       expect(heists.artPath, 'https://cdn.example.com/b/c1.jpg?sig=1');
-      // Home cards belong to no one library (hidden libraries never drop them).
+      // Home cards belong to no one library; a server card names its own
+      // for Plezilo's hidden-library setting, a personal one none.
       expect(heists.libraryId, isNull);
+      expect(heists.raw?[MediaItem.sourceLibraryKey], '3');
+      expect(heists.hidingLibraryGlobalKey, 'srv-1:3');
+      expect(row.items[1].raw?.containsKey(MediaItem.sourceLibraryKey), isFalse);
+      expect(row.items[1].hidingLibraryGlobalKey, isNull);
 
       final dateNight = row.items[1];
       expect(dateNight.thumbPath, 'https://cdn.example.com/collage/u1.jpg');
@@ -629,16 +635,31 @@ void main() {
   });
 
   group('Home filters', () {
-    test('hidden libraries leave a Home row of collections in place', () async {
+    late MultiServerManager manager;
+
+    setUp(() {
       resetSharedPreferencesForTest();
       SettingsService.resetForTesting();
-      final manager = MultiServerManager();
-      addTearDown(manager.dispose);
+      manager = MultiServerManager();
+    });
+
+    tearDown(() => manager.dispose());
+
+    /// Home: a row of collections (library 3's Heists and Empty, library 5's
+    /// Westerns, the viewer's Date night) and a title row of library 3.
+    SiloClient homeClient({List<Map<String, dynamic>>? collections}) {
+      final row = _collectionRow();
+      final cards =
+          collections ??
+          [
+            ...(row['collections'] as List).cast<Map<String, dynamic>>(),
+            {'id': 'w', 'source': 'library', 'title': 'Westerns', 'item_count': 2, 'library_id': '5'},
+          ];
       final c = client((request) async {
         if (request.url.path.endsWith('/home/sections')) {
           return _json({
             'sections': [
-              _collectionRow(),
+              {...row, 'collections': cards, 'total_count': cards.length},
               {
                 'id': 'ra',
                 'section_type': 'recently_added',
@@ -654,13 +675,59 @@ void main() {
         return emptyPage();
       });
       manager.debugRegisterClientForTesting(c);
+      return c;
+    }
+
+    test('a hidden library\'s server collections leave Home; personal ones and other libraries\' stay', () async {
+      homeClient();
       final result = await DataAggregationService(
         manager,
       ).getHubsFromAllServers(hiddenLibraryKeys: {'srv-1:3'}, includePlaybackHubs: false);
-      // The title row of the hidden library goes; the row of collections,
-      // whose Home cards belong to no one library, stays whole.
+      // The title row of the hidden library goes too.
       expect(result.hubs.map((h) => h.id), ['home:picks']);
-      expect(result.hubs.single.items, hasLength(3));
+      expect(result.hubs.single.items.map((i) => i.id), ['silo-user-collection:~:u1', 'silo-collection:~:w']);
+      expect(result.hubs.single.size, 2);
+    });
+
+    test('with nothing hidden the row is whole', () async {
+      homeClient();
+      final result = await DataAggregationService(manager).getHubsFromAllServers(includePlaybackHubs: false);
+      expect(result.hubs.map((h) => h.id), ['home:picks', 'home:ra']);
+      expect(result.hubs.first.items, hasLength(4));
+    });
+
+    test('a row whose every card is in a hidden library goes', () async {
+      homeClient(
+        collections: [
+          {'id': 'h', 'source': 'library', 'title': 'Heists', 'item_count': 2, 'library_id': '3'},
+        ],
+      );
+      final result = await DataAggregationService(
+        manager,
+      ).getHubsFromAllServers(hiddenLibraryKeys: {'srv-1:3', 'srv-1:5'}, includePlaybackHubs: false);
+      expect(result.hubs, isEmpty);
+    });
+
+    test('another server\'s hidden library with the same id changes nothing', () async {
+      homeClient();
+      final result = await DataAggregationService(
+        manager,
+      ).getHubsFromAllServers(hiddenLibraryKeys: {'other:3'}, includePlaybackHubs: false);
+      expect(result.hubs.first.items, hasLength(4));
+    });
+
+    test('a library page\'s row is that library: its cards carry no other library', () async {
+      final c = client((request) async {
+        if (Uri.decodeComponent(request.url.path).endsWith('/library/5/sections')) {
+          return _json({
+            'sections': [_collectionRow(libraryId: '3')],
+          });
+        }
+        return emptyPage();
+      });
+      final items = (await c.fetchLibraryHubs('5', libraryName: 'Shows')).single.items;
+      expect(items.map((i) => i.hidingLibraryGlobalKey).toSet(), {'srv-1:5'});
+      expect(items.any((i) => i.raw?.containsKey(MediaItem.sourceLibraryKey) ?? false), isFalse);
     });
   });
 }

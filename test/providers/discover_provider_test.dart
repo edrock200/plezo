@@ -805,6 +805,63 @@ void main() {
     expect(aggregation.hubCalls, hubCallsBefore + 1);
   });
 
+  group('a Silo Home row of collections and hidden libraries', () {
+    MediaItem card(String id, {String? sourceLibrary}) => MediaItem.silo(
+      id: id,
+      kind: MediaKind.collection,
+      title: id,
+      serverId: 'server_1',
+      raw: {MediaItem.sourceLibraryKey: ?sourceLibrary},
+    );
+
+    /// Runs [hide]; the reload it starts fails its hub pass. The pass is held
+    /// until the provider awaits it, so the failure is the provider's to handle.
+    Future<void> failNextHubPass(Future<void> Function() hide) async {
+      final gate = Completer<void>();
+      aggregation.hubGate = gate.future;
+      aggregation.hubsResult = () => throw Exception('offline');
+      await hide();
+      await pumpEventQueue();
+      gate.complete();
+      await pumpEventQueue();
+    }
+
+    MediaHub row() => _hub(
+      'home:picks',
+      identifier: 'collection_posters',
+      items: [
+        card('films', sourceLibrary: '3'),
+        card('shows', sourceLibrary: '5'),
+        card('mine'),
+      ],
+    );
+
+    test('hiding a library drops its server collections from the shown row; personal ones stay', () async {
+      aggregation.hubsResult = () => [row()];
+      await provider.load();
+      expect(provider.hubs.single.items, hasLength(3));
+
+      // The reload the hide starts fails, so the shown rows are filtered in place.
+      await failNextHubPass(() => hiddenLibraries.hideLibrary('server_1:3'));
+      expect(provider.hubs.single.items.map((i) => i.id), ['shows', 'mine']);
+    });
+
+    test('a row whose every card is hidden goes', () async {
+      aggregation.hubsResult = () => [
+        _hub(
+          'home:picks',
+          identifier: 'collection_posters',
+          items: [card('films', sourceLibrary: '3')],
+        ),
+        _hub('hub-other'),
+      ];
+      await provider.load();
+
+      await failNextHubPass(() => hiddenLibraries.hideLibrary('server_1:3'));
+      expect(provider.hubs.map((h) => h.id), ['hub-other']);
+    });
+  });
+
   test('refreshContinueWatching never flips states or surfaces errors', () async {
     aggregation.onDeckResult = () => [_item('a')];
     await provider.load();

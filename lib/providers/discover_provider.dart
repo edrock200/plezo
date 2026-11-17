@@ -930,7 +930,7 @@ class DiscoverProvider extends ChangeNotifier with DisposableChangeNotifierMixin
   }
 
   static bool _isInVisibleLibrary(MediaItem item, Set<String> hiddenLibraryKeys) {
-    final libraryKey = item.libraryGlobalKey;
+    final libraryKey = item.hidingLibraryGlobalKey;
     return libraryKey == null || !hiddenLibraryKeys.contains(libraryKey);
   }
 
@@ -939,8 +939,9 @@ class DiscoverProvider extends ChangeNotifier with DisposableChangeNotifierMixin
     final filteredHubs = <MediaHub>[];
     for (final hub in hubs) {
       final filteredItems = hub.items.where((item) {
-        var libraryKey = item.libraryGlobalKey;
-        final libraryId = item.libraryId;
+        var libraryKey = item.hidingLibraryGlobalKey;
+        final source = item.raw?[MediaItem.sourceLibraryKey];
+        final libraryId = item.libraryId ?? (source is String && source.isNotEmpty ? source : null);
         final serverId = item.serverId ?? hub.serverId;
         if (libraryKey == null && libraryId != null && serverId != null) {
           libraryKey = buildGlobalKey(ServerId(serverId), libraryId);

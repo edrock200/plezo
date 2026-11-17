@@ -478,6 +478,23 @@ sealed class MediaItem with _$MediaItem {
   /// so `addedAt` would scatter them; see `SiloClient.fetchContinueWatching`).
   static const continueWatchingRecencyKey = 'plezy_cw_recency';
 
+  /// Raw key a client may set on an item that belongs to no one library page
+  /// (so [libraryId] stays null) but comes from one library the user can
+  /// hide: its server-local library id. Silo sets it on a Home row of
+  /// collections' server collection cards, which open across libraries.
+  static const sourceLibraryKey = 'plezy_source_library_id';
+
+  /// The library whose hiding hides this item: [libraryGlobalKey], else the
+  /// library named by [sourceLibraryKey]; null when neither is known (such an
+  /// item is never hidden).
+  String? get hidingLibraryGlobalKey {
+    if (libraryGlobalKey case final key?) return key;
+    final source = raw?[sourceLibraryKey];
+    final server = serverId;
+    if (source is! String || source.isEmpty || server == null) return null;
+    return buildGlobalKey(ServerId(server), source);
+  }
+
   /// Recency used to order the Continue Watching / On Deck shelf: when the item
   /// was last watched, falling back to when it was added for never-watched rows.
   /// Shared by the per-client merge and the cross-server sort so they agree.

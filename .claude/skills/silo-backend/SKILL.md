@@ -280,7 +280,9 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
   (0 included) and "by Name" beside it (phone/desktop) or instead of it (TV); the text is Silo's catalog key
   `collections.posterCard.byOwner`, which `scripts/silo_catalog_strings.py` takes from silo-android's
   `strings_catalog.xml` (`ANDROID_KEYS`, `--android-catalogs`). `featured` is ignored (the row stays, never a hero).
-  Home cards have `libraryId` null, so Plezilo's hidden libraries never drop them; Plezilo has no Movies/Series-scoped
+  Home cards have `libraryId` null; a Home server card names its library in raw `MediaItem.sourceLibraryKey`, and
+  `MediaItem.hidingLibraryGlobalKey` (used by every hidden-library filter: `DataAggregationService`, `DiscoverProvider`)
+  hides it with that library (2.50.0, the user's request; personal cards stay, an emptied row goes); Plezilo has no Movies/Series-scoped
   library pages, and a library row's personal card already opens in that library (`source=user_collection&library_id=`).
 - **Recommendations (Silo's "For You", the user's request 2026-11-15):** Silo's apps have a For You page built from
   `GET /api/v2/recommendations/discover` (`RecommendationsViewModel`, phone `RecommendationsScreen`, TV

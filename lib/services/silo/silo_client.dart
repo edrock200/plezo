@@ -1659,7 +1659,9 @@ class SiloClient
   ///
   /// On Home ([libraryId] null) a server collection shows only when its
   /// library is in [shownLibraries] (none while that is null), so an e-book
-  /// library's collections never show. A personal collection another profile
+  /// library's collections never show; each Home server card names its
+  /// library in [MediaItem.sourceLibraryKey], so hiding that library in
+  /// Plezilo hides the card (personal collections stay). A personal collection another profile
   /// made carries that profile's name from [profileNames] ("by Name").
   /// A `featured` flag changes nothing: the row stays and is never a hero.
   MediaHub _collectionRowHub({
@@ -1684,6 +1686,9 @@ class SiloClient
           ...card,
           SiloCollectionCards.rowCardKey: true,
           SiloCollectionCards.ownerNameKey: ?owner,
+          // A Home server card opens across libraries (no libraryId), but
+          // hiding its library in Plezilo hides it.
+          if (!personal && libraryId == null) MediaItem.sourceLibraryKey: ?SiloCollectionCards.libraryIdOf(card),
         }, personal: personal),
       );
     }
