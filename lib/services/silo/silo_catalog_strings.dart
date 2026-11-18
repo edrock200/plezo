@@ -30,6 +30,12 @@ abstract final class SiloCatalogStrings {
       _current = _english;
     } else if (locale != _currentLocale || _current.isEmpty) {
       _current = await _read(source, locale);
+      // A regional variant without its own catalog (pt-PT) reads its base
+      // language's (pt) before falling back to English.
+      if (_current.isEmpty && locale.languageTag.contains('-')) {
+        final base = AppLocale.values.where((l) => l.languageTag == locale.languageCode).firstOrNull;
+        if (base != null && base != AppLocale.en) _current = await _read(source, base);
+      }
     }
     _currentLocale = locale;
   }

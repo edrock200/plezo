@@ -4,6 +4,12 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **European Portuguese:** Plezilo can now be shown in European Portuguese (Settings › Language), alongside Brazilian Portuguese. The language list also names both variants and puts each regional variant right after its base language. Silo's row titles use the Portuguese translation in it. *(From Plezy.)*
+
+## silo-preview-2.50.0
+
+Released November 17, 2026. Android and Windows.
+
 - **Hidden libraries in rows of collections:** a library you hid in Plezilo now also keeps its collections out of Home's Silo rows of collections. Your personal collections stay, and a row left with nothing to show goes away. Showing the library again brings them back.
 
 ## silo-preview-2.49.0
