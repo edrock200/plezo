@@ -3,7 +3,8 @@ import 'package:plezy/models/transcode_quality_preset.dart';
 import 'package:plezy/services/silo/silo_version_selector.dart';
 
 /// Ports of silo-android `DetailVersionSelectorTest` (#899): Edition picks the
-/// cut, Version Auto the best file in it for the quality preference.
+/// cut, Version Auto the best file in it for the quality preference; with no
+/// history the cut is picked by name first (#996).
 Map<String, dynamic> _file(
   int id, {
   String? resolution,
@@ -66,7 +67,7 @@ void main() {
     return index < 0 ? null : list[index]['file_id'] as String;
   }
 
-  test('nothing played opens on the edition holding the best file', () {
+  test('nothing played opens on the preferred cut with its best file', () {
     expect(select(), '1');
   });
 
@@ -132,20 +133,60 @@ void main() {
     );
   });
 
-  test('with no history each cut\'s Auto file is compared across cuts', () {
+  test('with no history the cut is picked by name, then quality', () {
     Map<String, dynamic> cut(int id, String? key, String resolution, {bool hdr = false, int size = 1}) =>
         _file(id, resolution: resolution, hdr: hdr, size: size, key: key, raw: key);
-    // A cut with a file within the cap beats one only above it.
+    // Name first (unnamed or standard, then theatrical, then any other cut), even over better quality.
+    expect(select(files: [cut(1, 'standard', '1080p'), cut(2, 'extended', '2160p', hdr: true)]), '1');
+    expect(select(files: [cut(1, 'theatrical', '1080p'), cut(2, null, '1080p')]), '2');
+    expect(select(files: [cut(1, 'theatrical', '1080p'), cut(2, 'standard edition', '1080p')]), '2');
+    expect(select(files: [cut(1, 'directors_cut', '1080p', size: 9000), cut(2, 'theatrical', '1080p')]), '2');
+    // Among equally named cuts, a file within the cap beats one only above it.
     expect(select(preferredQuality: '1080p', files: [cut(1, 'imax', '2160p'), cut(2, 'extended', '720p')]), '2');
     // Above the cap, the closer one wins.
     expect(select(preferredQuality: '480p', files: [cut(1, 'imax', '2160p'), cut(2, 'extended', '720p')]), '2');
-    // Same resolution: HDR, then edition preference (unnamed or standard, then theatrical); never file size.
-    expect(select(files: [cut(1, 'theatrical', '1080p'), cut(2, 'directors_cut', '1080p', hdr: true)]), '2');
-    expect(select(files: [cut(1, 'directors_cut', '1080p', size: 9000), cut(2, 'theatrical', '1080p')]), '2');
-    expect(select(files: [cut(1, 'theatrical', '1080p'), cut(2, null, '1080p')]), '2');
-    expect(select(files: [cut(1, 'theatrical', '1080p'), cut(2, 'standard edition', '1080p')]), '2');
+    // Same resolution: HDR; never file size.
+    expect(select(files: [cut(1, 'extended', '1080p', size: 9000), cut(2, 'directors_cut', '1080p', hdr: true)]), '2');
     // A full tie keeps server order.
     expect(select(files: [cut(1, 'extended', '1080p'), cut(2, 'directors_cut', '1080p', size: 9000)]), '1');
+  });
+
+  test('the name classes match Silo Android\'s', () {
+    Map<String, dynamic> cut(int id, String? key, String resolution, {String? raw}) =>
+        _file(id, resolution: resolution, key: key, raw: raw ?? key);
+    // "default", "standard …" and "… standard" are the standard class, whatever the quality of the other cut.
+    expect(select(files: [cut(1, 'extended', '2160p'), cut(2, 'default', '720p')]), '2');
+    expect(
+      select(
+        files: [
+          cut(1, 'theatrical', '2160p'),
+          cut(2, 'remastered_standard', '720p', raw: 'Remastered Standard'),
+        ],
+      ),
+      '2',
+    );
+    // The raw name counts too; "theatrical" may sit anywhere in a name.
+    expect(
+      select(
+        files: [
+          cut(1, 'imax', '2160p'),
+          cut(2, 'cut_a', '720p', raw: 'Original Theatrical Cut'),
+        ],
+      ),
+      '2',
+    );
+    // "standardized" is not "standard": both are other cuts, so quality decides.
+    expect(select(files: [cut(1, 'standardized', '720p'), cut(2, 'extended', '1080p')]), '2');
+    // Within the best class, quality still decides between two standard cuts.
+    expect(select(preferredQuality: '1080p', files: [cut(1, 'standard', '720p'), cut(2, null, '1080p')]), '2');
+  });
+
+  test('history beats the name class', () {
+    final standard4k = _file(1, resolution: '2160p', key: 'standard', raw: 'Standard');
+    final extended1080p = _file(2, resolution: '1080p', key: 'extended', raw: 'Extended');
+    expect(select(files: [standard4k, extended1080p]), '1');
+    expect(select(files: [standard4k, extended1080p], lastFileId: '2'), '2');
+    expect(select(files: [standard4k, extended1080p], lastEditionKey: 'extended'), '2');
   });
 
   test('a pin wins', () {

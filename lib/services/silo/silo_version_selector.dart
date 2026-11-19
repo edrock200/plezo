@@ -224,15 +224,20 @@ abstract final class SiloVersionSelector {
     return 2;
   }
 
-  /// The edition a page opens on with no history: each edition's Auto file
-  /// compared across cuts by fit (within the cap, above it, unknown), then
-  /// resolution (higher within the cap, lower above it), then HDR, then
-  /// edition preference, then server order. File size is not compared.
+  /// The edition a page opens on with no history, chosen by name first (Silo
+  /// Android #996, silo-server #4511): only the cuts in the most preferred
+  /// [_preference] class compete, so a standard cut is never passed over for
+  /// a longer one in better quality. Among those, each cut's Auto file is
+  /// compared by fit (within the cap, above it, unknown), then resolution
+  /// (higher within the cap, lower above it), then HDR, then server order.
+  /// File size is not compared across cuts.
   static SiloEdition _openingEdition(List<Map<String, dynamic>> versions, List<SiloEdition> editions, int? capRank) {
     int fit(int rank) => rank == 0 ? 2 : (capRank == null || rank <= capRank ? 0 : 1);
+    final bestClass = editions.map(_preference).reduce((a, b) => a < b ? a : b);
+    final named = editions.where((e) => _preference(e) == bestClass).toList();
     final candidates = [
-      for (var i = 0; i < editions.length; i++)
-        (index: i, edition: editions[i], auto: versions[autoIndex(versions, editions[i], capRank)]),
+      for (var i = 0; i < named.length; i++)
+        (index: i, edition: named[i], auto: versions[autoIndex(versions, named[i], capRank)]),
     ];
     candidates.sort((a, b) {
       final rankA = resolutionRank(a.auto['resolution']);
@@ -244,8 +249,6 @@ abstract final class SiloVersionSelector {
       if (byRank != 0) return byRank;
       final byHdr = (b.auto['hdr'] == true ? 1 : 0).compareTo(a.auto['hdr'] == true ? 1 : 0);
       if (byHdr != 0) return byHdr;
-      final byPreference = _preference(a.edition).compareTo(_preference(b.edition));
-      if (byPreference != 0) return byPreference;
       return a.index.compareTo(b.index);
     });
     return candidates.first.edition;
