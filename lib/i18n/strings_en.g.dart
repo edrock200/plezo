@@ -2152,6 +2152,9 @@ class Translations$mediaMenu$en {
 	/// en: 'Failed to delete media item'
 	String get mediaFailedToDelete => 'Failed to delete media item';
 
+	/// en: 'Media deletion is turned off on this server. Turn on "Allow media deletion" in the server's Library settings.'
+	String get mediaDeletionDisabledOnServer => 'Media deletion is turned off on this server. Turn on "Allow media deletion" in the server\'s Library settings.';
+
 	/// en: 'Rate'
 	String get rate => 'Rate';
 
@@ -10162,6 +10165,7 @@ extension on Translations {
 			'mediaMenu.deleteScopeUnverifiedNoFileInfo' => 'Your server did not provide file details for this item, so Plezilo cannot check which files this will remove. It may delete more than the item named above.',
 			'mediaMenu.mediaDeletedSuccessfully' => 'Media item deleted successfully',
 			'mediaMenu.mediaFailedToDelete' => 'Failed to delete media item',
+			'mediaMenu.mediaDeletionDisabledOnServer' => 'Media deletion is turned off on this server. Turn on "Allow media deletion" in the server\'s Library settings.',
 			'mediaMenu.rate' => 'Rate',
 			'mediaMenu.playFromBeginning' => 'Play from Beginning',
 			'mediaMenu.playVersion' => 'Play Version...',
@@ -10458,9 +10462,9 @@ extension on Translations {
 			'profiles.delete' => 'Delete',
 			'profiles.signOut' => 'Sign out',
 			'profiles.signOutPlexTitle' => 'Sign out of Plex?',
-			'profiles.signOutPlexMessage' => ({required Object displayName}) => 'Remove ${displayName} and all Plex Home users? Sign back in anytime.',
 			_ => null,
 		} ?? switch (path) {
+			'profiles.signOutPlexMessage' => ({required Object displayName}) => 'Remove ${displayName} and all Plex Home users? Sign back in anytime.',
 			'profiles.signOutPlexDeleteDownloads' => 'Also delete downloads',
 			'profiles.signOutPlexDeleteDownloadsDescription' => 'Otherwise they stay on this device and come back when you sign back in to this account.',
 			'profiles.signedOutPlex' => 'Signed out of Plex.',
@@ -10972,9 +10976,9 @@ extension on Translations {
 			'explore.detail.ratings' => 'Ratings',
 			'explore.detail.schedule' => 'Schedule',
 			'explore.detail.recommendedByUsers' => ({required num n}) => (_root.$meta.cardinalResolver ?? PluralResolvers.cardinal('en'))(n, one: 'Recommended by ${n} user', other: 'Recommended by ${n} users', ), 
-			'explore.detail.recommendedBy' => ({required Object who}) => 'Recommended by ${who}',
 			_ => null,
 		} ?? switch (path) {
+			'explore.detail.recommendedBy' => ({required Object who}) => 'Recommended by ${who}',
 			'explore.detail.favoritedBy' => ({required Object who}) => 'Favorited by ${who}',
 			'explore.detail.unairedEpisodes' => ({required Object n}) => '${n} not aired yet',
 			'explore.detail.recommendedByPercent' => ({required Object percent}) => 'Recommended by ${percent} of viewers',
@@ -11486,9 +11490,9 @@ extension on Translations {
 			'companionRemote.remote.playPause' => 'Play/Pause',
 			'companionRemote.remote.next' => 'Next',
 			'companionRemote.remote.seekBack' => 'Seek Back',
-			'companionRemote.remote.stop' => 'Stop',
 			_ => null,
 		} ?? switch (path) {
+			'companionRemote.remote.stop' => 'Stop',
 			'companionRemote.remote.seekForward' => 'Seek Fwd',
 			'companionRemote.remote.volume' => 'Volume',
 			'companionRemote.remote.volumeDown' => 'Down',
@@ -12000,9 +12004,9 @@ extension on Translations {
 			'siloRequests.searchHint' => 'Search for a movie or series to request',
 			'siloRequests.searchResults' => 'Titles to request',
 			'siloRequests.availableToRequest' => 'Available to request',
-			'siloRequests.availableToRequestOnServer' => ({required Object server}) => 'Available to request on ${server}',
 			_ => null,
 		} ?? switch (path) {
+			'siloRequests.availableToRequestOnServer' => ({required Object server}) => 'Available to request on ${server}',
 			'siloRequests.noRequests' => 'You haven\'t requested anything yet',
 			'siloRequests.noRequestsSubtitle' => 'Search for a movie or series to request it.',
 			'siloRequests.noResults' => 'No titles found',
