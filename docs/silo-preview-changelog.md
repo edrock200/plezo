@@ -4,6 +4,17 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **Silo titles open on the standard cut:** when a Silo movie comes in several editions and you have not watched any of them, its page now opens on the standard (or unnamed) edition, then the theatrical cut, and only then on another cut such as an Extended or Director's Cut, even when that other cut has a better-quality file. Quality still decides between cuts with the same kind of name, and the edition you last watched still opens first. *(From Silo's own apps.)*
+- **Downloads stay stopped after a storage problem:** when downloads stop because the device is running out of space, automatic download rules no longer start them again (and stop them again) on every refresh. Starting a download yourself, Retry or Resume still restarts them. *(From Plezy.)*
+- **Plex media deletion follows the server's switch:** "Delete from server" now shows on a Plex server only when its "Allow media deletion" setting is on; with it off Plezilo no longer deletes anything and says the setting is off. Jellyfin, Emby and Silo are unchanged. *(From Plezy.)*
+- **Roomier Libraries bar on phones:** on a narrow phone screen, Manage Libraries and Refresh now sit in a ⋮ menu, and a long library name ends in "…" instead of running under the buttons. Tablets, computers and TVs keep every button. *(From Plezy.)*
+- **Profile prompt on Android TV:** with "Ask for profile on app open" on, an Android TV that has the companion remote server turned on now asks for a profile again when you come back to Plezilo, like any other TV. *(From Plezy.)*
+- European Portuguese wording tidy-ups; on iOS and macOS, downloads count space the system can free, and iOS video on an external display is fixed for the newest iOS. *(From Plezy.)*
+
+## silo-preview-2.51.0
+
+Released November 18, 2026. Android and Windows.
+
 - **European Portuguese:** Plezilo can now be shown in European Portuguese (Settings › Language), alongside Brazilian Portuguese. The language list also names both variants and puts each regional variant right after its base language. Silo's row titles use the Portuguese translation in it. *(From Plezy.)*
 
 ## silo-preview-2.50.0
