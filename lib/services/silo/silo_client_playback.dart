@@ -156,6 +156,7 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
     required String fileId,
     required TranscodeQualityPreset preset,
     int? audioIndex,
+    Duration? startPosition,
     bool originalOnly = false,
     Map<String, Object?> Function(Map<String, Object?> body)? shapeBody,
   }) async {
@@ -173,9 +174,12 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
       'bandwidth_cap_kbps': ?preset.videoBitrateKbps,
       'subtitle_fidelity_preference': 'preserve',
       'metered': metered,
-      // Plezy seeks to the resume point itself, as it does on every backend,
-      // so the stream always starts at the beginning of the source.
-      'start_position': 0,
+      // Where the player will open (the resume point), as Silo's apps send
+      // it. A remuxed or transcoded stream starts producing here; started at
+      // 0, the player's seek to the resume point lands past what the server
+      // has made and the open stalls. The plan's timeline is the source's,
+      // so the player still opens at the same position.
+      'start_position': startPosition == null || startPosition <= Duration.zero ? 0 : _seconds(startPosition),
       'audio_track_index': ?audioIndex,
       'client_capabilities': SiloPlaybackCaps.clientCapabilities(),
       'client_playback_context': () {
@@ -292,7 +296,12 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
     await _stopStaleSessions(metadata.id);
     final Map<String, dynamic> decision;
     try {
-      decision = await _startPlayback(fileId: fileId, preset: options.qualityPreset, audioIndex: audioIndex);
+      decision = await _startPlayback(
+        fileId: fileId,
+        preset: options.qualityPreset,
+        audioIndex: audioIndex,
+        startPosition: options.startPosition,
+      );
     } catch (error, stackTrace) {
       if (error is PlaybackException) rethrow;
       Error.throwWithStackTrace(classifyPlaybackFailure(error), stackTrace);
@@ -438,7 +447,8 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
 
     appLogger.i(
       'Silo playback plan: delivery=$delivery reason=${plan['decision_reason']} '
-      'quality=${SiloPlaybackCaps.qualityPreference(options.qualityPreset)}',
+      'quality=${SiloPlaybackCaps.qualityPreference(options.qualityPreset)} '
+      'start=${plan['timeline'] is Map ? (plan['timeline'] as Map)['player_start_seconds'] : null}',
     );
 
     return PlaybackInitializationResult(

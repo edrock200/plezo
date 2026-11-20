@@ -919,6 +919,61 @@ void main() {
       expect(requests.single.url.queryParameters['file_id'], '43');
     });
 
+    group('start position', () {
+      Future<Map<String, dynamic>> startBodyFor(Duration? startPosition) async {
+        Map<String, dynamic>? startBody;
+        final c = client((request) async {
+          final path = Uri.decodeComponent(request.url.path);
+          if (path.endsWith('/watch/episode:e1')) {
+            return _json({
+              'content_id': 'episode:e1',
+              'versions': [
+                {'file_id': '42', 'duration_seconds': 2700},
+              ],
+            });
+          }
+          if (path.endsWith('/playback/capabilities')) {
+            return _json({
+              'state': 'available',
+              'installation_id': 'inst-1',
+              'protocol_versions': [3],
+              'features': ['sequenced_progress_v1'],
+            });
+          }
+          if (path.endsWith('/playback/start')) {
+            startBody = jsonDecode(request.body) as Map<String, dynamic>;
+            return _json({
+              'outcome': 'playable',
+              'session_id': 'sess-5',
+              'playback_plan': {
+                'delivery': 'server_remux_hls',
+                'stream': {'url': '/api/v2/stream/sess-5/master.m3u8?st=sig'},
+              },
+            }, 201);
+          }
+          return _json({}, 404);
+        });
+        final metadata = MediaItem.silo(id: 'episode:e1', kind: MediaKind.episode, serverId: 'srv-1');
+        await c.getPlaybackInitialization(
+          PlaybackInitializationOptions(metadata: metadata, selectedMediaIndex: 0, startPosition: startPosition),
+        );
+        return startBody!;
+      }
+
+      test('Resume asks the server to start the stream at the resume point', () async {
+        // A remuxed or transcoded stream starts where the server was told to:
+        // with 0 the player's seek to 25:00 lands past what the server has
+        // made and the open stalls ("Playback could not be started.").
+        final body = await startBodyFor(const Duration(minutes: 25, milliseconds: 500));
+        expect(body['start_position'], 1500.5);
+      });
+
+      test('Play from the start, or no position, starts at 0', () async {
+        expect((await startBodyFor(Duration.zero))['start_position'], 0);
+        expect((await startBodyFor(null))['start_position'], 0);
+      });
+    });
+
     Future<SiloClient> sessionAnsweringProgress(
       http.Response Function() progressAnswer, {
       http.Response Function()? stopAnswer,

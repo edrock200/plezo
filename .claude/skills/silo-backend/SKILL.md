@@ -380,7 +380,7 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
   and `output.hdr_details` is always sent with `display`. Dropping either makes 4K HDR HEVC
   transcode to SDR H.264. `codecs_video_hardware` lists every codec `VideoDecodeCapabilities`
   accepts. `form_factor` is `mobile` on phones *and* tablets, `tv` on TV, `desktop` otherwise. `progressive`
-  is declared but disabled, as Silo's apps do. `start_position` is 0 and Plezy seeks to resume.
+  is declared but disabled, as Silo's apps do. `start_position` is the resume point the player opens at (`PlaybackInitializationOptions.startPosition`, 0 for Play from start), as Silo's apps send it: a remux or transcode starts producing there, and with 0 a far resume seek outruns the server's stream and the open stalls ("Playback could not be started."). The plan timeline is source-aligned, so the player still opens at that position; the plan log line prints `start=` (`timeline.player_start_seconds`).
   `quality_preference` is never `original` (Silo Android #613; older servers read it as "never
   convert"): the Original preset sends `auto`, presets send `720p`/`1080p`/`2160p` or `auto` plus
   `bandwidth_cap_kbps`. An `original_http` answer to a capped preset is legitimate when the source
