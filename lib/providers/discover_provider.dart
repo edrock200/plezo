@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../media/home_watch_state.dart';
 import '../media/ids.dart';
 import '../media/media_hub.dart';
 import '../media/library_change_event.dart';
@@ -29,6 +30,24 @@ import 'multi_server_provider.dart';
 import 'watch_state_store.dart';
 
 enum DiscoverLoadState { initial, loading, loaded, error }
+
+/// What asked [DiscoverProvider.refreshHomeWatchState] to re-read the rows of
+/// servers whose Home can be read alone (Silo).
+enum HomeWatchStateTrigger {
+  /// Home was shown again: a tab switch back to it, or a return from a pushed
+  /// route (a detail page, the player).
+  shown,
+
+  /// The app came back to the foreground with Home on screen.
+  resumed,
+
+  /// The server's event stream said the profile's watch state changed (or a
+  /// reconnect / the periodic check stood in for it).
+  event,
+
+  /// A read that left rows out for a transient reason, read again.
+  retry,
+}
 
 enum DiscoverRefreshOutcome {
   /// Both surfaces completed without a failed or cancelled server leg.
@@ -99,6 +118,9 @@ class DiscoverProvider extends ChangeNotifier with DisposableChangeNotifierMixin
     this.libraryEventDebounce = const Duration(seconds: 3),
     this.libraryEventBlockedRetry = const Duration(seconds: 15),
     this.libraryEventCooldown = const Duration(minutes: 2),
+    this.watchStateShownThrottle = const Duration(seconds: 10),
+    this.watchStateEventDebounce = const Duration(seconds: 2),
+    this.watchStateRetryBase = const Duration(seconds: 1),
     Future<void> Function(String profileId, List<MediaItem>)? syncSystemShelf,
     Future<void> Function(String profileId, List<MediaServerClient> clients)? syncServerSources,
     // A private field cannot be a named initializing formal callers can pass.
@@ -119,7 +141,7 @@ class DiscoverProvider extends ChangeNotifier with DisposableChangeNotifierMixin
     // Late server connects (reconnect after outage, slow wave) refresh
     // discover the same way they refresh libraries. Removed in [dispose] so a
     // profile switch can't leave a stale listener on the app-global provider.
-    _multiServer.addOnlineServersListener(syncToOnlineServers);
+    _multiServer.addOnlineServersListener(_onOnlineServersChanged);
     _watchRecommendationsSetting();
     _hiddenLibraries.addListener(_onHiddenLibrariesChanged);
     _lastSeenLibraryOrderKeys = _libraryOrderKeys();
@@ -709,6 +731,7 @@ class DiscoverProvider extends ChangeNotifier with DisposableChangeNotifierMixin
         _recordObservations(observation, pendingObservations, observedServerIds);
         if (systemShelfPassToken != null) unawaited(_syncSystemShelf(systemShelfPassToken));
       }
+      if (!isDisposed) _retryIncompleteHomeReads();
     }
   }
 
@@ -1382,9 +1405,419 @@ class DiscoverProvider extends ChangeNotifier with DisposableChangeNotifierMixin
   List<MediaServerClient> _onlineShelfSourceClients() =>
       _multiServer.serverManager.visibleOnlineClients.values.toList(growable: false);
 
+  // --- Home watch state (Silo) ---------------------------------------------
+  //
+  // Silo's apps re-read Home when it is shown again, when the app returns,
+  // and when the server's event stream says the profile's watch state changed
+  // on another device (Silo Android #1009, Silo's Roku app #102); a read that
+  // left rows out for a transient reason is read again with a short backoff.
+  // Only servers whose client is a [HomeWatchStateClient] (Silo) take part:
+  // their rows come from one Home read, so they are re-read alone and
+  // replaced in place. Plex, Jellyfin and Emby keep the rules above.
+
+  /// The shortest gap between two re-reads asked by [HomeWatchStateTrigger.shown]
+  /// or [HomeWatchStateTrigger.resumed] (desktop windows report a resume on
+  /// every focus gain, and a return from a route reports "shown" twice).
+  final Duration watchStateShownThrottle;
+
+  /// Watch-state events arriving together become one re-read (foreign
+  /// playback reports progress every few seconds).
+  final Duration watchStateEventDebounce;
+
+  /// The first retry of an incomplete read waits this long, then twice and
+  /// four times as long; [watchStateMaxRetries] in all (Silo Android #1009).
+  final Duration watchStateRetryBase;
+  static const int watchStateMaxRetries = 3;
+
+  bool _homeVisible = false;
+  bool _appForeground = true;
+  final Map<String, ({HomeWatchStateClient client, HomeWatchStateWatch watch})> _watchStateWatches = {};
+  final Set<String> _watchStateSignalled = {};
+  Timer? _watchStateDebounceTimer;
+  DateTime? _lastWatchStateRefreshAt;
+  Future<void>? _watchStateRefreshFuture;
+  final Set<String> _watchStateRefreshQueue = {};
+  int _watchStateRetryAttempt = 0;
+  Timer? _watchStateRetryTimer;
+
+  /// Home's rows are on screen (the screen reports it: tab shown/hidden, a
+  /// route pushed over it or popped). Event streams run only while they are.
+  void setHomeVisible(bool visible) {
+    if (isDisposed || _homeVisible == visible) return;
+    _homeVisible = visible;
+    _onWatchStateActivityChanged();
+  }
+
+  /// The app is in the foreground (resumed) or backgrounded (hidden/paused).
+  void setAppForeground(bool foreground) {
+    if (isDisposed || _appForeground == foreground) return;
+    _appForeground = foreground;
+    _onWatchStateActivityChanged();
+  }
+
+  @visibleForTesting
+  bool get isWatchingHomeWatchState => _watchStateWatches.isNotEmpty;
+
+  @visibleForTesting
+  Set<String> get watchedHomeWatchStateServerIds => _watchStateWatches.keys.toSet();
+
+  bool get _watchStateActive => !isDisposed && _homeVisible && _appForeground;
+
+  void _onWatchStateActivityChanged() {
+    if (!_watchStateActive) {
+      _watchStateDebounceTimer?.cancel();
+      _watchStateSignalled.clear();
+      _watchStateRetryTimer?.cancel();
+      _watchStateRetryAttempt = 0;
+    }
+    _syncWatchStateWatches();
+  }
+
+  /// The online set changed: merge newly online servers' rows, and start or
+  /// stop watch-state streams (a server gone offline or signed out stops).
+  void _onOnlineServersChanged(Set<String> onlineServerIds) {
+    unawaited(syncToOnlineServers(onlineServerIds));
+    _syncWatchStateWatches();
+  }
+
+  /// Online servers whose client can re-read its Home alone, by server id.
+  Map<String, HomeWatchStateClient> _watchStateClients({Set<String>? only}) {
+    final clients = <String, HomeWatchStateClient>{};
+    for (final serverId in _multiServer.onlineServerIds) {
+      if (only != null && !only.contains(serverId)) continue;
+      final client = _multiServer.getClientForServer(ServerId(serverId));
+      if (client is HomeWatchStateClient) clients[serverId] = client as HomeWatchStateClient;
+    }
+    return clients;
+  }
+
+  /// Starts a watch for each online watch-state server while Home is shown
+  /// and the app is in the foreground; stops the others (Home hidden, app
+  /// backgrounded, server offline or signed out, client replaced).
+  void _syncWatchStateWatches() {
+    final wanted = _watchStateActive && !isProfileBinding()
+        ? _watchStateClients()
+        : const <String, HomeWatchStateClient>{};
+    for (final serverId in _watchStateWatches.keys.toList()) {
+      final entry = _watchStateWatches[serverId]!;
+      if (identical(wanted[serverId], entry.client)) continue;
+      entry.watch.stop();
+      _watchStateWatches.remove(serverId);
+    }
+    for (final MapEntry(key: serverId, value: client) in wanted.entries) {
+      if (_watchStateWatches.containsKey(serverId)) continue;
+      final watch = client.watchHomeWatchState((signal) => _onWatchStateSignal(serverId, client, signal));
+      if (watch != null) _watchStateWatches[serverId] = (client: client, watch: watch);
+    }
+  }
+
+  void _stopWatchStateWatches() {
+    for (final entry in _watchStateWatches.values) {
+      entry.watch.stop();
+    }
+    _watchStateWatches.clear();
+  }
+
+  void _onWatchStateSignal(String serverId, HomeWatchStateClient client, HomeWatchStateSignal signal) {
+    if (!_watchStateActive || !identical(_watchStateWatches[serverId]?.client, client)) return;
+    appLogger.d('DiscoverProvider: watch state ${signal.name} on a Silo server; re-reading its Home rows');
+    _watchStateSignalled.add(serverId);
+    _watchStateDebounceTimer?.cancel();
+    _watchStateDebounceTimer = Timer(watchStateEventDebounce, () {
+      final serverIds = Set<String>.of(_watchStateSignalled);
+      _watchStateSignalled.clear();
+      unawaited(refreshHomeWatchState(HomeWatchStateTrigger.event, serverIds: serverIds));
+    });
+  }
+
+  /// Re-reads the Home rows (Continue Watching and hubs) of the online
+  /// servers whose Home can be read alone ([HomeWatchStateClient]: Silo),
+  /// limited to [serverIds] when given, and replaces their rows in place. A
+  /// server whose read fails keeps the rows shown. Runs only while Home is
+  /// visible and loaded; a shown/resumed request inside
+  /// [watchStateShownThrottle] of the last one, or while a full pass runs,
+  /// does nothing (the pass reads those servers anyway). Concurrent requests
+  /// join the running re-read, which reads once more for them.
+  Future<void> refreshHomeWatchState(HomeWatchStateTrigger trigger, {Set<String>? serverIds}) {
+    if (!_watchStateActive || isProfileBinding()) return Future<void>.value();
+    if (_onDeckState != DiscoverLoadState.loaded || _hubsState != DiscoverLoadState.loaded) {
+      return Future<void>.value();
+    }
+    final ids = _watchStateClients(only: serverIds).keys.toSet();
+    if (ids.isEmpty) return Future<void>.value();
+    final userTriggered = trigger == HomeWatchStateTrigger.shown || trigger == HomeWatchStateTrigger.resumed;
+    if (userTriggered) {
+      if (_loadCoordinator.isFullActive) return Future<void>.value();
+      final last = _lastWatchStateRefreshAt;
+      if (last != null && _now().difference(last) < watchStateShownThrottle) {
+        return _watchStateRefreshFuture ?? Future<void>.value();
+      }
+    }
+    if (trigger != HomeWatchStateTrigger.retry) {
+      _watchStateRetryTimer?.cancel();
+      _watchStateRetryAttempt = 0;
+    }
+    _lastWatchStateRefreshAt = _now();
+    _watchStateRefreshQueue.addAll(ids);
+    final active = _watchStateRefreshFuture;
+    if (active != null) return active;
+    late final Future<void> run;
+    run = _drainWatchStateRefreshes().whenComplete(() {
+      if (identical(_watchStateRefreshFuture, run)) _watchStateRefreshFuture = null;
+    });
+    return _watchStateRefreshFuture = run;
+  }
+
+  Future<void> _drainWatchStateRefreshes() async {
+    final incomplete = <String>{};
+    while (_watchStateRefreshQueue.isNotEmpty && !isDisposed) {
+      final serverIds = Set<String>.of(_watchStateRefreshQueue);
+      _watchStateRefreshQueue.clear();
+      final stillIncomplete = await _refreshHomeWatchStateOnce(serverIds);
+      incomplete
+        ..removeAll(serverIds)
+        ..addAll(stillIncomplete);
+    }
+    _scheduleWatchStateRetry(incomplete);
+  }
+
+  /// After a full pass: a Silo server whose Home read was incomplete is read
+  /// again on the same backoff.
+  void _retryIncompleteHomeReads() {
+    if (!_watchStateActive) return;
+    final incomplete = {
+      for (final MapEntry(:key, :value) in _watchStateClients().entries)
+        if (value.lastHomeReadIncomplete) key,
+    };
+    _watchStateRetryAttempt = 0;
+    _scheduleWatchStateRetry(incomplete);
+  }
+
+  void _scheduleWatchStateRetry(Set<String> incomplete) {
+    if (isDisposed) return;
+    if (incomplete.isEmpty) {
+      _watchStateRetryAttempt = 0;
+      return;
+    }
+    if (!_watchStateActive) return;
+    if (_watchStateRetryAttempt >= watchStateMaxRetries) {
+      appLogger.d('DiscoverProvider: Silo Home rows still incomplete after $watchStateMaxRetries retries');
+      _watchStateRetryAttempt = 0;
+      return;
+    }
+    final delay = watchStateRetryBase * (1 << _watchStateRetryAttempt);
+    _watchStateRetryAttempt++;
+    appLogger.d('DiscoverProvider: Silo Home rows incomplete; reading again in ${delay.inMilliseconds} ms');
+    _watchStateRetryTimer?.cancel();
+    _watchStateRetryTimer = Timer(delay, () {
+      unawaited(refreshHomeWatchState(HomeWatchStateTrigger.retry, serverIds: incomplete));
+    });
+  }
+
+  /// One re-read of [serverIds]; returns the servers whose read was
+  /// incomplete.
+  Future<Set<String>> _refreshHomeWatchStateOnce(Set<String> serverIds) async {
+    try {
+      final revision = _contentRevision;
+      await _hiddenLibraries.ensureInitialized();
+      if (isDisposed) return const {};
+      final settings = await SettingsService.getInstance();
+      if (isDisposed || isProfileBinding()) return const {};
+      final hiddenKeys = Set<String>.of(_hiddenLibraries.hiddenLibraryKeys);
+      final aggregation = _multiServer.aggregationService;
+      final observation = _beginObservation();
+      final onDeckFuture = aggregation.getOnDeckFromAllServers(
+        limit: _continueWatchingProbeLimit,
+        hiddenLibraryKeys: hiddenKeys,
+        serverIds: serverIds,
+      );
+      final hubsFuture = aggregation.getHubsFromAllServers(
+        hiddenLibraryKeys: hiddenKeys,
+        useGlobalHubs: settings.read(SettingsService.useGlobalHubs),
+        includePlaybackHubs: false,
+        serverIds: serverIds,
+      );
+      final fetchedOnDeck = await onDeckFuture;
+      final fetchedHubs = await hubsFuture;
+      if (isDisposed) return const {};
+      final incomplete = {
+        for (final MapEntry(:key, :value) in _watchStateClients(only: serverIds).entries)
+          if (value.lastHomeReadIncomplete) key,
+      };
+      // A full or delta pass started meanwhile owns the rows now.
+      if (revision != _contentRevision ||
+          _onDeckState != DiscoverLoadState.loaded ||
+          _hubsState != DiscoverLoadState.loaded) {
+        return incomplete;
+      }
+
+      // Only a complete read replaces what is shown (Silo Android #1009): an
+      // incomplete one may hold the offline cache's older rows or miss a row;
+      // it is read again on the retry backoff.
+      var onDeckChanged = false;
+      var hubsChanged = false;
+      final onDeckIds = fetchedOnDeck.succeededServerIds.difference(incomplete);
+      if (onDeckIds.isNotEmpty) {
+        final kept = _continueWatchingWithoutServers(onDeckIds);
+        final merged = await aggregation.mergeContinueWatching(
+          kept.items,
+          [
+            for (final item in fetchedOnDeck.items)
+              if (onDeckIds.contains(item.serverId)) item,
+          ],
+          existingCopies: kept.copies,
+          freshCopies: fetchedOnDeck.copies,
+          limit: _continueWatchingProbeLimit,
+        );
+        if (isDisposed || revision != _contentRevision) return incomplete;
+        // The kept rows are already trimmed to the preview, so rows of other
+        // servers past it are unknown here: a "more" they gave stays.
+        final hasMore =
+            merged.items.length > continueWatchingPreviewLimit || (_hasMoreContinueWatching && kept.items.isNotEmpty);
+        final items = merged.items.length > continueWatchingPreviewLimit
+            ? merged.items.take(continueWatchingPreviewLimit).toList()
+            : merged.items;
+        if (!listEquals(items, _onDeck) ||
+            hasMore != _hasMoreContinueWatching ||
+            !_sameCopies(merged.copies, _continueWatchingCopies)) {
+          _continueWatchingCopies = merged.copies;
+          _replaceOnDeck(items, hasMore: hasMore);
+          onDeckChanged = true;
+        }
+        _loadedOnDeckServerIds = {..._loadedOnDeckServerIds, ...onDeckIds};
+      }
+
+      final hubIds = fetchedHubs.succeededServerIds.difference(incomplete);
+      if (hubIds.isNotEmpty) {
+        final merged = _hubsReplacingServers(hubIds, [
+          for (final hub in _filterDiscoverHubs(fetchedHubs.hubs))
+            if (hubIds.contains(hub.serverId)) hub,
+        ]);
+        sortMediaHubsByLibraryOrder(merged, _libraries.libraries);
+        if (!_sameHubs(merged, _hubs)) {
+          _replaceHubs(merged);
+          hubsChanged = true;
+        }
+        _loadedHubServerIds = {..._loadedHubServerIds, ...hubIds};
+      }
+
+      _recordObservations(
+        observation,
+        [
+          for (final row in fetchedOnDeck.observedItems)
+            if (onDeckIds.contains(row.item.serverId)) row,
+          for (final row in fetchedHubs.observedItems)
+            if (hubIds.contains(row.item.serverId)) row,
+        ],
+        {...onDeckIds, ...hubIds},
+      );
+      appLogger.d(
+        'DiscoverProvider: Silo Home rows re-read '
+        '(continue watching ${onDeckChanged ? 'updated' : 'unchanged'}, rows ${hubsChanged ? 'updated' : 'unchanged'}'
+        '${incomplete.isEmpty ? '' : ', incomplete'})',
+      );
+      if (onDeckChanged || hubsChanged) safeNotifyListeners();
+      if (onDeckChanged) unawaited(_syncSystemShelf(_onDeck));
+      return incomplete;
+    } catch (e) {
+      if (!isDisposed) appLogger.w('DiscoverProvider: Silo Home rows not re-read', error: e);
+      return const {};
+    }
+  }
+
+  /// The Continue Watching rows and copy groups without anything from
+  /// [serverIds]; a row from one of them whose group holds a copy from
+  /// another server leaves that copy in its place.
+  ({List<MediaItem> items, Map<String, List<MediaItem>> copies}) _continueWatchingWithoutServers(
+    Set<String> serverIds,
+  ) {
+    final items = <MediaItem>[];
+    final copies = <String, List<MediaItem>>{};
+    for (final row in _onDeck) {
+      final group = _continueWatchingCopies[row.globalKey] ?? [row];
+      final kept = group.where((item) => !serverIds.contains(item.serverId)).toList();
+      if (kept.isEmpty) continue;
+      final shown = kept.any((item) => item.globalKey == row.globalKey) ? row : kept.first;
+      items.add(shown);
+      if (kept.length > 1) copies[shown.globalKey] = kept;
+    }
+    return (items: items, copies: copies);
+  }
+
+  /// [_hubs] with the Home rows of [serverIds] replaced by [fresh] where
+  /// their first row was (appended for a server that had none). Their
+  /// recommendation rows stay, less those the fresh rows now show.
+  List<MediaHub> _hubsReplacingServers(Set<String> serverIds, List<MediaHub> fresh) {
+    final freshByServer = <String, List<MediaHub>>{};
+    for (final hub in fresh) {
+      final serverId = hub.serverId;
+      if (serverId != null) (freshByServer[serverId] ??= []).add(hub);
+    }
+    bool replaced(MediaHub hub) =>
+        hub.serverId != null && serverIds.contains(hub.serverId) && !hub.personalRecommendations;
+    final placed = <String>{};
+    final merged = <MediaHub>[];
+    for (final hub in _hubs) {
+      if (!replaced(hub)) {
+        merged.add(hub);
+      } else if (placed.add(hub.serverId!)) {
+        merged.addAll(freshByServer[hub.serverId!] ?? const []);
+      }
+    }
+    for (final serverId in serverIds) {
+      if (placed.add(serverId)) merged.addAll(freshByServer[serverId] ?? const []);
+    }
+    final recommendations = [
+      for (final hub in merged)
+        if (hub.personalRecommendations && serverIds.contains(hub.serverId)) hub,
+    ];
+    if (recommendations.isEmpty) return merged;
+    final keptRecommendations = Set<MediaHub>.identity()
+      ..addAll(withoutRecommendationsShownOnHome(recommendations, fresh).kept);
+    return [
+      for (final hub in merged)
+        if (!hub.personalRecommendations || !serverIds.contains(hub.serverId) || keptRecommendations.contains(hub)) hub,
+    ];
+  }
+
+  static bool _sameCopies(Map<String, List<MediaItem>> a, Map<String, List<MediaItem>> b) {
+    if (a.length != b.length) return false;
+    for (final MapEntry(:key, :value) in a.entries) {
+      final other = b[key];
+      if (other == null || !listEquals(value, other)) return false;
+    }
+    return true;
+  }
+
+  static bool _sameHubs(List<MediaHub> a, List<MediaHub> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      final x = a[i];
+      final y = b[i];
+      if (identical(x, y)) continue;
+      if (x.id != y.id ||
+          x.identifier != y.identifier ||
+          x.title != y.title ||
+          x.type != y.type ||
+          x.size != y.size ||
+          x.more != y.more ||
+          x.libraryId != y.libraryId ||
+          x.serverId != y.serverId ||
+          x.serverName != y.serverName ||
+          x.personalRecommendations != y.personalRecommendations ||
+          !listEquals(x.items, y.items)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   @override
   void dispose() {
-    _multiServer.removeOnlineServersListener(syncToOnlineServers);
+    _multiServer.removeOnlineServersListener(_onOnlineServersChanged);
+    _stopWatchStateWatches();
+    _watchStateDebounceTimer?.cancel();
+    _watchStateRetryTimer?.cancel();
     _recommendationsSetting?.removeListener(_onRecommendationsSettingChanged);
     _hiddenLibraries.removeListener(_onHiddenLibrariesChanged);
     _libraries.removeListener(_onLibrariesChanged);

@@ -12,6 +12,7 @@ import '../../i18n/strings.g.dart';
 import '../../media/chapter_marker_classifier.dart';
 import '../../media/artist_discography.dart';
 import '../../media/download_resolution.dart';
+import '../../media/home_watch_state.dart';
 import '../../media/ids.dart';
 import '../../media/library_change_event.dart';
 import '../../media/library_filter_result.dart';
@@ -58,6 +59,7 @@ import 'silo_card_overlay_store.dart';
 import 'silo_card_overlays.dart';
 import 'silo_collection_cards.dart';
 import 'silo_discover.dart';
+import 'silo_home_events.dart';
 import 'silo_download_registry.dart';
 import 'silo_managed_downloads.dart';
 import 'silo_section_titles.dart';
@@ -104,7 +106,8 @@ class SiloClient
         GracefullyCloseable,
         RemoteTrailerClient,
         DeferredDownloadSubtitles,
-        PersonalRecommendationsClient {
+        PersonalRecommendationsClient,
+        HomeWatchStateClient {
   SiloClient._({required this._connection, required this._api});
 
   /// Build a client for [connection]. Network I/O stays lazy.
@@ -447,6 +450,7 @@ class SiloClient
     Map<String, dynamic>? query,
     AbortController? abort,
     Duration? timeout,
+    void Function()? onCacheFallback,
   }) {
     // `item_limit` depends on a capability read that fails offline, so it
     // stays out of the key: an offline Home still finds the cached rows.
@@ -457,7 +461,11 @@ class SiloClient
       networkCall: () => _api.request('GET', path, query: query, abort: abort, timeout: timeout),
       parseCache: (data) => data is Map<String, dynamic> ? data : null,
       parseResponse: (response) => response.data is Map<String, dynamic> ? response.data as Map<String, dynamic> : null,
-      shouldFallback: (error) => error is MediaServerHttpException && error.isTransient,
+      shouldFallback: (error) {
+        final fallback = error is MediaServerHttpException && error.isTransient;
+        if (fallback) onCacheFallback?.call();
+        return fallback;
+      },
     );
   }
 
@@ -1392,21 +1400,96 @@ class SiloClient
 
   static const _playbackSectionTypes = {'continue_watching', 'next_up'};
 
-  Future<List<Map<String, dynamic>>>? _homeSectionsInFlight;
+  Future<_SiloHomeRead>? _homeReadInFlight;
+
+  /// The newest Home read, for [lastHomeReadIncomplete].
+  _SiloHomeRead? _latestHomeRead;
 
   /// Home sections; concurrent callers (continue watching and the hubs load
   /// together) share one request.
-  Future<List<Map<String, dynamic>>> _homeSections() => _homeSectionsInFlight ??= () async {
+  Future<_SiloHomeRead> _homeRead() => _homeReadInFlight ??= () async {
     // A Home load is where the profile's card overlay settings may have
     // changed (edited in Silo's web client); read them again alongside.
     unawaited(cardOverlays.refresh());
+    var servedFromCache = false;
     try {
-      final data = await _sectionList('/api/v2/home/sections');
-      return _itemsOf(data, 'sections');
+      final data = await _sectionList('/api/v2/home/sections', onCacheFallback: () => servedFromCache = true);
+      return _latestHomeRead = _SiloHomeRead(_itemsOf(data, 'sections'))..incomplete = servedFromCache;
+    } catch (e) {
+      _latestHomeRead = _SiloHomeRead(const [])..incomplete = isTransientHomeReadFailure(e);
+      rethrow;
     } finally {
-      _homeSectionsInFlight = null;
+      _homeReadInFlight = null;
     }
   }();
+
+  /// Whether the newest Home read left rows out (or kept the rows already
+  /// shown, or came from the offline cache) because of a transient failure;
+  /// Home then reads again with a short backoff (Silo Android #1009).
+  @override
+  bool get lastHomeReadIncomplete => _latestHomeRead?.incomplete ?? false;
+
+  /// A failure a later Home read may not hit: a timeout, a lost connection,
+  /// 408, 429 or a 5xx (Silo Android's `isTransientHomeReadFailure`). A
+  /// client-side abort is not one.
+  @visibleForTesting
+  static bool isTransientHomeReadFailure(Object error) {
+    if (error is TimeoutException) return true;
+    if (error is! MediaServerHttpException || error.isCancellation) return false;
+    if (error.isTransient) return true;
+    final status = error.statusCode;
+    return status == 408 || status == 429 || (status != null && status >= 500 && status <= 599);
+  }
+
+  /// The rows each Home section last read through its own items route, kept
+  /// so a transient failure shows them again instead of dropping the row.
+  final LinkedHashMap<String, List<Map<String, dynamic>>> _lastSectionRows = LinkedHashMap();
+  static const _maxRememberedSections = 48;
+
+  void _rememberSectionRows(String itemsPath, List<Map<String, dynamic>> rows) {
+    _lastSectionRows.remove(itemsPath);
+    _lastSectionRows[itemsPath] = rows;
+    while (_lastSectionRows.length > _maxRememberedSections) {
+      _lastSectionRows.remove(_lastSectionRows.keys.first);
+    }
+  }
+
+  @override
+  HomeWatchStateWatch? watchHomeWatchState(void Function(HomeWatchStateSignal signal) onSignal) {
+    if (_closed || _sessionExpired || isOfflineMode) return null;
+    return SiloHomeEventsWatcher(
+      url: SiloHomeEvents.socketUrl(_api.baseUrl),
+      profileId: connection.profileId,
+      mintTicket: _mintEventsTicket,
+      connect: (url, ticket) => eventsConnector(url, ticket),
+      onSignal: onSignal,
+      isClientUsable: () => !_closed && !_sessionExpired && !isOfflineMode,
+    )..start();
+  }
+
+  /// Opens the events socket; tests replace it.
+  @visibleForTesting
+  late SiloEventsConnector eventsConnector = (url, ticket) =>
+      connectSiloEventsSocket(url, ticket, headers: _api.device.toHeaders());
+
+  /// `POST /events/ws-ticket` for this profile. 404/405/501: the server has
+  /// no events socket.
+  Future<SiloEventsTicket> _mintEventsTicket() async {
+    // The server ends the socket when the ticket's access token expires.
+    await _api.refreshTokensIfHalfSpent();
+    final response = await _api.request(
+      'POST',
+      SiloHomeEvents.ticketPath,
+      timeout: const Duration(seconds: 10),
+      // A background socket must not flip the server's status on its own.
+      reportUnreachable: false,
+    );
+    if (const {404, 405, 501}.contains(response.statusCode)) throw SiloEventsUnsupported(response.statusCode);
+    throwIfHttpError(response);
+    final ticket = SiloEventsTicket.parse(response.data);
+    if (ticket == null) throw const FormatException('unusable events ticket');
+    return ticket;
+  }
 
   /// The most cards a Home or library row asks for; the rest are on the
   /// row's full page ([fetchMoreHubItemsPage]).
@@ -1508,26 +1591,49 @@ class SiloClient
   /// A Home or library section list, with `item_limit` when the server
   /// advertises it. A server that still rejects it is read again once
   /// without it and is not sent it again.
-  Future<Map<String, dynamic>?> _sectionList(String path) async {
+  Future<Map<String, dynamic>?> _sectionList(String path, {void Function()? onCacheFallback}) async {
     final limit = await _sectionItemLimitFor();
     try {
-      return await _cachedGet(path, query: {'image_size': _imageSize, 'item_limit': ?limit});
+      return await _cachedGet(
+        path,
+        query: {'image_size': _imageSize, 'item_limit': ?limit},
+        onCacheFallback: onCacheFallback,
+      );
     } catch (e) {
       if (limit == null || !_rejectsQueryParameter(e, 'item_limit')) rethrow;
       _sectionItemLimitRejected = true;
-      return _cachedGet(path, query: {'image_size': _imageSize});
+      return _cachedGet(path, query: {'image_size': _imageSize}, onCacheFallback: onCacheFallback);
     }
   }
 
-  /// Sections may arrive without inline items while `total_count > 0`.
-  Future<List<Map<String, dynamic>>> _sectionItems(Map<String, dynamic> section, String itemsPath) async {
+  /// Sections may arrive without inline items while `total_count > 0`. On a
+  /// Home read ([read]) a transient failure marks the read incomplete and
+  /// shows the rows this section last had, if any (Silo Android #1009: a
+  /// partial refresh does not clobber a good Home).
+  Future<List<Map<String, dynamic>>> _sectionItems(
+    Map<String, dynamic> section,
+    String itemsPath, {
+    _SiloHomeRead? read,
+  }) async {
     final inline = _itemsOf(section);
     final total = (section['total_count'] as num?)?.toInt() ?? 0;
     if (inline.isNotEmpty || total == 0) return inline;
     try {
       final data = await _api.getJson(itemsPath, query: {'image_size': _imageSize});
-      return _itemsOf(data);
+      final rows = _itemsOf(data);
+      if (read != null) _rememberSectionRows(itemsPath, rows);
+      return rows;
     } catch (e) {
+      if (read != null && isTransientHomeReadFailure(e)) {
+        read.incomplete = true;
+        final kept = _lastSectionRows[itemsPath];
+        appLogger.d(
+          'SiloClient: section items unavailable for now; ${kept == null ? 'row left out' : 'keeping its rows'}',
+          error: e.runtimeType,
+        );
+        if (kept != null) return kept;
+        return const [];
+      }
       appLogger.d('SiloClient: section items unavailable', error: e.runtimeType);
       return const [];
     }
@@ -1746,10 +1852,10 @@ class SiloClient
 
   @override
   Future<List<MediaItem>> fetchContinueWatching({int? count = 20, Set<String> excludedLibraryIds = const {}}) async {
-    final sections = await _homeSections();
+    final read = await _homeRead();
     final perSection = await Future.wait([
-      for (final section in sections.where((s) => s['section_type'] == 'continue_watching'))
-        _continueWatchingRows(section, count),
+      for (final section in read.sections.where((s) => s['section_type'] == 'continue_watching'))
+        _continueWatchingRows(section, count, read),
     ]);
     final items = continueWatchingInServerOrder([for (final rows in perSection) ...SiloMappers.items(rows, _ctx)]);
     final visible = items.where((item) => item.libraryId == null || !excludedLibraryIds.contains(item.libraryId));
@@ -1767,9 +1873,13 @@ class SiloClient
   /// the section's own catalog list is read instead, in the same order and
   /// with the same `progress_updated_at` stamps; if that fails, the row's
   /// cards are kept.
-  Future<List<Map<String, dynamic>>> _continueWatchingRows(Map<String, dynamic> section, int? count) async {
+  Future<List<Map<String, dynamic>>> _continueWatchingRows(
+    Map<String, dynamic> section,
+    int? count,
+    _SiloHomeRead read,
+  ) async {
     final sectionId = section['id'].toString();
-    final rows = await _sectionItems(section, '/api/v2/home/sections/${_seg(sectionId)}/items');
+    final rows = await _sectionItems(section, '/api/v2/home/sections/${_seg(sectionId)}/items', read: read);
     final total = (section['total_count'] as num?)?.toInt();
     final wanted = count ?? continueWatchingFullListMax;
     final mayHoldMore = (total != null && total > rows.length) || rows.length >= sectionRowMaxItems;
@@ -1780,6 +1890,7 @@ class SiloClient
       final page = await _pageAt('/api/v2/catalog', params, offset: 0, limit: wanted);
       return page.items.length > rows.length ? page.items : rows;
     } catch (e) {
+      if (isTransientHomeReadFailure(e)) read.incomplete = true;
       appLogger.d('SiloClient: Continue Watching full list unavailable', error: e.runtimeType);
       return rows;
     }
@@ -1824,13 +1935,14 @@ class SiloClient
     bool includePlaybackHubs = true,
     HubFetchDiagnostics? diagnostics,
   }) async {
-    final List<Map<String, dynamic>> sections;
+    final _SiloHomeRead read;
     try {
-      sections = await _homeSections();
+      read = await _homeRead();
     } catch (e) {
       diagnostics?.recordFailure(e);
       return const [];
     }
+    final sections = read.sections;
     final collections = await _collectionRowContext(sections, home: true);
     final hubs = await Future.wait([
       for (final section in sections)
@@ -1848,6 +1960,7 @@ class SiloClient
             _sectionItems(
               section,
               '/api/v2/home/sections/${_seg(sectionId)}/items',
+              read: read,
             ).then((rows) => _hub(id: 'home:$sectionId', section: section, rows: rows, limit: limit)),
     ]);
     return hubs.where((hub) => hub.items.isNotEmpty).toList();
@@ -2602,4 +2715,14 @@ class _SiloCursorState {
 
   /// Offset → `next_cursor` that starts there.
   final Map<int, String> next = {};
+}
+
+/// One `GET /home/sections` answer, shared by the Continue Watching and hub
+/// reads built from it. [incomplete] is set when it came from the offline
+/// cache or a section's items could not be read for a transient reason.
+class _SiloHomeRead {
+  _SiloHomeRead(this.sections);
+
+  final List<Map<String, dynamic>> sections;
+  bool incomplete = false;
 }

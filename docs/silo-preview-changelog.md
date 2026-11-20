@@ -4,6 +4,12 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **Silo Home keeps up with what you watched:** Continue Watching, watched checks and progress on Silo rows now update when you come back to Home (from a title's page, the player, another tab, or another app), not only every 15 minutes. While Home is on screen, Plezilo also listens to your Silo server, so marking something watched or watching it on another device (your phone, the web, a Roku) updates Home a couple of seconds later. If a Silo row could not be loaded because the server was busy or the connection dropped for a moment, Plezilo keeps what it showed and tries again a few seconds later instead of leaving the row out. Plex and Jellyfin are unchanged. *(From Silo's own apps; please test with two devices.)*
+
+## silo-preview-2.54.0
+
+Released November 20, 2026. Android and Windows.
+
 - **Resume works again on Silo:** resuming a Silo episode or movie could spin and then say "Playback could not be started.", while starting from the beginning worked. Plezilo now asks your Silo server to start the video where you left off, as Silo's own apps do, instead of starting it at the beginning and jumping ahead before the server had got there. When the server converts the video, going back to before the point you resumed from reloads it from there, and subtitles stay in time. *(please test)*
 
 ## silo-preview-2.53.0

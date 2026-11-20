@@ -557,6 +557,26 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
   an uploaded icon is capped at the badge's content width. Values are kept as the API sent them (no
   trimming), so `valueImages` keys match the web's. Plex/Jellyfin/Emby cards never look a store up
   (`CardArtworkOverlays.storeFor` returns null for non-Silo items).
+- **Home watch state (Silo Android #1009, Silo's Roku app #102, 2026-11-20):** `HomeWatchStateClient`
+  (`lib/media/home_watch_state.dart`, implemented by `SiloClient` only). `DiscoverProvider.refreshHomeWatchState`
+  re-reads the Silo servers' Home (Continue Watching + hubs, `serverIds:` legs of the aggregation) and replaces their rows
+  in place (Plex/Jellyfin rows and Silo recommendation rows stay; a failed leg keeps its rows; unchanged rows are not
+  republished; an incomplete read replaces nothing). Triggers: Home shown again (`onTabShown`: tab switch, route pop), app resume (every platform), both
+  throttled 10 s and skipped while a full pass runs; events (debounced 2 s); retries. `SiloClient.lastHomeReadIncomplete`:
+  the newest `/home/sections` read came from the offline cache, failed transiently (timeout, connection, 408, 429, 5xx:
+  `isTransientHomeReadFailure`), or a section's items route did (that row keeps its last rows, `_lastSectionRows`); the
+  provider then reads again after 1, 2, 4 s (3 retries, also after a full pass) while Home is shown. Events
+  (`silo_home_events.dart`, silo-server `docs/realtime-api.md`): `POST /api/v2/events/ws-ticket` (profile headers,
+  `reportUnreachable: false`) → `{ticket, expires_in ≤ 30, max_connection_seconds ≤ 300, protocol: silo.events.v2}`
+  (validated like Android's `validTicket`); `wss://…/api/v2/events/ws?channels=user_state` offering `silo.events.v2`,
+  `silo.ticket.<t>` (device headers only, no bearer), then `{"type":"subscribe","channels":["user_state"]}`. A
+  `user_state.changed` for this profile, `access_changed` / close 4001, or a re-subscription after a gap signals a re-read;
+  no rows are patched from the socket (it carries ids only). Reconnect 1 s doubling to 30 s (at once after an access change,
+  reset once subscribed; 15 s to subscribe); 404/405/501 on the ticket = no socket for that watch; a 2-minute check stands
+  in while no socket is live (as Silo's Roku app). Watches run only while Home is visible (`setHomeVisible`) and the app is
+  foregrounded (`setAppForeground`: hidden/paused stop them) and stop when the server leaves the online set (offline, signed
+  out) or its client is replaced/closed. Tests: `test/services/silo/silo_home_events_test.dart`, the `Home watch state
+  (Silo)` group in `test/providers/discover_provider_test.dart`. Not verified against a real server's socket.
 - **Limits:** `GET /catalog/people` caps `limit` at 100; catalog pages at 200.
 - **Offline:** `fetchItem` falls back to `SiloApiCache.getMetadata` (the pinned download row) on a
   transient error; watch detail is read through the cache too.

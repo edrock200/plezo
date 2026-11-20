@@ -354,6 +354,8 @@ class _DiscoverScreenState extends State<DiscoverScreen>
     _discover = context.read<DiscoverProvider>();
     _seenLoadGeneration = _discover.loadGeneration;
     _discover.addListener(_onDiscoverChanged);
+    // Silo servers' watch-state events run while Home is on screen.
+    _discover.setHomeVisible(_isTabVisible);
     _updateHubKeys();
     unawaited(_discover.load());
     _startAutoScroll();
@@ -470,6 +472,7 @@ class _DiscoverScreenState extends State<DiscoverScreen>
   @override
   void dispose() {
     _discover.removeListener(_onDiscoverChanged);
+    _discover.setHomeVisible(false);
     WidgetsBinding.instance.removeObserver(this);
     _autoScrollTimer?.cancel();
     _indicatorTimer?.cancel();
@@ -496,10 +499,18 @@ class _DiscoverScreenState extends State<DiscoverScreen>
       if (!startedFullPass && (Platform.isIOS || Platform.isAndroid)) {
         unawaited(_discover.refreshContinueWatching());
       }
+      // Silo: watch state may have changed on another device meanwhile
+      // (Silo Android #1009); its Home rows are re-read on every platform.
+      _discover.setAppForeground(true);
+      unawaited(_discover.refreshHomeWatchState(HomeWatchStateTrigger.resumed));
     } else if (state == AppLifecycleState.inactive || state == AppLifecycleState.hidden) {
       // Stop animations to prevent scroll state corruption while backgrounded
       _autoScrollTimer?.cancel();
       _stopIndicatorProgress();
+      // Backgrounded (desktop: minimised): Silo event streams stop.
+      if (state == AppLifecycleState.hidden) _discover.setAppForeground(false);
+    } else if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
+      _discover.setAppForeground(false);
     }
   }
 
@@ -574,6 +585,7 @@ class _DiscoverScreenState extends State<DiscoverScreen>
   @override
   void onTabHidden() {
     _isTabVisible = false;
+    _discover.setHomeVisible(false);
     _pendingTvBrowseRailFocus = false;
     _autoScrollTimer?.cancel();
     _stopIndicatorProgress();
@@ -582,7 +594,11 @@ class _DiscoverScreenState extends State<DiscoverScreen>
   @override
   void onTabShown() {
     _isTabVisible = true;
+    _discover.setHomeVisible(true);
     _discover.refreshIfStale();
+    // Silo's Home re-reads its rows whenever it is shown again (Silo Android
+    // #1009): watched checks and progress from the player or another device.
+    unawaited(_discover.refreshHomeWatchState(HomeWatchStateTrigger.shown));
     if (!_isAutoScrollPaused) {
       _startAutoScroll();
     }

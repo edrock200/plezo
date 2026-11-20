@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:plezy/media/home_watch_state.dart';
 import 'package:plezy/media/ids.dart';
 import 'package:plezy/media/media_backend.dart';
 import 'package:plezy/media/media_hub.dart';
@@ -170,6 +171,46 @@ class _FakeClient implements MediaServerClient {
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+/// A server whose Home can be re-read alone (Silo's shape) with a scripted
+/// watch-state stream.
+class _FakeWatchClient extends _FakeClient implements HomeWatchStateClient {
+  _FakeWatchClient() : super(serverIdValue: 'silo_1', serverNameValue: 'Silo');
+
+  bool incomplete = false;
+  final List<_FakeWatch> watches = [];
+
+  @override
+  bool get lastHomeReadIncomplete => incomplete;
+
+  @override
+  MediaBackend get backend => MediaBackend.silo;
+
+  @override
+  ServerCapabilities get capabilities => ServerCapabilities.silo;
+
+  @override
+  HomeWatchStateWatch? watchHomeWatchState(void Function(HomeWatchStateSignal signal) onSignal) {
+    final watch = _FakeWatch(onSignal);
+    watches.add(watch);
+    return watch;
+  }
+
+  List<_FakeWatch> get running => [
+    for (final watch in watches)
+      if (!watch.stopped) watch,
+  ];
+}
+
+class _FakeWatch implements HomeWatchStateWatch {
+  _FakeWatch(this.onSignal);
+
+  final void Function(HomeWatchStateSignal signal) onSignal;
+  bool stopped = false;
+
+  @override
+  void stop() => stopped = true;
 }
 
 class _PushChannel implements LibraryEventChannel {
@@ -1592,6 +1633,225 @@ void main() {
       scoped.dispose();
       await settle();
       expect(aggregation.hubCalls, 1);
+    });
+  });
+
+  test('Plex alone: Home returning reads nothing extra and no stream starts', () async {
+    await provider.load();
+    final onDeckCalls = aggregation.onDeckCalls;
+    final hubCalls = aggregation.hubCalls;
+    provider.setHomeVisible(true);
+    await provider.refreshHomeWatchState(HomeWatchStateTrigger.shown);
+    await provider.refreshHomeWatchState(HomeWatchStateTrigger.resumed);
+    expect(aggregation.onDeckCalls, onDeckCalls);
+    expect(aggregation.hubCalls, hubCalls);
+    expect(provider.isWatchingHomeWatchState, isFalse);
+  });
+
+  group('Home watch state (Silo)', () {
+    late _FakeWatchClient silo;
+    late DiscoverProvider scoped;
+    var siloVersion = 1;
+
+    DiscoverProvider watchProvider({Duration retryBase = const Duration(milliseconds: 5)}) {
+      final created = DiscoverProvider(
+        multiServer,
+        hiddenLibraries,
+        libraries,
+        profileId: 'profile-a',
+        isProfileBinding: () => isBinding,
+        now: () => currentTime,
+        watchStateShownThrottle: const Duration(seconds: 10),
+        watchStateEventDebounce: const Duration(milliseconds: 20),
+        watchStateRetryBase: retryBase,
+        syncSystemShelf: (owner, items) async {},
+      );
+      addTearDown(() {
+        if (!created.isDisposed) created.dispose();
+      });
+      return created;
+    }
+
+    MediaHub siloHub() => _hub(
+      'silo-recent',
+      serverId: 'silo_1',
+      items: [_item('silo-movie-v$siloVersion', serverId: 'silo_1')],
+    );
+
+    setUp(() {
+      siloVersion = 1;
+      silo = _FakeWatchClient();
+      manager.debugRegisterClientForTesting(silo);
+      aggregation.onDeckResult = () => [
+        if (aggregation.lastOnDeckServerIds == null) _item('plex-episode'),
+        _item('silo-episode-v$siloVersion', serverId: 'silo_1'),
+      ];
+      aggregation.hubsResult = () => [if (aggregation.lastHubsServerIds == null) _hub('plex-recent'), siloHub()];
+      scoped = watchProvider();
+    });
+
+    Future<void> settle([int ms = 60]) => Future<void>.delayed(Duration(milliseconds: ms));
+
+    test('Home shown again re-reads only the Silo rows and replaces them in place', () async {
+      await scoped.load();
+      expect(scoped.hubs.map((h) => h.id), ['plex-recent', 'silo-recent']);
+      scoped.setHomeVisible(true);
+      siloVersion = 2;
+
+      await scoped.refreshHomeWatchState(HomeWatchStateTrigger.shown);
+
+      expect(aggregation.lastHubsServerIds, {'silo_1'});
+      expect(aggregation.lastOnDeckServerIds, {'silo_1'});
+      expect(scoped.hubs.map((h) => h.id), ['plex-recent', 'silo-recent']);
+      expect(scoped.hubs.last.items.single.id, 'silo-movie-v2');
+      expect(scoped.onDeck.map((i) => i.id), unorderedEquals(['plex-episode', 'silo-episode-v2']));
+    });
+
+    test('shown and resumed requests are throttled; hidden or backgrounded Home reads nothing', () async {
+      await scoped.load();
+      scoped.setHomeVisible(true);
+      await scoped.refreshHomeWatchState(HomeWatchStateTrigger.shown);
+      final calls = aggregation.hubCalls;
+
+      await scoped.refreshHomeWatchState(HomeWatchStateTrigger.resumed);
+      expect(aggregation.hubCalls, calls, reason: 'inside the throttle');
+
+      currentTime = currentTime.add(const Duration(seconds: 11));
+      scoped.setHomeVisible(false);
+      await scoped.refreshHomeWatchState(HomeWatchStateTrigger.shown);
+      scoped.setHomeVisible(true);
+      scoped.setAppForeground(false);
+      await scoped.refreshHomeWatchState(HomeWatchStateTrigger.resumed);
+      expect(aggregation.hubCalls, calls);
+
+      scoped.setAppForeground(true);
+      await scoped.refreshHomeWatchState(HomeWatchStateTrigger.resumed);
+      expect(aggregation.hubCalls, calls + 1);
+    });
+
+    test('nothing is re-read before the first load has shown Home', () async {
+      scoped.setHomeVisible(true);
+      await scoped.refreshHomeWatchState(HomeWatchStateTrigger.shown);
+      expect(aggregation.hubCalls, 0);
+    });
+
+    test('a failed Silo read keeps the rows shown', () async {
+      await scoped.load();
+      scoped.setHomeVisible(true);
+      siloVersion = 2;
+      aggregation.hubSucceededServerIds = const {};
+      aggregation.onDeckSucceededServerIds = const {};
+
+      await scoped.refreshHomeWatchState(HomeWatchStateTrigger.shown);
+
+      expect(scoped.hubs.map((h) => h.id), ['plex-recent', 'silo-recent']);
+      expect(scoped.hubs.last.items.single.id, 'silo-movie-v1');
+      expect(scoped.onDeck.map((i) => i.id), unorderedEquals(['plex-episode', 'silo-episode-v1']));
+    });
+
+    test('an incomplete read is retried with backoff, at most three times', () async {
+      await scoped.load();
+      scoped.setHomeVisible(true);
+      silo.incomplete = true;
+      final calls = aggregation.hubCalls;
+
+      await scoped.refreshHomeWatchState(HomeWatchStateTrigger.shown);
+      // Retries after 5, 10 and 20 ms.
+      await settle(400);
+      expect(aggregation.hubCalls, calls + 4);
+      await settle(100);
+      expect(aggregation.hubCalls, calls + 4, reason: 'gives up after three retries');
+    });
+
+    test('a retry stops once the read is complete, and when Home is hidden', () async {
+      await scoped.load();
+      scoped.setHomeVisible(true);
+      silo.incomplete = true;
+      siloVersion = 2;
+      final calls = aggregation.hubCalls;
+      await scoped.refreshHomeWatchState(HomeWatchStateTrigger.shown);
+      // An incomplete read (cached or missing rows) never replaces what is shown.
+      expect(scoped.hubs.last.items.single.id, 'silo-movie-v1');
+      expect(scoped.onDeck.map((i) => i.id), contains('silo-episode-v1'));
+      silo.incomplete = false;
+      await settle(80);
+      expect(aggregation.hubCalls, calls + 2);
+      expect(scoped.hubs.last.items.single.id, 'silo-movie-v2');
+      expect(scoped.onDeck.map((i) => i.id), unorderedEquals(['plex-episode', 'silo-episode-v2']));
+
+      silo.incomplete = true;
+      currentTime = currentTime.add(const Duration(seconds: 11));
+      await scoped.refreshHomeWatchState(HomeWatchStateTrigger.shown);
+      scoped.setHomeVisible(false);
+      await settle(80);
+      expect(aggregation.hubCalls, calls + 3);
+    });
+
+    test('a full pass that left a Silo read incomplete retries it while Home is shown', () async {
+      scoped.setHomeVisible(true);
+      silo.incomplete = true;
+      await scoped.load();
+      final calls = aggregation.hubCalls;
+      silo.incomplete = false;
+      await settle(40);
+      expect(aggregation.hubCalls, calls + 1);
+      expect(aggregation.lastHubsServerIds, {'silo_1'});
+    });
+
+    test('watch-state events run only while Home is shown and the app is in the foreground', () async {
+      await scoped.load();
+      expect(silo.running, isEmpty, reason: 'Home not shown yet');
+
+      scoped.setHomeVisible(true);
+      expect(silo.running, hasLength(1));
+      expect(scoped.watchedHomeWatchStateServerIds, {'silo_1'});
+
+      scoped.setAppForeground(false);
+      expect(silo.running, isEmpty);
+      scoped.setAppForeground(true);
+      expect(silo.running, hasLength(1));
+
+      scoped.setHomeVisible(false);
+      expect(silo.running, isEmpty);
+      scoped.setHomeVisible(true);
+      expect(silo.running, hasLength(1));
+
+      // Signed out / gone offline: the server leaves the online set.
+      manager.debugMarkAuthErrorForTesting(silo.serverId);
+      await settle(10);
+      expect(silo.running, isEmpty);
+    });
+
+    test('a burst of events becomes one re-read of that server', () async {
+      await scoped.load();
+      scoped.setHomeVisible(true);
+      siloVersion = 3;
+      final calls = aggregation.hubCalls;
+      final watch = silo.running.single;
+      watch.onSignal(HomeWatchStateSignal.changed);
+      watch.onSignal(HomeWatchStateSignal.changed);
+      watch.onSignal(HomeWatchStateSignal.reconnected);
+      await settle(80);
+      expect(aggregation.hubCalls, calls + 1);
+      expect(scoped.hubs.last.items.single.id, 'silo-movie-v3');
+
+      // A stopped watch's late signal does nothing.
+      scoped.setHomeVisible(false);
+      watch.onSignal(HomeWatchStateSignal.changed);
+      await settle(60);
+      expect(aggregation.hubCalls, calls + 1);
+    });
+
+    test('dispose stops the streams and pending re-reads', () async {
+      await scoped.load();
+      scoped.setHomeVisible(true);
+      final watch = silo.running.single;
+      final calls = aggregation.hubCalls;
+      watch.onSignal(HomeWatchStateSignal.changed);
+      scoped.dispose();
+      await settle(60);
+      expect(watch.stopped, isTrue);
+      expect(aggregation.hubCalls, calls);
     });
   });
 }
