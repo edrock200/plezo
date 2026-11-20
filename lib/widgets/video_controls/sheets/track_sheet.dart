@@ -494,7 +494,8 @@ class _SubtitleColumn extends StatelessWidget {
 List<Widget> _buildSubtitleSearchFooter(BuildContext context, TrackControlsState state) {
   final silo = state.siloSubtitles;
   if (silo != null) {
-    return [Divider(height: 1, color: Theme.of(context).dividerColor), SiloSubtitleFooterTiles(tools: silo)];
+    // The Silo rows draw their own divider: both can be hidden.
+    return [SiloSubtitleFooterTiles(tools: silo)];
   }
   if (!state.canSearchSubtitles) return const [];
 

@@ -453,6 +453,97 @@ void main() {
     });
   });
 
+  group('provider status (Silo Android #608)', () {
+    const available = SiloSubtitleProviderStatus(
+      state: 'available',
+      allowed: true,
+      enabled: true,
+      providers: ['opensubtitles'],
+    );
+    const none = SiloSubtitleProviderStatus(state: 'disabled', allowed: false, enabled: false);
+
+    test('the client reads providers/status and a failed read is null', () async {
+      var answer = _json({
+        'state': 'available',
+        'allowed': true,
+        'enabled': true,
+        'providers': ['opensubtitles', 'podnapisi'],
+      });
+      extra = (request, path) => path.endsWith('/subtitles/providers/status') ? answer : null;
+      final c = client();
+      final status = await c.subtitleProviderStatus();
+      expect(requests.last.method, 'GET');
+      expect(requests.last.url.path, '/api/v2/subtitles/providers/status');
+      expect(requests.last.headers['X-Profile-Id'], 'p-owner');
+      expect(status?.searchAvailable, isTrue);
+      expect(status?.providers, ['opensubtitles', 'podnapisi']);
+
+      answer = _json({'state': 'available', 'allowed': true, 'enabled': false, 'providers': <String>[]});
+      expect((await c.subtitleProviderStatus())?.searchAvailable, isFalse);
+      answer = _json({'state': 'unconfigured', 'allowed': true, 'enabled': true});
+      expect((await c.subtitleProviderStatus())?.searchAvailable, isFalse);
+      answer = _json({'state': 'available', 'allowed': false, 'enabled': true});
+      expect((await c.subtitleProviderStatus())?.searchAvailable, isFalse);
+
+      answer = _problem(404, 'not_found');
+      expect(await c.subtitleProviderStatus(), isNull);
+      answer = _problem(500, 'internal');
+      expect(await c.subtitleProviderStatus(), isNull);
+    });
+
+    test('a server answer decides; a failed read keeps the last answer, else offers search', () {
+      expect(siloSubtitleSearchAvailableAfter(available, false), isTrue);
+      expect(siloSubtitleSearchAvailableAfter(none, true), isFalse);
+      expect(siloSubtitleSearchAvailableAfter(none, null), isFalse);
+      expect(siloSubtitleSearchAvailableAfter(null, false), isFalse);
+      expect(siloSubtitleSearchAvailableAfter(null, true), isTrue);
+      expect(siloSubtitleSearchAvailableAfter(null, null), isTrue);
+    });
+
+    test('the gate offers search until an answer, and only the newest read applies', () async {
+      final pending = <Completer<SiloSubtitleProviderStatus?>>[];
+      final gate = SiloSubtitleSearchGate(() {
+        final c = Completer<SiloSubtitleProviderStatus?>();
+        pending.add(c);
+        return c.future;
+      });
+      var changes = 0;
+      gate.addListener(() => changes++);
+      expect(gate.offered, isTrue);
+      expect(gate.known, isNull);
+
+      final older = gate.refresh();
+      final newer = gate.refresh();
+      pending[1].complete(none);
+      await newer;
+      expect(gate.offered, isFalse);
+      pending[0].complete(available);
+      await older;
+      expect(gate.offered, isFalse, reason: 'an older answer landing last is ignored');
+      expect(changes, 1);
+
+      final failed = gate.refresh();
+      pending[2].completeError(Exception('offline'));
+      await failed;
+      expect(gate.offered, isFalse, reason: 'a failed read keeps the last answer');
+      gate.dispose();
+    });
+
+    test('a read that takes longer than 5 s counts as failed', () {
+      fakeAsync((async) {
+        final gate = SiloSubtitleSearchGate(() => Completer<SiloSubtitleProviderStatus?>().future);
+        var done = false;
+        gate.refresh().then((_) => done = true);
+        async.elapse(const Duration(seconds: 4));
+        expect(done, isFalse);
+        async.elapse(const Duration(seconds: 1));
+        expect(done, isTrue);
+        expect(gate.known, isTrue, reason: 'no answer yet: search is offered');
+        gate.dispose();
+      });
+    });
+  });
+
   group('controller', () {
     test('runs a job to completion and loads its subtitle into the player', () async {
       var reads = 0;

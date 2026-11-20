@@ -433,7 +433,11 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
   `combined_index` is not).
 - **Subtitle search / download:** `POST /subtitles/search {media_file_id, languages}` → `{results, warnings}`;
   `POST /subtitles/download` (provider, subtitle_id, language, release_name, score, hearing_impaired) → `{subtitle}`
-  stored on the server. No capability probe: "no providers" arrives as an error or a warning.
+  stored on the server. "Search Subtitles" is gated (Silo Android #608, `SiloClient.subtitleSearchGate`): each
+  sheet open reads `GET /subtitles/providers/status` (5 s bound); search shows only when `allowed && enabled &&
+  state == "available"`. A failed or slow read keeps the last answer, else offers search; only the newest read
+  applies. Offline playback builds no `SiloSubtitleTools`, so it never probes or shows search. A provider removed
+  after the check still arrives as an error or a warning.
 - **AI subtitles** (`/subtitles/ai/status|quota|translate|jobs/{id}|jobs/{id}/cancel`): status gates the row
   (`enabled` = translate, `transcribe_enabled` = transcribe; transcription without translation stays in the spoken
   language and sends no target). `translate` reads a subtitle `combined_index` (embedded non-bitmap, external or stored

@@ -21,6 +21,22 @@ mixin _SiloSubtitleMethods on MediaServerCacheMixin, _SiloPlaybackMethods {
   Future<SiloAiStatus>? _aiStatus;
   SiloAiStatus? _aiStatusValue;
 
+  /// Whether the subtitle sheet offers online search; refreshed each time the
+  /// sheet opens (Silo Android #608).
+  late final SiloSubtitleSearchGate subtitleSearchGate = SiloSubtitleSearchGate(subtitleProviderStatus);
+
+  /// `GET /subtitles/providers/status`, bounded to 5 s. Null when the read
+  /// failed (an older server without the endpoint, no network, a stall).
+  Future<SiloSubtitleProviderStatus?> subtitleProviderStatus() async {
+    try {
+      final data = await _api.getJson('/api/v2/subtitles/providers/status', timeout: siloSubtitleProviderStatusTimeout);
+      return SiloSubtitleProviderStatus.fromJson(data);
+    } catch (e) {
+      appLogger.d('SiloClient: subtitle provider status unavailable', error: e.runtimeType);
+      return null;
+    }
+  }
+
   /// The AI status read so far (null until [aiStatus] answers).
   SiloAiStatus? get cachedAiStatus => _aiStatusValue;
 
@@ -216,8 +232,9 @@ mixin _SiloSubtitleMethods on MediaServerCacheMixin, _SiloPlaybackMethods {
     }
   }
 
-  /// `POST /subtitles/search` for the playing file. There is no capability
-  /// probe: "no providers configured" arrives as an error or a warning.
+  /// `POST /subtitles/search` for the playing file. The sheet offers it only
+  /// while [subtitleSearchGate] allows; a provider removed since then arrives
+  /// as an error or a warning.
   Future<SiloSubtitleSearchResults> searchServerSubtitles({
     required String fileId,
     required List<String> languages,

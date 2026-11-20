@@ -1,7 +1,97 @@
 /// Silo's subtitle tools as Plezy uses them in the player: provider search and
 /// download (`POST /api/v2/subtitles/search|download`) and "Translate with AI"
-/// (`/api/v2/subtitles/ai/*`). Pure models; the calls live in `SiloClient`.
+/// (`/api/v2/subtitles/ai/*`). Pure models and the search gate; the calls
+/// live in `SiloClient`.
 library;
+
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
+
+/// `GET /api/v2/subtitles/providers/status` (Silo Android #608): whether this
+/// viewer can search external subtitle providers.
+class SiloSubtitleProviderStatus {
+  const SiloSubtitleProviderStatus({
+    required this.state,
+    required this.allowed,
+    required this.enabled,
+    this.providers = const [],
+  });
+
+  final String state;
+  final bool allowed;
+  final bool enabled;
+  final List<String> providers;
+
+  /// Search is offered only when the profile is allowed, the capability is
+  /// `available` and a provider is enabled (Silo's `searchAvailable`).
+  bool get searchAvailable => allowed && enabled && state == 'available';
+
+  static SiloSubtitleProviderStatus fromJson(Map<String, dynamic> json) {
+    final providers = json['providers'];
+    return SiloSubtitleProviderStatus(
+      state: json['state']?.toString() ?? '',
+      allowed: json['allowed'] == true,
+      enabled: json['enabled'] == true,
+      providers: providers is List ? providers.map((p) => p?.toString()).nonNulls.toList() : const [],
+    );
+  }
+}
+
+/// How long a provider-status read may take before it counts as failed, so a
+/// stalled read never keeps search hidden for the full HTTP timeout.
+const siloSubtitleProviderStatusTimeout = Duration(seconds: 5);
+
+/// Whether online subtitle search is offered after a provider-status read
+/// ([status] null when it failed or timed out). A server answer decides; a
+/// failed read keeps the [previous] answer and otherwise offers search, so
+/// servers without the endpoint keep a working feature (Silo's
+/// `subtitleSearchAvailabilityAfter`).
+bool siloSubtitleSearchAvailableAfter(SiloSubtitleProviderStatus? status, bool? previous) =>
+    status?.searchAvailable ?? previous ?? true;
+
+/// The player's "Search subtitles" gate for one Silo client: [refresh] reads
+/// the provider status (each time the subtitle sheet opens), and only the
+/// newest read's answer applies.
+class SiloSubtitleSearchGate extends ChangeNotifier {
+  SiloSubtitleSearchGate(this._probe, {this.timeout = siloSubtitleProviderStatusTimeout});
+
+  /// Reads the status; null (or a throw) is a failed read.
+  final Future<SiloSubtitleProviderStatus?> Function() _probe;
+  final Duration timeout;
+
+  bool? _known;
+  int _generation = 0;
+  bool _disposed = false;
+
+  /// The last answer, null before the first one.
+  bool? get known => _known;
+
+  /// Whether search is shown: the last answer, or yes before any.
+  bool get offered => _known ?? true;
+
+  Future<void> refresh() async {
+    final generation = ++_generation;
+    SiloSubtitleProviderStatus? status;
+    try {
+      status = await _probe().timeout(timeout);
+    } catch (_) {
+      status = null;
+    }
+    if (_disposed || generation != _generation) return;
+    final next = siloSubtitleSearchAvailableAfter(status, _known);
+    if (next == _known) return;
+    final wasOffered = offered;
+    _known = next;
+    if (offered != wasOffered) notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
+  }
+}
 
 /// `GET /api/v2/subtitles/ai/status`.
 class SiloAiStatus {

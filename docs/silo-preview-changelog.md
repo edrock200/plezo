@@ -4,6 +4,12 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **Subtitle search only when your server has a provider:** in the player's subtitle menu, "Search Subtitles" for a Silo title now shows only when your Silo server has a subtitle provider set up, so it no longer offers a search that can only come back empty. Plezilo asks the server each time you open the menu, so a provider added or removed meanwhile shows up the next time. If the server does not answer (or is too old to say), the menu keeps what it showed last time, and offers the search when it has nothing to go on. Downloaded titles never offer it. Plex and Jellyfin are unchanged. *(From Silo's own apps.)*
+
+## silo-preview-2.52.0
+
+Released November 19, 2026. Android and Windows.
+
 - **Silo titles open on the standard cut:** when a Silo movie comes in several editions and you have not watched any of them, its page now opens on the standard (or unnamed) edition, then the theatrical cut, and only then on another cut such as an Extended or Director's Cut, even when that other cut has a better-quality file. Quality still decides between cuts with the same kind of name, and the edition you last watched still opens first. *(From Silo's own apps.)*
 - **Downloads stay stopped after a storage problem:** when downloads stop because the device is running out of space, automatic download rules no longer start them again (and stop them again) on every refresh. Starting a download yourself, Retry or Resume still restarts them. *(From Plezy.)*
 - **Plex media deletion follows the server's switch:** "Delete from server" now shows on a Plex server only when its "Allow media deletion" setting is on; with it off Plezilo no longer deletes anything and says the setting is off. Jellyfin, Emby and Silo are unchanged. *(From Plezy.)*
