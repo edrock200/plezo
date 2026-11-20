@@ -920,6 +920,12 @@ void main() {
     });
 
     group('start position', () {
+      Map<String, dynamic> remuxPlan = {
+        'delivery': 'server_remux_hls',
+        'stream': {'url': '/api/v2/stream/sess-5/master.m3u8?st=sig'},
+      };
+      late PlaybackInitializationResult lastResult;
+
       Future<Map<String, dynamic>> startBodyFor(Duration? startPosition) async {
         Map<String, dynamic>? startBody;
         final c = client((request) async {
@@ -942,19 +948,12 @@ void main() {
           }
           if (path.endsWith('/playback/start')) {
             startBody = jsonDecode(request.body) as Map<String, dynamic>;
-            return _json({
-              'outcome': 'playable',
-              'session_id': 'sess-5',
-              'playback_plan': {
-                'delivery': 'server_remux_hls',
-                'stream': {'url': '/api/v2/stream/sess-5/master.m3u8?st=sig'},
-              },
-            }, 201);
+            return _json({'outcome': 'playable', 'session_id': 'sess-5', 'playback_plan': remuxPlan}, 201);
           }
           return _json({}, 404);
         });
         final metadata = MediaItem.silo(id: 'episode:e1', kind: MediaKind.episode, serverId: 'srv-1');
-        await c.getPlaybackInitialization(
+        lastResult = await c.getPlaybackInitialization(
           PlaybackInitializationOptions(metadata: metadata, selectedMediaIndex: 0, startPosition: startPosition),
         );
         return startBody!;
@@ -971,6 +970,66 @@ void main() {
       test('Play from the start, or no position, starts at 0', () async {
         expect((await startBodyFor(Duration.zero))['start_position'], 0);
         expect((await startBodyFor(null))['start_position'], 0);
+      });
+
+      test('a remux started at the resume point lays its stream at the plan\'s timeline offset', () async {
+        // silo-server configureCopyRemuxTimelineV3: the copy starts at the
+        // keyframe before the start (1496 s), player_start = 1500 - 1496.
+        remuxPlan = {
+          'delivery': 'server_remux_hls',
+          'stream': {'url': '/api/v2/stream/sess-5/master.m3u8?st=sig'},
+          'timeline': {
+            'source_start_seconds': 1500,
+            'stream_origin_seconds': 1496.25,
+            'player_start_seconds': 3.75,
+            'timeline_offset_seconds': 1496.25,
+            'can_seek_anywhere': false,
+          },
+          'subtitle': {
+            'inventory': [
+              {
+                'combined_index': 0,
+                'delivery': 'sidecar',
+                'source': 'embedded',
+                'codec': 'ass',
+                'language': 'en',
+                'url': '/stream/sess-5/subtitles/0.ass?file_id=42&embedded_stream_index=2',
+              },
+            ],
+          },
+        };
+        await startBodyFor(const Duration(seconds: 1500));
+        expect(lastResult.mediaInfo!.timelineOffset, const Duration(milliseconds: 1496250));
+        final sidecar = lastResult.subtitleSidecars.single.track;
+        final uri = Uri.parse(sidecar.uri!);
+        // Cues are in source time; the player shows them on the stream's.
+        expect(uri.path, endsWith('/subtitles/0.vtt'));
+        expect(uri.queryParameters['timestamp_offset'], '-1496.25');
+        expect(uri.queryParameters['embedded_stream_index'], '2');
+        expect(sidecar.codec, 'webvtt');
+      });
+
+      test('a plan on the source clock (direct play) has no offset and untouched sidecars', () async {
+        remuxPlan = {
+          'delivery': 'original_http',
+          'stream': {'url': '/api/v2/stream/sess-5?st=sig'},
+          'timeline': {'source_start_seconds': 1500, 'player_start_seconds': 1500, 'timeline_offset_seconds': 0},
+          'subtitle': {
+            'inventory': [
+              {
+                'combined_index': 0,
+                'delivery': 'sidecar',
+                'source': 'external',
+                'codec': 'srt',
+                'url': '/stream/sess-5/subtitles/0.vtt?file_id=42',
+              },
+            ],
+          },
+        };
+        await startBodyFor(const Duration(seconds: 1500));
+        expect(lastResult.mediaInfo!.timelineOffset, Duration.zero);
+        final uri = Uri.parse(lastResult.subtitleSidecars.single.track.uri!);
+        expect(uri.queryParameters.containsKey('timestamp_offset'), isFalse);
       });
     });
 

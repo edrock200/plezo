@@ -25,6 +25,15 @@ class MediaSourceInfo {
   /// where the open file ([partIndex]) sits on the item's timeline.
   final MediaPartTimeline? partTimeline;
 
+  /// Where the stream's time 0 sits on the item's timeline, for a server
+  /// stream that starts part-way into the file (Silo's remux or transcode
+  /// started at the resume point: `timeline.timeline_offset_seconds`). The
+  /// player lays the stream there, so everything above it (progress,
+  /// markers, chapters, the seek bar) keeps speaking item time; a seek
+  /// before it needs a new stream. Zero for a stream that starts with the
+  /// file. Not used together with [partTimeline].
+  final Duration timelineOffset;
+
   /// Jellyfin default stream indexes for this source. A subtitle index of -1
   /// is an explicit server/user decision to start with subtitles off.
   final int? defaultAudioStreamIndex;
@@ -49,6 +58,7 @@ class MediaSourceInfo {
     this.mediaIndex,
     this.partIndex,
     this.partTimeline,
+    this.timelineOffset = Duration.zero,
     this.defaultAudioStreamIndex,
     this.defaultSubtitleStreamIndex,
     this.trickplayByWidth,
@@ -58,7 +68,11 @@ class MediaSourceInfo {
   /// Field-preserving rebuild. Track lists are the only members that the
   /// playback pipeline rewrites after construction; every other field must
   /// survive those rewrites untouched.
-  MediaSourceInfo copyWith({List<MediaAudioTrack>? audioTracks, List<MediaSubtitleTrack>? subtitleTracks}) {
+  MediaSourceInfo copyWith({
+    List<MediaAudioTrack>? audioTracks,
+    List<MediaSubtitleTrack>? subtitleTracks,
+    Duration? timelineOffset,
+  }) {
     return MediaSourceInfo(
       videoUrl: videoUrl,
       audioTracks: audioTracks ?? this.audioTracks,
@@ -70,6 +84,7 @@ class MediaSourceInfo {
       mediaIndex: mediaIndex,
       partIndex: partIndex,
       partTimeline: partTimeline,
+      timelineOffset: timelineOffset ?? this.timelineOffset,
       defaultAudioStreamIndex: defaultAudioStreamIndex,
       defaultSubtitleStreamIndex: defaultSubtitleStreamIndex,
       trickplayByWidth: trickplayByWidth,

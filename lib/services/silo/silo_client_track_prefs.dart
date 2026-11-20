@@ -128,6 +128,7 @@ mixin _SiloTrackPrefsMethods on MediaServerCacheMixin, _SiloPlaybackMethods {
       mediaIndex: info.mediaIndex,
       partIndex: info.partIndex,
       partTimeline: info.partTimeline,
+      timelineOffset: info.timelineOffset,
       defaultAudioStreamIndex: info.defaultAudioStreamIndex,
       defaultSubtitleStreamIndex: -1,
       trickplayByWidth: info.trickplayByWidth,

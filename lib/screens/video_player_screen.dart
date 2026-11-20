@@ -406,19 +406,38 @@ class _PlaybackOpenRequest {
   );
 }
 
-class _PlaybackOpenTiming {
+/// Whether a seek to [target] lands before a stream that starts [streamOffset]
+/// into the item (see [MediaSourceInfo.timelineOffset]), so the open stream
+/// cannot play it. Within a second of the origin the seek stays native: it
+/// lands on the origin.
+@visibleForTesting
+bool streamStartsAfter(Duration streamOffset, Duration target) =>
+    streamOffset > Duration.zero && target < streamOffset - const Duration(seconds: 1);
+
+/// Where an open starts and how its stream is laid on the item's timeline:
+/// [mediaStart] and [timelineDuration] in item time, [timelineOffset] where
+/// the stream's time 0 sits (see `Player.open`).
+@visibleForTesting
+class PlaybackOpenTiming {
   final Duration? mediaStart;
   final Duration? timelineDuration;
   final Duration timelineOffset;
 
-  const _PlaybackOpenTiming({this.mediaStart, this.timelineDuration, this.timelineOffset = Duration.zero});
+  const PlaybackOpenTiming({this.mediaStart, this.timelineDuration, this.timelineOffset = Duration.zero});
 }
 
-_PlaybackOpenTiming _playbackOpenTiming({
+/// [streamOffset] is [MediaSourceInfo.timelineOffset]: a server stream that
+/// starts part-way into the source (Silo's remux or transcode started at the
+/// resume point). The player opens at the resume point on the item's clock,
+/// which is `player_start_seconds` on the stream's, and spans the item's
+/// whole duration so the seek bar, progress and markers stay in item time.
+@visibleForTesting
+PlaybackOpenTiming playbackOpenTiming({
   required bool isTranscoding,
   required Duration? resumePosition,
   required int? durationMs,
   MediaPartTimeline? partTimeline,
+  Duration streamOffset = Duration.zero,
 }) {
   if (partTimeline != null) {
     // One file of a stacked item: the player lays it onto the item timeline.
@@ -432,13 +451,21 @@ _PlaybackOpenTiming _playbackOpenTiming({
         'resume ${resumePosition.inMilliseconds}ms; starting at ${part.start.inMilliseconds}ms',
       );
     }
-    return _PlaybackOpenTiming(
+    return PlaybackOpenTiming(
       mediaStart: resumeHeld ? resumePosition : part.start,
       timelineDuration: partTimeline.duration,
       timelineOffset: part.start,
     );
   }
-  return _PlaybackOpenTiming(
+  if (streamOffset > Duration.zero) {
+    return PlaybackOpenTiming(
+      // The stream holds nothing before its origin.
+      mediaStart: resumePosition == null || resumePosition < streamOffset ? streamOffset : resumePosition,
+      timelineDuration: durationMs != null ? Duration(milliseconds: durationMs) : null,
+      timelineOffset: streamOffset,
+    );
+  }
+  return PlaybackOpenTiming(
     mediaStart: resumePosition,
     timelineDuration: isTranscoding && durationMs != null ? Duration(milliseconds: durationMs) : null,
   );

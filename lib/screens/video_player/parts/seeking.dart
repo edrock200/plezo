@@ -30,6 +30,18 @@ extension _VideoPlayerSeekingMethods on VideoPlayerScreenState {
       await _openStackedPartAt(target, reason: 'stacked part seek');
       return;
     }
+    // A server stream started part-way in (Silo, resumed) holds nothing
+    // before its origin: ask the server for a stream starting at the target.
+    final streamOffset = _currentMediaInfo?.timelineOffset ?? Duration.zero;
+    if (!widget.isLive && partTimeline == null && streamStartsAfter(streamOffset, target)) {
+      if (!(isCurrent?.call() ?? true)) return;
+      appLogger.d(
+        'Seek to ${target.inMilliseconds}ms is before the stream origin ${streamOffset.inMilliseconds}ms; '
+        'restarting the stream there',
+      );
+      await _openStackedPartAt(target, reason: 'seek before stream origin');
+      return;
+    }
     // Finish an already-dispatched seek before issuing a newer target; an old
     // native completion must not land after the user's superseding seek.
     while (_nativeSeekDrain != null) {

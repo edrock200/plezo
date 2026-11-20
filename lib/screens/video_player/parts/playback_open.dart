@@ -878,7 +878,7 @@ extension _VideoPlayerOpenMethods on VideoPlayerScreenState {
     required bool isTranscoding,
     required bool isLocalMedia,
     required MediaVersion? selectedVersion,
-    required _PlaybackOpenTiming timing,
+    required PlaybackOpenTiming timing,
     required PlaybackOpenOutcome outcome,
     Map<String, String>? headers,
     required bool play,
@@ -1117,11 +1117,12 @@ extension _VideoPlayerOpenMethods on VideoPlayerScreenState {
 
       // Sidecars ride along with open() so tracks are discovered in a single
       // prepare/loadfile cycle.
-      final openTiming = _playbackOpenTiming(
+      final openTiming = playbackOpenTiming(
         isTranscoding: result.isTranscoding,
         resumePosition: resumePosition(),
         durationMs: metadata.durationMs,
         partTimeline: result.mediaInfo?.partTimeline,
+        streamOffset: result.mediaInfo?.timelineOffset ?? Duration.zero,
       );
       if (!isCurrent()) return false;
       _armDisplaySwitchBeforeDecoder(

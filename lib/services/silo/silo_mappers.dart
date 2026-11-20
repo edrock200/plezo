@@ -31,6 +31,45 @@ enum SiloLibraryFamily { video, audio, reading, unknown }
 
 /// Pure JSON → neutral-model mapping for Silo `/api/v2` payloads.
 abstract final class SiloMappers {
+  /// Where a playback plan's stream time 0 sits on the source timeline
+  /// (`timeline.timeline_offset_seconds`). Silo sets it when a remux, or a
+  /// transcode served from a growing playlist, starts part-way in: the copy's
+  /// keyframe origin or the transcode's segment boundary at or before
+  /// `start_position`, with `player_start_seconds` = start − offset. Direct
+  /// play and transcodes with a complete playlist keep the source's clock
+  /// (0). Anything unreadable, negative or past a year counts as 0.
+  static Duration planTimelineOffset(Object? plan) {
+    final timeline = plan is Map ? plan['timeline'] : null;
+    final value = timeline is Map ? timeline['timeline_offset_seconds'] : null;
+    if (value is! num) return Duration.zero;
+    final seconds = value.toDouble();
+    if (!seconds.isFinite || seconds <= 0 || seconds > 31536000) return Duration.zero;
+    return Duration(microseconds: (seconds * Duration.microsecondsPerSecond).round());
+  }
+
+  /// A text sidecar of a plan whose stream starts [offset] into the source.
+  /// Sidecar cues are in source time while the player lays them on the
+  /// stream's clock, so they are asked for as WebVTT shifted by −[offset]
+  /// (`timestamp_offset`, which the server applies to `.vtt` only; Silo's
+  /// Cast sender does the same). An ASS/SSA/SRT track loses its styling in
+  /// that case. [url] unchanged, and [codec] null, when [offset] is zero.
+  static ({String url, String? codec}) sidecarForTimeline(String url, Duration offset) {
+    if (offset <= Duration.zero) return (url: url, codec: null);
+    final uri = Uri.tryParse(url);
+    if (uri == null) return (url: url, codec: null);
+    final path = uri.path;
+    final slash = path.lastIndexOf('/');
+    final dot = path.lastIndexOf('.');
+    final vttPath = dot > slash ? '${path.substring(0, dot)}.vtt' : path;
+    final seconds = -offset.inMicroseconds / Duration.microsecondsPerSecond;
+    final query = [
+      for (final part in uri.query.split('&'))
+        if (part.isNotEmpty && part.split('=').first != 'timestamp_offset') part,
+      'timestamp_offset=$seconds',
+    ].join('&');
+    return (url: uri.replace(path: vttPath, query: query).toString(), codec: 'webvtt');
+  }
+
   /// Prefix of the synthetic season ids used where Silo names a season only
   /// by series and number (episode cards). The real season `content_id` is
   /// used wherever the server gives one.

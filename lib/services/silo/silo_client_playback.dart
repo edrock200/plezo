@@ -323,6 +323,9 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
       throw PlaybackException(t.messages.playbackDataInvalid, reason: PlaybackFailureReason.invalidPlaybackData);
     }
     final delivery = plan['delivery']?.toString() ?? 'original_http';
+    // The stream starts part-way into the source when asked to start at a
+    // resume point (a remux, or a transcode from a growing playlist).
+    final timelineOffset = SiloMappers.planTimelineOffset(plan);
     final isOriginal = delivery == 'original_http';
     final subtitle = plan['subtitle'];
     final inventory = subtitle is Map ? subtitle['inventory'] : null;
@@ -406,14 +409,15 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
         } else if (index != null) {
           sidecarIndexes.add(index);
         }
+        final shifted = SiloMappers.sidecarForTimeline(url, timelineOffset);
         sidecars.add(
           PlaybackSubtitleSidecar(
             sourceStreamId: sourceStreamId,
             track: SubtitleTrack.uri(
-              _subtitleUrl(url),
+              _subtitleUrl(shifted.url),
               title: entry['label']?.toString(),
               language: entry['language']?.toString(),
-              codec: codec,
+              codec: shifted.codec ?? codec,
               isDefault: entry['default'] == true,
               isForced: entry['forced'] == true,
             ),
@@ -433,6 +437,7 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
       unplayableSubtitleIndexes: unplayableIndexes,
       extraSubtitleTracks: storedTracks,
     );
+    if (timelineOffset > Duration.zero) mediaInfo = mediaInfo.copyWith(timelineOffset: timelineOffset);
     if (profileTracks && inventory is List) {
       mediaInfo = _applySubtitleStart(
         mediaInfo,
@@ -448,7 +453,8 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
     appLogger.i(
       'Silo playback plan: delivery=$delivery reason=${plan['decision_reason']} '
       'quality=${SiloPlaybackCaps.qualityPreference(options.qualityPreset)} '
-      'start=${plan['timeline'] is Map ? (plan['timeline'] as Map)['player_start_seconds'] : null}',
+      'start=${plan['timeline'] is Map ? (plan['timeline'] as Map)['player_start_seconds'] : null} '
+      'offset=${timelineOffset.inMilliseconds / 1000}',
     );
 
     return PlaybackInitializationResult(
