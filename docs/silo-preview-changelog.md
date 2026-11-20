@@ -4,6 +4,12 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **Resume works again on Silo:** resuming a Silo episode or movie could spin and then say "Playback could not be started.", while starting from the beginning worked. Plezilo now asks your Silo server to start the video where you left off, as Silo's own apps do, instead of starting it at the beginning and jumping ahead before the server had got there. When the server converts the video, going back to before the point you resumed from reloads it from there, and subtitles stay in time. *(please test)*
+
+## silo-preview-2.53.0
+
+Released November 20, 2026. Android and Windows.
+
 - **Subtitle search only when your server has a provider:** in the player's subtitle menu, "Search Subtitles" for a Silo title now shows only when your Silo server has a subtitle provider set up, so it no longer offers a search that can only come back empty. Plezilo asks the server each time you open the menu, so a provider added or removed meanwhile shows up the next time. If the server does not answer (or is too old to say), the menu keeps what it showed last time, and offers the search when it has nothing to go on. Downloaded titles never offer it. Plex and Jellyfin are unchanged. *(From Silo's own apps.)*
 
 ## silo-preview-2.52.0
