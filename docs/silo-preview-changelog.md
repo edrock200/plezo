@@ -4,6 +4,12 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **Switching profiles from an empty Home on TV:** when a profile's server shows nothing on Home, the remote can now reach the profile menu (and the Retry button leads to it), so you can switch to another profile. *(From Plezy.)*
+
+## silo-preview-2.56.0
+
+Released November 21, 2026. Android and Windows.
+
 - **Silo row titles in more languages:** the names of the rows your Silo server makes itself (Continue Watching, Recommended for You, Because You Watched…, the holiday rows and so on) now appear in Plezilo's language for Bulgarian, Hungarian, Japanese, Korean, Simplified and Traditional Chinese, and in European Portuguese (which used the Brazilian wording until now). The other languages pick up Silo's newest translations. *(From Silo's own apps.)*
 
 ## silo-preview-2.55.0
