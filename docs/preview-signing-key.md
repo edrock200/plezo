@@ -44,3 +44,5 @@ Create these repository secrets:
 The APK build prefers these secrets over the cache, so the next preview is signed with the same key and installs as
 an update. Check that release's notes: there must be no "uninstall first" warning. After that the cache no longer
 matters, and the downloaded artifact can be deleted.
+
+Last export run: 2026-11-21 (triggered from the Claude session).
