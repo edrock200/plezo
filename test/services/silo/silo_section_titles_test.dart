@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plezy/i18n/strings.g.dart';
 import 'package:plezy/services/silo/silo_catalog_strings.dart';
@@ -112,8 +114,55 @@ void main() {
     });
 
     test('a language Silo has no catalog for uses Silo English', () async {
-      await SiloCatalogStrings.load(AppLocale.ja);
+      await SiloCatalogStrings.load(AppLocale.kk);
       expect(SiloSectionTitles.localize(titleKey: 'home.section.forYou', fallback: 'x'), 'For You');
+    });
+
+    test('languages Silo added later read their own catalogs', () async {
+      final expected = {
+        AppLocale.bg: 'За вас',
+        AppLocale.hu: 'Önnek',
+        AppLocale.ja: 'おすすめ',
+        AppLocale.ko: isNot('For You'),
+        AppLocale.zh: '为你推荐',
+        AppLocale.zhHant: '為你推薦',
+      };
+      for (final MapEntry(key: locale, value: matcher) in expected.entries) {
+        await SiloCatalogStrings.load(locale);
+        expect(
+          SiloSectionTitles.localize(titleKey: 'home.section.forYou', fallback: 'x'),
+          matcher,
+          reason: locale.languageTag,
+        );
+      }
+      await SiloCatalogStrings.load(AppLocale.bg);
+      expect(
+        SiloSectionTitles.localize(titleKey: 'home.section.topGenre', titleArgs: {'genre': 'Драма'}, fallback: 'x'),
+        'Най-добрите в жанра Драма',
+      );
+    });
+
+    test('European Portuguese reads its own catalog, not the Brazilian one', () async {
+      await SiloCatalogStrings.load(AppLocale.ptPt);
+      expect(SiloSectionTitles.localize(titleKey: 'home.section.forYou', fallback: 'x'), 'Para si');
+      await SiloCatalogStrings.load(AppLocale.pt);
+      expect(SiloSectionTitles.localize(titleKey: 'home.section.forYou', fallback: 'x'), 'Para você');
+    });
+
+    test('every bundled catalog is named after a Plezilo locale tag', () {
+      // scripts/silo_catalog_strings.py maps Android folders (values-iw, values-in,
+      // values-b+zh+Hant, values-pt-rPT) to the tags the loader reads.
+      final tags = {for (final l in AppLocale.values) l.languageTag};
+      final files = Directory(SiloCatalogStrings.assetDir)
+          .listSync()
+          .whereType<File>()
+          .map((f) => f.uri.pathSegments.last)
+          .where((name) => name.endsWith('.json'))
+          .map((name) => name.substring(0, name.length - '.json'.length))
+          .toList();
+      expect(files, contains('en'));
+      expect(files.where((tag) => !tags.contains(tag)), isEmpty);
+      expect(files, isNot(anyOf(contains('iw'), contains('in'))));
     });
 
     test('Portuguese reads the Brazilian catalog and English reads en', () async {

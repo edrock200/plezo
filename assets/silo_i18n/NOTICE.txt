@@ -2,21 +2,19 @@ SILO TRANSLATIONS — NOTICE
 ==========================
 
 The translated titles of the rows a Silo server words itself (Home sections
-and recommendation rows, catalog keys "home.section.*") in this folder are
-taken from Silo's translation catalogs:
+and recommendation rows, catalog keys "home.section.*") and the line naming
+the profile that shared a collection (catalog key
+"collections.posterCard.byOwner") in this folder are taken from Silo's
+translation catalogs:
 
-  Silo-Server/silo-roku at e09a5e0 (catalog release 2026.11.15-0ba1666)
-  locale/<language>/strings.json
-
-The line naming the profile that shared a collection (catalog key
-"collections.posterCard.byOwner") is taken from Silo's Android app catalog:
-
-  Silo-Server/silo-android at db87f835f (catalog release 2026.11.17-fe23d4e)
+  Silo-Server/silo-android at 63c898084 (catalog release 2026.11.20-9403fbd)
   android-shared/src/androidMain/res/values*/strings_catalog.xml
   (Android's %1$s placeholders written as named {placeholders})
 
-Languages: English, Danish, German, Spanish, French, Italian, Norwegian
-Bokmål, Dutch, Polish, Brazilian Portuguese, Russian, Swedish, Turkish.
+Languages: English, Bulgarian, Danish, German, Spanish, French, Hungarian,
+Italian, Japanese, Korean, Norwegian Bokmål, Dutch, Polish, Brazilian
+Portuguese, European Portuguese, Russian, Swedish, Turkish, Simplified
+Chinese, Traditional Chinese.
 
 Copyright (c) their authors (Silo Media L.L.C. and contributors).
 
