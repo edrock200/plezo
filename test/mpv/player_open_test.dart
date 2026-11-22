@@ -915,7 +915,7 @@ void main() {
               'https://example.test/movie.mkv',
               'replace',
               '-1',
-              'sub-files=${_fixedLengthPathList([english, french])},sid=no,secondary-sid=no',
+              'sub-files=${_fixedLengthPathList([english, french])},sid=no,secondary-sid=no,demuxer-lavf-o-append=live_start_index=0',
             ]);
             expect(_commandCalls(calls, 'sub-add'), isEmpty);
           } finally {
@@ -959,8 +959,8 @@ void main() {
               'replace',
               '-1',
               Platform.isWindows
-                  ? r'sub-files=%31%/subs/a\b.srt;/subs/c\:d\;e.srt,sid=no,secondary-sid=no'
-                  : r'sub-files=%31%/subs/a\b.srt:/subs/c\\:d;e.srt,sid=no,secondary-sid=no',
+                  ? r'sub-files=%31%/subs/a\b.srt;/subs/c\:d\;e.srt,sid=no,secondary-sid=no,demuxer-lavf-o-append=live_start_index=0'
+                  : r'sub-files=%31%/subs/a\b.srt:/subs/c\\:d;e.srt,sid=no,secondary-sid=no,demuxer-lavf-o-append=live_start_index=0',
             ]);
           } finally {
             await player.dispose();
@@ -1073,7 +1073,7 @@ void main() {
               'https://example.test/transcode.m3u8',
               'replace',
               '-1',
-              'sub-files=${_fixedLengthPathList([subtitleUri])},sid=no,secondary-sid=no',
+              'sub-files=${_fixedLengthPathList([subtitleUri])},sid=no,secondary-sid=no,demuxer-lavf-o-append=live_start_index=0',
             ]);
 
             player.handlePlayerEvent('start-file', null);
@@ -1469,6 +1469,41 @@ void main() {
             expect(emissionCount, 1);
           } finally {
             await subscription.cancel();
+            await player.dispose();
+          }
+        },
+      );
+    });
+
+    test('MPV starts a VOD playlist at its first segment, a live one at FFmpeg\'s live position', () async {
+      // A Silo copy remux (or a transcode started at a resume point) is
+      // FFmpeg's still-growing playlist: no EXT-X-ENDLIST until it finishes.
+      // FFmpeg's HLS demuxer starts such a playlist three segments before its
+      // end (live_start_index -3), near the end of the episode once the copy
+      // has run ahead, and the first absolute seek, counted from the first
+      // segment, jumps back to the start.
+      final calls = <MethodCall>[];
+      await withMockPlayerChannels(
+        methodChannelName: 'com.plezy/mpv_player',
+        eventChannelName: 'com.plezy/mpv_player/events',
+        methodHandler: (call) async {
+          calls.add(call);
+          return call.method == 'initialize' ? true : null;
+        },
+        testBody: () async {
+          final player = PlayerNative();
+          try {
+            await player.open(
+              Media('https://example.test/api/v2/playback/s1/stream/master.m3u8', start: const Duration(seconds: 1810)),
+              timelineDuration: const Duration(minutes: 45),
+              timelineOffset: const Duration(seconds: 1806),
+            );
+            expect(_loadfileArgs(calls).last, contains('demuxer-lavf-o-append=live_start_index=0'));
+
+            calls.clear();
+            await player.open(Media('https://example.test/live.m3u8'), isLive: true);
+            expect(_loadfileArgs(calls).last, isNot(contains('live_start_index')));
+          } finally {
             await player.dispose();
           }
         },

@@ -402,6 +402,8 @@ class PlayerNative extends PlayerBase {
   /// [startLivePlaylistFromBeginning] makes mpv start server-positioned live
   /// HLS at its first available segment instead of FFmpeg's default live position.
   /// It applies only to this live open, preserving later opens' defaults.
+  /// A non-live video open always starts a playlist at its first segment
+  /// (see [_loadReplacement]).
   @override
   Future<int?> open(
     Media media, {
@@ -560,7 +562,17 @@ class PlayerNative extends PlayerBase {
       // A server-positioned live playlist already starts at the requested
       // offset. FFmpeg's default (-3) can skip much of it before decoding.
       // Keep this file-local and append so other demuxer options survive.
-      if (isLive && startLivePlaylistFromBeginning) 'demuxer-lavf-o-append=live_start_index=0',
+      //
+      // A non-live open plays its playlist from the first segment, too. A
+      // VOD server can serve an HLS playlist that is still growing (Silo's
+      // copy remux, or a transcode started at a resume point, is FFmpeg's
+      // live playlist until it finishes), and FFmpeg treats any playlist
+      // without EXT-X-ENDLIST as live: it began three segments before the
+      // end of what was produced, often near the end of the episode, and
+      // the first absolute seek (counted from the first segment) then
+      // jumped back to the start. Finished playlists and other formats
+      // ignore the option. The music core keeps FFmpeg's default.
+      if (isLive ? startLivePlaylistFromBeginning : !audioOnly) 'demuxer-lavf-o-append=live_start_index=0',
       // A live stream arrives at 1x, so mpv's defaults — start at the first
       // decodable frame, leave a stall once 1 s is buffered — ride the live
       // edge with one segment of headroom and stall on every segment that

@@ -497,6 +497,7 @@ class ExoPlayerPlugin :
     headers: Map<String, String>?,
     startPositionMs: Long,
     hasStartPosition: Boolean,
+    isLive: Boolean,
     autoPlay: Boolean,
     externalSubtitles: List<Map<String, Any?>>?,
     onComplete: (Boolean) -> Unit
@@ -504,6 +505,10 @@ class ExoPlayerPlugin :
     val startSeconds = startPositionMs / 1000.0
     val options = mutableListOf<String>()
     options.add(if (hasStartPosition && startPositionMs > 0L) "start=$startSeconds" else "start=none")
+    // A VOD playlist that is still growing (no EXT-X-ENDLIST: Silo's copy
+    // remux) plays from its first segment, not from FFmpeg's live position
+    // three segments before its end. Same rule as PlayerNative's open.
+    if (!isLive) options.add("demuxer-lavf-o-append=live_start_index=0")
     options.add(if (autoPlay) "pause=no" else "pause=yes")
     options.add("sid=no")
     options.add("secondary-sid=no")
@@ -758,6 +763,7 @@ class ExoPlayerPlugin :
         headers = request.headers,
         startPositionMs = request.startPositionMs,
         hasStartPosition = request.hasStartPosition,
+        isLive = request.isLive,
         autoPlay = request.autoPlay,
         externalSubtitles = request.externalSubtitles
       ) { success ->
