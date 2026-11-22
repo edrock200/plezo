@@ -4,6 +4,13 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **Collections on a title's page:** a Silo movie or series page now shows the collections it belongs to, below the box set row. When one collection holds it, you see up to six of that collection's other titles under its name, then the collection itself to open the rest. When several do, an "Also in" row shows each collection. This needs a Silo server new enough to offer it; on older servers nothing changes. Collections of libraries Plezilo does not show (such as e-books) stay hidden, as on Home. *(From Silo's own apps.)*
+- **Play Next follows Silo's "Show Next Up" setting:** on a Silo episode, the Play Next card now appears the number of seconds before the end that you chose in Silo's Show Next Up setting (30 seconds unless you changed it), or only at the very end if you picked "At end". When it appears early, its countdown follows the time left in the episode, so the next episode starts when this one ends, not in the middle of the last scene. Skip Credits works as before. Plex and Jellyfin are unchanged. *(From Silo's own apps; please test.)*
+
+## silo-preview-2.58.0
+
+Released November 22, 2026. Android and Windows.
+
 - **Silo episodes no longer flash their ending before playing:** starting a Silo episode or movie that your server repackages on the fly could show a few seconds from near the end, then jump back to the start (or to where you left off). The server's video is still being prepared at that point, and Plezilo's player treated it like a live broadcast and joined it at its newest part. It now always plays such a video from its first part, so it opens where it should, and seeking within it lands on the right place. Plex and Jellyfin are unchanged. *(please test)*
 
 ## silo-preview-2.57.0
