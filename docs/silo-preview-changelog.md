@@ -4,6 +4,12 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **Silo episodes no longer flash their ending before playing:** starting a Silo episode or movie that your server repackages on the fly could show a few seconds from near the end, then jump back to the start (or to where you left off). The server's video is still being prepared at that point, and Plezilo's player treated it like a live broadcast and joined it at its newest part. It now always plays such a video from its first part, so it opens where it should, and seeking within it lands on the right place. Plex and Jellyfin are unchanged. *(please test)*
+
+## silo-preview-2.57.0
+
+Released November 21, 2026. Android and Windows.
+
 - **Switching profiles from an empty Home on TV:** when a profile's server shows nothing on Home, the remote can now reach the profile menu (and the Retry button leads to it), so you can switch to another profile. *(From Plezy.)*
 
 ## silo-preview-2.56.0
