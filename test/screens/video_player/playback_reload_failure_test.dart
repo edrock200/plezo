@@ -6,12 +6,14 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:openwatchparty/openwatchparty.dart' as owp;
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:plezy/database/app_database.dart';
 import 'package:plezy/i18n/strings.g.dart';
 import 'package:plezy/media/ids.dart';
 import 'package:plezy/media/media_backend.dart';
+import 'package:plezy/media/media_kind.dart';
 import 'package:plezy/media/media_server_client.dart';
 import 'package:plezy/media/play_queue.dart';
 import 'package:plezy/media/server_capabilities.dart';
@@ -672,6 +674,7 @@ void main() {
     _ReloadClient? client,
     bool isOffline = false,
     bool serverOnline = true,
+    MediaKind itemKind = MediaKind.movie,
   }) async {
     client ??= _ReloadClient();
     final multi = testMultiServer(clients: [client], offline: [if (!serverOnline) client]);
@@ -689,7 +692,7 @@ void main() {
       accountPreferences.dispose();
     });
     final key = GlobalKey<VideoPlayerScreenState>();
-    final item = testMediaItem(id: 'movie-prior', serverId: 'srv-1', backend: MediaBackend.jellyfin);
+    final item = testMediaItem(id: 'movie-prior', serverId: 'srv-1', backend: MediaBackend.jellyfin, kind: itemKind);
     await tester.pumpWidget(
       MultiProvider(
         providers: [
@@ -716,6 +719,144 @@ void main() {
     key.currentState!.player = fakePlayer;
     return (key: key, player: fakePlayer);
   }
+
+  group('Show Next Up (Silo Android #994)', () {
+    /// A playing episode with a next one queued; [promptSeconds] stands in
+    /// for the Silo setting the screen reads for a Silo stream (null: any
+    /// other backend, whose prompt opens at the end).
+    Future<({VideoPlayerScreenState state, _ReloadPlayer player})> playingEpisode(
+      WidgetTester tester, {
+      int? promptSeconds,
+    }) async {
+      // The TV layout, as the Play Next tests below use: the prompt draws
+      // without the phone chrome around it.
+      TvDetectionService.debugSetAppleTVOverride(true);
+      addTearDown(() => TvDetectionService.debugSetAppleTVOverride(null));
+      // The controls' clock and finish time format with the app's locale.
+      await initializeDateFormatting('en');
+      final screen = await pumpReloadScreen(tester, itemKind: MediaKind.episode);
+      final state = screen.key.currentState!;
+      final fakePlayer = screen.player;
+      await state.debugWirePlayerStreamsForTesting();
+      fakePlayer.emitPlaybackRestart();
+      await state.debugMarkPlaybackStartedForTesting();
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      final next = testMediaItem(
+        id: 'next',
+        title: 'Next episode',
+        serverId: 'srv-1',
+        backend: MediaBackend.jellyfin,
+        kind: MediaKind.episode,
+      );
+      Provider.of<PlaybackStateProvider>(
+        screen.key.currentContext!,
+        listen: false,
+      ).setPlaybackFromLocalQueue(LocalPlayQueue(items: [state.widget.metadata, next], currentIndex: 0));
+      state.debugCommitAdjacentEpisodesForTesting(
+        AdjacentEpisodes(
+          next: next,
+          nextStatus: QueueNavigationStatus.found,
+          previousStatus: QueueNavigationStatus.boundary,
+        ),
+      );
+      state.debugSiloNextUpPromptSecondsForTesting = promptSeconds;
+      return (state: state, player: fakePlayer);
+    }
+
+    Future<void> playTo(WidgetTester tester, _ReloadPlayer player, Duration left) async {
+      player.emitPosition(player.state.duration - left);
+      await tester.pump();
+      await tester.pump();
+    }
+
+    testWidgets('crossing the point opens Play Next, counts the time left and advances at the end', (tester) async {
+      await withMockPlayerChannels(
+        methodChannelName: 'com.plezy/mpv_player',
+        eventChannelName: 'com.plezy/mpv_player/events',
+        testBody: () async {
+          final (:state, :player) = await playingEpisode(tester, promptSeconds: 30);
+          await playTo(tester, player, const Duration(seconds: 32));
+          expect(state.debugPlayNextPromptVisibleForTesting, isFalse);
+          await playTo(tester, player, const Duration(seconds: 30));
+          await playTo(tester, player, const Duration(milliseconds: 29500));
+          await pumpUntil(tester, () => state.debugPlayNextPromptVisibleForTesting);
+          expect(state.debugAutoPlayCountdownForTesting, 30);
+
+          // The countdown follows the playback time left, not the wall clock.
+          await tester.pump(const Duration(seconds: 5));
+          expect(state.debugAutoPlayCountdownForTesting, 30);
+          await playTo(tester, player, const Duration(seconds: 12));
+          expect(state.debugAutoPlayCountdownForTesting, 12);
+          expect(player.openCalls, 0, reason: 'the episode plays to its end');
+
+          // The stream ends: the next episode starts.
+          player.setPosition(player.state.duration);
+          player.setCompleted(true);
+          state.debugCompleteVideoForTesting();
+          for (var i = 0; i < 100 && player.openCalls == 0; i++) {
+            await tester.pump(const Duration(milliseconds: 50));
+          }
+          expect(player.openCalls, 1);
+        },
+      );
+    });
+
+    testWidgets('a seek past the point, "At end" and other backends wait for the end', (tester) async {
+      await withMockPlayerChannels(
+        methodChannelName: 'com.plezy/mpv_player',
+        eventChannelName: 'com.plezy/mpv_player/events',
+        testBody: () async {
+          final (:state, :player) = await playingEpisode(tester, promptSeconds: 30);
+          await playTo(tester, player, const Duration(minutes: 5));
+          await playTo(tester, player, const Duration(seconds: 20));
+          await tester.pump(const Duration(milliseconds: 100));
+          expect(state.debugPlayNextPromptVisibleForTesting, isFalse, reason: 'a seek is not playback');
+
+          state.debugSiloNextUpPromptSecondsForTesting = 0;
+          await playTo(tester, player, const Duration(minutes: 1));
+          await playTo(tester, player, const Duration(seconds: 59));
+          await playTo(tester, player, const Duration(seconds: 1));
+          expect(state.debugPlayNextPromptVisibleForTesting, isFalse, reason: 'At end');
+
+          state.debugSiloNextUpPromptSecondsForTesting = null;
+          await playTo(tester, player, const Duration(seconds: 31));
+          await playTo(tester, player, const Duration(seconds: 29));
+          await tester.pump(const Duration(milliseconds: 100));
+          expect(state.debugPlayNextPromptVisibleForTesting, isFalse, reason: 'not a Silo stream');
+        },
+      );
+    });
+
+    testWidgets('dismissing the early prompt keeps playing; the end opens it again', (tester) async {
+      await withMockPlayerChannels(
+        methodChannelName: 'com.plezy/mpv_player',
+        eventChannelName: 'com.plezy/mpv_player/events',
+        testBody: () async {
+          final (:state, :player) = await playingEpisode(tester, promptSeconds: 30);
+          await playTo(tester, player, const Duration(seconds: 31));
+          await playTo(tester, player, const Duration(seconds: 29));
+          await pumpUntil(tester, () => state.debugPlayNextPromptVisibleForTesting);
+          state.debugCancelAutoPlayForTesting();
+          await tester.pump();
+          expect(state.debugPlayNextPromptVisibleForTesting, isFalse);
+
+          // Playing across the point again does not reopen it.
+          await playTo(tester, player, const Duration(seconds: 31));
+          await playTo(tester, player, const Duration(seconds: 29));
+          await tester.pump(const Duration(milliseconds: 100));
+          expect(state.debugPlayNextPromptVisibleForTesting, isFalse);
+
+          player.setPosition(player.state.duration - const Duration(seconds: 1));
+          player.emitPlaying(false);
+          player.setCompleted(true);
+          state.debugCompleteVideoForTesting();
+          await pumpUntil(tester, () => state.debugPlayNextPromptVisibleForTesting);
+          expect(player.openCalls, 0);
+        },
+      );
+    });
+  });
 
   group('TV background suspend', () {
     testWidgets('a suspend under the Play Next prompt restores the prompt and its countdown', (tester) async {

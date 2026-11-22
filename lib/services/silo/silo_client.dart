@@ -73,6 +73,7 @@ import 'silo_letter_index.dart';
 import 'silo_series_track_choices.dart';
 import 'silo_requests.dart';
 import 'silo_memberships.dart';
+import 'silo_next_up_prompt.dart';
 import 'silo_personal_lists.dart';
 import 'silo_sort_options.dart';
 import 'silo_subtitles.dart';
@@ -2116,6 +2117,42 @@ class SiloClient
     // apps; the collections holding the title sit between them (Silo Android
     // #1007, as on the web).
     return [?boxSet, ?collections, ?similar];
+  }
+
+  // ---------------------------------------------------------------------------
+  // Show Next Up (Silo Android #994)
+  // ---------------------------------------------------------------------------
+
+  ({int seconds, DateTime readAt})? _nextUpPromptSeconds;
+  Future<int>? _nextUpPromptInFlight;
+
+  /// How many seconds before the end of an episode its Play Next prompt
+  /// opens: the profile's Show Next Up setting (`playback.next_up_prompt_seconds`,
+  /// 0 = at the end). Read once per 10 minutes, one read in flight; a failed
+  /// read answers the last value, else Silo's default of 30.
+  Future<int> nextUpPromptSeconds() {
+    final known = _nextUpPromptSeconds;
+    if (known != null && DateTime.now().difference(known.readAt) < _searchCapabilitiesFreshness) {
+      return Future.value(known.seconds);
+    }
+    return _nextUpPromptInFlight ??= () async {
+      try {
+        final body = await _readOptionalJson(
+          '/api/v2/settings/values/effective',
+          query: {
+            'keys': const [SiloNextUpPrompt.settingKey],
+          },
+        );
+        final seconds = SiloNextUpPrompt.secondsFromEffective(body) ?? SiloNextUpPrompt.defaultSeconds;
+        _nextUpPromptSeconds = (seconds: seconds, readAt: DateTime.now());
+        return seconds;
+      } catch (e) {
+        appLogger.d('SiloClient: Show Next Up setting unavailable', error: e.runtimeType);
+        return known?.seconds ?? SiloNextUpPrompt.defaultSeconds;
+      } finally {
+        _nextUpPromptInFlight = null;
+      }
+    }();
   }
 
   // ---------------------------------------------------------------------------

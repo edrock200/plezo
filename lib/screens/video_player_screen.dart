@@ -31,6 +31,7 @@ import '../services/live_seek_accumulator.dart';
 import '../services/plex_client.dart';
 import '../services/jellyfin_client.dart';
 import '../services/silo/silo_client.dart';
+import '../services/silo/silo_next_up_prompt.dart';
 import '../media/account_preferences.dart';
 import '../media/account_ref.dart';
 import '../utils/session_identifier.dart';
@@ -1152,6 +1153,7 @@ class VideoPlayerScreenState extends State<VideoPlayerScreen>
     _selectedQualityPreset = session.qualityPreset;
     _selectedAudioStreamId = session.audioStreamId;
     _bindSiloStreamAuth(session.context);
+    _loadSiloNextUpPrompt(session.context);
     // Any freshly opened stream ends a dead-stream park (#1520).
     _eofRecovery.clearPark();
     // Every successful open passes through here (never live TV), making it
@@ -1160,6 +1162,27 @@ class VideoPlayerScreenState extends State<VideoPlayerScreen>
     if (!session.isOffline) {
       unawaited(LocalPlaybackHistory.recordPlayback(session.metadata));
     }
+  }
+
+  /// Seconds before the end at which a Silo episode's Play Next prompt opens
+  /// (Silo's Show Next Up setting, Silo Android #994); null while unknown,
+  /// and for every other backend, whose prompt opens at the end.
+  int? _siloNextUpPromptSeconds;
+  int _siloNextUpPromptGeneration = 0;
+
+  /// Reads the Show Next Up setting for a freshly opened Silo stream. Plex,
+  /// Jellyfin and Emby keep the prompt at the end of the stream.
+  void _loadSiloNextUpPrompt(PlaybackContext context) {
+    final generation = ++_siloNextUpPromptGeneration;
+    _siloNextUpPromptSeconds = null;
+    _episode.earlyPlayNextOffered = false;
+    final client = context.reportingClient;
+    if (client is! SiloClient || widget.isLive) return;
+    unawaited(
+      client.nextUpPromptSeconds().then((seconds) {
+        if (mounted && generation == _siloNextUpPromptGeneration) _siloNextUpPromptSeconds = seconds;
+      }),
+    );
   }
 
   /// Releases the Silo stream-auth hold of the previous session.
@@ -1406,6 +1429,12 @@ class VideoPlayerScreenState extends State<VideoPlayerScreen>
 
   @visibleForTesting
   bool get debugPlayNextPromptVisibleForTesting => _episode.showPlayNextDialog;
+
+  @visibleForTesting
+  void debugCancelAutoPlayForTesting() => _cancelAutoPlay();
+
+  @visibleForTesting
+  set debugSiloNextUpPromptSecondsForTesting(int? seconds) => _siloNextUpPromptSeconds = seconds;
 
   @visibleForTesting
   int get debugAutoPlayCountdownForTesting => _episode.autoPlayCountdown.value;

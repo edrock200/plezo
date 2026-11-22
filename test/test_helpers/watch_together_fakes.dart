@@ -55,6 +55,14 @@ class FakeSyncPlayer implements Player {
   final _fileStartedController = StreamController<void>.broadcast();
   final _durationController = StreamController<Duration>.broadcast();
   final _errorController = StreamController<PlayerError>.broadcast();
+  final _positionController = StreamController<Duration>.broadcast();
+
+  /// Move the playhead and publish the tick on the position stream, as a
+  /// playing player does ([setPosition] moves it silently).
+  void emitPosition(Duration position) {
+    _state = _state.copyWith(position: position);
+    _positionController.add(position);
+  }
 
   @override
   PlayerState get state => _state;
@@ -67,7 +75,7 @@ class FakeSyncPlayer implements Player {
     playing: _playingController.stream,
     completed: const Stream<bool>.empty(),
     buffering: _bufferingController.stream,
-    position: const Stream<Duration>.empty(),
+    position: _positionController.stream,
     duration: _durationController.stream,
     seekable: const Stream<bool>.empty(),
     buffer: const Stream<Duration>.empty(),
@@ -243,6 +251,7 @@ class FakeSyncPlayer implements Player {
     await _fileStartedController.close();
     await _durationController.close();
     await _errorController.close();
+    await _positionController.close();
   }
 
   @override

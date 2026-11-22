@@ -36,6 +36,16 @@ class EpisodeSessionState {
 
   bool showPlayNextDialog = false;
 
+  /// The prompt on screen opened before the end of a Silo episode (Show Next
+  /// Up, Silo Android #994): its countdown follows the playback time left and
+  /// it advances when the stream ends, not on a wall-clock timer.
+  bool earlyPlayNext = false;
+
+  /// An early prompt was already offered for the open stream, so playing
+  /// across the point again after a dismissal does not reopen it (the end
+  /// still does).
+  bool earlyPlayNextOffered = false;
+
   Timer? autoPlayTimer;
   final ValueNotifier<int> autoPlayCountdown = ValueNotifier<int>(5);
 

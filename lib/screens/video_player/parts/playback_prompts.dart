@@ -91,6 +91,25 @@ extension _VideoPlayerPlaybackPromptMethods on VideoPlayerScreenState {
       }
     }
 
+    // A Silo prompt that opened before the end (Show Next Up) advances when
+    // the stream ends, as Silo's apps do, or waits with auto-play off.
+    if (navigationAction == CompletionNavigationAction.presentNext &&
+        _episode.showPlayNextDialog &&
+        _episode.earlyPlayNext &&
+        !_episode.completionLatch.triggered) {
+      _episode.completionLatch.latch();
+      _episode.earlyPlayNext = false;
+      final serverStopped = _progressTracker?.stoppedByServer ?? false;
+      if (_episode.autoPlayCountdown.value >= 0 && !serverStopped) {
+        _logVideoCompleted('action=presentNext early autoplay');
+        unawaited(_playNext());
+        return;
+      }
+      _logVideoCompleted('action=presentNext early prompt');
+      _episode.autoPlayCountdown.value = -1;
+      return;
+    }
+
     if (navigationAction == CompletionNavigationAction.presentNext &&
         !_episode.showPlayNextDialog &&
         !_showStillWatchingPrompt &&
@@ -129,6 +148,7 @@ extension _VideoPlayerPlaybackPromptMethods on VideoPlayerScreenState {
       _logVideoCompleted(serverStopped ? 'action=presentNext prompt serverStopped' : 'action=presentNext prompt');
       _setPlayerState(() {
         _episode.showPlayNextDialog = true;
+        _episode.earlyPlayNext = false;
         _episode.autoPlayCountdown.value = autoPlayEnabled ? countdownSeconds : -1;
       });
 
@@ -150,6 +170,78 @@ extension _VideoPlayerPlaybackPromptMethods on VideoPlayerScreenState {
       unawaited(_handleBackButton());
     } else {
       _logVideoCompleted('action=${navigationAction.name} latched');
+    }
+  }
+
+  /// A position tick of the playing stream: opens a Silo episode's Play Next
+  /// prompt when playback crosses the Show Next Up point (Silo Android #994),
+  /// and keeps an early prompt's countdown on the playback time left.
+  void _onSiloNextUpPosition({required Duration previous, required Duration position, required Duration duration}) {
+    if (_episode.earlyPlayNext && _episode.showPlayNextDialog) {
+      if (_episode.autoPlayCountdown.value >= 0) {
+        _episode.autoPlayCountdown.value = SiloNextUpPrompt.countdownSeconds(position: position, duration: duration);
+      }
+      return;
+    }
+    final seconds = _siloNextUpPromptSeconds;
+    if (seconds == null || widget.isLive || _episode.earlyPlayNextOffered) return;
+    if (!SiloNextUpPrompt.crossesPromptPoint(
+      previous: previous,
+      position: position,
+      duration: duration,
+      promptSeconds: seconds,
+    )) {
+      return;
+    }
+    unawaited(_presentPlayNextBeforeEnd(seconds));
+  }
+
+  bool get _canPresentPlayNextBeforeEnd =>
+      mounted &&
+      _canNavigateMediaItems() &&
+      // Show Next Up is about the next episode (Silo's apps time it for
+      // episodes only).
+      _currentMetadata.isEpisode &&
+      _episode.next != null &&
+      !_episode.isLoadingNext &&
+      !_episode.showPlayNextDialog &&
+      !_showStillWatchingPrompt &&
+      !_episode.completionLatch.triggered &&
+      _transitionGate.transition == PlaybackTransition.idle &&
+      // PiP advances at the end without a prompt, and an end-of-video sleep
+      // timer stops after this item.
+      !PipService().isPipActive.value &&
+      !SleepTimerService().isEndOfVideoMode;
+
+  /// The Play Next prompt [seconds] before a Silo episode ends. With
+  /// auto-play on, its countdown is the playback time left and the next
+  /// episode starts when the stream ends ([_onVideoCompleted]); with it off
+  /// the prompt waits. Nothing is reported stopped: the episode still plays.
+  Future<void> _presentPlayNextBeforeEnd(int seconds) async {
+    if (!_canPresentPlayNextBeforeEnd) return;
+    final isKeyboardMode = PlatformDetector.isTV() && InputModeTracker.isKeyboardMode(context, listen: false);
+    final settings = await SettingsService.getInstance();
+    if (!_canPresentPlayNextBeforeEnd || _episode.earlyPlayNextOffered) return;
+    final currentPlayer = player;
+    if (currentPlayer == null) return;
+    final serverStopped = _progressTracker?.stoppedByServer ?? false;
+    final autoPlayEnabled = !serverStopped && settings.read(SettingsService.autoPlayNextEpisode);
+    appLogger.i('Silo Show Next Up: playback crossed $seconds s before the end; showing Play Next');
+    _setPlayerState(() {
+      _episode.earlyPlayNextOffered = true;
+      _episode.earlyPlayNext = true;
+      _episode.showPlayNextDialog = true;
+      _episode.autoPlayCountdown.value = autoPlayEnabled
+          ? SiloNextUpPrompt.countdownSeconds(
+              position: currentPlayer.state.position,
+              duration: currentPlayer.state.duration,
+            )
+          : -1;
+    });
+    if (isKeyboardMode) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _playNextConfirmFocusNode.requestFocus();
+      });
     }
   }
 
@@ -249,6 +341,7 @@ extension _VideoPlayerPlaybackPromptMethods on VideoPlayerScreenState {
 
     _setPlayerState(() {
       _episode.showPlayNextDialog = true;
+      _episode.earlyPlayNext = false;
       // Deliberately not [SettingsService.playNextCountdown]: this countdown
       // spaces transient-failure retries (see completion_latch.dart), so a
       // user preference of 0 must not collapse it into a hot retry loop.
@@ -293,6 +386,7 @@ extension _VideoPlayerPlaybackPromptMethods on VideoPlayerScreenState {
     final remaining = countdown == 0 ? 1 : countdown;
     _setPlayerState(() {
       _episode.showPlayNextDialog = true;
+      _episode.earlyPlayNext = false;
       _episode.autoPlayCountdown.value = remaining;
     });
 
@@ -309,7 +403,11 @@ extension _VideoPlayerPlaybackPromptMethods on VideoPlayerScreenState {
     if (_shuttingDown) return;
     _episode.autoPlayTimer?.cancel();
     _unfocusPlayNextPrompt();
-    _progressTracker?.resumeAfterStoppedReport();
+    // A prompt that opened before the end sent no stopped report: the
+    // session is still playing, so there is nothing to resume.
+    final wasEarly = _episode.earlyPlayNext;
+    _episode.earlyPlayNext = false;
+    if (!wasEarly) _progressTracker?.resumeAfterStoppedReport();
     // Keep the latch set while playback is still parked at EOF, so duplicate
     // completed signals cannot re-open this prompt. It is re-armed once playback
     // seeks back clear of the end region (see the position listener) or new media loads.

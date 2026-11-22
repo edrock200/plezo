@@ -284,6 +284,18 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
   `MediaItem.hidingLibraryGlobalKey` (used by every hidden-library filter: `DataAggregationService`, `DiscoverProvider`)
   hides it with that library (2.50.0, the user's request; personal cards stay, an emptied row goes); Plezilo has no Movies/Series-scoped
   library pages, and a library row's personal card already opens in that library (`source=user_collection&library_id=`).
+- **Show Next Up (Silo Android #994):** Plezilo's Play Next prompt opens at the end of the stream for every backend
+  (never at a credits marker; an end-reaching credits range's skip button offers the next episode). For a Silo
+  **episode** only, `VideoPlayerScreenState._loadSiloNextUpPrompt` reads `SiloClient.nextUpPromptSeconds()` (`GET
+  /settings/values/effective?keys=playback.next_up_prompt_seconds`, any `source`, 0 = "At end", default/failure 30, kept
+  10 min) on every committed session, and the position listener (`_onSiloNextUpPosition`) opens the prompt when playback
+  crosses that point (`SiloNextUpPrompt.crossesPromptPoint`: forward steps ≤ 3 s only, so seeks/resumes past it don't).
+  An early prompt (`EpisodeSessionState.earlyPlayNext`) sends no stopped report, its countdown is the playback time left
+  (no wall-clock timer), and the end of the stream advances (auto-play on) or leaves it waiting (off). Dismissing it keeps
+  playing without `resumeAfterStoppedReport`; it is offered once per stream (`earlyPlayNextOffered`) and the end opens the
+  normal prompt again. Not in PiP, under an end-of-video sleep timer, or for live/offline (no client) playback. Plezilo's
+  Auto-play and countdown settings still apply. Tests: `test/services/silo/silo_next_up_prompt_test.dart`, the `Show Next
+  Up` group in `test/screens/video_player/playback_reload_failure_test.dart`.
 - **Collections holding a title (Silo Android #1007, silo-server #4528 `listCatalogItemCollections`):** a movie or
   series page's related hubs are box set → collections → More Like This (`fetchRelatedHubs`). Only when `GET
   /catalog/search/capabilities` says `item_collections: true` (read once per client, kept 10 min, one in flight; a

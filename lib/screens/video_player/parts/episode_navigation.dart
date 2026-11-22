@@ -63,6 +63,7 @@ extension _VideoPlayerEpisodeNavigationMethods on VideoPlayerScreenState {
     _setPlayerState(() {
       _episode.isLoadingNext = true;
       _episode.showPlayNextDialog = false;
+      _episode.earlyPlayNext = false;
     });
 
     final outcome = await _navigateToEpisode(_episode.next!);
@@ -98,6 +99,7 @@ extension _VideoPlayerEpisodeNavigationMethods on VideoPlayerScreenState {
 
     _setPlayerState(() {
       _episode.showPlayNextDialog = false;
+      _episode.earlyPlayNext = false;
       _episode.completionLatch.reset();
     });
 

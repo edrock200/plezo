@@ -135,6 +135,7 @@ extension _VideoPlayerPlaybackServiceMethods on VideoPlayerScreenState {
     await Future.wait<void>(_cancelPlayerStreamSubscriptions(includeMediaControls: false));
     if (!mounted || _shuttingDown || player != currentPlayer) return;
     int? lastObservedPositionMs;
+    Duration? lastPromptPosition;
 
     // Anything that moves the playhead behind the accumulator's back retires
     // its pinned target, so the next skip steps from where the viewer
@@ -153,6 +154,7 @@ extension _VideoPlayerPlaybackServiceMethods on VideoPlayerScreenState {
         // listener would immediately re-fire the Play Next prompt.
         if (!done) {
           lastObservedPositionMs = null;
+          lastPromptPosition = null;
           final durMs = currentPlayer.state.duration.inMilliseconds;
           final posMs = currentPlayer.state.position.inMilliseconds;
           if (durMs <= 0 || posMs < durMs - _episode.completionLatch.rearmWindowMs) {
@@ -285,6 +287,11 @@ extension _VideoPlayerPlaybackServiceMethods on VideoPlayerScreenState {
         _eofRecovery.onPositionAdvanced(position.inMilliseconds);
 
         final duration = activePlayer.state.duration;
+        final previousPromptPosition = lastPromptPosition;
+        lastPromptPosition = position;
+        if (previousPromptPosition != null) {
+          _onSiloNextUpPosition(previous: previousPromptPosition, position: position, duration: duration);
+        }
         _episode.completionLatch.classifyPosition(
           positionMs: position.inMilliseconds,
           durationMs: duration.inMilliseconds,
