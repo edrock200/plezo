@@ -1,5 +1,6 @@
 {
   "collections.posterCard.byOwner": "Készítette: {owner}",
+  "detail.alsoIn": "Ezekben is szerepel",
   "home.section.becauseYouEnjoy": "Mert szereti: {genres}",
   "home.section.becauseYouWatched": "Mert megnézte",
   "home.section.becauseYouWatchedTitle": "Mert megnézte: {title}",

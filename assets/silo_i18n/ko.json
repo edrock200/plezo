@@ -1,5 +1,6 @@
 {
   "collections.posterCard.byOwner": "만든 사람: {owner}",
+  "detail.alsoIn": "포함된 컬렉션",
   "home.section.becauseYouEnjoy": "{genres} 장르를 즐겨 보신다면",
   "home.section.becauseYouWatched": "시청한 작품 기반 추천",
   "home.section.becauseYouWatchedTitle": "{title} 시청 기반 추천",

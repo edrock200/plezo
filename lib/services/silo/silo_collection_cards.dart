@@ -75,6 +75,11 @@ abstract final class SiloCollectionCards {
       SiloCatalogStrings.format('collections.posterCard.byOwner', {'owner': name}) ??
       t.siloCollections.byOwner(owner: name);
 
+  /// The heading of a title page's row of the collections holding it (Silo
+  /// Android #1007, catalog key `detail.alsoIn`), then Silo's English, then
+  /// Plezilo's.
+  static String get alsoInTitle => SiloCatalogStrings.format('detail.alsoIn', const {}) ?? t.siloCollections.alsoIn;
+
   /// The caption under a row-of-collections card, or null for any other
   /// item. The count is exact (0 included). A personal collection another
   /// profile shared reads "by Name": beside the count on phones, tablets and

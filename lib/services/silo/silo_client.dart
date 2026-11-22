@@ -2107,9 +2107,130 @@ class SiloClient
 
   @override
   Future<List<MediaHub>> fetchRelatedHubs(String id, {int count = 10}) async {
-    final (boxSet, similar) = await (_movieBoxSetHub(id), _similarHub(id, count)).wait;
-    // A movie page's box set row sits above More Like This, as in Silo's apps.
-    return [?boxSet, ?similar];
+    final (boxSet, collections, similar) = await (
+      _movieBoxSetHub(id),
+      _itemCollectionsHub(id),
+      _similarHub(id, count),
+    ).wait;
+    // A movie page's box set row sits above More Like This, as in Silo's
+    // apps; the collections holding the title sit between them (Silo Android
+    // #1007, as on the web).
+    return [?boxSet, ?collections, ?similar];
+  }
+
+  // ---------------------------------------------------------------------------
+  // The collections holding a title (Silo Android #1007, silo-server #4528)
+  // ---------------------------------------------------------------------------
+
+  /// Titles a single collection's preview shows, as Silo's apps and web do.
+  static const itemCollectionPreviewLimit = 6;
+
+  /// How long a search capabilities answer is used before it is read again.
+  static const _searchCapabilitiesFreshness = Duration(minutes: 10);
+
+  ({Map<String, dynamic> data, DateTime readAt})? _searchCapabilities;
+  Future<Map<String, dynamic>>? _searchCapabilitiesInFlight;
+
+  /// `GET /catalog/search/capabilities` for this connection's profile: one
+  /// read in flight, an answer kept for 10 minutes, a failure not kept.
+  Future<Map<String, dynamic>> _readSearchCapabilities() {
+    final known = _searchCapabilities;
+    if (known != null && DateTime.now().difference(known.readAt) < _searchCapabilitiesFreshness) {
+      return Future.value(known.data);
+    }
+    return _searchCapabilitiesInFlight ??= () async {
+      try {
+        final data = await _api.getJson('/api/v2/catalog/search/capabilities').timeout(_capabilityReadTimeout * 2);
+        _searchCapabilities = (data: data, readAt: DateTime.now());
+        return data;
+      } finally {
+        _searchCapabilitiesInFlight = null;
+      }
+    }();
+  }
+
+  /// The last collections row each page showed, so a failed refresh keeps it
+  /// on screen (as Silo's apps do) while a failed first read shows none.
+  final Map<String, MediaHub?> _itemCollectionRows = {};
+
+  /// The collections row of a movie or series page (Silo Android #1007):
+  /// when one collection holds the title, up to six of its other titles under
+  /// its name and then its card (Silo's "Explore all"); when several do, an
+  /// "Also in" row of their cards. Only a movie or series asks, and only on a
+  /// server whose search capabilities advertise `item_collections`, so older
+  /// servers never see `GET /catalog/items/{id}/collections`. No collection
+  /// (or none Plezilo shows) means no row; a failed read keeps the row this
+  /// page showed last, else shows none.
+  Future<MediaHub?> _itemCollectionsHub(String id) async {
+    try {
+      final detail = await _recentItemDetail(id);
+      if (detail == null) return null;
+      final kind = SiloMappers.itemKind(detail['type']?.toString());
+      if (kind != MediaKind.movie && kind != MediaKind.show) return null;
+      final capabilities = await _readSearchCapabilities();
+      if (capabilities['item_collections'] != true) return null;
+      final libraryId = detail['library_id']?.toString();
+      final data = await _api.getJson(
+        '/api/v2/catalog/items/${_seg(id)}/collections',
+        query: {'library_id': ?libraryId},
+      );
+      final hub = await _itemCollectionsRow(id, data);
+      _itemCollectionRows[id] = hub;
+      return hub;
+    } catch (e) {
+      appLogger.d('SiloClient: collections holding the title unavailable', error: e.runtimeType);
+      return _itemCollectionRows[id];
+    }
+  }
+
+  /// The row for a `listCatalogItemCollections` answer (`items`: the
+  /// collection cards, server ones first; `preview_items`: other titles of
+  /// the collection, filled only when one holds the title). Cards decode on
+  /// their own and server collections show only from libraries Plezilo lists,
+  /// as on Home.
+  Future<MediaHub?> _itemCollectionsRow(String id, Map<String, dynamic> data) async {
+    final cards = data['items'];
+    if (cards is! List) throw const FormatException('Missing collection items.');
+    final section = <String, dynamic>{
+      'section_type': 'collection_posters',
+      'title': SiloCollectionCards.alsoInTitle,
+      'collections': cards,
+    };
+    final context = await _collectionRowContext([section], home: true);
+    final alsoIn = _collectionRowHub(
+      id: 'item-collections:$id',
+      section: section,
+      shownLibraries: context.shownLibraries,
+      profileNames: context.profileNames,
+    );
+    if (alsoIn.items.isEmpty) return null;
+    final only = alsoIn.items.length == 1 ? alsoIn.items.single : null;
+    final previewRows = data['preview_items'];
+    final preview = only == null || previewRows is! List
+        ? const <MediaItem>[]
+        : SiloMappers.items(previewRows, _ctx).where((item) => item.id != id).take(itemCollectionPreviewLimit).toList();
+    if (only == null || preview.isEmpty) {
+      return MediaHub(
+        id: alsoIn.id,
+        identifier: 'item_collections',
+        title: alsoIn.title,
+        type: MediaKind.collection.id,
+        items: alsoIn.items,
+        size: alsoIn.items.length,
+        serverId: serverId,
+        serverName: serverName,
+      );
+    }
+    return MediaHub(
+      id: 'item-collection:$id',
+      identifier: 'item_collection_preview',
+      title: only.title ?? '',
+      type: _hubType(preview),
+      items: [...preview, only],
+      size: preview.length + 1,
+      serverId: serverId,
+      serverName: serverName,
+    );
   }
 
   Future<MediaHub?> _similarHub(String id, int count) async {

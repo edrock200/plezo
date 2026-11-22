@@ -7266,6 +7266,9 @@ class Translations$siloCollections$en {
 
 	/// en: 'by ${owner}'
 	String byOwner({required Object owner}) => 'by ${owner}';
+
+	/// en: 'Also in'
+	String get alsoIn => 'Also in';
 }
 
 // Path: siloMemberships
@@ -12159,6 +12162,7 @@ extension on Translations {
 			'siloForYou.watchlistEmptyShows' => 'No shows on your watchlist',
 			'siloForYou.emptyHint' => 'Titles you save on this Silo profile show up here.',
 			'siloCollections.byOwner' => ({required Object owner}) => 'by ${owner}',
+			'siloCollections.alsoIn' => 'Also in',
 			'siloMemberships.addToFavorites' => 'Add to Favorites',
 			'siloMemberships.removeFromFavorites' => 'Remove from Favorites',
 			'siloMemberships.addedToFavorites' => 'Added to Favorites',

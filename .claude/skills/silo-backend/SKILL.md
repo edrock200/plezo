@@ -284,6 +284,18 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
   `MediaItem.hidingLibraryGlobalKey` (used by every hidden-library filter: `DataAggregationService`, `DiscoverProvider`)
   hides it with that library (2.50.0, the user's request; personal cards stay, an emptied row goes); Plezilo has no Movies/Series-scoped
   library pages, and a library row's personal card already opens in that library (`source=user_collection&library_id=`).
+- **Collections holding a title (Silo Android #1007, silo-server #4528 `listCatalogItemCollections`):** a movie or
+  series page's related hubs are box set → collections → More Like This (`fetchRelatedHubs`). Only when `GET
+  /catalog/search/capabilities` says `item_collections: true` (read once per client, kept 10 min, one in flight; a
+  failure is not kept) does `_itemCollectionsHub` read `GET /catalog/items/{id}/collections[?library_id=]` (no other
+  params). Answer `{items: [SectionCollectionCard], preview_items: [card]}`: cards decode on their own and server ones
+  show only from libraries Plezilo lists, through the Home row-of-collections path (`_collectionRowContext(home: true)`,
+  `_collectionRowHub`: `_anyLibrary` ids, exact counts, "by Name"). One card with preview titles = a hub titled with the
+  collection's name (`item_collection_preview`): up to 6 titles (not the page's own) then the collection card (Silo's
+  Explore all, like the box set row); otherwise an "Also in" hub of the cards (`item_collections`; heading
+  `SiloCollectionCards.alsoInTitle` = catalog key `detail.alsoIn`, then `t.siloCollections.alsoIn`). No card = no row; a
+  failed read returns the row this page showed last (`_itemCollectionRows`), else none. Tests:
+  `test/services/silo/silo_item_collections_test.dart`.
 - **Recommendations (Silo's "For You", the user's request 2026-11-15):** Silo's apps have a For You page built from
   `GET /api/v2/recommendations/discover` (`RecommendationsViewModel`, phone `RecommendationsScreen`, TV
   `TvRecommendationsScreen`; Siku's `ForYouPage.brs`). Answer `{items: [{type, title, title_key?, title_args?, kind?, key?,

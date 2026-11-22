@@ -51,6 +51,7 @@ FOLDERS = {"en": "en_US", "pt": "pt_BR"}
 # catalogs lack them.
 ANDROID_KEYS = {
     "collections_posterCard_byOwner": ("collections.posterCard.byOwner", ("owner",)),
+    "detail_alsoIn": ("detail.alsoIn", ()),
 }
 
 # Plezilo locale (lib/i18n file name) -> Android resource folder, where it is
@@ -267,7 +268,12 @@ def notice_text(
     intro = textwrap.fill(
         'The translated titles of the rows a Silo server words itself (Home sections and recommendation '
         'rows, catalog keys "home.section.*")'
-        + (f" and the line naming the profile that shared a collection (catalog key {extra})" if android_source else "")
+        + (
+            " and the line naming the profile that shared a collection and the heading of a title page's "
+            f'"Also in" row (catalog keys {extra})'
+            if android_source
+            else ""
+        )
         + " in this folder are taken from Silo's translation catalogs:",
         width=78,
     )

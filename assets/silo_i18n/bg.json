@@ -1,5 +1,6 @@
 {
   "collections.posterCard.byOwner": "от {owner}",
+  "detail.alsoIn": "Също в",
   "home.section.becauseYouEnjoy": "Защото харесвате {genres}",
   "home.section.becauseYouWatched": "Защото гледахте",
   "home.section.becauseYouWatchedTitle": "Защото гледахте {title}",

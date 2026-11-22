@@ -1,5 +1,6 @@
 {
   "collections.posterCard.byOwner": "由 {owner} 建立",
+  "detail.alsoIn": "也收錄於",
   "home.section.becauseYouEnjoy": "因為你喜歡 {genres}",
   "home.section.becauseYouWatched": "因為你看過",
   "home.section.becauseYouWatchedTitle": "因為你看過 {title}",

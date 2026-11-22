@@ -1,5 +1,6 @@
 {
   "collections.posterCard.byOwner": "par {owner}",
+  "detail.alsoIn": "Également dans",
   "home.section.becauseYouEnjoy": "Parce que vous aimez {genres}",
   "home.section.becauseYouWatched": "Parce que vous avez regardé",
   "home.section.becauseYouWatchedTitle": "Parce que vous avez regardé {title}",

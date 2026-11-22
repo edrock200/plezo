@@ -1,5 +1,6 @@
 {
   "collections.posterCard.byOwner": "作成者：{owner}",
+  "detail.alsoIn": "収録コレクション",
   "home.section.becauseYouEnjoy": "{genres}が好きなあなたに",
   "home.section.becauseYouWatched": "視聴履歴に基づくおすすめ",
   "home.section.becauseYouWatchedTitle": "{title}を視聴したあなたに",
