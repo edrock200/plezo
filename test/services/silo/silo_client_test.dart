@@ -893,6 +893,12 @@ void main() {
       // Direct play: only the external file is a sidecar; embedded ones are in the file.
       expect(result.subtitleSidecars, hasLength(1));
       expect(result.subtitleSidecars.single.track.uri, contains('/subtitles/0.vtt?file_id=43&token=acc-1'));
+      // Silo Android #1013: the embedded row the server delivers as a sidecar
+      // is listed once, as the file's own track (no sidecar stands for it).
+      final subs = result.mediaInfo!.subtitleTracks;
+      expect(subs.map((t) => t.index), [0, 1]);
+      expect(subs.singleWhere((t) => t.index == 1).usesExternalDelivery, isFalse);
+      expect(result.subtitleSidecars.map((s) => s.sourceStreamId), [subs.singleWhere((t) => t.index == 0).id]);
       expect(c.streamHeaders['Authorization'], 'Bearer acc-1');
 
       await c.reportPlaybackStarted(itemId: 'movie:m1', position: Duration.zero, playSessionId: 'sess-1');

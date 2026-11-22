@@ -20,6 +20,17 @@ void main() {
     expect(hls['validated_claims'], isEmpty);
   });
 
+  test('an HLS transcode keeps ASS styling and fonts, so the server never burns ASS in (Silo Android #1010)', () {
+    final context = SiloPlaybackCaps.playbackContext(appVersion: '1.0', formFactor: 'tv');
+    final deliveries = context['deliveries']! as Map<String, Object?>;
+    for (final route in ['original_http', 'hls']) {
+      final subtitles = (deliveries[route]! as Map<String, Object?>)['subtitles']! as Map<String, Object?>;
+      expect(subtitles, containsPair('sidecar_text', true), reason: route);
+      expect(subtitles, containsPair('ass_styling', true), reason: route);
+      expect(subtitles, containsPair('font_attachments', true), reason: route);
+    }
+  });
+
   test('HEVC is declared for decode and hardware when the device accepts it', () {
     final caps = SiloPlaybackCaps.clientCapabilities();
     expect(caps['video_evidence'], 'declared');
