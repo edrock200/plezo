@@ -85,5 +85,6 @@
   "home.section.topRatedMovies": "Най-високо оценени филми",
   "home.section.topRatedTv": "Най-високо оценени сериали",
   "home.section.trendingOnServer": "Набиращи популярност на сървъра",
-  "home.section.trendingThisWeek": "Набиращи популярност тази седмица"
+  "home.section.trendingThisWeek": "Набиращи популярност тази седмица",
+  "player.notice.pausedTimeout": "Възпроизвеждането спря, защото беше на пауза твърде дълго."
 }

@@ -85,5 +85,6 @@
   "home.section.topRatedMovies": "최고 평점 영화",
   "home.section.topRatedTv": "최고 평점 시리즈",
   "home.section.trendingOnServer": "서버 인기",
-  "home.section.trendingThisWeek": "이번 주 인기"
+  "home.section.trendingThisWeek": "이번 주 인기",
+  "player.notice.pausedTimeout": "너무 오래 일시정지되어 재생이 중지됐어요."
 }

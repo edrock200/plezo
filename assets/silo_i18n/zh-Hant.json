@@ -85,5 +85,6 @@
   "home.section.topRatedMovies": "最高評分電影",
   "home.section.topRatedTv": "最高評分影集",
   "home.section.trendingOnServer": "伺服器熱門內容",
-  "home.section.trendingThisWeek": "本週熱門"
+  "home.section.trendingThisWeek": "本週熱門",
+  "player.notice.pausedTimeout": "播放因暫停過久而停止。"
 }

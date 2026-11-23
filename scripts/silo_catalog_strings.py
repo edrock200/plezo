@@ -6,7 +6,8 @@ hubs) and sends `title_key` (`home.section.*`) and `title_args` next to the
 English `title`. Silo's apps translate those keys from a shared catalog that
 ships in AGPL-3.0 projects. Plezilo bundles only the `home.section.*` entries
 and a few strings Silo's Android app words for the same server data
-(`ANDROID_KEYS`, e.g. the "by {owner}" line of a shared collection's card), one
+(`ANDROID_KEYS`, e.g. the "by {owner}" line of a shared collection's card, or
+the notice that the server stopped a session left paused too long), one
 small JSON file per Plezilo locale, in `assets/silo_i18n/`, and resolves them in
 `lib/services/silo/silo_catalog_strings.dart`.
 
@@ -52,6 +53,7 @@ FOLDERS = {"en": "en_US", "pt": "pt_BR"}
 ANDROID_KEYS = {
     "collections_posterCard_byOwner": ("collections.posterCard.byOwner", ("owner",)),
     "detail_alsoIn": ("detail.alsoIn", ()),
+    "player_notice_pausedTimeout": ("player.notice.pausedTimeout", ()),
 }
 
 # Plezilo locale (lib/i18n file name) -> Android resource folder, where it is
@@ -269,8 +271,9 @@ def notice_text(
         'The translated titles of the rows a Silo server words itself (Home sections and recommendation '
         'rows, catalog keys "home.section.*")'
         + (
-            " and the line naming the profile that shared a collection and the heading of a title page's "
-            f'"Also in" row (catalog keys {extra})'
+            ", the line naming the profile that shared a collection, the heading of a title page's "
+            '"Also in" row and the notice that the server stopped a video left paused too long '
+            f"(catalog keys {extra})"
             if android_source
             else ""
         )

@@ -85,5 +85,6 @@
   "home.section.topRatedMovies": "Legjobbra értékelt filmek",
   "home.section.topRatedTv": "Legjobbra értékelt sorozatok",
   "home.section.trendingOnServer": "Felkapott a szerveren",
-  "home.section.trendingThisWeek": "Felkapott ezen a héten"
+  "home.section.trendingThisWeek": "Felkapott ezen a héten",
+  "player.notice.pausedTimeout": "A lejátszás leállt, mert túl sokáig volt szüneteltetve."
 }

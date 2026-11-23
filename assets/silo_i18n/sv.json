@@ -85,5 +85,6 @@
   "home.section.topRatedMovies": "Filmer med högst betyg",
   "home.section.topRatedTv": "Serier med högst betyg",
   "home.section.trendingOnServer": "Trendar på servern",
-  "home.section.trendingThisWeek": "Trendar den här veckan"
+  "home.section.trendingThisWeek": "Trendar den här veckan",
+  "player.notice.pausedTimeout": "Uppspelningen stoppades eftersom den var pausad för länge."
 }

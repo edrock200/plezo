@@ -85,5 +85,6 @@
   "home.section.topRatedMovies": "Best vurderte filmer",
   "home.section.topRatedTv": "Best vurderte serier",
   "home.section.trendingOnServer": "Populært på serveren",
-  "home.section.trendingThisWeek": "Populært denne uken"
+  "home.section.trendingThisWeek": "Populært denne uken",
+  "player.notice.pausedTimeout": "Avspillingen stoppet fordi den var satt på pause for lenge."
 }

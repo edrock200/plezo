@@ -85,5 +85,6 @@
   "home.section.topRatedMovies": "高分电影",
   "home.section.topRatedTv": "高分剧集",
   "home.section.trendingOnServer": "服务器上的热门内容",
-  "home.section.trendingThisWeek": "本周热门"
+  "home.section.trendingThisWeek": "本周热门",
+  "player.notice.pausedTimeout": "暂停时间过长，播放已停止。"
 }

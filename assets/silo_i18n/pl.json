@@ -85,5 +85,6 @@
   "home.section.topRatedMovies": "Najwyżej oceniane filmy",
   "home.section.topRatedTv": "Najwyżej oceniane seriale",
   "home.section.trendingOnServer": "Popularne na serwerze",
-  "home.section.trendingThisWeek": "Popularne w tym tygodniu"
+  "home.section.trendingThisWeek": "Popularne w tym tygodniu",
+  "player.notice.pausedTimeout": "Odtwarzanie zatrzymano, ponieważ było wstrzymane zbyt długo."
 }

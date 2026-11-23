@@ -85,5 +85,6 @@
   "home.section.topRatedMovies": "Фильмы с высокими оценками",
   "home.section.topRatedTv": "Сериалы с высокими оценками",
   "home.section.trendingOnServer": "В тренде на сервере",
-  "home.section.trendingThisWeek": "В тренде на этой неделе"
+  "home.section.trendingThisWeek": "В тренде на этой неделе",
+  "player.notice.pausedTimeout": "Воспроизведение остановлено, потому что пауза длилась слишком долго."
 }

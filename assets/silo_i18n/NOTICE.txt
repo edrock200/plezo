@@ -2,12 +2,14 @@ SILO TRANSLATIONS — NOTICE
 ==========================
 
 The translated titles of the rows a Silo server words itself (Home sections
-and recommendation rows, catalog keys "home.section.*") and the line naming
-the profile that shared a collection and the heading of a title page's "Also
-in" row (catalog keys "collections.posterCard.byOwner", "detail.alsoIn") in
-this folder are taken from Silo's translation catalogs:
+and recommendation rows, catalog keys "home.section.*"), the line naming the
+profile that shared a collection, the heading of a title page's "Also in" row
+and the notice that the server stopped a video left paused too long (catalog
+keys "collections.posterCard.byOwner", "detail.alsoIn",
+"player.notice.pausedTimeout") in this folder are taken from Silo's
+translation catalogs:
 
-  Silo-Server/silo-android at 63c898084 (catalog release 2026.11.20-9403fbd)
+  Silo-Server/silo-android at 56e23561a (catalog release 2026.11.23-73e6a54)
   android-shared/src/androidMain/res/values*/strings_catalog.xml
   (Android's %1$s placeholders written as named {placeholders})
 
@@ -25,9 +27,10 @@ Plezilo itself is licensed under the GNU General Public License, version 3,
 whose section 13 permits combining it with work under the AGPL.
 
 Only the "home.section.*" and "collections.posterCard.byOwner",
-"detail.alsoIn" entries are included, unmodified apart from being copied into
-one JSON file per language. The source of these files is the catalogs named
-above; scripts/silo_catalog_strings.py in Plezilo's source regenerates them.
+"detail.alsoIn", "player.notice.pausedTimeout" entries are included,
+unmodified apart from being copied into one JSON file per language. The source
+of these files is the catalogs named above; scripts/silo_catalog_strings.py in
+Plezilo's source regenerates them.
 
 "Silo" is a trademark of Silo Media L.L.C. Plezilo is not made or endorsed by
 Silo Media L.L.C.

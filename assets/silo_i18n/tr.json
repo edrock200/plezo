@@ -85,5 +85,6 @@
   "home.section.topRatedMovies": "En yüksek puanlı filmler",
   "home.section.topRatedTv": "En yüksek puanlı diziler",
   "home.section.trendingOnServer": "Sunucuda trend olanlar",
-  "home.section.trendingThisWeek": "Bu hafta trend olanlar"
+  "home.section.trendingThisWeek": "Bu hafta trend olanlar",
+  "player.notice.pausedTimeout": "Çok uzun süre duraklatıldığı için oynatma durduruldu."
 }

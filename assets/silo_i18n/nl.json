@@ -85,5 +85,6 @@
   "home.section.topRatedMovies": "Best beoordeelde films",
   "home.section.topRatedTv": "Best beoordeelde series",
   "home.section.trendingOnServer": "Trending op de server",
-  "home.section.trendingThisWeek": "Trending deze week"
+  "home.section.trendingThisWeek": "Trending deze week",
+  "player.notice.pausedTimeout": "Het afspelen is gestopt omdat het te lang gepauzeerd was."
 }

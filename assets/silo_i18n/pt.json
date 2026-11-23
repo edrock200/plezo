@@ -85,5 +85,6 @@
   "home.section.topRatedMovies": "Filmes mais bem avaliados",
   "home.section.topRatedTv": "Séries mais bem avaliadas",
   "home.section.trendingOnServer": "Em alta no servidor",
-  "home.section.trendingThisWeek": "Em alta nesta semana"
+  "home.section.trendingThisWeek": "Em alta nesta semana",
+  "player.notice.pausedTimeout": "A reprodução foi interrompida porque ficou pausada por tempo demais."
 }

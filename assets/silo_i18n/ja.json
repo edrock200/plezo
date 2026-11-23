@@ -85,5 +85,6 @@
   "home.section.topRatedMovies": "高評価の映画",
   "home.section.topRatedTv": "高評価のシリーズ",
   "home.section.trendingOnServer": "サーバーのトレンド",
-  "home.section.trendingThisWeek": "今週のトレンド"
+  "home.section.trendingThisWeek": "今週のトレンド",
+  "player.notice.pausedTimeout": "一時停止の時間が長すぎたため、再生を停止しました。"
 }

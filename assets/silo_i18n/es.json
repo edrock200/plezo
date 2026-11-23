@@ -85,5 +85,6 @@
   "home.section.topRatedMovies": "Películas mejor calificadas",
   "home.section.topRatedTv": "Series mejor calificadas",
   "home.section.trendingOnServer": "Tendencias en el servidor",
-  "home.section.trendingThisWeek": "Tendencias de esta semana"
+  "home.section.trendingThisWeek": "Tendencias de esta semana",
+  "player.notice.pausedTimeout": "La reproducción se detuvo porque estuvo en pausa demasiado tiempo."
 }

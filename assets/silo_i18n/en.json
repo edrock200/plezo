@@ -85,5 +85,6 @@
   "home.section.topRatedMovies": "Top Rated Movies",
   "home.section.topRatedTv": "Top Rated TV",
   "home.section.trendingOnServer": "Trending on Server",
-  "home.section.trendingThisWeek": "Trending This Week"
+  "home.section.trendingThisWeek": "Trending This Week",
+  "player.notice.pausedTimeout": "Playback stopped because it was paused for too long."
 }
