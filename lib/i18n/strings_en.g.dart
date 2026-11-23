@@ -2786,6 +2786,9 @@ class Translations$messages$en {
 	/// en: 'An administrator ended this playback session.'
 	String get playbackSessionEndedByServer => 'An administrator ended this playback session.';
 
+	/// en: 'Playback stopped because it was paused for too long.'
+	String get playbackStoppedPausedTooLong => 'Playback stopped because it was paused for too long.';
+
 	/// en: 'The server refused to stream this item (HTTP 403). Your account may not have permission to play it, or the server may only allow playback on its local network.'
 	String get playbackNotAllowedBody => 'The server refused to stream this item (HTTP 403). Your account may not have permission to play it, or the server may only allow playback on its local network.';
 
@@ -10400,6 +10403,7 @@ extension on Translations {
 			'messages.serverBusyBody' => 'The server kept refusing to stream this file (HTTP 503). It may be restarting, busy, or the file\'s storage may be offline. Try again in a moment — if it keeps happening, ask the server owner to check the server and the file\'s storage.',
 			'messages.playbackNotAllowedTitle' => 'Playback not allowed',
 			'messages.playbackSessionEndedByServer' => 'An administrator ended this playback session.',
+			'messages.playbackStoppedPausedTooLong' => 'Playback stopped because it was paused for too long.',
 			'messages.playbackNotAllowedBody' => 'The server refused to stream this item (HTTP 403). Your account may not have permission to play it, or the server may only allow playback on its local network.',
 			'messages.logsUploaded' => 'Logs uploaded',
 			'messages.logsUploadFailed' => 'Failed to upload logs',
@@ -10464,9 +10468,9 @@ extension on Translations {
 			'profiles.manage' => 'Manage',
 			'profiles.delete' => 'Delete',
 			'profiles.signOut' => 'Sign out',
-			'profiles.signOutPlexTitle' => 'Sign out of Plex?',
 			_ => null,
 		} ?? switch (path) {
+			'profiles.signOutPlexTitle' => 'Sign out of Plex?',
 			'profiles.signOutPlexMessage' => ({required Object displayName}) => 'Remove ${displayName} and all Plex Home users? Sign back in anytime.',
 			'profiles.signOutPlexDeleteDownloads' => 'Also delete downloads',
 			'profiles.signOutPlexDeleteDownloadsDescription' => 'Otherwise they stay on this device and come back when you sign back in to this account.',
@@ -10978,9 +10982,9 @@ extension on Translations {
 			'explore.detail.crew' => 'Crew',
 			'explore.detail.ratings' => 'Ratings',
 			'explore.detail.schedule' => 'Schedule',
-			'explore.detail.recommendedByUsers' => ({required num n}) => (_root.$meta.cardinalResolver ?? PluralResolvers.cardinal('en'))(n, one: 'Recommended by ${n} user', other: 'Recommended by ${n} users', ), 
 			_ => null,
 		} ?? switch (path) {
+			'explore.detail.recommendedByUsers' => ({required num n}) => (_root.$meta.cardinalResolver ?? PluralResolvers.cardinal('en'))(n, one: 'Recommended by ${n} user', other: 'Recommended by ${n} users', ), 
 			'explore.detail.recommendedBy' => ({required Object who}) => 'Recommended by ${who}',
 			'explore.detail.favoritedBy' => ({required Object who}) => 'Favorited by ${who}',
 			'explore.detail.unairedEpisodes' => ({required Object n}) => '${n} not aired yet',
@@ -11492,9 +11496,9 @@ extension on Translations {
 			'companionRemote.remote.previous' => 'Previous',
 			'companionRemote.remote.playPause' => 'Play/Pause',
 			'companionRemote.remote.next' => 'Next',
-			'companionRemote.remote.seekBack' => 'Seek Back',
 			_ => null,
 		} ?? switch (path) {
+			'companionRemote.remote.seekBack' => 'Seek Back',
 			'companionRemote.remote.stop' => 'Stop',
 			'companionRemote.remote.seekForward' => 'Seek Fwd',
 			'companionRemote.remote.volume' => 'Volume',
@@ -12006,9 +12010,9 @@ extension on Translations {
 			'siloRequests.myRequests' => 'My requests',
 			'siloRequests.searchHint' => 'Search for a movie or series to request',
 			'siloRequests.searchResults' => 'Titles to request',
-			'siloRequests.availableToRequest' => 'Available to request',
 			_ => null,
 		} ?? switch (path) {
+			'siloRequests.availableToRequest' => 'Available to request',
 			'siloRequests.availableToRequestOnServer' => ({required Object server}) => 'Available to request on ${server}',
 			'siloRequests.noRequests' => 'You haven\'t requested anything yet',
 			'siloRequests.noRequestsSubtitle' => 'Search for a movie or series to request it.',

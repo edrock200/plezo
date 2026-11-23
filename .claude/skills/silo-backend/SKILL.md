@@ -419,8 +419,15 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
   session row (later reports go through `/sync/progress`). A 410 `playback_session_ended` (an administrator stop)
   ends it for good: nothing more is written for that session id (no `/sync/progress`, no `/watched`), and
   `_sendProgress` throws `PlaybackSessionTerminatedException(leavePlayback: true)`; the progress tracker's
-  `onServerTerminated` makes the video player stop and show `messages.playbackSessionEndedByServer` (Retry opens a
-  fresh session).
+  `onServerTerminated` makes the video player stop and show `messages.playbackSessionEndedByServer` (no Retry).
+  Video starts (not the download-subtitle or external-player sessions) list `paused_timeout_v1`
+  (`SiloPlaybackCaps.clientFeaturesFor`; Silo Android #1043, protocol v3 §6.3): a session left paused past the
+  admin's limit then answers 410 `playback_session_paused_timeout`, handled like the admin end (`SiloSessionEnd`)
+  but worded with Silo's catalog `player.notice.pausedTimeout` (fallback `messages.playbackStoppedPausedTooLong`).
+  Plezilo restarts by starting a new session (no replan) and a DELETE of an ended session answers `200 replayed`,
+  so every same-item `_reloadMediaInPlace` (seek before the stream origin, track/quality change, EOF recovery,
+  Retry) first calls `PlaybackSessionRestartGuard.confirmPlaybackSessionBeforeRestart`: one paused progress post
+  repeating the last sample; a 410 leaves the player instead of restarting.
 - **Resume points:** `SiloMappers.resumeOffsetMs` ports the TV app's `resumePositionSeconds`:
   none at ≤ 30 s or ≥ duration − 5 s; a played item keeps its position (re-watch stopped midway).
 - **External players** get a `/direct-download/links` URL (header-free, Range, no session). Only a

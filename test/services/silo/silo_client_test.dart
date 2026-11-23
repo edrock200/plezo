@@ -1039,6 +1039,8 @@ void main() {
       });
     });
 
+    Map<String, dynamic>? videoStartBody;
+
     Future<SiloClient> sessionAnsweringProgress(
       http.Response Function() progressAnswer, {
       http.Response Function()? stopAnswer,
@@ -1065,6 +1067,7 @@ void main() {
           });
         }
         if (path.endsWith('/playback/start')) {
+          videoStartBody = jsonDecode(request.body) as Map<String, dynamic>;
           return _json({
             'outcome': 'playable',
             'session_id': 'sess-9',
@@ -1138,6 +1141,116 @@ void main() {
         expect(requests, isEmpty);
       },
     );
+
+    test('a video start advertises paused_timeout_v1', () async {
+      await sessionAnsweringProgress(() => _json({}));
+      expect(videoStartBody!['client_features'], containsAll(['playback_plan_v3', 'paused_timeout_v1']));
+    });
+
+    group('a session left paused too long (410 playback_session_paused_timeout)', () {
+      Matcher leavesWithPausedNotice() => throwsA(
+        isA<PlaybackSessionTerminatedException>()
+            .having((e) => e.leavePlayback, 'leavePlayback', isTrue)
+            .having((e) => e.leaveNotice, 'leaveNotice', 'Playback stopped because it was paused for too long.'),
+      );
+
+      Future<void> report(SiloClient c, Duration position) => c.reportPlaybackProgress(
+        itemId: 'movie:m1',
+        position: position,
+        duration: const Duration(hours: 1),
+        isPaused: true,
+        playSessionId: 'sess-9',
+      );
+
+      test('on progress, leaves with its own notice and writes nothing more, not even a stop', () async {
+        final c = await sessionAnsweringProgress(() => _problem(410, 'playback_session_paused_timeout'));
+        await expectLater(report(c, const Duration(minutes: 5)), leavesWithPausedNotice());
+        requests.clear();
+        await report(c, const Duration(minutes: 6));
+        await c.reportPlaybackStopped(
+          itemId: 'movie:m1',
+          position: const Duration(minutes: 58),
+          duration: const Duration(hours: 1),
+          playSessionId: 'sess-9',
+        );
+        expect(requests, isEmpty);
+      });
+
+      test('before a restart, one paused progress post finds it and the restart leaves instead', () async {
+        final c = await sessionAnsweringProgress(() => _problem(410, 'playback_session_paused_timeout'));
+        await expectLater(c.confirmPlaybackSessionBeforeRestart('sess-9'), leavesWithPausedNotice());
+        final probe = requests.single;
+        expect(probe.method, 'POST');
+        expect(probe.url.path, endsWith('/playback/sess-9/progress'));
+        final body = jsonDecode(probe.body) as Map<String, dynamic>;
+        // The last sample the server took (the start report), paused, with a
+        // higher sequence.
+        expect(body['position'], 0);
+        expect(body['is_paused'], isTrue);
+        expect(body['sequence'], 2);
+        requests.clear();
+        // A second check and the stopped report send nothing.
+        await expectLater(c.confirmPlaybackSessionBeforeRestart('sess-9'), leavesWithPausedNotice());
+        await c.reportPlaybackStopped(
+          itemId: 'movie:m1',
+          position: const Duration(minutes: 5),
+          duration: const Duration(hours: 1),
+          playSessionId: 'sess-9',
+        );
+        expect(requests, isEmpty);
+      });
+    });
+
+    group('the check before a restart', () {
+      test('lets the restart of a live session go on after one progress post', () async {
+        final c = await sessionAnsweringProgress(() => _json({'outcome': 'applied'}));
+        await c.reportPlaybackProgress(
+          itemId: 'movie:m1',
+          position: const Duration(minutes: 5),
+          duration: const Duration(hours: 1),
+          playSessionId: 'sess-9',
+        );
+        requests.clear();
+        await c.confirmPlaybackSessionBeforeRestart('sess-9');
+        final body = jsonDecode(requests.single.body) as Map<String, dynamic>;
+        expect(body['position'], 300);
+        expect(body['is_paused'], isTrue);
+      });
+
+      test('an administrator end leaves too, with the administrator wording', () async {
+        final c = await sessionAnsweringProgress(() => _problem(410, 'playback_session_ended'));
+        await expectLater(
+          c.confirmPlaybackSessionBeforeRestart('sess-9'),
+          throwsA(
+            isA<PlaybackSessionTerminatedException>()
+                .having((e) => e.leavePlayback, 'leavePlayback', isTrue)
+                .having((e) => e.leaveNotice, 'leaveNotice', 'An administrator ended this playback session.'),
+          ),
+        );
+      });
+
+      test('a forgotten session (404) or a failed post lets the restart go on', () async {
+        final forgotten = await sessionAnsweringProgress(() => _problem(404, 'playback_session_not_found'));
+        await forgotten.confirmPlaybackSessionBeforeRestart('sess-9');
+        final failing = await sessionAnsweringProgress(() => _problem(503, 'unavailable'));
+        await failing.confirmPlaybackSessionBeforeRestart('sess-9');
+      });
+
+      test('a session that is unknown or already stopped sends nothing', () async {
+        final c = await sessionAnsweringProgress(() => _json({}), stopAnswer: () => _json({'outcome': 'stopped'}));
+        await c.confirmPlaybackSessionBeforeRestart('sess-other');
+        expect(requests, isEmpty);
+        await c.reportPlaybackStopped(
+          itemId: 'movie:m1',
+          position: const Duration(minutes: 5),
+          duration: const Duration(hours: 1),
+          playSessionId: 'sess-9',
+        );
+        requests.clear();
+        await c.confirmPlaybackSessionBeforeRestart('sess-9');
+        expect(requests, isEmpty);
+      });
+    });
 
     test('any other 410 on progress is treated like a forgotten session', () async {
       final c = await sessionAnsweringProgress(() => _problem(410, 'gone'));

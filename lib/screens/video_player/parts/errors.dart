@@ -128,16 +128,39 @@ extension _VideoPlayerErrorMethods on VideoPlayerScreenState {
   }
 
   /// The server ended this playback session and its contract says the player
-  /// must leave (Silo's 410 `playback_session_ended`, an administrator stop):
-  /// stop the picture instead of letting the buffer drain, and say why. The
-  /// client already reports nothing more for that session. Retry, a viewer
-  /// action, opens a fresh one; Back leaves.
-  void _leaveServerEndedPlayback() {
+  /// must leave (Silo's 410 `playback_session_ended`, an administrator stop,
+  /// or `playback_session_paused_timeout`, a pause past the server's limit):
+  /// stop the picture instead of letting the buffer drain, and say why with
+  /// the exception's [PlaybackSessionTerminatedException.leaveNotice]. The
+  /// client already reports nothing more for that session (no stop either).
+  /// There is no Retry; Back leaves.
+  void _leaveServerEndedPlayback([PlaybackSessionTerminatedException? end]) {
     if (!mounted || _shuttingDown || _hasFatalPlaybackError) return;
     appLogger.i('The server ended this playback session; stopping the player');
     _latchFatalPlaybackError(PlaybackFailureAction.fatal);
-    // No Retry: an administrator stopped this stream on purpose, as the audiobook player treats it.
-    _presentPlaybackFailure(t.messages.playbackSessionEndedByServer, allowRetry: false);
+    // No Retry: the server ended this stream on purpose, as the audiobook player treats it.
+    _presentPlaybackFailure(end?.leaveNotice ?? t.messages.playbackSessionEndedByServer, allowRetry: false);
+  }
+
+  /// Before the player replaces the session it is playing with a fresh one,
+  /// a backend that can end sessions for good ([PlaybackSessionRestartGuard],
+  /// Silo) confirms it is still live. False when the server ended it: the
+  /// player has left ([_leaveServerEndedPlayback]) and the restart must not
+  /// go on.
+  Future<bool> _confirmPlayingSessionBeforeRestart() async {
+    final guard = _playbackSession?.reportingClient;
+    final sessionId = _playbackPlaySessionId;
+    if (guard is! PlaybackSessionRestartGuard || sessionId == null || _isOfflinePlayback) return true;
+    try {
+      await (guard as PlaybackSessionRestartGuard).confirmPlaybackSessionBeforeRestart(sessionId);
+      return true;
+    } on PlaybackSessionTerminatedException catch (e) {
+      if (!e.leavePlayback) return true;
+      appLogger.i('The server ended the playing session; leaving instead of restarting it');
+      _progressTracker?.stopTracking();
+      _leaveServerEndedPlayback(e);
+      return false;
+    }
   }
 
   /// Raise the persistent failure surface over the player. It stays until

@@ -581,6 +581,15 @@ extension _VideoPlayerReloadMethods on VideoPlayerScreenState {
         }
         if (!isCurrentReload()) return MediaReloadOutcome.superseded;
 
+        // A restart of the same item replaces the playing session with a
+        // fresh one. Where the server can have ended that session for good
+        // (Silo: an administrator's stop, a pause past its limit), confirm it
+        // first; an ended one leaves the player rather than being undone.
+        if (!isItemChange && !await _confirmPlayingSessionBeforeRestart()) {
+          return MediaReloadOutcome.superseded;
+        }
+        if (!isCurrentReload()) return MediaReloadOutcome.superseded;
+
         // Local resume lookup can overlap the old stop, but source resolution
         // below must not: Plex can use that stop to terminate any new
         // transcode sharing this playback session identifier.

@@ -1013,6 +1013,22 @@ extension MediaServerClientLiveTv on MediaServerClient {
   LiveTvDvrSupport? get liveTvDvr => capabilities.liveTvDvr ? liveTv.dvr : null;
 }
 
+/// Optional capability for clients whose server can end a playback session
+/// for good while the player cannot hear of it (Silo: an administrator's stop
+/// or a session left paused past the server's limit). Every way the video
+/// player restarts the item it is playing (a seek outside the open stream, a
+/// track or quality change, recovery from a dropped stream, Retry) starts a
+/// fresh session; before it does, it asks the client to confirm that the
+/// playing session is still live, so an ended one makes the player leave
+/// instead of undoing the server's stop (Silo protocol v3 §6.3).
+abstract interface class PlaybackSessionRestartGuard {
+  /// Completes normally when [playSessionId] may be replaced (it is live, or
+  /// the server forgot it, or the check could not reach the server). Throws a
+  /// [PlaybackSessionTerminatedException] with `leavePlayback` when the server
+  /// ended it for good.
+  Future<void> confirmPlaybackSessionBeforeRestart(String playSessionId);
+}
+
 /// Optional capability for clients that can fetch a season's episodes without
 /// listing generic children. Jellyfin uses this to avoid mixing local extras or
 /// missing/virtual placeholders into normal season episode rails.

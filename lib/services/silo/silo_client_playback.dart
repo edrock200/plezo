@@ -42,6 +42,12 @@ class _SiloPlaybackSession {
   /// The stop's progress sequence, also fixed on its first attempt.
   int? stopSequence;
   int stopAttempts = 0;
+
+  /// The last progress sample the server took, for the one progress post a
+  /// restart sends first ([_SiloPlaybackMethods.confirmPlaybackSessionBeforeRestart]);
+  /// null until a sample landed.
+  Duration? lastReportedPosition;
+
   Future<void>? stopping;
   bool stopped = false;
 }
@@ -57,11 +63,13 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
 
   final Map<String, _SiloPlaybackSession> _sessions = {};
 
-  /// Sessions an administrator ended (410 `playback_session_ended`). The
-  /// contract says the player leaves: nothing more is written for them, not
-  /// even the sessionless progress or watched mark a forgotten (404) session
-  /// falls back to.
-  final Set<String> _endedSessionIds = {};
+  /// Sessions the server ended for good, and why ([SiloSessionEnd]): an
+  /// administrator's stop (410 `playback_session_ended`) or a pause past the
+  /// server's limit (410 `playback_session_paused_timeout`). The contract says
+  /// the player leaves: nothing more is written for them (no stop either),
+  /// not even the sessionless progress or watched mark a forgotten (404)
+  /// session falls back to, and no fresh session replaces them.
+  final Map<String, SiloSessionEnd> _endedSessions = {};
 
   /// Item id → the file its latest playback started, so the player's
   /// markers come from the version being played.
@@ -158,6 +166,7 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
     int? audioIndex,
     Duration? startPosition,
     bool originalOnly = false,
+    bool pausedTimeout = false,
     Map<String, Object?> Function(Map<String, Object?> body)? shapeBody,
   }) async {
     final appVersion = _api.device.clientVersion;
@@ -169,7 +178,7 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
       'file_id': fileId,
       'profile_id': connection.profileId,
       'playback_attempt_id': const Uuid().v4(),
-      'client_features': SiloPlaybackCaps.clientFeatures,
+      'client_features': SiloPlaybackCaps.clientFeaturesFor(pausedTimeout: pausedTimeout),
       'quality_preference': SiloPlaybackCaps.qualityPreference(preset),
       'bandwidth_cap_kbps': ?preset.videoBitrateKbps,
       'subtitle_fidelity_preference': 'preserve',
@@ -301,6 +310,10 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
         preset: options.qualityPreset,
         audioIndex: audioIndex,
         startPosition: options.startPosition,
+        // The video player leaves on the paused-timeout answer with its own
+        // notice. The download-subtitle and external-player sessions cannot,
+        // so they keep the default.
+        pausedTimeout: true,
       );
     } catch (error, stackTrace) {
       if (error is PlaybackException) rethrow;
@@ -869,16 +882,51 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
       // The server ended or forgot the session; nothing more to report to it.
       session.stopped = true;
       _sessions.remove(session.sessionId);
-      if (SiloAudiobookSessionRules.isSessionEnded(status, response.data)) {
-        // An administrator stopped it: leave playback and write nothing more.
-        _endedSessionIds.add(session.sessionId);
-        final problem = response.data;
-        final detail = problem is Map ? problem['detail']?.toString() : null;
-        throw PlaybackSessionTerminatedException(code: status, reason: detail, leavePlayback: true);
+      final end = SiloSessionEnd.of(status, response.data);
+      if (end != null) {
+        // An administrator stopped it, or it stayed paused too long: leave
+        // playback and write nothing more.
+        _endedSessions[session.sessionId] = end;
+        appLogger.i('SiloClient: the server ended this playback session (410 ${end.problemCode}); leaving playback');
+        throw _sessionEndedException(end, response.data);
       }
       return;
     }
     throwIfHttpError(response);
+    session.lastReportedPosition = position;
+  }
+
+  PlaybackSessionTerminatedException _sessionEndedException(SiloSessionEnd end, Object? problem) =>
+      PlaybackSessionTerminatedException(
+        code: 410,
+        reason: siloProblemDetail(problem) ?? end.problemCode,
+        leavePlayback: true,
+        leaveNotice: end.notice,
+      );
+
+  /// One progress post before the player replaces [playSessionId] with a
+  /// fresh session (a seek outside the open stream, a track or quality
+  /// change, stream recovery, Retry). Plezilo restarts by starting a new
+  /// session rather than replanning, and a stop of a session the server ended
+  /// answers `200 replayed`, so without this the restart would undo the end:
+  /// the contract asks such a client to post progress first and leave on 410
+  /// (protocol v3 §6.3). It repeats the last sample the server took, paused,
+  /// as the player is while it reloads. A session that never reported is not
+  /// asked (the paused timeout only ends sessions that report); a 404 or a
+  /// failed post lets the restart go on.
+  Future<void> confirmPlaybackSessionBeforeRestart(String playSessionId) async {
+    final ended = _endedSessions[playSessionId];
+    if (ended != null) throw _sessionEndedException(ended, null);
+    final session = _sessions[playSessionId];
+    final position = session?.lastReportedPosition;
+    if (session == null || session.stopped || session.stopping != null || position == null) return;
+    try {
+      await _sendProgress(session, position, true);
+    } on PlaybackSessionTerminatedException {
+      rethrow;
+    } catch (e) {
+      appLogger.d('SiloClient: progress before a restart failed; restarting anyway', error: e.runtimeType);
+    }
   }
 
   /// Stops [session]. A failed stop keeps the session (same `stop_id`) so a
@@ -903,9 +951,10 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
         );
         final status = response.statusCode;
         if (status != 404 && status != 410) throwIfHttpError(response);
-        // An administrator ended it: like a refused progress report, nothing
-        // more is written for it (no watched mark either).
-        if (SiloAudiobookSessionRules.isSessionEnded(status, response.data)) _endedSessionIds.add(session.sessionId);
+        // The server ended it: like a refused progress report, nothing more
+        // is written for it (no watched mark either).
+        final end = SiloSessionEnd.of(status, response.data);
+        if (end != null) _endedSessions[session.sessionId] = end;
         session.stopped = true;
       } finally {
         if (session.stopped || ++session.stopAttempts >= _maxStopAttempts) {
@@ -949,7 +998,7 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
     int? audioStreamIndex,
     int? subtitleStreamIndex,
   }) async {
-    if (_endedSessionIds.contains(playSessionId)) return;
+    if (_endedSessions.containsKey(playSessionId)) return;
     final session = playSessionId == null ? null : _sessions[playSessionId];
     if (session == null) {
       // A downloaded file plays without a server session.
@@ -971,7 +1020,7 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
     int? subtitleStreamIndex,
     PlaybackReportMetadata report = const PlaybackReportMetadata.live(),
   }) async {
-    if (_endedSessionIds.contains(playSessionId)) return;
+    if (_endedSessions.containsKey(playSessionId)) return;
     final session = playSessionId == null ? null : _sessions[playSessionId];
     if (session == null) {
       final total = duration;
@@ -996,7 +1045,7 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
       return;
     }
     await _stopSession(session, position: position, isPaused: true);
-    if (_endedSessionIds.contains(session.sessionId)) return;
+    if (_endedSessions.containsKey(session.sessionId)) return;
     final item = session.item;
     if (item != null && _isFinishedPlay(position, duration)) await _confirmFinished(item, position, duration!);
   }

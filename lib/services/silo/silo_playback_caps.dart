@@ -17,6 +17,20 @@ abstract final class SiloPlaybackCaps {
 
   static const clientFeatures = <String>['playback_plan_v3', 'direct_stream_resume_v1'];
 
+  /// The player leaves with its own notice when the server ends a session
+  /// left paused past the administrator's limit: progress then answers 410
+  /// `playback_session_paused_timeout` instead of `playback_session_ended`
+  /// (Silo Android #1043, protocol v3 §6.3). Attempt-sticky on the server.
+  static const pausedTimeoutFeature = 'paused_timeout_v1';
+
+  /// [clientFeatures], with [pausedTimeoutFeature] for a start whose player
+  /// can leave on that answer (the video player; not the short sessions for
+  /// download subtitles or an external player).
+  static List<String> clientFeaturesFor({required bool pausedTimeout}) => [
+    ...clientFeatures,
+    if (pausedTimeout) pausedTimeoutFeature,
+  ];
+
   static const _containers = <String>[
     'mkv',
     'matroska',

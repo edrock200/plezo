@@ -63,6 +63,7 @@ import 'silo_home_events.dart';
 import 'silo_download_registry.dart';
 import 'silo_managed_downloads.dart';
 import 'silo_section_titles.dart';
+import 'silo_session_end.dart';
 import 'silo_stream_auth.dart';
 import 'silo_live_subtitles.dart';
 import 'silo_mappers.dart';
@@ -108,7 +109,8 @@ class SiloClient
         RemoteTrailerClient,
         DeferredDownloadSubtitles,
         PersonalRecommendationsClient,
-        HomeWatchStateClient {
+        HomeWatchStateClient,
+        PlaybackSessionRestartGuard {
   SiloClient._({required this._connection, required this._api});
 
   /// Build a client for [connection]. Network I/O stays lazy.
