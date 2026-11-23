@@ -4,6 +4,12 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **Silo says when a long pause ended playback:** your Silo server can stop a video that has been paused for too long (its administrator sets how long). Plezilo now stops the video and says "Playback stopped because it was paused for too long." (in your language), instead of saying an administrator ended it. Seeking or changing the audio, subtitles or quality in the moments after the server stopped it no longer starts a new playback behind its back either: press Back and play the title again when you are ready, and it picks up where you paused. Plex and Jellyfin are unchanged. *(From Silo's own apps.)*
+
+## silo-preview-2.59.0
+
+Released November 22, 2026. Android and Windows.
+
 - **Collections on a title's page:** a Silo movie or series page now shows the collections it belongs to, below the box set row. When one collection holds it, you see up to six of that collection's other titles under its name, then the collection itself to open the rest. When several do, an "Also in" row shows each collection. This needs a Silo server new enough to offer it; on older servers nothing changes. Collections of libraries Plezilo does not show (such as e-books) stay hidden, as on Home. *(From Silo's own apps.)*
 - **Play Next follows Silo's "Show Next Up" setting:** on a Silo episode, the Play Next card now appears the number of seconds before the end that you chose in Silo's Show Next Up setting (30 seconds unless you changed it), or only at the very end if you picked "At end". When it appears early, its countdown follows the time left in the episode, so the next episode starts when this one ends, not in the middle of the last scene. Skip Credits works as before. Plex and Jellyfin are unchanged. *(From Silo's own apps; please test.)*
 
