@@ -1527,6 +1527,36 @@ void main() {
       expect(await fixture.db.getPendingSupplementaryQueueItems(), isEmpty);
     });
 
+    // Silo Android #1038: the stored file's end credits are recorded once
+    // the download is in, and a failing record never costs the completion.
+    for (final fails in [false, true]) {
+      test('a completion recorder is told the stored version${fails ? ' (and its failure is ignored)' : ''}', () async {
+        final fixture = await _createSupplementaryFixture();
+        final events = <String>[];
+        final client = _RecordingClient(
+          metadata: fixture.metadata,
+          resolution: () =>
+              const DownloadResolution(videoUrl: 'https://example.test/video', externalSubtitlesResolved: true),
+          events: events,
+          fails: fails,
+        );
+        await _seedCompletedPendingDownload(fixture, downloadSubtitles: true);
+        await fixture.db.updateDownloadMediaSource(fixture.metadata.globalKey, 'source-2');
+        final manager = DownloadManagerService(
+          database: fixture.db,
+          storageService: fixture.storage,
+          clientResolver: (serverId, {clientScopeId}) => client,
+          downloadsSupportedOverride: false,
+        );
+        addTearDown(manager.dispose);
+
+        await manager.repairPendingSupplementaryDownloads();
+
+        expect(events, ['record ${fixture.metadata.id} source-2']);
+        expect(await fixture.db.getPendingSupplementaryQueueItems(), isEmpty);
+      });
+    }
+
     test('supplementary repair reuses the persisted media source', () async {
       final fixture = await _createSupplementaryFixture();
       final client = _SupplementaryClient(
@@ -4057,6 +4087,19 @@ class _SupplementaryClient implements MediaServerClient {
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _RecordingClient extends _SupplementaryClient implements DownloadCompletionRecorder {
+  _RecordingClient({required super.metadata, required super.resolution, required this.events, this.fails = false});
+
+  final List<String> events;
+  final bool fails;
+
+  @override
+  Future<void> recordDownloadedFile(MediaItem item, {int mediaIndex = 0, String? mediaSourceId}) async {
+    events.add('record ${item.id} $mediaSourceId');
+    if (fails) throw StateError('server unavailable');
+  }
 }
 
 class _DeferredSubtitleClient extends _SupplementaryClient implements DeferredDownloadSubtitles {

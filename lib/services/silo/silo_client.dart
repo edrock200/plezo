@@ -54,6 +54,7 @@ import '../playback_initialization_types.dart';
 import '../scrub_preview_source.dart';
 import 'silo_api.dart';
 import 'silo_api_cache.dart';
+import 'silo_end_credits.dart';
 import 'silo_audiobook.dart';
 import 'silo_card_overlay_store.dart';
 import 'silo_card_overlays.dart';
@@ -108,6 +109,7 @@ class SiloClient
         GracefullyCloseable,
         RemoteTrailerClient,
         DeferredDownloadSubtitles,
+        DownloadCompletionRecorder,
         PersonalRecommendationsClient,
         HomeWatchStateClient,
         PlaybackSessionRestartGuard {

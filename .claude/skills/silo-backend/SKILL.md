@@ -498,6 +498,15 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
 - **Progress without a session** (downloaded file, offline queue): `POST /sync/progress` with
   `{media_item_id, position_ms, duration_ms, updated_at}`; a stop past `watchedThreshold` posts
   `/watched/{id}` instead.
+  End credits (Silo Android #1038, silo-android 137fca310): that route names no file, so the server can only
+  apply its watched percentage. When a download completes, `SiloClient.recordDownloadedFile`
+  (`DownloadCompletionRecorder`, called from the manager's `_runSupplementaryDownloads`, best effort) reads
+  `GET /watch/{id}?file_id=<stored file>` (else the pinned detail) and stores `SiloEndCreditsRecord` (pinned,
+  `silo:end-credits/<id>`, dropped by `deleteForItem`): `SiloEndCredits.start` = the last credits range starting in
+  the server's end window (episode: last min(450 s, 40%); else min(900 s, 25%)) and before the end. A sessionless
+  stop (offline replay, or a download played online) at or past it is sent as the full duration (online:
+  `POST /watched`); the queued local row keeps the real position. Downloads made before this have no record
+  (unchanged). Tests: `test/services/silo/silo_end_credits_test.dart`.
 
 - **Dismissals:** `PUT /home/dismissals/continue_watching/{id}` requires `progress_updated_at`
   (refetch the item detail when the card lacks it); `next_up` requires `series_id`.

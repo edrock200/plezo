@@ -571,6 +571,70 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
     );
   }
 
+  /// A completed download: records where the stored file's end credits start
+  /// (Silo Android #1038), so a downloaded stop in them is sent as watched
+  /// ([_downloadedReportPosition]). Read from `GET /watch/{id}?file_id=` (the
+  /// server fills that file's on-demand markers), else from the watch detail
+  /// pinned with the download. Best effort: without a readable answer nothing
+  /// is recorded and the server's watched percentage decides, as before.
+  Future<void> recordDownloadedFile(MediaItem item, {int mediaIndex = 0, String? mediaSourceId}) async {
+    final scope = ServerId(cacheServerId);
+    Map<String, dynamic>? pinned;
+    String? fileId = mediaSourceId;
+    if (fileId == null || fileId.isEmpty) {
+      pinned = await SiloApiCache.instance.getWatchDetail(scope, item.id);
+      final versions = SiloMappers.watchVersions(pinned);
+      if (versions.isEmpty) return;
+      fileId = versions[SiloMappers.selectVersionIndex(versions, pinned, requestedIndex: mediaIndex)]['file_id']
+          ?.toString();
+      if (fileId == null || fileId.isEmpty) return;
+    }
+    Map<String, dynamic>? watch;
+    try {
+      watch = await _watchDetail(item.id, forceRefresh: true, fileId: fileId);
+    } catch (e) {
+      appLogger.d('SiloClient: watch detail for a completed download unavailable', error: e.runtimeType);
+    }
+    if (SiloMappers.watchVersions(watch).every((v) => v['file_id']?.toString() != fileId)) {
+      watch = pinned ?? await SiloApiCache.instance.getWatchDetail(scope, item.id);
+    }
+    if (SiloMappers.watchVersions(watch).every((v) => v['file_id']?.toString() != fileId)) return;
+    final start = SiloEndCredits.fromWatchDetail(watch, fileId: fileId, item: item);
+    await SiloApiCache.instance.putEndCredits(scope, item.id, SiloEndCreditsRecord(fileId: fileId, start: start));
+    appLogger.d(
+      start == null
+          ? 'SiloClient: downloaded file has no end credits in its end window'
+          : 'SiloClient: downloaded file ends its credits from ${start.inSeconds} s',
+    );
+  }
+
+  /// The position a downloaded file's [position] is sent with (no session:
+  /// `POST /sync/progress` names no file, so the server can only apply its
+  /// watched percentage). At or past the stored end credits start
+  /// ([recordDownloadedFile]) it is the full [duration], which the server
+  /// stores as watched, as it would a streamed stop there.
+  Future<Duration> _downloadedReportPosition(String itemId, Duration position, Duration? duration) async {
+    if (duration == null || duration <= Duration.zero) return position;
+    SiloEndCreditsRecord? record;
+    try {
+      record = await SiloApiCache.instance.getEndCredits(ServerId(cacheServerId), itemId);
+    } catch (_) {
+      return position;
+    }
+    final sent = SiloEndCredits.reportedPosition(
+      position: position,
+      duration: duration,
+      endCreditsStart: record?.start,
+    );
+    if (sent != position) {
+      appLogger.i(
+        'SiloClient: downloaded playback stopped at ${_seconds(position).toStringAsFixed(0)} s, in the end credits '
+        '(from ${record!.start!.inSeconds} s); sending it as played to the end',
+      );
+    }
+    return sent;
+  }
+
   static bool _hasExternalSubtitles(Map<String, dynamic> version) {
     final rawSubs = version['subtitle_tracks'];
     return rawSubs is List && rawSubs.whereType<Map>().any((track) => track['external'] == true);
@@ -1031,13 +1095,19 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
         // completion (a finished offline play arrives at the full duration).
         // Stamping it with the send time let a stale queued position beat
         // newer progress and bring back a resume point.
-        await _syncProgress(itemId, position: position, duration: total, updatedAt: report.recordedAt);
+        // A stop in the downloaded file's end credits goes up as the full
+        // duration (Silo Android #1038); the local resume point keeps the
+        // real position.
+        final sent = await _downloadedReportPosition(itemId, position, total);
+        await _syncProgress(itemId, position: sent, duration: total, updatedAt: report.recordedAt);
         return;
       }
       // A downloaded file played online: no session to stop. Past the watched
-      // threshold the item is marked played, as a finished session is below;
-      // otherwise the resume point is written.
-      if (_isFinishedPlay(position, total)) {
+      // threshold, or in the file's end credits (Silo Android #1038), the item
+      // is marked played, as a finished session is below; otherwise the
+      // resume point is written.
+      final sent = await _downloadedReportPosition(itemId, position, total);
+      if (_isFinishedPlay(sent, total)) {
         await _api.send('POST', '/api/v2/watched/${Uri.encodeComponent(itemId)}');
       } else {
         await _syncProgress(itemId, position: position, duration: total);

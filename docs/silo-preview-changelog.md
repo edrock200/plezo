@@ -4,6 +4,14 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **Downloaded Silo episodes count as watched when you stop in the end credits:** if you watched a downloaded Silo episode or movie and stopped during its end credits, it used to stay unwatched (and in Continue Watching) after Plezilo synced, unless you had gone past 90%. Plezilo now notes where the credits start when a download finishes, and a stop in them is sent to the server as watched. On your device the title still resumes where you stopped. This applies to downloads made from this preview on; older downloads behave as before. Plex and Jellyfin are unchanged. *(From Silo's own apps.)*
+- **Picture-in-picture respects "Auto-play next episode":** with auto-play turned off, an episode that ends in picture-in-picture no longer starts the next one. The Play Next card waits, without a countdown, and shows when you return to the full player. *(From Plezy.)*
+- **Watch Together guests can skip end credits:** a guest allowed to control playback can now skip credits that run to the end of the episode, and the room moves on for everyone. *(From Plezy.)*
+
+## silo-preview-2.60.0
+
+Released November 23, 2026. Android and Windows.
+
 - **Silo says when a long pause ended playback:** your Silo server can stop a video that has been paused for too long (its administrator sets how long). Plezilo now stops the video and says "Playback stopped because it was paused for too long." (in your language), instead of saying an administrator ended it. Seeking or changing the audio, subtitles or quality in the moments after the server stopped it no longer starts a new playback behind its back either: press Back and play the title again when you are ready, and it picks up where you paused. Plex and Jellyfin are unchanged. *(From Silo's own apps.)*
 
 ## silo-preview-2.59.0

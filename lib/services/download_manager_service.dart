@@ -3280,6 +3280,18 @@ class DownloadManagerService {
     required List<String?> partPaths,
     List<List<DownloadSubtitleSpec>>? preresolvedSubtitles,
   }) async {
+    if (client is DownloadCompletionRecorder) {
+      try {
+        await (client as DownloadCompletionRecorder).recordDownloadedFile(
+          metadata,
+          mediaIndex: record?.mediaIndex ?? 0,
+          mediaSourceId: record?.mediaSourceId,
+        );
+      } catch (e) {
+        appLogger.d('Could not record downloaded-file facts for $globalKey', error: e);
+      }
+    }
+
     var artworkSettled = !downloadArtwork;
     if (downloadArtwork) {
       final itemArtworkSettled = await _downloadArtwork(globalKey, metadata, client, isRepair: isRepair);

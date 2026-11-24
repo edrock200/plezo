@@ -173,3 +173,14 @@ abstract interface class DeferredDownloadSubtitles {
     String? mediaSourceId,
   });
 }
+
+/// A client that records facts about a downloaded file once it is stored
+/// (Silo: where the file's end credits start, Silo Android #1038). The
+/// download manager calls it, best effort, when a download completes (and on
+/// a repair of its supplementary files), with the stored version.
+abstract interface class DownloadCompletionRecorder {
+  /// Records what offline playback of [item]'s stored version needs later.
+  /// Never throws for a server that cannot answer: the download stays
+  /// complete without the record.
+  Future<void> recordDownloadedFile(MediaItem item, {int mediaIndex = 0, String? mediaSourceId});
+}

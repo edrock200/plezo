@@ -29,6 +29,10 @@ class SiloApiCache extends ApiCache {
   /// Cache key of an item's watch detail (versions, tracks, chapters,
   /// markers), which offline playback of a download reads.
   static String watchEndpoint(String itemId) => '/api/v2/watch/${Uri.encodeComponent(itemId)}';
+
+  /// Cache key of where a downloaded file's end credits start
+  /// ([SiloEndCreditsRecord]), stored when the download completes.
+  static String endCreditsEndpoint(String itemId) => 'silo:end-credits/${Uri.encodeComponent(itemId)}';
   static final RegExp _itemKeyPattern = RegExp(r'^[^:]+:silo:item/(.+)$');
 
   Future<void> putItem(ServerId serverId, MediaItem item) => put(serverId, itemEndpoint(item.id), item.toJson());
@@ -52,8 +56,27 @@ class SiloApiCache extends ApiCache {
 
   @override
   Future<void> deleteForItem(ServerId serverId, String itemId) async {
-    final keys = ['$serverId:${itemEndpoint(itemId)}', '$serverId:${watchEndpoint(itemId)}'];
+    final keys = [
+      '$serverId:${itemEndpoint(itemId)}',
+      '$serverId:${watchEndpoint(itemId)}',
+      '$serverId:${endCreditsEndpoint(itemId)}',
+    ];
     await (database.delete(database.apiCache)..where((t) => t.cacheKey.isIn(keys))).go();
+  }
+
+  /// Records where the downloaded file [SiloEndCreditsRecord.fileId] of
+  /// [itemId] ends its credits (null start: none in its end window), pinned
+  /// with the download.
+  Future<void> putEndCredits(ServerId serverId, String itemId, SiloEndCreditsRecord record) async {
+    await put(serverId, endCreditsEndpoint(itemId), record.toJson());
+    await pin(serverId, endCreditsEndpoint(itemId));
+  }
+
+  /// The record [putEndCredits] stored for [itemId]; null when the download
+  /// completed before this existed or the record is unreadable.
+  Future<SiloEndCreditsRecord?> getEndCredits(ServerId serverId, String itemId) async {
+    final data = await get(serverId, endCreditsEndpoint(itemId));
+    return data == null ? null : SiloEndCreditsRecord.fromJson(data);
   }
 
   /// The pinned watch detail of a downloaded item, for offline playback.
@@ -105,6 +128,30 @@ class SiloApiCache extends ApiCache {
           return MapEntry(buildGlobalKey(row.serverId, row.id), item);
         },
       ),
+    );
+  }
+}
+
+/// Where a downloaded Silo file's end credits start (Silo Android #1038).
+class SiloEndCreditsRecord {
+  const SiloEndCreditsRecord({required this.fileId, required this.start});
+
+  /// The downloaded file.
+  final String fileId;
+
+  /// The start of its end credits; null when it places none in its end window.
+  final Duration? start;
+
+  Map<String, dynamic> toJson() => {'file_id': fileId, 'end_credits_start_ms': start?.inMilliseconds};
+
+  static SiloEndCreditsRecord? fromJson(Map<String, dynamic> json) {
+    final fileId = json['file_id'];
+    final startMs = json['end_credits_start_ms'];
+    if (fileId is! String || fileId.isEmpty) return null;
+    if (startMs != null && (startMs is! int || startMs < 0)) return null;
+    return SiloEndCreditsRecord(
+      fileId: fileId,
+      start: startMs == null ? null : Duration(milliseconds: startMs),
     );
   }
 }
