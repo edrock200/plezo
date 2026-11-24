@@ -4,6 +4,12 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **Sports games show their date instead of a made-up episode number:** some Silo servers number a sports league's games by year and game (so a basketball game read "S2026 E296"). When your Silo server marks a series that way, Plezilo now shows the game's date, written the way your language writes dates ("Nov 20, 2026"), wherever the season and episode number used to go: episode cards (Continue Watching too), the big banner at the top of Home and the TV detail page, the season's episode list, the Play button on a series page, the player's title, the media notification and the Play Next card. A game without a date keeps its numbers, and the order of games and what plays next do not change. This needs a Silo server new enough to send it; other series, and Plex and Jellyfin, are unchanged. *(From Silo's own apps.)*
+
+## silo-preview-2.61.0
+
+Released November 24, 2026. Android and Windows.
+
 - **Downloaded Silo episodes count as watched when you stop in the end credits:** if you watched a downloaded Silo episode or movie and stopped during its end credits, it used to stay unwatched (and in Continue Watching) after Plezilo synced, unless you had gone past 90%. Plezilo now notes where the credits start when a download finishes, and a stop in them is sent to the server as watched. On your device the title still resumes where you stopped. This applies to downloads made from this preview on; older downloads behave as before. Plex and Jellyfin are unchanged. *(From Silo's own apps.)*
 - **Picture-in-picture respects "Auto-play next episode":** with auto-play turned off, an episode that ends in picture-in-picture no longer starts the next one. The Play Next card waits, without a countdown, and shows when you return to the full player. *(From Plezy.)*
 - **Watch Together guests can skip end credits:** a guest allowed to control playback can now skip credits that run to the end of the episode, and the room moves on for everyone. *(From Plezy.)*
