@@ -293,7 +293,8 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
   An early prompt (`EpisodeSessionState.earlyPlayNext`) sends no stopped report, its countdown is the playback time left
   (no wall-clock timer), and the end of the stream advances (auto-play on) or leaves it waiting (off). Dismissing it keeps
   playing without `resumeAfterStoppedReport`; it is offered once per stream (`earlyPlayNextOffered`) and the end opens the
-  normal prompt again. Not in PiP, under an end-of-video sleep timer, or for live/offline (no client) playback. Plezilo's
+  normal prompt again. Not in PiP (upstream #3150: there the end goes straight on with auto-play on, else opens a
+  prompt without a countdown, hidden until the viewer leaves PiP; an early prompt already open waits the same way), under an end-of-video sleep timer, or for live/offline (no client) playback. Plezilo's
   Auto-play and countdown settings still apply. Tests: `test/services/silo/silo_next_up_prompt_test.dart`, the `Show Next
   Up` group in `test/screens/video_player/playback_reload_failure_test.dart`.
 - **Collections holding a title (Silo Android #1007, silo-server #4528 `listCatalogItemCollections`):** a movie or

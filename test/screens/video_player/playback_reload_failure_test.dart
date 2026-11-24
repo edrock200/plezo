@@ -29,6 +29,7 @@ import 'package:plezy/screens/video_player/live_tv_session_args.dart';
 import 'package:plezy/services/download_storage_service.dart';
 import 'package:plezy/services/episode_navigation_service.dart';
 import 'package:plezy/services/offline_watch_sync_service.dart';
+import 'package:plezy/services/pip_service.dart';
 import 'package:plezy/services/playback_initialization_types.dart';
 import 'package:plezy/services/playback_coordinator.dart';
 import 'package:plezy/services/plex_client.dart';
@@ -856,6 +857,60 @@ void main() {
         },
       );
     });
+    // The upstream PiP rule (#3150) and Show Next Up together: with
+    // auto-play off an early prompt waits at the end, also in PiP, and PiP
+    // itself never opens the early prompt (the end decides there).
+    testWidgets('with auto-play off the early prompt waits at the end in PiP; PiP opens none early', (tester) async {
+      await SettingsService.instance.write(SettingsService.autoPlayNextEpisode, false);
+      addTearDown(() => PipService().isPipActive.value = false);
+      await withMockPlayerChannels(
+        methodChannelName: 'com.plezy/mpv_player',
+        eventChannelName: 'com.plezy/mpv_player/events',
+        testBody: () async {
+          final (:state, :player) = await playingEpisode(tester, promptSeconds: 30);
+          await playTo(tester, player, const Duration(seconds: 31));
+          await playTo(tester, player, const Duration(seconds: 29));
+          await pumpUntil(tester, () => state.debugPlayNextPromptVisibleForTesting);
+          expect(state.debugAutoPlayCountdownForTesting, -1, reason: 'auto-play off: no countdown');
+
+          PipService().isPipActive.value = true;
+          player.setPosition(player.state.duration);
+          player.emitPlaying(false);
+          player.setCompleted(true);
+          state.debugCompleteVideoForTesting();
+          await tester.pump(const Duration(seconds: 20));
+          expect(player.openCalls, 0, reason: 'auto-play off must not start the next episode in PiP');
+          expect(state.debugPlayNextPromptVisibleForTesting, isTrue);
+          expect(state.debugAutoPlayCountdownForTesting, -1);
+        },
+      );
+    });
+
+    testWidgets('in PiP the Show Next Up point opens no prompt; the end waits with auto-play off', (tester) async {
+      await SettingsService.instance.write(SettingsService.autoPlayNextEpisode, false);
+      PipService().isPipActive.value = true;
+      addTearDown(() => PipService().isPipActive.value = false);
+      await withMockPlayerChannels(
+        methodChannelName: 'com.plezy/mpv_player',
+        eventChannelName: 'com.plezy/mpv_player/events',
+        testBody: () async {
+          final (:state, :player) = await playingEpisode(tester, promptSeconds: 30);
+          await playTo(tester, player, const Duration(seconds: 31));
+          await playTo(tester, player, const Duration(seconds: 29));
+          await tester.pump(const Duration(milliseconds: 100));
+          expect(state.debugPlayNextPromptVisibleForTesting, isFalse, reason: 'nobody can answer it in PiP');
+
+          player.setPosition(player.state.duration - const Duration(seconds: 1));
+          player.emitPlaying(false);
+          player.setCompleted(true);
+          state.debugCompleteVideoForTesting();
+          await pumpUntil(tester, () => state.debugPlayNextPromptVisibleForTesting);
+          expect(state.debugAutoPlayCountdownForTesting, -1);
+          await tester.pump(const Duration(seconds: 20));
+          expect(player.openCalls, 0);
+        },
+      );
+    });
   });
 
   group('TV background suspend', () {
@@ -1048,6 +1103,50 @@ void main() {
       } finally {
         debugDefaultTargetPlatformOverride = null;
       }
+    });
+  }
+
+  for (final autoPlay in [false, true]) {
+    testWidgets('an EOF in PiP ${autoPlay ? 'starts the next episode at once' : 'waits at the Play Next prompt'} '
+        '(auto-play ${autoPlay ? 'on' : 'off'}, #3150)', (tester) async {
+      final client = _ReloadClient();
+      final fakePlayer = _ExitPlayer();
+      await SettingsService.instance.write(SettingsService.autoPlayNextEpisode, autoPlay);
+      PipService().isPipActive.value = true;
+      addTearDown(() => PipService().isPipActive.value = false);
+
+      await withMockPlayerChannels(
+        methodChannelName: 'com.plezy/mpv_player',
+        eventChannelName: 'com.plezy/mpv_player/events',
+        testBody: () async {
+          final screen = await _pushExitScreen(tester, db: db, client: client, fakePlayer: fakePlayer);
+          final state = screen.key.currentState!;
+          state.debugCommitAdjacentEpisodesForTesting(
+            AdjacentEpisodes(
+              next: testMediaItem(id: 'pip-next', serverId: 'srv-1', backend: MediaBackend.jellyfin),
+              nextStatus: QueueNavigationStatus.found,
+              previousStatus: QueueNavigationStatus.boundary,
+            ),
+          );
+          fakePlayer.setPosition(fakePlayer.state.duration - const Duration(seconds: 2));
+          fakePlayer.emitPlaying(false);
+          fakePlayer.setCompleted(true);
+          final opens = fakePlayer.openCalls;
+          state.debugCompleteVideoForTesting();
+
+          if (autoPlay) {
+            // Nobody can answer a countdown in PiP, so it is skipped.
+            await pumpUntil(tester, () => fakePlayer.openCalls > opens);
+            expect(state.debugPlayNextPromptVisibleForTesting, isFalse);
+          } else {
+            // The prompt is hidden in PiP and waits for the viewer to return.
+            await pumpUntil(tester, () => state.debugPlayNextPromptVisibleForTesting);
+            expect(state.debugAutoPlayCountdownForTesting, -1);
+            await tester.pump(const Duration(seconds: 20));
+            expect(fakePlayer.openCalls, opens, reason: 'auto-play off must not start the next episode');
+          }
+        },
+      );
     });
   }
 

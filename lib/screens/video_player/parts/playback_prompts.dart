@@ -122,13 +122,6 @@ extension _VideoPlayerPlaybackPromptMethods on VideoPlayerScreenState {
       // waits for a person instead of counting down.
       final serverStopped = _progressTracker?.stoppedByServer ?? false;
 
-      // PiP: skip dialog (user can't interact), auto-play immediately
-      if (PipService().isPipActive.value && !serverStopped) {
-        _logVideoCompleted('action=presentNext pip');
-        unawaited(_playNext());
-        return;
-      }
-
       // Capture keyboard mode before async gap
       final isKeyboardMode = PlatformDetector.isTV() && InputModeTracker.isKeyboardMode(context, listen: false);
 
@@ -137,9 +130,11 @@ extension _VideoPlayerPlaybackPromptMethods on VideoPlayerScreenState {
       final autoPlayEnabled = !serverStopped && settings.read(SettingsService.autoPlayNextEpisode);
       final countdownSeconds = settings.read(SettingsService.playNextCountdown);
 
-      // A zero countdown (#1827) behaves like the PiP path above: no prompt,
-      // straight into the next episode.
-      if (autoPlayEnabled && (skipAutoPlayCountdown || countdownSeconds == 0)) {
+      // Straight into the next episode, no prompt: auto-play with nothing to
+      // count down — a zero countdown (#1827), or PiP, where nobody can answer
+      // the prompt. With auto-play off, PiP takes the prompt below; it stays
+      // hidden in PiP and waits for the viewer to come back (#3150).
+      if (autoPlayEnabled && (skipAutoPlayCountdown || countdownSeconds == 0 || PipService().isPipActive.value)) {
         _logVideoCompleted('action=presentNext autoplay');
         unawaited(_playNext());
         return;
@@ -208,8 +203,10 @@ extension _VideoPlayerPlaybackPromptMethods on VideoPlayerScreenState {
       !_showStillWatchingPrompt &&
       !_episode.completionLatch.triggered &&
       _transitionGate.transition == PlaybackTransition.idle &&
-      // PiP advances at the end without a prompt, and an end-of-video sleep
-      // timer stops after this item.
+      // PiP has nobody to answer an early prompt: the end decides there
+      // (straight on with auto-play, else a prompt kept hidden until the
+      // viewer returns, #3150). An end-of-video sleep timer stops after this
+      // item.
       !PipService().isPipActive.value &&
       !SleepTimerService().isEndOfVideoMode;
 
@@ -254,6 +251,27 @@ extension _VideoPlayerPlaybackPromptMethods on VideoPlayerScreenState {
       'Video completed: $branch '
       '(position=${state?.position.inMilliseconds}ms duration=${state?.duration.inMilliseconds}ms)',
     );
+  }
+
+  /// The viewer ended the item ahead of its file: skipped credits that run to
+  /// the end, where a seek is unreliable (position stream throttling).
+  ///
+  /// While a room drives the player the item ends for everyone: the room
+  /// seeks to its end, and its end completes the item on every screen
+  /// ([_onRoomMediaEnded]). The host completes at once as well so its skip
+  /// keeps the countdown choice; the room's end then finds the latch set.
+  Future<void> _finishItem({required bool skipAutoPlayCountdown}) async {
+    final currentPlayer = player;
+    if (!mounted || _shuttingDown || currentPlayer == null) return;
+    final room = _followedRoom();
+    if (room != null) {
+      room.endMedia();
+      if (!room.isHost) return;
+    } else {
+      await currentPlayer.pause();
+      if (!mounted || player != currentPlayer) return;
+    }
+    _onVideoCompleted(true, skipAutoPlayCountdown: skipAutoPlayCountdown);
   }
 
   void _startAutoPlayTimer() {
