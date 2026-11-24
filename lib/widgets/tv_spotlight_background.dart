@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../i18n/strings.g.dart';
 import '../media/media_item.dart';
+import '../media/media_item_labels.dart';
 import '../media/media_item_types.dart';
 import '../media/media_kind.dart';
 import '../media/media_server_client.dart';
@@ -324,7 +325,8 @@ class TvSpotlightBackground extends StatelessWidget {
   Widget _buildMetadataLine(BuildContext context, MediaItem media) {
     final scale = _scale(context);
     final colorScheme = Theme.of(context).colorScheme;
-    final episodeLabel = formatSeasonEpisodeLabel(media.parentIndex, media.index);
+    final episodeLabel = formatEpisodeLabel(media);
+    final airDateLabel = episodeAirDateText(media);
     final textStyle = TextStyle(
       color: colorScheme.onSurface,
       fontSize: _metadataFontSize(scale),
@@ -357,7 +359,10 @@ class TvSpotlightBackground extends StatelessWidget {
       parts.add(MetadataLineText(formatDurationTextual(media.durationMs!), dropPriority: 1));
     }
     if (media.isEpisode && media.originallyAvailableAt != null) {
-      parts.add(MetadataLineText(formatFullDate(media.originallyAvailableAt!), dropPriority: 0));
+      // A date-labeled episode (Silo sports) already leads with its air date.
+      if (airDateLabel == null) {
+        parts.add(MetadataLineText(formatFullDate(media.originallyAvailableAt!), dropPriority: 0));
+      }
     } else if (media.year != null) {
       parts.add(MetadataLineText(media.year.toString(), dropPriority: 0));
     }

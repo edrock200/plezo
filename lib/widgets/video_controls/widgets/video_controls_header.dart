@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:plezy/utils/formatters.dart';
 
 import '../../../media/media_item.dart';
+import '../../../media/media_item_labels.dart';
 import '../../../i18n/strings.g.dart';
 import '../../../watch_together/widgets/watch_together_overlay.dart';
 import '../../../watch_together/providers/watch_together_provider.dart';
@@ -94,7 +95,8 @@ class VideoControlsHeader extends StatelessWidget {
     final List<String> parts = [seriesName];
 
     if (hasEpisodeInfo) {
-      parts.add('S${metadata.parentIndex}E${metadata.index}');
+      // A date-labeled series (Silo sports) names the episode by its air date.
+      parts.add(episodeAirDateText(metadata) ?? 'S${metadata.parentIndex}E${metadata.index}');
       parts.add(itemTitle);
     }
 
@@ -110,8 +112,12 @@ class VideoControlsHeader extends StatelessWidget {
     final List<String> secondLineParts = [];
 
     if (metadata.parentIndex != null && metadata.index != null) {
-      secondLineParts.add('S${metadata.parentIndex}');
-      secondLineParts.add('E${metadata.index}');
+      if (episodeAirDateText(metadata) case final airDate?) {
+        secondLineParts.add(airDate);
+      } else {
+        secondLineParts.add('S${metadata.parentIndex}');
+        secondLineParts.add('E${metadata.index}');
+      }
       secondLineParts.add(itemTitle);
     }
 

@@ -175,6 +175,15 @@ class PlaybackInitializationResult {
   /// null and the id is derived from [availableVersions] instead.
   final String? selectedMediaSourceId;
 
+  /// What the server's playback detail says labels this episode, for the
+  /// player's title and the media notification: `airDate` is the air date
+  /// (`YYYY-MM-DD`) shown in place of the season and episode code, or null
+  /// for the code. Null when the backend has no say (Plex, Jellyfin, offline);
+  /// the item keeps the label it came with. Silo sends `episode_labels` and
+  /// `air_date` on `/api/v2/watch` (Silo Android #1035), its players' only
+  /// source of the label.
+  final ({String? airDate})? episodeLabel;
+
   /// True when [videoUrl] points at a downloaded/local copy. This is a media
   /// source detail, not a statement about whether server reporting is possible.
   bool get usesLocalMedia => isOffline;
@@ -201,6 +210,7 @@ class PlaybackInitializationResult {
     this.playMethod,
     this.selectedMediaIndex = 0,
     this.selectedMediaSourceId,
+    this.episodeLabel,
   });
 }
 

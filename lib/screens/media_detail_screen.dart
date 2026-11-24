@@ -33,6 +33,7 @@ import '../utils/provider_extensions.dart';
 import '../utils/plex_season_display.dart';
 import '../media/media_backend.dart';
 import '../media/media_item.dart';
+import '../media/media_item_labels.dart';
 import '../media/primary_trailer.dart';
 import '../media/episode_collection.dart';
 import '../media/media_item_types.dart';
@@ -4462,10 +4463,15 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
     final lineMetadata = focusedEpisode ?? metadata;
     final parts = <MetadataLinePart>[];
 
-    final episodeLabel = formatSeasonEpisodeLabel(lineMetadata.parentIndex, lineMetadata.index);
+    // A date-labeled series' episode (Silo sports) names itself by its air
+    // date, so the date is not repeated after it.
+    final airDateLabel = episodeAirDateText(lineMetadata);
+    final episodeLabel = formatEpisodeLabel(lineMetadata);
     if (lineMetadata.isEpisode && episodeLabel != null) parts.add(MetadataLineText(episodeLabel, dropPriority: 0));
     if (lineMetadata.isEpisode && lineMetadata.originallyAvailableAt != null) {
-      parts.add(MetadataLineText(formatAbbreviatedDate(lineMetadata.originallyAvailableAt!), dropPriority: 0));
+      if (airDateLabel == null) {
+        parts.add(MetadataLineText(formatAbbreviatedDate(lineMetadata.originallyAvailableAt!), dropPriority: 0));
+      }
     } else if (lineMetadata.year != null) {
       parts.add(MetadataLineText(lineMetadata.year.toString(), dropPriority: 0));
     }
@@ -5403,8 +5409,10 @@ class _MediaDetailScreenState extends State<MediaDetailScreen>
         final episodeNum = episode.index ?? 0;
 
         // Use the same format for both play and resume
-        // (icon will indicate the difference)
-        return t.discover.playEpisode(season: seasonNum.toString(), episode: episodeNum.toString());
+        // (icon will indicate the difference). A date-labeled series (Silo
+        // sports) names the episode by its air date.
+        return episodeAirDateText(episode) ??
+            t.discover.playEpisode(season: seasonNum.toString(), episode: episodeNum.toString());
       } else {
         final seasonNum = defaultPlaybackSeason(_seasons)?.index ?? 1;
         return t.discover.playEpisode(season: seasonNum.toString(), episode: '1');

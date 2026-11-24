@@ -1108,10 +1108,13 @@ class SiloClient
   }
 
   Future<List<MediaItem>> _fetchEpisodes(String seriesId, int seasonNumber, {required String seasonId}) async {
+    // Read beside the list; it never throws, so the list's own error stands.
+    final labelsFuture = _seriesEpisodeLabels(seriesId);
     final data = await _cachedGet(
       '/api/v2/catalog/series/${_seg(seriesId)}/seasons/$seasonNumber/episodes',
       query: {'image_size': _imageSize},
     );
+    final seriesLabels = await labelsFuture;
     return SiloMappers.items(
       _itemsOf(data).map(
         (json) => {
@@ -1120,10 +1123,26 @@ class SiloClient
           'series_id': json['series_id'] ?? seriesId,
           'season_number': json['season_number'] ?? seasonNumber,
           'season_id': seasonId,
+          'episode_labels': ?(json['episode_labels'] ?? seriesLabels),
         },
       ),
       _ctx,
     );
+  }
+
+  /// The series' `episode_labels` (`air_date`: its episodes are labeled by
+  /// air date, Silo Android #1035). A season's episode list does not carry
+  /// it, so it comes from the series detail: the row the detail page just
+  /// read, else one shared fetch. Null (numbers) when the detail can't be
+  /// read, so a failure never hides the list.
+  Future<String?> _seriesEpisodeLabels(String seriesId) async {
+    try {
+      final labels = (await _recentItemDetail(seriesId))?['episode_labels'];
+      return labels is String && labels.isNotEmpty ? labels : null;
+    } catch (e) {
+      appLogger.d('SiloClient: series episode labels unavailable', error: e.runtimeType);
+      return null;
+    }
   }
 
   /// `GET /catalog/box-sets/{id}?library_id=`: the box set's own fields

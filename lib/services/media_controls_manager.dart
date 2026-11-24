@@ -8,6 +8,7 @@ import 'package:rate_limiter/rate_limiter.dart';
 
 import '../media/media_server_client.dart';
 import '../media/media_item.dart';
+import '../media/media_item_labels.dart';
 import '../media/media_item_types.dart';
 import '../media/media_kind.dart';
 import '../utils/app_logger.dart';
@@ -328,7 +329,8 @@ class MediaControlsManager {
       }
 
       if (metadata.parentIndex != null && metadata.index != null) {
-        parts.add('S${metadata.parentIndex} E${metadata.index}');
+        // A date-labeled series (Silo sports) names the episode by its air date.
+        parts.add(episodeAirDateText(metadata) ?? 'S${metadata.parentIndex} E${metadata.index}');
       } else if (metadata.parentTitle != null) {
         parts.add(metadata.parentTitle!);
       }

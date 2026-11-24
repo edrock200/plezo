@@ -5,6 +5,7 @@ import '../media/catalog_item_ref.dart';
 import '../media/ids.dart';
 import '../media/media_backend.dart';
 import '../media/media_item.dart';
+import '../media/media_item_labels.dart';
 import '../media/media_item_merge.dart';
 import '../media/media_item_types.dart';
 import '../media/media_kind.dart';
@@ -19,7 +20,6 @@ import '../services/settings_service.dart';
 import '../utils/global_key_utils.dart';
 import 'catalog_navigation_helper.dart';
 import 'dialogs.dart';
-import 'formatters.dart';
 import 'music_navigation.dart';
 import 'plex_library_section_utils.dart';
 import 'video_player_navigation.dart';
@@ -141,7 +141,7 @@ Future<MediaItem?> _pickContinueWatchingCopy(BuildContext context, List<MediaIte
   String label(MediaItem copy) {
     final library = copy.libraryTitle;
     return [
-      if (showEpisode && copy.isEpisode) ?formatSeasonEpisodeLabel(copy.parentIndex, copy.index),
+      if (showEpisode && copy.isEpisode) ?formatEpisodeLabel(copy),
       library ?? copy.serverName ?? copy.backend.dialect?.productName ?? 'Plex',
       ?libraryCopyQualityLabel(copy),
       if (showServer && library != null) ?copy.serverName,

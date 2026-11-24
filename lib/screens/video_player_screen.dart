@@ -1149,6 +1149,7 @@ class VideoPlayerScreenState extends State<VideoPlayerScreen>
   /// it — untouched, so there is nothing to roll back.
   void _commitPlaybackSession(PlaybackSession session) {
     _playbackSession = session;
+    _applyServerEpisodeLabel(session);
     _effectiveSelectedMediaIndex = session.mediaIndex;
     _requestedMediaSourceId = session.mediaSourceId;
     _selectedQualityPreset = session.qualityPreset;
@@ -1163,6 +1164,22 @@ class VideoPlayerScreenState extends State<VideoPlayerScreen>
     if (!session.isOffline) {
       unawaited(LocalPlaybackHistory.recordPlayback(session.metadata));
     }
+  }
+
+  /// The episode label the server's playback detail gives the opened item
+  /// (Silo's `/watch`: a sports episode shows its air date in place of
+  /// S2026E296, Silo Android #1035) replaces the one the item arrived with,
+  /// so the player's title and the media notification follow the playback
+  /// answer alone. Results without a say (Plex, Jellyfin, offline) change
+  /// nothing.
+  void _applyServerEpisodeLabel(PlaybackSession session) {
+    final label = session.context.result.episodeLabel;
+    if (label == null || session.metadata.globalKey != _currentMetadata.globalKey) return;
+    final labeled = _currentMetadata.withEpisodeAirDateLabel(label.airDate);
+    if (identical(labeled, _currentMetadata)) return;
+    appLogger.d('Episode label from playback detail: ${label.airDate == null ? 'numbers' : 'air date'}');
+    _currentMetadata = labeled;
+    if (mounted) setState(() {});
   }
 
   /// Seconds before the end at which a Silo episode's Play Next prompt opens

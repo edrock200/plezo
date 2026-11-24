@@ -5,6 +5,7 @@ import 'package:plezy/i18n/strings.g.dart';
 import 'package:plezy/media/ids.dart';
 import 'package:plezy/media/media_item.dart';
 import 'package:plezy/services/jellyfin_mappers.dart';
+import 'package:plezy/services/silo/silo_mappers.dart';
 import 'package:plezy/watch_together/providers/watch_together_provider.dart';
 import 'package:plezy/widgets/video_controls/widgets/video_controls_header.dart';
 import 'package:provider/provider.dart';
@@ -70,7 +71,34 @@ void main() {
       expect(find.text(t.common.unknown), findsNothing, reason: style.name);
     }
   });
+
+  testWidgets('a Silo sports episode names itself by its air date in both layouts', (tester) async {
+    final item = SiloMappers.item({
+      'content_id': 'episode:nba-2026-296',
+      'type': 'episode',
+      'title': 'Lakers at Celtics',
+      'series_title': 'NBA',
+      'series_id': 'series:nba',
+      'season_number': 2026,
+      'episode_number': 296,
+      'episode_labels': 'air_date',
+      'air_date': '2026-11-20',
+    }, _siloCtx)!;
+
+    for (final style in VideoHeaderStyle.values) {
+      await _pumpHeader(tester, metadata: item, style: style);
+
+      final expectedEpisodeLine = switch (style) {
+        VideoHeaderStyle.singleLine => 'NBA · Nov 20, 2026 · Lakers at Celtics',
+        VideoHeaderStyle.multiLine => 'Nov 20, 2026 · Lakers at Celtics',
+      };
+      expect(find.text(expectedEpisodeLine), findsOneWidget, reason: style.name);
+      expect(find.textContaining('S2026'), findsNothing, reason: style.name);
+    }
+  });
 }
+
+final _siloCtx = SiloMappingContext(serverId: 'srv-1', serverName: 'Home Silo', resolveUrl: (url) => url);
 
 MediaItem _mappedItem(Map<String, dynamic> json) {
   return JellyfinMappers.mediaItem(

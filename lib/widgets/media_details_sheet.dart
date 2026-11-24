@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../focus/focusable_wrapper.dart';
 import '../media/media_item.dart';
+import '../media/media_item_labels.dart';
 import '../media/media_item_types.dart';
 import '../utils/content_utils.dart';
 import '../utils/formatters.dart';
@@ -63,12 +64,13 @@ class _MediaDetailsSheetState extends State<MediaDetailsSheet> {
   /// Year (or episode label and air date), certification, runtime, and every
   /// quality label — the plain-text fields of the hero metadata line, complete.
   List<String> _metadataLabels(MediaItem item) {
-    final episodeLabel = formatSeasonEpisodeLabel(item.parentIndex, item.index);
+    final episodeLabel = formatEpisodeLabel(item);
     return [
       if (item.isEpisode && episodeLabel != null) episodeLabel,
-      if (item.isEpisode && item.originallyAvailableAt != null)
-        formatAbbreviatedDate(item.originallyAvailableAt!)
-      else if (item.year != null)
+      if (item.isEpisode && item.originallyAvailableAt != null) ...[
+        // A date-labeled episode's label is already its air date.
+        if (episodeAirDateText(item) == null) formatAbbreviatedDate(item.originallyAvailableAt!),
+      ] else if (item.year != null)
         item.year.toString(),
       if (item.contentRating != null) formatContentRating(item.contentRating!),
       if (item.durationMs != null) formatDurationTextual(item.durationMs!),

@@ -246,6 +246,16 @@ Jellyfin-compatible API the server also hosts. `SiloApi.request` throws on any p
   inherited art (`heroBackdropPaths`), and `spoilerSafeArt` reads `grandparentArtPath`; series and
   season art is never an episode still, so spoiler protection leaves it visible. `artPath` stays
   the episode's own backdrop. Plezy's Up Next card deliberately shows the (blurred) episode still.
+- **Episodes labeled by air date** (Silo Android #1035, sports leagues Sportarr numbers
+  `S<year>E<n>`): a series marked `episode_labels: air_date` on v2 cards, item detail and
+  `/api/v2/watch` labels its episodes by `air_date`. `SiloMappers.item` sets `SiloMediaItem.airDateLabel`
+  (episodes only, a valid `YYYY-MM-DD`, `SiloMappers.episodeAirDateLabel`); shared UI asks the neutral
+  `MediaItem.episodeAirDateLabel` / `episodeAirDateText` / `formatEpisodeLabel`
+  (`lib/media/media_item_labels.dart`), null on Plex and Jellyfin. A season's episode list does not
+  carry the flag: `_fetchEpisodes` takes it from the series detail (`_recentItemDetail`, reused when
+  the page just read it; a failed read keeps numbers). The player takes the playing episode's label
+  from `/watch` only (`PlaybackInitializationResult.episodeLabel`, applied in `_commitPlaybackSession`).
+  Numbers still sort and pick next-up; downloads' file names and external-player titles keep them.
 - **Section rows (`item_limit`, Silo #688):** Home and library section lists send
   `item_limit=min(20, section_item_limit_max)` only when `GET /home/capabilities` advertises the
   field. The capability is read once per client (shared future, 3 s cap); a failed/slow read or a
@@ -654,6 +664,9 @@ PIN length (matches Silo's apps). Open follow-ups: an edit screen for an existin
 — today the user removes and re-adds it; music/audiobook libraries; OIDC sign-in.
 
 ## Deliberate differences from Silo's apps
+- Up Next's episode label (sports air date) comes from the episode list, whose flag comes from the
+  series detail, not from the playing episode's `/watch` as in Silo's players; the playing episode's
+  own label follows `/watch`. Download file names keep `SxxEyy`.
 - Quality changes start a fresh `POST /playback/start` for the same `file_id` (no staged replans),
   so the server never moves Plezy to another version mid-play; Silo #684 (adopt a cross-version
   replan with subtitles off) does not apply. Subtitles are chosen client-side.

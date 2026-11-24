@@ -336,6 +336,7 @@ SiloMediaItem _$SiloMediaItemFromJson(Map<String, dynamic> json) =>
       serverId: json['serverId'] as String?,
       serverName: json['serverName'] as String?,
       backendFolderKey: json['backendFolderKey'] as String?,
+      airDateLabel: json['airDateLabel'] as String?,
       raw: _mediaItemRawFromJson(json['raw']),
     );
 
@@ -398,5 +399,6 @@ Map<String, dynamic> _$SiloMediaItemToJson(SiloMediaItem instance) =>
       'serverId': ?instance.serverId,
       'serverName': ?instance.serverName,
       'backendFolderKey': ?instance.backendFolderKey,
+      'airDateLabel': ?instance.airDateLabel,
       'raw': ?instance.raw,
     };

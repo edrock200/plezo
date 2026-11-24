@@ -411,6 +411,39 @@ abstract final class SiloMappers {
     return positionMs;
   }
 
+  /// The `episode_labels` value of a series whose episodes are labeled by
+  /// air date (Silo Android #1035): Sportarr numbers a league's events
+  /// `S<year>E<n>`, so a game would read "S2026E296".
+  static const episodeLabelsAirDate = 'air_date';
+
+  /// The air date that labels an episode in place of its code: the payload's
+  /// `air_date` as `YYYY-MM-DD` when its series is marked `episode_labels:
+  /// air_date` (cards, item detail and `/watch` carry both), else null. An
+  /// undated episode, or a date the month doesn't have (2026-02-30), keeps
+  /// its numbers, as in Silo's apps (`EpisodeLabel.airDate`).
+  static String? episodeAirDateLabel(Map<String, dynamic>? json) {
+    if (json == null || _string(json['episode_labels']) != episodeLabelsAirDate) return null;
+    return calendarDate(json['air_date']);
+  }
+
+  /// [value] (`YYYY-MM-DD`, or a timestamp's date part) as a valid
+  /// `YYYY-MM-DD` calendar date, else null.
+  static String? calendarDate(Object? value) {
+    final raw = _string(value)?.trim();
+    if (raw == null) return null;
+    final parts = raw.split('T').first.split(' ').first.split('-');
+    if (parts.length != 3) return null;
+    final year = int.tryParse(parts[0]);
+    final month = int.tryParse(parts[1]);
+    final day = int.tryParse(parts[2]);
+    if (year == null || month == null || day == null) return null;
+    if (year < 1 || year > 9999 || month < 1 || month > 12 || day < 1) return null;
+    // Day 0 of the next month is this month's last day.
+    if (day > DateTime.utc(year, month + 1, 0).day) return null;
+    String pad(int n, int width) => n.toString().padLeft(width, '0');
+    return '${pad(year, 4)}-${pad(month, 2)}-${pad(day, 2)}';
+  }
+
   /// Map a Silo card or detail object. Returns `null` for rows without an
   /// id or of a type Plezy cannot show (music, podcasts and reading media).
   /// An audiobook maps to a [MediaKind.album] whose `raw['type']` is
@@ -577,6 +610,7 @@ abstract final class SiloMappers {
       libraryTitle: libraryTitle,
       serverId: ctx.serverId,
       serverName: ctx.serverName,
+      airDateLabel: kind == MediaKind.episode ? episodeAirDateLabel(json) : null,
       raw: json,
     );
   }

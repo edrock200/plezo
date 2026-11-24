@@ -381,6 +381,13 @@ sealed class MediaItem with _$MediaItem {
 
     /// Always null on Silo, which has no folder browsing.
     String? backendFolderKey,
+
+    /// The air date (`YYYY-MM-DD`) that labels this episode in place of its
+    /// season and episode numbers: set only on an episode of a series Silo
+    /// marks `episode_labels: air_date` (sports leagues Sportarr numbers
+    /// S2026E296, Silo Android #1035) that has a valid `air_date`. Read it
+    /// through [MediaItem.episodeAirDateLabel].
+    String? airDateLabel,
     @JsonKey(fromJson: _mediaItemRawFromJson) Map<String, Object?>? raw,
   }) = SiloMediaItem;
 
@@ -570,6 +577,25 @@ sealed class MediaItem with _$MediaItem {
     final unwatched = userData is Map<String, dynamic> ? flexibleInt(userData['UnplayedItemCount']) : null;
     return unwatched != null && unwatched >= 0 ? unwatched : null;
   }
+
+  /// The air date (`YYYY-MM-DD`) shown where this episode's season and
+  /// episode code ("S1 E2") would go, or null to show the code. Only Silo
+  /// labels episodes by date (a series marked `episode_labels: air_date`);
+  /// Plex and Jellyfin items always show numbers. The numbers still sort
+  /// episodes and pick what plays next.
+  String? get episodeAirDateLabel => switch (this) {
+    SiloMediaItem(:final airDateLabel) when kind == MediaKind.episode => airDateLabel,
+    _ => null,
+  };
+
+  /// Copy whose [episodeAirDateLabel] is [airDate] (null: show the numbers).
+  /// No-op on backends that never label episodes by date.
+  MediaItem withEpisodeAirDateLabel(String? airDate) => switch (this) {
+    final SiloMediaItem item when item.kind == MediaKind.episode && item.airDateLabel != airDate => item.copyWith(
+      airDateLabel: airDate,
+    ),
+    _ => this,
+  };
 
   /// Copy with the watched flag applied so [isWatched] reflects it for every
   /// kind. This is the single mutation seam used by watch-state overlays.

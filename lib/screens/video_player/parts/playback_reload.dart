@@ -776,9 +776,10 @@ extension _VideoPlayerReloadMethods on VideoPlayerScreenState {
         if (!isCurrentReload()) return MediaReloadOutcome.superseded;
 
         // Same helper as the initial start flow, so any future change lands in
-        // both paths together.
+        // both paths together. The committed item carries the playback
+        // detail's episode label ([_applyServerEpisodeLabel]).
         _wirePerItemPlaybackServices(
-          metadata: metadata,
+          metadata: _currentMetadata.globalKey == metadata.globalKey ? _currentMetadata : metadata,
           mediaClient: mediaClient,
           offlineWatchService: offlineWatchService,
           playSessionId: _playbackPlaySessionId,

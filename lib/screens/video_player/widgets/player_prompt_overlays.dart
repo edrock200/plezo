@@ -11,6 +11,7 @@ import '../../../focus/input_mode_tracker.dart';
 import '../../../i18n/strings.g.dart';
 import '../../../media/ids.dart';
 import '../../../media/media_item.dart';
+import '../../../media/media_item_labels.dart';
 import '../../../media/media_item_types.dart';
 import '../../../providers/playback_state_provider.dart';
 import '../../../services/download_artwork_service.dart';
@@ -438,7 +439,7 @@ class _PlayNextEpisodeHeader extends StatelessWidget {
               const SizedBox(height: 4),
               if (episode.parentIndex != null && episode.index != null)
                 Text(
-                  'S${episode.parentIndex} E${episode.index} · ${episode.title}',
+                  '${episodeAirDateText(episode) ?? 'S${episode.parentIndex} E${episode.index}'} · ${episode.title}',
                   style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: .w600),
                   maxLines: 2,
                   overflow: .ellipsis,

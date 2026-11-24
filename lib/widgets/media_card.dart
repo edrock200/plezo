@@ -13,6 +13,7 @@ import '../focus/input_mode_tracker.dart';
 import '../i18n/app_locale_utils.dart';
 import '../media/catalog_item_ref.dart';
 import '../media/media_item.dart';
+import '../media/media_item_labels.dart';
 import '../media/media_item_types.dart';
 import '../media/media_kind.dart';
 import '../media/media_playlist.dart';
@@ -158,7 +159,7 @@ String mediaCardSemanticLabel(Object item) {
   String baseLabel;
   switch (item.kind) {
     case MediaKind.episode:
-      final episodeInfo = item.parentIndex != null && item.index != null ? 'S${item.parentIndex} E${item.index}' : '';
+      final episodeInfo = formatEpisodeLabel(item) ?? '';
       baseLabel = t.accessibility.mediaCardEpisode(title: item.displayTitle, episodeInfo: episodeInfo);
     case MediaKind.season:
       final seasonInfo = item.title?.isNotEmpty == true
@@ -862,7 +863,7 @@ class _MediaCardList extends StatelessWidget {
       if (mi.kind == MediaKind.track) return mi.trackArtistTitle;
 
       if (mi.parentIndex != null && mi.index != null) {
-        return 'S${mi.parentIndex}${_episodeNumberSuffix(mi)}';
+        return episodeAirDateText(mi) ?? 'S${mi.parentIndex}${_episodeNumberSuffix(mi)}';
       }
 
       if (mi.displaySubtitle != null) {
@@ -1304,7 +1305,7 @@ class _MediaCardHelpers {
     }
 
     if (mi.isEpisode && mi.parentIndex != null) {
-      final number = 'S${mi.parentIndex}${_episodeNumberSuffix(mi)}';
+      final number = episodeAirDateText(mi) ?? 'S${mi.parentIndex}${_episodeNumberSuffix(mi)}';
       if (showTitleImplied) {
         // The headline already names the episode; identify it by number and
         // runtime instead of repeating the title.
@@ -1523,7 +1524,8 @@ class _CatalogFocusBorder extends StatelessWidget {
   }
 }
 
-/// "S# E# · Episode title" with the season number linking to the season.
+/// "S# E# · Episode title" with the season number linking to the season. An
+/// episode of a date-labeled series shows its air date there instead.
 Widget _buildEpisodeSubtitleRow(
   BuildContext context,
   MediaItem mi, {
@@ -1531,7 +1533,9 @@ Widget _buildEpisodeSubtitleRow(
   required bool enableDetailLinks,
   required bool isOffline,
 }) {
-  final seasonLabel = 'S${mi.parentIndex}';
+  final airDate = episodeAirDateText(mi);
+  final seasonLabel = airDate ?? 'S${mi.parentIndex}';
+  final episodeSuffix = airDate == null ? _episodeNumberSuffix(mi) : '';
   return Row(
     children: [
       if (enableDetailLinks)
@@ -1542,7 +1546,7 @@ Widget _buildEpisodeSubtitleRow(
         )
       else
         ExcludeSemantics(child: Text(seasonLabel, style: style)),
-      ExcludeSemantics(child: Text('${_episodeNumberSuffix(mi)} · ', style: style)),
+      ExcludeSemantics(child: Text('$episodeSuffix · ', style: style)),
       Expanded(
         child: ExcludeSemantics(
           child: Text(mi.displaySubtitle ?? mi.displayTitle, maxLines: 1, overflow: .ellipsis, style: style),

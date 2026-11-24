@@ -2,6 +2,7 @@ import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:plezy/database/app_database.dart';
 import 'package:plezy/i18n/strings.g.dart';
 import 'package:plezy/media/media_backend.dart';
@@ -126,6 +127,40 @@ void main() {
     await _pumpEpisodeCard(tester, episode);
 
     expect(find.byType(MediaProgressBar), findsOneWidget);
+  });
+
+  testWidgets('a date-labeled Silo episode leads with its title, its date below', (tester) async {
+    await initializeDateFormatting('en');
+    final game = testMediaItem(
+      id: 'episode:nba-2026-296',
+      backend: MediaBackend.silo,
+      kind: MediaKind.episode,
+      title: 'Lakers at Celtics',
+      parentIndex: 2026,
+      index: 296,
+      originallyAvailableAt: '2026-11-20',
+    ).withEpisodeAirDateLabel('2026-11-20');
+
+    await _pumpEpisodeCard(tester, game);
+
+    expect(find.text('Lakers at Celtics'), findsOneWidget);
+    expect(find.text('296. Lakers at Celtics'), findsNothing);
+    expect(find.text('November 20, 2026'), findsOneWidget);
+  });
+
+  testWidgets('a numbered episode keeps its number before the title', (tester) async {
+    final episode = testMediaItem(
+      id: 'episode:numbered',
+      backend: MediaBackend.silo,
+      kind: MediaKind.episode,
+      title: 'Pilot',
+      parentIndex: 1,
+      index: 1,
+    );
+
+    await _pumpEpisodeCard(tester, episode);
+
+    expect(find.text('1. Pilot'), findsOneWidget);
   });
 }
 

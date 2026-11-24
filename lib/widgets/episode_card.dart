@@ -14,6 +14,7 @@ import 'package:provider/provider.dart';
 import '../services/settings_service.dart';
 import 'settings_builder.dart';
 import '../media/media_item.dart';
+import '../media/media_item_labels.dart';
 import '../media/media_item_types.dart';
 import '../widgets/collapsible_text.dart';
 import '../widgets/download_status_icon.dart';
@@ -258,9 +259,18 @@ class _EpisodeCardState extends State<EpisodeCard> with ContextMenuTapMixin<Epis
                               }
 
                               final index = episode.index;
+                              final airDate = episodeAirDateText(episode);
+                              final title = episode.title;
                               // The prefix mirrors the server-provided episode
                               // number verbatim, including a genuine episode 0.
-                              final titleText = index != null ? '$index. ${episode.title!}' : episode.title!;
+                              // A date-labeled series' title stands alone (its
+                              // date is on the line below); an untitled one
+                              // shows the date.
+                              final titleText = airDate != null
+                                  ? (title == null || title.isEmpty ? airDate : title)
+                                  : index != null
+                                  ? '$index. ${episode.title!}'
+                                  : episode.title!;
                               return Row(
                                 children: [
                                   if (downloadStatusIcon != null) ...[downloadStatusIcon, const SizedBox(width: 8)],

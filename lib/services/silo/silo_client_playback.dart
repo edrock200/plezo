@@ -484,6 +484,9 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
       playMethod: isOriginal ? 'DirectPlay' : (delivery.contains('transcode') ? 'Transcode' : 'DirectStream'),
       selectedMediaIndex: versionIndex,
       selectedMediaSourceId: fileId,
+      episodeLabel: watch != null && metadata.kind == MediaKind.episode
+          ? (airDate: SiloMappers.episodeAirDateLabel(watch))
+          : null,
     );
   }
 

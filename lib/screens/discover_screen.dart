@@ -16,6 +16,7 @@ import '../focus/input_mode_tracker.dart';
 import '../focus/key_event_utils.dart';
 
 import '../media/media_item.dart';
+import '../media/media_item_labels.dart';
 import '../media/media_item_types.dart';
 import '../media/media_server_client.dart';
 import '../media/media_hub.dart';
@@ -1499,6 +1500,10 @@ class _DiscoverScreenState extends State<DiscoverScreen>
     );
   }
 
+  /// "S1, E2" before a hero episode's summary or title, or the air date of
+  /// an episode whose series is labeled by date (Silo sports).
+  static String _heroEpisodeCode(MediaItem item) => episodeAirDateText(item) ?? 'S${item.parentIndex}, E${item.index}';
+
   Widget _buildHeroItem(MediaItem heroItem, double heroHeight) {
     final heroClient = _getMediaClientForItem(heroItem);
     final isEpisode = heroItem.isEpisode;
@@ -1655,7 +1660,7 @@ class _DiscoverScreenState extends State<DiscoverScreen>
                                   children: [
                                     if (isEpisode && heroItem.parentIndex != null && heroItem.index != null)
                                       TextSpan(
-                                        text: 'S${heroItem.parentIndex}, E${heroItem.index}: ',
+                                        text: '${_heroEpisodeCode(heroItem)}: ',
                                         style: TextStyle(fontWeight: .bold, color: colorScheme.onSurface),
                                       ),
                                     TextSpan(
@@ -1672,7 +1677,7 @@ class _DiscoverScreenState extends State<DiscoverScreen>
                                 heroItem.index != null) ...[
                               const SizedBox(height: 12),
                               Text(
-                                'S${heroItem.parentIndex}, E${heroItem.index}: ${heroItem.title}',
+                                '${_heroEpisodeCode(heroItem)}: ${heroItem.title}',
                                 maxLines: 2,
                                 overflow: .ellipsis,
                                 textAlign: alignLeft ? TextAlign.left : TextAlign.center,

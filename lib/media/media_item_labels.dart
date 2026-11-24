@@ -2,8 +2,25 @@ import '../utils/formatters.dart';
 import 'media_item.dart';
 import 'media_kind.dart';
 
+/// An episode's air date formatted for the locale ("Nov 20, 2026"), shown in
+/// place of its season and episode code when its series is labeled by date
+/// ([MediaItem.episodeAirDateLabel]: Silo sports series). Null shows the code,
+/// which every Plex and Jellyfin item does.
+String? episodeAirDateText(MediaItem item) {
+  final date = item.episodeAirDateLabel;
+  return date == null ? null : formatAbbreviatedDate(date);
+}
+
+/// [formatSeasonEpisodeLabel] ("S1 E2"), or the air date of an episode whose
+/// series is labeled by date ([episodeAirDateText]).
+String? formatEpisodeLabel(MediaItem item) =>
+    episodeAirDateText(item) ?? formatSeasonEpisodeLabel(item.parentIndex, item.index);
+
 String formatQueueItemSubtitle(MediaItem item) {
   final grandparentTitle = item.grandparentTitle;
+  if (episodeAirDateText(item) case final date? when grandparentTitle != null) {
+    return '$grandparentTitle \u00b7 $date';
+  }
   if (grandparentTitle != null && item.parentIndex != null && item.index != null) {
     return '$grandparentTitle \u00b7 S${item.parentIndex}E${item.index}';
   }
@@ -31,7 +48,7 @@ String formatMediaTargetLabel(MediaItem item) {
   switch (item.kind) {
     case MediaKind.episode:
       add(item.grandparentTitle);
-      add(formatSeasonEpisodeLabel(item.parentIndex, item.index));
+      add(formatEpisodeLabel(item));
       add(item.title);
     case MediaKind.season:
       add(item.grandparentTitle ?? item.parentTitle);
