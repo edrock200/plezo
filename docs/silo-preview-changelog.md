@@ -4,6 +4,12 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **Tofa servers (new, a first version):** Plezilo can now connect to a Tofa media server, its fifth server type next to Plex, Jellyfin, Emby and Silo. In *Add connection* pick *Connect to Tofa*, type your server's address, then sign in with the code (or QR code) Plezilo shows, on your phone or computer, and pick your Tofa profile (with its PIN if it has one). You can browse your libraries, open movies and series with their seasons and episodes, search, see Continue Watching, mark things watched or unwatched, and play: the server decides whether your device plays the file as is or gets a converted stream, Plezilo starts where you left off and keeps your place. Not there yet: downloads, sorting and filters, other Home rows, chapters and seek-bar previews, watchlist, and connecting from outside your home network through Tofa's relay (use an address your device can reach). This was built from Tofa's published API and has not been tried on a real Tofa server yet, so please report what doesn't work.
+
+## silo-preview-2.63.0
+
+Released November 25, 2026. Android and Windows.
+
 - **Audio and subtitles you pick in the player are remembered for the whole show, and for movies:** when you change the audio or subtitles while a Silo episode plays, Plezilo already saved the choice on your Silo server for the rest of the series. It now does the same for movies, so the next time you start that movie it plays your pick, also in Silo's own apps. A pick is saved only once it actually plays: if the server cannot switch to that track (or plays a different one instead), nothing is saved and your earlier choice stays. Plex and Jellyfin are unchanged. *(From Silo's own apps.)*
 
 ## silo-preview-2.62.0

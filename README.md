@@ -5,7 +5,7 @@
 
 A client for Plex, Jellyfin, Emby, and [Silo](https://github.com/Silo-Server/silo-server) on desktop, mobile, and TV, built with Flutter.
 
-Plezilo is based on [Plezy](https://github.com/edde746/plezy) by edde746 and adds Silo as a fourth server type. It is not made or endorsed by the Plezy project; report problems with Plezilo here, not upstream. Plezy's name, logo and services belong to the Plezy project ([TRADEMARKS.md](TRADEMARKS.md)), so Plezilo has its own name, icon and `plezilo://` links, and the features that relied on Plezy's services are switched off (see [What is switched off](#what-is-switched-off)).
+Plezilo is based on [Plezy](https://github.com/edde746/plezy) by edde746 and adds Silo as a fourth server type and Tofa (first version) as a fifth. It is not made or endorsed by the Plezy project; report problems with Plezilo here, not upstream. Plezy's name, logo and services belong to the Plezy project ([TRADEMARKS.md](TRADEMARKS.md)), so Plezilo has its own name, icon and `plezilo://` links, and the features that relied on Plezy's services are switched off (see [What is switched off](#what-is-switched-off)).
 
 <p>
   <a href="#download">Download</a> ·
@@ -114,7 +114,7 @@ These features used services the Plezy project runs or registered, which a fork 
 
 ### <img src="assets/readme_icons/customization.svg" height="20" alt="" align="center" /> Platform & Customization
 - Desktop, mobile, and TV — full D-pad, keyboard, and gamepad support
-- Multiple servers at once — Plex, Jellyfin, Emby, and Silo side by side
+- Multiple servers at once — Plex, Jellyfin, Emby, Silo and Tofa side by side
 - Silo servers over Silo's `/api/v2` API: sign in with a code or password, Silo profiles with PINs, server-defined Home rows, and server-chosen Direct Play or transcode[^silo]
 - Profiles with per-profile downloads, watch state, and settings; Plex Home switching with PIN
 - Jellyfin and Emby local-server discovery and multiple URLs per server; Quick Connect sign-in[^jf]
@@ -236,6 +236,9 @@ The full, plain-language change log for each preview is in [`docs/silo-preview-c
 - **Phone and TV parity with Silo's apps:** tablets identify as tablets, playback reports the device's form factor and metered networks, Silo's default port `8090` is tried, LDAP-style password sign-in, downloads never carry the account token.
 - **Review fixes:** cursor paging that jumps to distant pages and recovers from changed listings; season writes from an episode's season link no longer hit the whole series; failed playback stops are retried; refused sign-ins are not retried on every request; offline details for downloaded items; faster Home and season loading; Continue Watching dismissals, IMDb scores and version runtimes fixed; Discord artwork no longer receives the account token; device-code sign-in handles expired codes, PIN lockouts and broken avatars; each Plezilo profile's downloads stay with its own Silo account.
 
+### Tofa (first version)
+
+Plezilo also connects to [Tofa](https://tofa.tv) servers through Tofa's public `/api/v1` API: sign in with a code shown on screen (QR code too), pick a Tofa profile, browse, search, Continue Watching, watched/unwatched and playback with progress. Not yet: downloads, sorting and filters, other Home rows, chapters, seek-bar previews, watchlist and Tofa's relay for connecting from away. It was built from Tofa's published API and still needs testing on a real Tofa server.
 
 ## Building from Source
 
