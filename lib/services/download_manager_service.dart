@@ -584,6 +584,7 @@ class DownloadManagerService {
   }
 
   Future<String?> _profileScopeIdForBackend(MediaBackend backend, ServerId serverId, String activeProfileId) async {
+    if (backend == MediaBackend.tofa) return activeClientScopeIdForServer(serverId);
     if (backend == MediaBackend.silo) {
       // A Silo cache is keyed by the connection id (`server/user/profile`).
       return await _siloProfileScopeId(serverId, activeProfileId) ?? activeClientScopeIdForServer(serverId);

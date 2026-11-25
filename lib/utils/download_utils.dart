@@ -170,6 +170,10 @@ Future<DownloadResult?> showDownloadOptionsAndQueue(
   }
 
   if (!context.mounted) return null;
+  if (!metadata.backend.supportsDownloads) {
+    appLogger.d('Downloads are not supported for ${metadata.backend.id} items');
+    return null;
+  }
 
   final versionConfig = await resolveDownloadVersion(context, metadata, client);
   if (versionConfig == null || !context.mounted) return null;

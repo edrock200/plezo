@@ -146,7 +146,8 @@ class _MenuContext {
   /// administrator (or holds a collection-management policy that sign-in
   /// does not capture), so MediaBrowser non-admins only get playlists. Plex
   /// keeps offering collections to everyone, as before.
-  bool get canManageCollections => (isPlex || isAdmin) && itemBackend != MediaBackend.silo;
+  bool get canManageCollections =>
+      (isPlex || isAdmin) && itemBackend != MediaBackend.silo && itemBackend != MediaBackend.tofa;
 }
 
 /// Whether the picked entry navigated away, in which case the menu must not
@@ -622,8 +623,9 @@ class MediaContextMenuState extends State<MediaContextMenu> {
           hasAnyDownload: false,
           downloadValue: menu.isPlaylist ? 'download_playlist' : 'download_collection',
         ),
-      // Silo's collections and box sets are read-only for clients.
-      if (menu.itemBackend != MediaBackend.silo)
+      // Silo's collections and box sets are read-only for clients; Plezilo
+      // edits no Tofa playlists or collections.
+      if (menu.itemBackend != MediaBackend.silo && menu.itemBackend != MediaBackend.tofa)
         _MenuAction(value: 'delete', icon: Symbols.delete_rounded, label: t.common.delete, destructive: true),
     ];
   }
@@ -816,6 +818,7 @@ class MediaContextMenuState extends State<MediaContextMenu> {
     // skip entirely.
     final canDownload =
         !PlatformDetector.isAppleTV() &&
+        mediaItem.backend.supportsDownloads &&
         (mediaItem.isVideoContent || mediaKind == MediaKind.album || mediaKind == MediaKind.track) &&
         !SiloMappers.isAudiobook(mediaItem);
     final downloadProvider = canDownload ? Provider.of<DownloadProvider>(context, listen: false) : null;
