@@ -219,6 +219,8 @@ extension _VideoPlayerPlaybackStartMethods on VideoPlayerScreenState {
             showErrorSnackBar(context, t.videoControls.transcodeUnavailableFallback);
           }
         }
+        final notice = playbackContext.result.playbackNotice;
+        if (notice != null && mounted) showAppSnackBar(context, notice);
       }
       final result = playbackContext.result;
       if (!attempt.isCurrent) return;

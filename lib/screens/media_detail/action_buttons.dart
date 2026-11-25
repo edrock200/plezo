@@ -23,14 +23,19 @@ extension _MediaDetailActionButtons on _MediaDetailScreenState {
     return memberships == null ? row() : ListenableBuilder(listenable: memberships, builder: (_, _) => row());
   }
 
-  /// The Watchlist / Favorites state for a Silo movie or show page that is
-  /// online, else null (no toggles).
+  /// The Watchlist / Favorites state for a Silo or Tofa movie or show page
+  /// that is online, else null (no toggles).
   SiloMembershipStore? _siloMembershipStore(MediaItem metadata) {
-    if (widget.isOffline || metadata.backend != MediaBackend.silo) return null;
+    if (widget.isOffline || !_hasServerLists(metadata.backend)) return null;
     if (!metadata.isMovie && !metadata.isShow) return null;
     final client = _getMediaClientForMetadata(context);
-    return client is SiloClient ? client.memberships : null;
+    return switch (client) {
+      final MembershipListsClient lists => lists.memberships,
+      _ => null,
+    };
   }
+
+  static bool _hasServerLists(MediaBackend backend) => backend == MediaBackend.silo || backend == MediaBackend.tofa;
 
   /// Play while the page waits for the full item: a disabled button with a
   /// spinner and "Loading...". [style] comes from the live row's styling; the
@@ -413,11 +418,17 @@ extension _MediaDetailActionButtons on _MediaDetailScreenState {
     // Silo title this is the watchlist button; a catalog source's watchlist
     // stays in the ⋮ menu.
     final siloMemberships = _siloMembershipStore(metadata);
-    final siloClient = siloMemberships == null ? null : _getMediaClientForMetadata(context) as SiloClient?;
+    final siloClient = siloMemberships == null
+        ? null
+        : switch (_getMediaClientForMetadata(context)) {
+            final MembershipListsClient client => client,
+            _ => null,
+          };
     FocusableAction? siloToggle(SiloMembership kind) {
       final store = siloMemberships;
       final client = siloClient;
-      if (store == null || client == null) return null;
+      // Tofa keeps a Watchlist and no Favorites.
+      if (store == null || client == null || !client.membershipKinds.contains(kind)) return null;
       final on = store.isMember(metadata, kind);
       final isWatchlist = kind == SiloMembership.watchlist;
       final tooltip = isWatchlist

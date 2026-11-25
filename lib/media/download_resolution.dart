@@ -21,6 +21,10 @@ class DownloadSubtitleSpec {
   final bool forced;
   final String? displayTitle;
 
+  /// Headers the subtitle fetch sends (Tofa's offline subtitle route needs
+  /// its device id header). Empty for self-authorising URLs.
+  final Map<String, String> headers;
+
   const DownloadSubtitleSpec({
     required this.id,
     required this.url,
@@ -29,6 +33,7 @@ class DownloadSubtitleSpec {
     this.languageCode,
     this.forced = false,
     this.displayTitle,
+    this.headers = const {},
   });
 }
 

@@ -112,6 +112,7 @@ class SiloClient
         DownloadCompletionRecorder,
         PersonalRecommendationsClient,
         HomeWatchStateClient,
+        MembershipListsClient,
         PlaybackSessionRestartGuard,
         SourceTrackPickClient {
   SiloClient._({required this._connection, required this._api});
@@ -2511,6 +2512,10 @@ class SiloClient
 
   /// Watchlist and Favorites state for this connection, with the session's
   /// presses (see [SiloMembershipStore]).
+  @override
+  Set<SiloMembership> get membershipKinds => const {SiloMembership.watchlist, SiloMembership.favorite};
+
+  @override
   late final SiloMembershipStore memberships = SiloMembershipStore(
     serverId: serverId.value,
     write: (item, kind, value) => setMembership(item, kind, value),

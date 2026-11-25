@@ -30,7 +30,6 @@ import '../utils/download_utils.dart';
 import '../utils/focus_utils.dart';
 import '../utils/global_key_utils.dart';
 import '../providers/download_provider.dart';
-import '../services/silo/silo_client.dart';
 import '../services/silo/silo_mappers.dart';
 import '../services/silo/silo_memberships.dart';
 import '../providers/multi_server_provider.dart';
@@ -525,10 +524,11 @@ class MediaContextMenuState extends State<MediaContextMenu> {
     final catalogSources = Provider.of<CatalogSourcesProvider?>(context, listen: false);
     var showWatchlistEntry = false;
     var watchlistRemoveOffered = false;
-    // A Silo card offers Silo's own Watchlist instead (below), so the
-    // catalog-source entry would read as a duplicate "Add to Watchlist".
+    // A Silo or Tofa card offers its server's own Watchlist instead (below),
+    // so the catalog-source entry would read as a duplicate "Add to Watchlist".
     if (mediaItem != null &&
         mediaItem.backend != MediaBackend.silo &&
+        mediaItem.backend != MediaBackend.tofa &&
         (mediaKind == MediaKind.movie || mediaKind == MediaKind.show) &&
         catalogSources != null &&
         catalogSources.watchlistCapableSources.isNotEmpty &&
@@ -662,8 +662,9 @@ class MediaContextMenuState extends State<MediaContextMenu> {
         _MenuAction(value: 'watch', icon: Symbols.check_circle_outline_rounded, label: t.mediaMenu.markAsWatched),
       if (mediaItem.isWatched || isPartiallyWatched || hasActiveProgress)
         _MenuAction(value: 'unwatch', icon: Symbols.remove_circle_outline_rounded, label: t.mediaMenu.markAsUnwatched),
-      // Silo's Watchlist and Favorites (Siku's card menu, Silo Android #706).
-      if (_siloMemberships(menu, mediaItem) case final store?) ...[
+      // Silo's Watchlist and Favorites (Siku's card menu, Silo Android #706);
+      // Tofa's Watchlist.
+      if (_siloMemberships(menu, mediaItem) case (final store, final kinds)) ...[
         _MenuAction(
           value: 'silo_watchlist',
           icon: store.isMember(mediaItem, SiloMembership.watchlist)
@@ -673,13 +674,14 @@ class MediaContextMenuState extends State<MediaContextMenu> {
               ? t.explore.removeFromWatchlist
               : t.explore.addToWatchlist,
         ),
-        _MenuAction(
-          value: 'silo_favorite',
-          icon: Symbols.favorite_rounded,
-          label: store.isMember(mediaItem, SiloMembership.favorite)
-              ? t.siloMemberships.removeFromFavorites
-              : t.siloMemberships.addToFavorites,
-        ),
+        if (kinds.contains(SiloMembership.favorite))
+          _MenuAction(
+            value: 'silo_favorite',
+            icon: Symbols.favorite_rounded,
+            label: store.isMember(mediaItem, SiloMembership.favorite)
+                ? t.siloMemberships.removeFromFavorites
+                : t.siloMemberships.addToFavorites,
+          ),
       ],
       if (widget.isInContinueWatching && menu.canRemoveFromContinueWatching)
         _MenuAction(
@@ -799,13 +801,14 @@ class MediaContextMenuState extends State<MediaContextMenu> {
     ];
   }
 
-  /// The membership store for a Silo movie or show card whose server is
-  /// online, else null (no Watchlist / Favorites entries).
-  SiloMembershipStore? _siloMemberships(_MenuContext menu, MediaItem mediaItem) {
-    final client = menu.mediaClient;
-    if (client is! SiloClient || !menu.itemServerOnline) return null;
-    if (mediaItem.kind != MediaKind.movie && mediaItem.kind != MediaKind.show) return null;
-    return client.memberships;
+  /// The membership store and lists for a Silo or Tofa movie or show card
+  /// whose server is online, else null (no Watchlist / Favorites entries).
+  (SiloMembershipStore, Set<SiloMembership>)? _siloMemberships(_MenuContext menu, MediaItem mediaItem) {
+    if (menu.mediaClient case final MembershipListsClient client when menu.itemServerOnline) {
+      if (mediaItem.kind != MediaKind.movie && mediaItem.kind != MediaKind.show) return null;
+      return (client.memberships, client.membershipKinds);
+    }
+    return null;
   }
 
   /// Download, watchlist, add-to and delete entries — the item's place in
@@ -952,7 +955,7 @@ class MediaContextMenuState extends State<MediaContextMenu> {
         await _handleRemoveFromContinueWatching(context, mediaItem);
         break;
       case 'silo_watchlist' || 'silo_favorite':
-        if (menu.mediaClient case final SiloClient client when context.mounted) {
+        if (menu.mediaClient case final MembershipListsClient client when context.mounted) {
           await toggleSiloMembership(
             context,
             client,

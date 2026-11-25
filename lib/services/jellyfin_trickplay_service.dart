@@ -31,9 +31,8 @@ Future<void> _defaultSheetCacheWarmer(String url) => PlexImageCacheManager.insta
 /// over the same sheet hits the cache. Adjacent sheets are pre-fetched in
 /// the direction of motion to keep fast scrubs smooth.
 class JellyfinTrickplayService implements ScrubPreviewSource {
-  final JellyfinClient _client;
-  final String _itemId;
-  final String? _mediaSourceId;
+  /// The sheet URL for a tile width and sheet index.
+  final String Function(int width, int sheetIndex) _sheetUrl;
   final TrickplayInfo _info;
   final TrickplaySheetImageBuilder _sheetImageBuilder;
   final TrickplaySheetCacheWarmer? _sheetCacheWarmer;
@@ -48,9 +47,7 @@ class JellyfinTrickplayService implements ScrubPreviewSource {
   final Map<int, ImageProvider> _providerCache = {};
 
   JellyfinTrickplayService._({
-    required this._client,
-    required this._itemId,
-    required this._mediaSourceId,
+    required this._sheetUrl,
     required this._info,
     required this._sheetImageBuilder,
     required this._sheetCacheWarmer,
@@ -71,6 +68,23 @@ class JellyfinTrickplayService implements ScrubPreviewSource {
     int targetTooltipWidth = 160,
     TrickplaySheetImageBuilder? sheetImageBuilder,
     TrickplaySheetCacheWarmer? sheetCacheWarmer,
+  }) => forSheets(
+    sheetUrl: (width, index) => client.buildTrickplayTileUrl(itemId, width, index, mediaSourceId: mediaSourceId),
+    manifest: manifest,
+    targetTooltipWidth: targetTooltipWidth,
+    sheetImageBuilder: sheetImageBuilder,
+    sheetCacheWarmer: sheetCacheWarmer,
+  );
+
+  /// The same sprite-sheet reader over any server whose sheets follow the
+  /// Jellyfin trickplay layout (Tofa's QuickView tiles do), given how to
+  /// build a sheet's URL.
+  static JellyfinTrickplayService? forSheets({
+    required String Function(int width, int sheetIndex) sheetUrl,
+    required Map<int, TrickplayInfo> manifest,
+    int targetTooltipWidth = 160,
+    TrickplaySheetImageBuilder? sheetImageBuilder,
+    TrickplaySheetCacheWarmer? sheetCacheWarmer,
   }) {
     if (manifest.isEmpty) return null;
     final widths = manifest.keys.toList()..sort();
@@ -78,9 +92,7 @@ class JellyfinTrickplayService implements ScrubPreviewSource {
     final info = manifest[preferred];
     if (info == null) return null;
     return JellyfinTrickplayService._(
-      client: client,
-      itemId: itemId,
-      mediaSourceId: mediaSourceId,
+      sheetUrl: sheetUrl,
       info: info,
       sheetImageBuilder: sheetImageBuilder ?? _defaultSheetImageBuilder,
       sheetCacheWarmer: sheetCacheWarmer ?? (sheetImageBuilder == null ? _defaultSheetCacheWarmer : null),
@@ -116,8 +128,7 @@ class JellyfinTrickplayService implements ScrubPreviewSource {
 
   /// Sheet URL for [sheetIndex] using the chosen width and source id.
   /// Exposed for tests; production callers use [getFrame].
-  String sheetUrlFor(int sheetIndex) =>
-      _client.buildTrickplayTileUrl(_itemId, _info.width, sheetIndex, mediaSourceId: _mediaSourceId);
+  String sheetUrlFor(int sheetIndex) => _sheetUrl(_info.width, sheetIndex);
 
   @override
   bool get isAvailable => !_disposed && _info.thumbnailCount > 0;

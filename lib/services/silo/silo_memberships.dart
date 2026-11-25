@@ -32,6 +32,16 @@ enum SiloMembership {
   final SiloPersonalList list;
 }
 
+/// A client whose server keeps personal lists Plezilo shows with the
+/// [SiloMembershipStore] UI (detail page toggles, card menu entries): Silo
+/// (Watchlist and Favorites) and Tofa (Watchlist only).
+abstract interface class MembershipListsClient {
+  SiloMembershipStore get memberships;
+
+  /// The lists this server has, in [SiloMembership.values] order.
+  Set<SiloMembership> get membershipKinds;
+}
+
 /// A confirmed membership change, for pages that show the lists.
 class SiloMembershipChange {
   const SiloMembershipChange({required this.serverId, required this.kind, required this.itemId, required this.value});
@@ -83,8 +93,8 @@ class SiloMembershipOutcome {
 /// plain reason for timeouts and unreachable servers, else "Try again."
 String siloMembershipFailureReason(Object error) {
   if (error is MediaServerHttpException) {
-    final detail = siloProblemDetail(error.responseData);
-    if (detail != null) return detail;
+    final detail = siloProblemDetail(error.responseData) ?? error.display;
+    if (detail != null && detail.isNotEmpty) return detail;
   }
   final reason = localizedErrorReason(error);
   return reason == t.errors.reasonUnexpected ? t.siloMemberships.tryAgain : reason;
@@ -109,10 +119,17 @@ class _Write {
 /// The state the user set this session overrides what cards and pages carry
 /// (their `user_state` was read before the change).
 class SiloMembershipStore extends ChangeNotifier {
-  SiloMembershipStore({required this.serverId, required Future<void> Function(MediaItem, SiloMembership, bool) write})
-    : _send = write;
+  SiloMembershipStore({
+    required this.serverId,
+    required Future<void> Function(MediaItem, SiloMembership, bool) write,
+    this._known,
+  }) : _send = write;
 
   final String serverId;
+
+  /// What the server's list says when the item itself carries no
+  /// membership (Tofa titles: read from the watchlist); null when unknown.
+  final bool? Function(MediaItem item, SiloMembership kind)? _known;
   final Future<void> Function(MediaItem item, SiloMembership kind, bool value) _send;
   final Map<(String, SiloMembership), bool> _overrides = {};
   final Map<(String, SiloMembership), _Write> _writes = {};
@@ -123,7 +140,8 @@ class SiloMembershipStore extends ChangeNotifier {
   static Stream<SiloMembershipChange> get changes => _changes.stream;
 
   /// Whether [item] is on [kind]'s list, as far as this session knows.
-  bool isMember(MediaItem item, SiloMembership kind) => _overrides[(item.id, kind)] ?? fromItem(item, kind);
+  bool isMember(MediaItem item, SiloMembership kind) =>
+      _overrides[(item.id, kind)] ?? _known?.call(item, kind) ?? fromItem(item, kind);
 
   /// What the item itself carries (`user_state` of the JSON it came from).
   static bool fromItem(MediaItem item, SiloMembership kind) {
@@ -154,7 +172,7 @@ class SiloMembershipStore extends ChangeNotifier {
       } catch (e) {
         write.inFlight = false;
         write.pending = null;
-        appLogger.i('Silo: ${kind.name} write failed (${e.runtimeType})');
+        appLogger.i('${kind.name} write failed (${e.runtimeType})');
         _overrides[key] = write.confirmed;
         notifyListeners();
         return SiloMembershipOutcome(kind: kind, value: value, error: e);

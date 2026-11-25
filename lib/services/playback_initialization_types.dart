@@ -184,6 +184,10 @@ class PlaybackInitializationResult {
   /// source of the label.
   final ({String? airDate})? episodeLabel;
 
+  /// A short note for the viewer as playback starts (Tofa: the stream goes
+  /// through the bandwidth-capped relay), or null.
+  final String? playbackNotice;
+
   /// True when [videoUrl] points at a downloaded/local copy. This is a media
   /// source detail, not a statement about whether server reporting is possible.
   bool get usesLocalMedia => isOffline;
@@ -211,6 +215,7 @@ class PlaybackInitializationResult {
     this.selectedMediaIndex = 0,
     this.selectedMediaSourceId,
     this.episodeLabel,
+    this.playbackNotice,
   });
 }
 

@@ -3517,7 +3517,11 @@ class DownloadManagerService {
             continue;
           }
           await file.parent.create(recursive: true);
-          await _http.downloadFile(subtitle.url, subtitlePath);
+          await _http.downloadFile(
+            subtitle.url,
+            subtitlePath,
+            headers: subtitle.headers.isEmpty ? null : subtitle.headers,
+          );
           appLogger.d('Downloaded subtitle ${subtitle.id} for $globalKey');
         } catch (e, st) {
           allSettled = false;
