@@ -36,6 +36,10 @@ agent needs. The code still says "Plezy" in internal names (Dart package `plezy`
 - `.claude/skills/silo-backend/SKILL.md` — how the Silo integration works, the Silo `/api/v2`
   contract rules it relies on, and how to test it against a mock server. Use for any change under
   `lib/services/silo/` or anything Silo-related.
+- `.claude/skills/tofa-backend/SKILL.md` — how Plezilo talks to a tofa server (tofa.tv): device-flow
+  sign-in through api.tofa.tv, server-scoped tokens, API keys, profiles, images under `/cache/`,
+  `/stream/{id}/info` playback and the ticks-versus-milliseconds trap. Use for anything under
+  `lib/services/tofa/` or tofa-related.
 - `.claude/skills/media-backend-integration/SKILL.md` — the checklist for adding or changing a
   server backend (enum, `MediaItem` union, connection persistence, server manager, profile binder,
   caches, UI, tests). Use before touching `MediaBackend`, `Connection` or `MultiServerManager`.
