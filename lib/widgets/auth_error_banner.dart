@@ -8,7 +8,9 @@ import '../profiles/active_profile_provider.dart';
 import '../providers/multi_server_provider.dart';
 import '../screens/settings/add_connection_screen.dart';
 import '../screens/settings/add_silo_screen.dart';
+import '../screens/settings/add_tofa_screen.dart';
 import '../services/silo/silo_client.dart';
+import '../services/tofa/tofa_client.dart';
 import '../focus/focusable_button.dart';
 import 'app_icon.dart';
 
@@ -90,6 +92,17 @@ class AuthErrorBanner extends StatelessWidget {
       await Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => AddSiloScreen(editConnection: silo.connection, targetProfile: target, signInAgain: true),
+        ),
+      );
+      return;
+    }
+    if (silo is TofaClient) {
+      // One Tofa server: its sign-in again, at the saved address. The new
+      // sign-in of the same account and profile replaces the stored one.
+      final target = context.read<ActiveProfileProvider>().active;
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => AddTofaScreen(initialUrl: silo.connection.baseUrl, targetProfile: target),
         ),
       );
       return;

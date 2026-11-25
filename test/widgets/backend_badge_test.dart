@@ -31,4 +31,20 @@ void main() {
     expect(File(BackendBadge.siloIconAsset).existsSync(), isTrue);
     expect(File('assets/brand/silo/NOTICE.txt').readAsStringSync(), contains('Silo Media L.L.C.'));
   });
+
+  testWidgets('Tofa gets a neutral badge of Plezilo\'s own: no image asset, spoken "Tofa"', (tester) async {
+    final semantics = tester.ensureSemantics();
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Center(child: BackendBadge(backend: MediaBackend.tofa, size: 28, color: Colors.white)),
+      ),
+    );
+
+    expect(find.byType(Image), findsNothing);
+    expect(find.byType(SvgPicture), findsNothing);
+    expect(find.text('T'), findsOneWidget);
+    expect(find.bySemanticsLabel(BackendBadge.tofaLabel), findsOneWidget);
+    expect(tester.getSize(find.byType(BackendBadge)), const Size(28, 28));
+    semantics.dispose();
+  });
 }

@@ -6414,6 +6414,84 @@ class Translations$addServer$en {
 
 	/// en: 'Your password needs to be reset. Use Silo's mobile app or website to set a new one, then sign in again.'
 	String get siloPasswordResetOnTv => 'Your password needs to be reset. Use Silo\'s mobile app or website to set a new one, then sign in again.';
+
+	/// en: 'Enter your server address, then sign in with a code.'
+	String get connectToTofaCardSubtitle => 'Enter your server address, then sign in with a code.';
+
+	/// en: 'Sign in to your Tofa server and pick a Tofa profile. Binds to ${name}.'
+	String connectToTofaCardSubtitleScoped({required Object name}) => 'Sign in to your Tofa server and pick a Tofa profile. Binds to ${name}.';
+
+	/// en: 'No Tofa server answered at this address.'
+	String get tofaNotATofaServer => 'No Tofa server answered at this address.';
+
+	/// en: 'This Tofa server isn't set up for sign-in yet. Finish setting it up on the server, then try again.'
+	String get tofaNotClaimed => 'This Tofa server isn\'t set up for sign-in yet. Finish setting it up on the server, then try again.';
+
+	/// en: 'Sign in with a code'
+	String get tofaSignInWithCode => 'Sign in with a code';
+
+	/// en: 'On your phone or computer, open ${url} and enter this code.'
+	String tofaDeviceCodeInstructions({required Object url}) => 'On your phone or computer, open ${url} and enter this code.';
+
+	/// en: 'Getting a sign-in code…'
+	String get tofaDeviceGettingCode => 'Getting a sign-in code…';
+
+	/// en: 'Waiting for approval'
+	String get tofaDeviceWaiting => 'Waiting for approval';
+
+	/// en: 'Can't reach Tofa's sign-in service. Still trying…'
+	String get tofaDeviceUnreachable => 'Can\'t reach Tofa\'s sign-in service. Still trying…';
+
+	/// en: 'The code expired before it was used.'
+	String get tofaDeviceExpired => 'The code expired before it was used.';
+
+	/// en: 'Sign-in was declined or cancelled.'
+	String get tofaDeviceDenied => 'Sign-in was declined or cancelled.';
+
+	/// en: 'Couldn't get a sign-in code.'
+	String get tofaDeviceFailed => 'Couldn\'t get a sign-in code.';
+
+	/// en: 'Signing in…'
+	String get tofaDeviceSigningIn => 'Signing in…';
+
+	/// en: 'Show a new code'
+	String get tofaShowNewCode => 'Show a new code';
+
+	/// en: 'Change server'
+	String get tofaChangeServer => 'Change server';
+
+	/// en: 'Sign-in code: ${code}'
+	String tofaCodeSemantics({required Object code}) => 'Sign-in code: ${code}';
+
+	/// en: 'Sign-in QR code. Or go to ${url} and enter ${code}.'
+	String tofaQrSemantics({required Object url, required Object code}) => 'Sign-in QR code. Or go to ${url} and enter ${code}.';
+
+	/// en: 'Who's watching?'
+	String get tofaChooseProfile => 'Who\'s watching?';
+
+	/// en: 'Pick the Tofa profile to use on this device.'
+	String get tofaChooseProfileSubtitle => 'Pick the Tofa profile to use on this device.';
+
+	/// en: 'This account has no Tofa profiles.'
+	String get tofaNoProfiles => 'This account has no Tofa profiles.';
+
+	/// en: 'PIN protected'
+	String get tofaProfileLocked => 'PIN protected';
+
+	/// en: 'Kids profile'
+	String get tofaProfileKids => 'Kids profile';
+
+	/// en: 'Wrong PIN. Try again.'
+	String get tofaWrongPin => 'Wrong PIN. Try again.';
+
+	/// en: 'Too many PIN attempts. Wait a moment and try again.'
+	String get tofaTooManyPinAttempts => 'Too many PIN attempts. Wait a moment and try again.';
+
+	/// en: 'Couldn't check the PIN. Check your connection and try again.'
+	String get tofaPinNetworkError => 'Couldn\'t check the PIN. Check your connection and try again.';
+
+	/// en: 'Couldn't finish signing in. Try again.'
+	String get tofaSignInFailed => 'Couldn\'t finish signing in. Try again.';
 }
 
 // Path: deepLinks
@@ -11914,6 +11992,32 @@ extension on Translations {
 			'addServer.siloPasswordErrorFailed' => 'Couldn\'t change your password. Try again.',
 			'addServer.siloPasswordErrorNotChanged' => 'Your password wasn\'t changed. Try again.',
 			'addServer.siloPasswordResetOnTv' => 'Your password needs to be reset. Use Silo\'s mobile app or website to set a new one, then sign in again.',
+			'addServer.connectToTofaCardSubtitle' => 'Enter your server address, then sign in with a code.',
+			'addServer.connectToTofaCardSubtitleScoped' => ({required Object name}) => 'Sign in to your Tofa server and pick a Tofa profile. Binds to ${name}.',
+			'addServer.tofaNotATofaServer' => 'No Tofa server answered at this address.',
+			'addServer.tofaNotClaimed' => 'This Tofa server isn\'t set up for sign-in yet. Finish setting it up on the server, then try again.',
+			'addServer.tofaSignInWithCode' => 'Sign in with a code',
+			'addServer.tofaDeviceCodeInstructions' => ({required Object url}) => 'On your phone or computer, open ${url} and enter this code.',
+			'addServer.tofaDeviceGettingCode' => 'Getting a sign-in code…',
+			'addServer.tofaDeviceWaiting' => 'Waiting for approval',
+			'addServer.tofaDeviceUnreachable' => 'Can\'t reach Tofa\'s sign-in service. Still trying…',
+			'addServer.tofaDeviceExpired' => 'The code expired before it was used.',
+			'addServer.tofaDeviceDenied' => 'Sign-in was declined or cancelled.',
+			'addServer.tofaDeviceFailed' => 'Couldn\'t get a sign-in code.',
+			'addServer.tofaDeviceSigningIn' => 'Signing in…',
+			'addServer.tofaShowNewCode' => 'Show a new code',
+			'addServer.tofaChangeServer' => 'Change server',
+			'addServer.tofaCodeSemantics' => ({required Object code}) => 'Sign-in code: ${code}',
+			'addServer.tofaQrSemantics' => ({required Object url, required Object code}) => 'Sign-in QR code. Or go to ${url} and enter ${code}.',
+			'addServer.tofaChooseProfile' => 'Who\'s watching?',
+			'addServer.tofaChooseProfileSubtitle' => 'Pick the Tofa profile to use on this device.',
+			'addServer.tofaNoProfiles' => 'This account has no Tofa profiles.',
+			'addServer.tofaProfileLocked' => 'PIN protected',
+			'addServer.tofaProfileKids' => 'Kids profile',
+			'addServer.tofaWrongPin' => 'Wrong PIN. Try again.',
+			'addServer.tofaTooManyPinAttempts' => 'Too many PIN attempts. Wait a moment and try again.',
+			'addServer.tofaPinNetworkError' => 'Couldn\'t check the PIN. Check your connection and try again.',
+			'addServer.tofaSignInFailed' => 'Couldn\'t finish signing in. Try again.',
 			'deepLinks.invalid' => 'This Plezilo link isn\'t valid.',
 			'deepLinks.profileNotFound' => ({required Object profile}) => 'No profile matches "${profile}".',
 			'deepLinks.serverUnavailable' => 'Couldn\'t reach the server for this link.',
@@ -11984,6 +12088,8 @@ extension on Translations {
 			'siloCardOverlays.runtimeMinutes' => ({required Object minutes}) => '${minutes}m',
 			'siloCardOverlays.returning' => 'Returning',
 			'siloCardOverlays.ended' => 'Ended',
+			_ => null,
+		} ?? switch (path) {
 			'siloCardOverlays.cancelled' => 'Cancelled',
 			'siloCardOverlays.upcoming' => 'Upcoming',
 			'siloEditConnection.editTitle' => ({required Object server}) => 'Edit ${server}',
@@ -12010,8 +12116,6 @@ extension on Translations {
 			'siloRequests.myRequests' => 'My requests',
 			'siloRequests.searchHint' => 'Search for a movie or series to request',
 			'siloRequests.searchResults' => 'Titles to request',
-			_ => null,
-		} ?? switch (path) {
 			'siloRequests.availableToRequest' => 'Available to request',
 			'siloRequests.availableToRequestOnServer' => ({required Object server}) => 'Available to request on ${server}',
 			'siloRequests.noRequests' => 'You haven\'t requested anything yet',

@@ -14,6 +14,7 @@ import '../profile/borrow_connection_screen.dart';
 import 'add_jellyfin_screen.dart';
 import 'add_plex_account_screen.dart';
 import 'add_silo_screen.dart';
+import 'add_tofa_screen.dart';
 
 /// Picker shown when the user taps "Add connection".
 ///
@@ -21,7 +22,8 @@ import 'add_silo_screen.dart';
 /// profile" option that opens [BorrowConnectionScreen] for the target. The
 /// global Connections screen invokes this without a target — Plex auto-
 /// surfaces its Home users as new profiles, while MediaBrowser and Silo
-/// servers bind to the active profile via [AddJellyfinScreen] / [AddSiloScreen].
+/// and Tofa servers bind to the active profile via [AddJellyfinScreen] /
+/// [AddSiloScreen] / [AddTofaScreen].
 ///
 /// Pops with `true` after the underlying flow succeeds so the parent list
 /// refreshes; pops with `null` (the default) when the user backs out.
@@ -71,6 +73,14 @@ class AddConnectionScreen extends StatelessWidget {
             ? t.addServer.connectToSiloCardSubtitleScoped(name: targetProfile!.displayName)
             : t.addServer.connectToSiloCardSubtitle,
         builder: (_) => AddSiloScreen(targetProfile: targetProfile),
+      ),
+      _BackendOption(
+        backend: MediaBackend.tofa,
+        title: t.addServer.connectToMediaBrowserCard(product: 'Tofa'),
+        subtitle: scoped
+            ? t.addServer.connectToTofaCardSubtitleScoped(name: targetProfile!.displayName)
+            : t.addServer.connectToTofaCardSubtitle,
+        builder: (_) => AddTofaScreen(targetProfile: targetProfile),
       ),
       if (scoped)
         _BackendOption(
