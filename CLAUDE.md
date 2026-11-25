@@ -83,9 +83,10 @@ agent needs. The code still says "Plezy" in internal names (Dart package `plezy`
 
 ## Rules
 - Silo: `/api/v2` only, never v1. Details and pitfalls are in the `silo-backend` skill.
-- Tofa: `/api/v1` plus the cloud sign-in service; facts in the `tofa-backend` skill. Never use Tofa's
-  logo (not licensed to us): `BackendBadge` draws a neutral "T" badge. Tofa has no downloads yet
-  (`MediaBackend.supportsDownloads` is false for it).
+- Tofa: `/api/v1` plus the cloud service (sign-in, `connection-info`, relay); facts in the `tofa-backend`
+  skill. Never use Tofa's logo (not licensed to us): `BackendBadge` draws a neutral "T" badge. Offer only
+  sort and filter values `/media/facets` lists. The detail page and card menu reach Silo's and Tofa's
+  Watchlist through `MembershipListsClient`; keep Silo's behaviour identical when touching it.
 - The app is one build for phone, tablet, desktop and TV. Every new screen must work with touch
   **and** D-pad: use `FocusableButton`, `FocusableTextFormField`, `FocusableWrapper` and give each
   focusable a `FocusNode` with explicit `onNavigateUp/Down` where the default order is wrong. TV

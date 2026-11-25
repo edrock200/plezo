@@ -4,6 +4,18 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **Tofa servers can now be downloaded for offline viewing:** on a Tofa movie or episode, *Download* works as it does for Silo. When the server offers smaller versions, Plezilo asks which quality you want (Original, or a smaller copy with its size; the server prepares a smaller copy first, and the download waits until it is ready). Downloads keep their audio tracks, text subtitles and intro/credits skip buttons, and play without a connection. Where you stop while offline, and what you mark watched, goes to your Tofa server the next time Plezilo is online. Deleting a download tells the server too.
+- **Sorting and filters in Tofa libraries:** the library's Sort menu now lists the sorts your Tofa server offers (title, date added and so on), and Filters offers genre, watch status (unwatched, in progress, watched), quality, year and "Available only". The A–Z bar jumps by the letters the server lists, and the Genres tab lists the library's genres.
+- **More Home rows for Tofa:** Home now shows Recently Added (also per library), Suggested for You, Ready to Binge (complete seasons you have not started), your Watchlist and the collections your server pins to Home, next to Continue Watching.
+- **Chapters, skip buttons and seek-bar previews on Tofa:** Tofa episodes and movies now show their chapters, offer Skip Intro and Skip Credits where your server found them, and show a picture while you scrub the seek bar.
+- **Tofa watchlist:** a Tofa movie or series page, and its card's menu, can add it to or remove it from your Tofa watchlist (Tofa has no favorites, so there is no heart).
+- **Tofa away from home:** Plezilo now finds the best way to reach your Tofa server, as Tofa's own apps do: your home network first, then a direct connection over the internet, then Tofa's relay, and it switches when the one in use stops answering. When a video plays through the relay, Plezilo says so: its quality is limited to the relay's bandwidth (2 Mbps on Tofa's free tier). You can also sign in with your Tofa account instead of typing an address (*Sign in with your Tofa account* under *Connect to Tofa*) and pick your server from the list, which works away from home from the start.
+- All of this was built from Tofa's published API and has not been tried on a real Tofa server yet, so please report what doesn't work.
+
+## silo-preview-2.64.0
+
+Released November 25, 2026. Android and Windows.
+
 - **Tofa servers (new, a first version):** Plezilo can now connect to a Tofa media server, its fifth server type next to Plex, Jellyfin, Emby and Silo. In *Add connection* pick *Connect to Tofa*, type your server's address, then sign in with the code (or QR code) Plezilo shows, on your phone or computer, and pick your Tofa profile (with its PIN if it has one). You can browse your libraries, open movies and series with their seasons and episodes, search, see Continue Watching, mark things watched or unwatched, and play: the server decides whether your device plays the file as is or gets a converted stream, Plezilo starts where you left off and keeps your place. Not there yet: downloads, sorting and filters, other Home rows, chapters and seek-bar previews, watchlist, and connecting from outside your home network through Tofa's relay (use an address your device can reach). This was built from Tofa's published API and has not been tried on a real Tofa server yet, so please report what doesn't work.
 
 ## silo-preview-2.63.0

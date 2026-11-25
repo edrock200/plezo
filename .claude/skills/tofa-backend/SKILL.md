@@ -219,25 +219,62 @@ to the address the user typed (LAN or custom URL); relay support is a follow-up.
   unverified and fail closed.
 - Never let tests write progress or watched state to a real server.
 
-## In Plezilo (first version)
+## In Plezilo
 
-- Code: `lib/services/tofa/` — `tofa_api.dart` (HTTP, headers, token refresh), `tofa_auth_service.dart` (server
-  probe, device flow state machine `TofaDeviceSignIn`, profiles, verify-pin), `tofa_mappers.dart` (JSON → `TofaMediaItem`,
-  ticks), `tofa_playback_caps.dart` (codec query), `tofa_client.dart`, `tofa_api_cache.dart`. Sign-in screen:
-  `lib/screens/settings/add_tofa_screen.dart`. Tests: `test/services/tofa/` (fake server in `tofa_fixtures.dart`) and
-  `test/screens/settings/add_tofa_screen_test.dart`.
+- Code: `lib/services/tofa/`:
+  - `tofa_api.dart`: HTTP, `X-Tofa-*` headers (with `X-Tofa-Device-Id`, the app's per-install client id), token
+    refresh, connection-failure counting, 503 `server_relay_not_connected` retries.
+  - `tofa_auth_service.dart`: server probe, device flow (`TofaDeviceSignIn`, also `.account` for account-first
+    sign-in), `GET /servers`, `server-session`, profiles, verify-pin.
+  - `tofa_client.dart` plus its parts: `_home` (Home rows), `_quickview` (chapters, markers, previews), `_downloads`,
+    `_connect` (address race).
+  - `tofa_mappers.dart`, `tofa_library_options.dart` (facets → sorts/filters), `tofa_downloads.dart` (download record,
+    qualities, offline extras), `tofa_endpoints.dart` (connection-info, race), `tofa_playback_caps.dart`,
+    `tofa_api_cache.dart`.
+  - Sign-in screen: `lib/screens/settings/add_tofa_screen.dart`. Tests: `test/services/tofa/` (fake server in
+    `tofa_fixtures.dart`, routes by path, host or prefix) and `test/screens/settings/add_tofa_screen_test.dart`.
 - Item ids: titles keep the media id; seasons are `tofa-season:{mediaId}/{seasonId}`, episodes
   `tofa-episode:{mediaId}/{episodeId}` (one `/media/{id}` read serves the whole series tree). File ids live in
-  `raw['tofa_file_ids']`; watch state of a detail comes from `POST /media/progress/batch`.
+  `raw['tofa_file_ids']`; a detail's watch state comes from `POST /media/progress/batch`; watched writes for files use
+  `POST /media/watched/batch`.
 - Artwork is `tofa-artwork:{mediaId}/{kind}` in the item and becomes `/api/v1/artwork/...?st=` in
   `TofaClient.thumbnailUrl` (image token renewed at 80% of `expires_in`). Raw `*_path` values are never used.
 - A refreshed pair is persisted (`ConnectionRegistry.updateTofaSession`, awaited) **before** the client uses it.
 - Playback picks the requested file, else `/versions`' recommended file, else the only file; with several files and
-  no recommendation it refuses to play rather than take the first. `resume_ticks` is always sent (0 from the start).
-  Text subtitles: external ones on a direct play, all of them on a remux/transcode, as `full.vtt?st=` sidecars.
-- Not in this version: downloads (`MediaBackend.supportsDownloads` false; actions hidden), external players,
-  playlists, collections, people, watchlist (Plezilo's watchlist UI is Silo-specific), sort/filter/genre lists,
-  chapters/markers, seek-bar previews, relay, live events, sign-out revoke (none in the public spec).
+  no recommendation it refuses to play. `resume_ticks` is always sent. Text subtitles: external ones on a direct play,
+  all of them on a remux/transcode, as `full.vtt?st=` sidecars.
+- **Sorts and filters** come only from `GET /media/facets` (`sorts`, `default_sort`, `default_order`, `genres`,
+  `quality`, `letters`, `watched` counts, `years`); `/media`'s own `sort`/`order`/`watched`/`quality`/`letter` are
+  plain strings in the spec. `order` is sent only when `default_order` is `asc`/`desc`. Genres tab:
+  `GET /media/genres`.
+- **Home**: Recently Added (only when the facets list a date-added sort: `added_at`, `created_at` or `date_added`,
+  sent with `order=desc`), `/users/me/suggested` (`items`), `/media/binge-ready` (seasons), `/users/me/watchlist`
+  (owned titles), `/collections/home-rows` (`pinned_collection` rows), all with `Future.wait`.
+  `latest-episodes` and `browse/sections` make no row.
+- **Watchlist**: `MembershipListsClient` (in `silo_memberships.dart`) is the neutral interface the detail page and card
+  menu use; Silo has Watchlist + Favorites, Tofa Watchlist only. Tofa titles carry no watchlist flag: the client reads
+  the list (2-minute freshness) and answers through `SiloMembershipStore`'s `known` hook.
+- **QuickView** (`/media/{file}/quickview`): chapters (`start_ticks`, chapter images with the image token), segments
+  → markers by `segment_type` (intro/opening, recap, credit/outro/ending, preview; others left out), tiles → the
+  Jellyfin trickplay reader (`JellyfinTrickplayService.forSheets`), sheets `/quickview/tiles/{w}/{i}?st=`.
+- **Downloads**: `POST /download/register` (`device_id`, `media_file_id`, `quality_key` = a `download_options` tag,
+  `client_request_id`); bytes `GET /stream/{file}/download?quality=&st=<auth.token>`; text subtitles from
+  `subtitle_manifest` with the `X-Tofa-Device-Id` header; 409/503 → `GET /download/prepare/{client_request_id}` →
+  `DownloadNotReadyException`. The record (no tokens) is pinned in `TofaApiCache`; offline playback reads its tracks
+  and skip segments (`CachedPlaybackMetadataService`), offline progress goes up as `POST /playback/offlineProgress`
+  with a rising `monotonic_seq`; deleting the copy sends `DELETE /download/{id}` (`TofaDownloadTracker`).
+- **Connecting**: on the first health check and after the server stopped answering, the client races the entered
+  address and `GET {cloud}/servers/{id}/connection-info`'s candidates (documented in the API guide, "Reach the server
+  from anywhere"; not in the cloud OpenAPI) in order with `stagger_ms`; the relay base
+  `{cloud}/servers/{id}/relay` is added when not listed. Two connection failures in a row rerun it (at most every
+  15 s). On the relay, playback shows a bandwidth notice (`PlaybackInitializationResult.playbackNotice`).
+- **Account-first sign-in**: device flow without `server_id` (cloud token) → `GET /servers` → pick → `POST
+  /servers/{id}/server-session`; the connection's address is the server's `connect_url`, else its relay.
+- Not in this version: external players, playlists, collections pages, people, live TV, sign-out revoke (none in the
+  public spec), multi-part files beyond part 1, live events.
 - Unverified on a real server (all fail closed and are marked in code): codec-list format; `max_bitrate` unit;
-  `force_method` values; `letter` format (only single A–Z sent); whether `stream_url`/HLS variants keep `st`;
-  relative URL base; wrong-PIN status; `X-Tofa-Platform` values for desktops; avatar URLs needing a bearer.
+  `force_method` values; that the facets' `watched` field names are `/media?watched=` values; `segment_type` names;
+  that `auth.token` is the download route's `st` and `quality` takes the option's tag; that `request_id` of the
+  preparation route is the `client_request_id`; `bandwidth_limit`'s unit (not turned into a cap); whether
+  `stream_url`/HLS variants keep `st`, also through the relay; relative URL base; wrong-PIN status;
+  `X-Tofa-Platform` values for desktops; avatar URLs needing a bearer.

@@ -236,9 +236,9 @@ The full, plain-language change log for each preview is in [`docs/silo-preview-c
 - **Phone and TV parity with Silo's apps:** tablets identify as tablets, playback reports the device's form factor and metered networks, Silo's default port `8090` is tried, LDAP-style password sign-in, downloads never carry the account token.
 - **Review fixes:** cursor paging that jumps to distant pages and recovers from changed listings; season writes from an episode's season link no longer hit the whole series; failed playback stops are retried; refused sign-ins are not retried on every request; offline details for downloaded items; faster Home and season loading; Continue Watching dismissals, IMDb scores and version runtimes fixed; Discord artwork no longer receives the account token; device-code sign-in handles expired codes, PIN lockouts and broken avatars; each Plezilo profile's downloads stay with its own Silo account.
 
-### Tofa (first version)
+### Tofa
 
-Plezilo also connects to [Tofa](https://tofa.tv) servers through Tofa's public `/api/v1` API: sign in with a code shown on screen (QR code too), pick a Tofa profile, browse, search, Continue Watching, watched/unwatched and playback with progress. Not yet: downloads, sorting and filters, other Home rows, chapters, seek-bar previews, watchlist and Tofa's relay for connecting from away. It was built from Tofa's published API and still needs testing on a real Tofa server.
+Plezilo also connects to [Tofa](https://tofa.tv) servers through Tofa's public `/api/v1` API: sign in with a code shown on screen (QR code too), either at your server's address or with your Tofa account (then pick your server), pick a Tofa profile, browse with the sorts and filters your server offers, search, Home rows (Continue Watching, Recently Added, Suggested, Ready to Binge, Watchlist, pinned collections), watched/unwatched, watchlist, playback with progress, chapters, skip intro/credits, seek-bar previews, and downloads for offline viewing whose progress syncs back. Away from home Plezilo picks the home network, a direct connection or Tofa's relay, as Tofa's apps do (relay streams are bandwidth-capped). It was built from Tofa's published API and still needs testing on a real Tofa server.
 
 ## Building from Source
 
