@@ -118,6 +118,37 @@ class ConnectionRegistry {
     return written;
   }
 
+  /// Store the token pair a live Tofa client obtained by refreshing, and
+  /// nothing else. Written only while the stored row still holds a refresh
+  /// token of the reporting client's session ([ownsRefreshToken]), so a row
+  /// that was removed or replaced by a new sign-in is left alone. Returns
+  /// whether the row holds the new pair afterwards.
+  Future<bool> updateTofaSession(
+    TofaConnection updated, {
+    required bool Function(String refreshToken) ownsRefreshToken,
+  }) async {
+    final written = await _db.runIdentityMutation(() async {
+      final existing = await (_db.select(_db.connections)..where((t) => t.id.equals(updated.id))).getSingleOrNull();
+      if (existing == null) return false;
+      final current = await _rowToConnection(existing);
+      if (current is! TofaConnection || !ownsRefreshToken(current.refreshToken)) return false;
+      final next = current.copyWith(
+        accessToken: updated.accessToken,
+        refreshToken: updated.refreshToken,
+        accessTokenExpiresAt: updated.accessTokenExpiresAt,
+      );
+      if (hasSameConfig(current, next)) return true;
+      await _writeRow(next, createdAt: existing.createdAt);
+      return true;
+    });
+    appLogger.d(
+      written
+          ? '[tofa] stored the refreshed token pair for ${updated.id}'
+          : '[tofa] token pair for ${updated.id} not stored (row gone or replaced)',
+    );
+    return written;
+  }
+
   Future<void> _writeRow(Connection connection, {required int createdAt, void Function()? checkCurrent}) async {
     final protectedConfig = await CredentialVault.protectConnectionConfig(
       connection.kind.id,
@@ -205,6 +236,12 @@ class ConnectionRegistry {
           dialect: kind.dialect!,
         ),
         MediaBackend.silo => SiloConnection.fromConfigJson(
+          id: row.id,
+          json: revealed.config,
+          createdAt: createdAt,
+          lastAuthenticatedAt: lastAuth,
+        ),
+        MediaBackend.tofa => TofaConnection.fromConfigJson(
           id: row.id,
           json: revealed.config,
           createdAt: createdAt,

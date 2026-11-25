@@ -63,10 +63,10 @@ class ProfileConnectionCleanup {
     await _clearProfileServerPrefsNoLongerReferenced(
       profileId: profileId,
       removedServerIds: removedServerIds,
-      clearEverywhereWhenUnreferenced: connection is JellyfinConnection || connection is SiloConnection,
+      clearEverywhereWhenUnreferenced: connection is! PlexAccountConnection,
     );
 
-    if (connection is JellyfinConnection || connection is SiloConnection) {
+    if (connection is! PlexAccountConnection) {
       await _removeUnreferencedJellyfinConnection(connection);
     }
   }
@@ -159,7 +159,7 @@ class ProfileConnectionCleanup {
     final referencedConnectionIds = (await profileConnections.listAll()).map((row) => row.connectionId).toSet();
     var removed = 0;
 
-    for (final connection in all.where((c) => c is JellyfinConnection || c is SiloConnection)) {
+    for (final connection in all.where((c) => c is! PlexAccountConnection)) {
       if (referencedConnectionIds.contains(connection.id)) continue;
       await _removeJellyfinConnection(connection);
       removed++;
@@ -183,6 +183,9 @@ class ProfileConnectionCleanup {
         rawServerId = connection.serverMachineId;
       case SiloConnection():
         serverManager?.removeSiloConnection(connection);
+        rawServerId = connection.serverId;
+      case TofaConnection():
+        serverManager?.removeTofaConnection(connection);
         rawServerId = connection.serverId;
       case PlexAccountConnection():
         return;
@@ -257,5 +260,6 @@ Set<ServerId> _serverIdsForConnection(Connection connection) {
     },
     JellyfinConnection(:final serverMachineId) => {?ServerId.tryParse(serverMachineId)},
     SiloConnection(:final serverId) => {?ServerId.tryParse(serverId)},
+    TofaConnection(:final serverId) => {?ServerId.tryParse(serverId)},
   };
 }

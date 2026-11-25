@@ -83,6 +83,7 @@ import 'services/connectivity_probe.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'services/jellyfin_api_cache.dart';
 import 'services/silo/silo_api_cache.dart';
+import 'services/tofa/tofa_api_cache.dart';
 import 'services/silo/silo_catalog_strings.dart';
 import 'services/silo/silo_managed_downloads.dart';
 import 'services/plex_api_cache.dart';
@@ -1477,6 +1478,7 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
     PlexApiCache.initialize(_appDatabase);
     JellyfinApiCache.initialize(_appDatabase);
     SiloApiCache.initialize(_appDatabase);
+    TofaApiCache.initialize(_appDatabase);
 
     _downloadManager = DownloadManagerService(
       database: _appDatabase,
@@ -1848,6 +1850,8 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
             final registry = context.read<ConnectionRegistry>();
             _serverManager.onSiloConnectionUpdated = (connection, ownsRefreshToken) =>
                 registry.updateSiloSession(connection, ownsRefreshToken: ownsRefreshToken);
+            _serverManager.onTofaConnectionUpdated = (connection, ownsRefreshToken) =>
+                registry.updateTofaSession(connection, ownsRefreshToken: ownsRefreshToken);
             return MultiServerProvider(_serverManager, _aggregationService);
           },
         ),
@@ -2394,6 +2398,8 @@ class _SetupScreenState extends State<SetupScreen> with MountedSetStateMixin {
             _serverStatus[conn.serverMachineId] = (conn.serverName, null);
           } else if (conn is SiloConnection) {
             _serverStatus[conn.serverId] = (conn.serverName, null);
+          } else if (conn is TofaConnection) {
+            _serverStatus[conn.serverId] = (conn.serverName, null);
           }
         }
       });
@@ -2402,11 +2408,12 @@ class _SetupScreenState extends State<SetupScreen> with MountedSetStateMixin {
     final plexCount = allConnections.whereType<PlexAccountConnection>().fold<int>(0, (n, c) => n + c.servers.length);
     final mediaBrowserCount = allConnections.whereType<JellyfinConnection>().length;
     final siloCount = allConnections.whereType<SiloConnection>().length;
+    final tofaCount = allConnections.whereType<TofaConnection>().length;
     unawaited(
       Sentry.addBreadcrumb(
         Breadcrumb(
           message:
-              'Handing off to MainScreen with $plexCount Plex + $mediaBrowserCount MediaBrowser + $siloCount Silo server(s)',
+              'Handing off to MainScreen with $plexCount Plex + $mediaBrowserCount MediaBrowser + $siloCount Silo + $tofaCount Tofa server(s)',
           category: 'setup',
         ),
       ),

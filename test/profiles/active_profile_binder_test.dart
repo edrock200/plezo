@@ -752,6 +752,49 @@ void main() {
     expect(siloManager.added, [second.id]);
   });
 
+  test('a profile holding a Tofa connection binds it and expects its server', () async {
+    binder.dispose();
+    multiServerProvider.dispose();
+    final tofaManager = _RecordingTofaManager();
+    manager = tofaManager;
+    multiServerProvider = testMultiServerProvider(manager);
+    binder = ActiveProfileBinder(
+      activeProfile: activeProfile,
+      connections: connections,
+      profileConnections: profileConnections,
+      serverManager: manager,
+      multiServerProvider: multiServerProvider,
+      pinPrompt: (_, {String? errorMessage}) async => null,
+      shouldDeferInitialBind: (_) async => false,
+    );
+
+    final profile = await createActiveLocalProfile('local-tofa');
+    final tofa = TofaConnection(
+      id: TofaConnection.compoundId(serverId: 'tofa-srv', userId: 'u-1', profileId: 'p-1'),
+      baseUrl: 'http://tofa.example.com:8096',
+      serverName: 'tofa.example.com',
+      serverId: 'tofa-srv',
+      connectUrl: 'https://cloud.example.com',
+      userId: 'u-1',
+      userName: 'laura',
+      accessToken: 'acc-1',
+      refreshToken: 'ref-1',
+      profileId: 'p-1',
+      profileName: 'Laura',
+      createdAt: DateTime(2026, 1, 1),
+    );
+    await connections.upsert(tofa);
+    await profileConnections.upsert(
+      ProfileConnection(profileId: profile.id, connectionId: tofa.id, userIdentifier: tofa.userId),
+    );
+
+    await binder.rebindActive();
+    expect(tofaManager.added, [tofa.id]);
+    expect(activeProfile.lastBindingSucceeded, isTrue);
+    expect(multiServerProvider.expectedServerIds.toSet(), {'tofa-srv'});
+    expect(multiServerProvider.onlineServerIds, ['tofa-srv']);
+  });
+
   group('Plex Home token cache policy', () {
     test('cold start uses cached token instead of forcing PIN revalidation', () {
       expect(shouldUsePlexHomeTokenCache(preVerified: false, hasBoundOnce: false), isTrue);
@@ -1788,6 +1831,17 @@ class _RecordingSiloManager extends MultiServerManager {
 
   @override
   Future<bool> addSiloConnection(SiloConnection connection) async {
+    added.add(connection.id);
+    updateServerStatus(ServerId(connection.serverId), true);
+    return true;
+  }
+}
+
+class _RecordingTofaManager extends MultiServerManager {
+  final added = <String>[];
+
+  @override
+  Future<bool> addTofaConnection(TofaConnection connection) async {
     added.add(connection.id);
     updateServerStatus(ServerId(connection.serverId), true);
     return true;

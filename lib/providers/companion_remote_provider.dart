@@ -336,8 +336,8 @@ class CompanionRemoteProvider with ChangeNotifier, DisposableChangeNotifierMixin
           );
         case JellyfinConnection():
           addContext(await _createMediaBrowserAuthContext(connection: connection));
-        case SiloConnection():
-          // Silo has no companion-remote relay.
+        case SiloConnection() || TofaConnection():
+          // Silo and Tofa have no companion-remote relay.
           break;
       }
     }

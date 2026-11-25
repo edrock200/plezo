@@ -786,6 +786,8 @@ class DownloadProvider extends ChangeNotifier with DisposableChangeNotifierMixin
         MediaBackend.plex => <String, dynamic>{'key': '/library/metadata/$showRatingKey'},
         MediaBackend.jellyfin || MediaBackend.emby => <String, dynamic>{'Id': showRatingKey, 'Type': 'Series'},
         MediaBackend.silo => <String, dynamic>{'content_id': showRatingKey, 'type': 'series'},
+        // Not reached in practice: Plezilo has no Tofa downloads.
+        MediaBackend.tofa => <String, dynamic>{'tofa_media_id': showRatingKey},
       };
       return MediaItem(
         id: showRatingKey,

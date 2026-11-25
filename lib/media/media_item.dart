@@ -132,6 +132,29 @@ sealed class MediaItem with _$MediaItem {
         serverName: serverName,
         raw: raw,
       ),
+      MediaBackend.tofa => TofaMediaItem(
+        id: id,
+        kind: kind,
+        title: title,
+        summary: summary,
+        year: year,
+        contentRating: contentRating,
+        parentId: parentId,
+        parentTitle: parentTitle,
+        index: index,
+        thumbPath: thumbPath,
+        artPath: artPath,
+        durationMs: durationMs,
+        leafCount: leafCount,
+        rating: rating,
+        ratings: ratings,
+        genres: genres,
+        libraryId: libraryId,
+        libraryTitle: libraryTitle,
+        serverId: serverId,
+        serverName: serverName,
+        raw: raw,
+      ),
     };
   }
 
@@ -391,10 +414,88 @@ sealed class MediaItem with _$MediaItem {
     @JsonKey(fromJson: _mediaItemRawFromJson) Map<String, Object?>? raw,
   }) = SiloMediaItem;
 
+  /// Backend-tagged concrete subclass for items sourced from a Tofa server
+  /// (`/api/v1`). Ids are Tofa's title, season and episode ids; playback,
+  /// progress and watched state act on a file id kept in [raw].
+  @FreezedUnionValue('tofa')
+  @JsonSerializable(includeIfNull: false, explicitToJson: true)
+  const factory MediaItem.tofa({
+    @JsonKey(readValue: readStringField, defaultValue: '') required String id,
+    @JsonKey(fromJson: _mediaKindFromJson, toJson: _mediaKindToJson) required MediaKind kind,
+    String? guid,
+    String? title,
+    String? titleSort,
+    String? summary,
+    String? tagline,
+    String? originalTitle,
+    String? studio,
+    @JsonKey(fromJson: flexibleInt) int? year,
+    String? originallyAvailableAt,
+    String? contentRating,
+    String? parentId,
+    String? parentTitle,
+    String? parentThumbPath,
+    @JsonKey(fromJson: flexibleInt) int? parentIndex,
+    @JsonKey(fromJson: flexibleInt) int? index,
+    String? grandparentId,
+    String? grandparentTitle,
+    String? grandparentThumbPath,
+    String? grandparentArtPath,
+    List<String>? grandparentBackdropPaths,
+    String? thumbPath,
+    String? artPath,
+    List<String>? backdropPaths,
+    String? clearLogoPath,
+    String? backgroundSquarePath,
+    @JsonKey(fromJson: flexibleInt) int? durationMs,
+    @JsonKey(fromJson: flexibleInt) int? viewOffsetMs,
+    @JsonKey(fromJson: flexibleInt) int? viewCount,
+    @JsonKey(fromJson: flexibleInt) int? lastViewedAt,
+    @JsonKey(fromJson: flexibleInt) int? leafCount,
+    @JsonKey(fromJson: flexibleInt) int? viewedLeafCount,
+    @JsonKey(fromJson: flexibleInt) int? childCount,
+    @JsonKey(fromJson: flexibleInt) int? addedAt,
+    @JsonKey(fromJson: flexibleInt) int? updatedAt,
+    @JsonKey(fromJson: flexibleDouble) double? rating,
+    @JsonKey(fromJson: flexibleDouble) double? userRating,
+
+    /// The per-source ratings (Tofa reports a single `rating`).
+    @JsonKey(fromJson: _mediaItemRatingsFromJson) List<MediaRatingSource>? ratings,
+    bool? isFavorite,
+    @JsonKey(fromJson: _mediaItemStringList) List<String>? genres,
+    @JsonKey(fromJson: _mediaItemStringList) List<String>? directors,
+    @JsonKey(fromJson: _mediaItemStringList) List<String>? writers,
+    @JsonKey(fromJson: _mediaItemStringList) List<String>? producers,
+    @JsonKey(fromJson: _mediaItemStringList) List<String>? countries,
+    @JsonKey(fromJson: _mediaItemStringList) List<String>? collections,
+    @JsonKey(fromJson: _mediaItemStringList) List<String>? labels,
+    @JsonKey(fromJson: _mediaItemStringList) List<String>? styles,
+    @JsonKey(fromJson: _mediaItemStringList) List<String>? moods,
+    @JsonKey(fromJson: _mediaItemRolesFromJson) List<MediaRole>? roles,
+
+    /// The item's versions, one per Tofa `files[]` entry (by file id). Same contract as
+    /// the Plex variant: null means not fetched, non-empty means complete.
+    @JsonKey(fromJson: _mediaItemVersionsFromJson) List<MediaVersion>? mediaVersions,
+    String? libraryId,
+    String? libraryTitle,
+
+    /// Unused on Tofa (no playlists in Plezilo's first Tofa version); kept so the union
+    /// exposes the same neutral field set as the MediaBrowser variant.
+    String? playlistItemId,
+    String? serverId,
+    String? serverName,
+
+    /// Always null on Tofa, which has no folder browsing.
+    String? backendFolderKey,
+
+    @JsonKey(fromJson: _mediaItemRawFromJson) Map<String, Object?>? raw,
+  }) = TofaMediaItem;
+
   MediaBackend get backend => switch (this) {
     PlexMediaItem() => MediaBackend.plex,
     JellyfinMediaItem(:final dialect) => dialect.backend,
     SiloMediaItem() => MediaBackend.silo,
+    TofaMediaItem() => MediaBackend.tofa,
   };
 
   /// Restore a [MediaItem] from a [toJson] payload. Missing/unknown backend
@@ -406,6 +507,7 @@ sealed class MediaItem with _$MediaItem {
       MediaBackend.jellyfin => _$JellyfinMediaItemFromJson(json),
       MediaBackend.emby => _$JellyfinMediaItemFromJson(json).copyWith(dialect: MediaBrowserDialect.emby),
       MediaBackend.silo => _$SiloMediaItemFromJson(json),
+      MediaBackend.tofa => _$TofaMediaItemFromJson(json),
     };
   }
 
@@ -414,6 +516,7 @@ sealed class MediaItem with _$MediaItem {
       final PlexMediaItem item => {'backend': MediaBackend.plex.id, ..._$PlexMediaItemToJson(item)},
       final JellyfinMediaItem item => {'backend': item.dialect.backend.id, ..._$JellyfinMediaItemToJson(item)},
       final SiloMediaItem item => {'backend': MediaBackend.silo.id, ..._$SiloMediaItemToJson(item)},
+      final TofaMediaItem item => {'backend': MediaBackend.tofa.id, ..._$TofaMediaItemToJson(item)},
     };
   }
 

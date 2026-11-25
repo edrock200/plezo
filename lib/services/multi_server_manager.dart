@@ -16,6 +16,7 @@ import 'jellyfin_client.dart';
 import 'jellyfin_endpoint_discovery.dart';
 import 'silo/silo_card_overlay_store.dart';
 import 'silo/silo_client.dart';
+import 'tofa/tofa_client.dart';
 import 'plex_client.dart';
 import '../models/plex/plex_config.dart';
 import '../utils/app_logger.dart';
@@ -64,12 +65,14 @@ class MultiServerManager {
     Stream<List<ConnectivityResult>> Function()? connectivityChanges,
     Duration connectivityDebounceDuration = const Duration(seconds: 2),
     Future<SiloClient> Function(SiloConnection connection) siloClientFactory = SiloClient.create,
+    Future<TofaClient> Function(TofaConnection connection) tofaClientFactory = TofaClient.create,
     List<Duration>? offlineRetryDelays,
   }) : this._(
          plexClientFactory,
          connectivityChanges ?? _defaultConnectivityChanges,
          connectivityDebounceDuration,
          siloClientFactory,
+         tofaClientFactory,
          offlineRetryDelays ?? _defaultOfflineRetryDelays,
        );
 
@@ -78,6 +81,7 @@ class MultiServerManager {
     this._connectivityChanges,
     this._connectivityDebounceDuration,
     this._siloClientFactory,
+    this._tofaClientFactory,
     this._offlineRetryDelays,
   );
 
@@ -85,6 +89,7 @@ class MultiServerManager {
 
   final PlexClientFactory _plexClientFactory;
   final Future<SiloClient> Function(SiloConnection connection) _siloClientFactory;
+  final Future<TofaClient> Function(TofaConnection connection) _tofaClientFactory;
   final Stream<List<ConnectivityResult>> Function() _connectivityChanges;
   final Duration _connectivityDebounceDuration;
   final List<Duration> _offlineRetryDelays;
@@ -98,6 +103,13 @@ class MultiServerManager {
   /// edit, a removal or a new sign-in (`ConnectionRegistry.updateSiloSession`).
   FutureOr<void> Function(SiloConnection connection, bool Function(String refreshToken) ownsRefreshToken)?
   onSiloConnectionUpdated;
+
+  /// Persists a Tofa client's rotated token pair into a row whose stored
+  /// refresh token passes `ownsRefreshToken` (`ConnectionRegistry.updateTofaSession`).
+  /// Awaited by the client before it uses the new pair: a retired Tofa
+  /// refresh token revokes the whole sign-in.
+  FutureOr<void> Function(TofaConnection connection, bool Function(String refreshToken) ownsRefreshToken)?
+  onTofaConnectionUpdated;
 
   final Map<String, MediaServerClient> _clients = {};
 
@@ -210,6 +222,7 @@ class MultiServerManager {
   static String? _boundConnectionId(MediaServerClient client) => switch (client) {
     JellyfinClient(:final connection) => connection.id,
     SiloClient(:final connection) => connection.id,
+    TofaClient(:final connection) => connection.id,
     _ => null,
   };
 
@@ -482,6 +495,9 @@ class MultiServerManager {
       return client.connection.isAdministrator;
     }
     if (client is SiloClient) {
+      return client.connection.isAdministrator;
+    }
+    if (client is TofaClient) {
       return client.connection.isAdministrator;
     }
     return false;
@@ -1239,6 +1255,99 @@ class MultiServerManager {
       appLogger.d('Silo: logout on removal failed', error: e.runtimeType);
     } finally {
       if (client != null) await _closeClientGracefully(client);
+    }
+  }
+
+  /// Add a Tofa server backed by an authenticated [TofaConnection]. Returns
+  /// true when the server answered healthy. Same bookkeeping as Silo: one
+  /// client per connection (account + Tofa profile), one active per server
+  /// id, adds serialized per connection (two clients built from one refresh
+  /// token would race its rotation).
+  Future<bool> addTofaConnection(TofaConnection connection) {
+    final previous = _tofaAddsInFlight[connection.id] ?? Future<bool>.value(false);
+    final next = previous.catchError((_) => false).then((_) => _addTofaConnection(connection));
+    _tofaAddsInFlight[connection.id] = next;
+    return next.whenComplete(() {
+      if (identical(_tofaAddsInFlight[connection.id], next)) _tofaAddsInFlight.remove(connection.id);
+    });
+  }
+
+  final Map<String, Future<bool>> _tofaAddsInFlight = {};
+
+  /// Whether the live Tofa client for [live] can serve [incoming] as is: the
+  /// address, cloud service and profile token are baked into the client.
+  @visibleForTesting
+  static bool canReuseTofaClient({required TofaConnection live, required TofaConnection incoming}) =>
+      live.baseUrl == incoming.baseUrl &&
+      live.connectUrl == incoming.connectUrl &&
+      live.profileToken == incoming.profileToken;
+
+  Future<bool> _addTofaConnection(TofaConnection connection) async {
+    try {
+      final compoundId = connection.id;
+      final machineId = connection.serverId;
+      final existing = _jellyfinByCompoundId[compoundId];
+      if (existing is TofaClient &&
+          canReuseTofaClient(live: existing.connection, incoming: connection) &&
+          existing.ownsRefreshToken(connection.refreshToken)) {
+        return await _reuseConnectionClient(existing, connectionId: compoundId, machineId: machineId);
+      }
+      final client = await _tofaClientFactory(connection);
+      if (existing is TofaClient && existing.ownsRefreshToken(connection.refreshToken)) {
+        // A changed connection of the same sign-in: the row may predate a
+        // rotation the live client made, so take its current pair.
+        client.inheritSession(existing);
+      }
+      _wireTofaClient(client);
+      if (existing != null) unawaited(_closeClientGracefully(existing));
+      _jellyfinByCompoundId[compoundId] = client;
+      _clients[machineId] = client;
+      _activeJellyfinMachine[machineId] = compoundId;
+
+      final health = await client.checkHealth();
+      _jellyfinHealthByCompoundId[compoundId] = health;
+      if (!_isActiveJellyfin(machineId, compoundId)) return health == HealthStatus.online;
+      _applyHealth(ServerId(machineId), health);
+      final healthy = health == HealthStatus.online;
+      appLogger.i('[tofa] added server ${connection.serverName}${healthy ? '' : ' (unhealthy: ${health.name})'}');
+      return healthy;
+    } catch (e, stackTrace) {
+      appLogger.e('[tofa] failed to add server ${connection.serverName}', error: e, stackTrace: stackTrace);
+      return false;
+    }
+  }
+
+  void _wireTofaClient(TofaClient client) {
+    client.onConnectionUpdated = (updated) async {
+      var toPersist = updated;
+      var owns = client.ownsRefreshToken;
+      final live = _jellyfinByCompoundId[updated.id];
+      if (live != client) {
+        // A replaced client still draining rotated the pair its replacement
+        // shares: hand the new pair over so the replacement keeps working.
+        if (live is! TofaClient || !client.ownsRefreshToken(live.connection.refreshToken)) return;
+        live.inheritSession(client);
+        toPersist = live.connection;
+        owns = (token) => live.ownsRefreshToken(token) || client.ownsRefreshToken(token);
+      }
+      try {
+        await onTofaConnectionUpdated?.call(toPersist, owns);
+      } catch (e, st) {
+        appLogger.w('[tofa] persisting the connection update failed', error: e, stackTrace: st);
+      }
+      _emitStatus();
+    };
+  }
+
+  /// Tear down a Tofa connection's client. Tofa's public API has no device
+  /// sign-out, so the tokens are only forgotten locally.
+  void removeTofaConnection(TofaConnection connection) {
+    final client = _jellyfinByCompoundId.remove(connection.id);
+    _jellyfinHealthByCompoundId.remove(connection.id);
+    if (client != null) unawaited(_closeClientGracefully(client));
+    if (_isActiveJellyfin(connection.serverId, connection.id)) {
+      _forgetServer(connection.serverId);
+      _emitStatus();
     }
   }
 

@@ -96,6 +96,9 @@ String? connectionAvatarUrl({
     ),
     PlexAccountConnection() => _plexHomeUserThumb(plexHomeByConnectionId[connection.id], link.userIdentifier),
     SiloConnection(:final profileAvatarUrl) => profileAvatarUrl,
+    // Unverified whether Tofa's `avatar_image_url` needs the bearer (an image
+    // view cannot send it): no picture rather than a refused one.
+    TofaConnection() => null,
   };
 }
 

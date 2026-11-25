@@ -567,3 +567,211 @@ class SiloConnection extends Connection {
     );
   }
 }
+
+/// A Tofa (tofa.tv) account signed in on one Tofa media server, acting as one
+/// of that account's Tofa profiles.
+///
+/// Like [SiloConnection], the chosen profile is part of the identity: every
+/// watch-state call acts on the `X-Profile-Id` profile, so two profiles of one
+/// account are two connections.
+///
+/// Sign-in runs the device flow at Tofa's cloud service ([connectUrl]), which
+/// grants a 30-day access token scoped to this server and a rotating 90-day
+/// refresh token. The client persists each refreshed pair back through the
+/// registry before it uses it: replaying a retired refresh token revokes the
+/// whole session.
+class TofaConnection extends Connection {
+  @override
+  final String id;
+
+  @override
+  final DateTime createdAt;
+
+  @override
+  final DateTime? lastAuthenticatedAt;
+
+  /// Server base URL as the user entered it after normalisation, no trailing
+  /// slash. API paths (`/api/v1/...`) are appended.
+  final String baseUrl;
+
+  /// Shown name of the server. Tofa's own API has no server name for a
+  /// device-flow client (only the cloud's account-first server list does), so
+  /// this is the host unless the user's address said otherwise.
+  final String serverName;
+
+  /// Tofa's server id (`/api/v1/auth/status` `server_id`); the token is
+  /// scoped to it.
+  final String serverId;
+
+  /// The cloud service that signs this server's devices in and refreshes
+  /// their tokens (`auth/status` `connect_url`, e.g. `https://api.tofa.tv`).
+  final String connectUrl;
+
+  final String userId;
+  final String userName;
+  final bool isAdministrator;
+
+  /// Bearer access token (30 days).
+  final String accessToken;
+
+  /// Rotating refresh token (90 days).
+  final String refreshToken;
+
+  /// When [accessToken] expires, or `null` when unknown.
+  final DateTime? accessTokenExpiresAt;
+
+  /// The Tofa profile this connection acts as (`X-Profile-Id`).
+  final String profileId;
+  final String profileName;
+
+  /// `avatar_image_url` from `/api/v1/profiles` (root-relative or absolute).
+  final String? profileAvatarUrl;
+
+  /// `X-Profile-Token` from `verify-pin`, present only for a locked profile.
+  final String? profileToken;
+
+  /// When [profileToken] expires (`verify-pin` `expires_at`), or `null`.
+  final DateTime? profileTokenExpiresAt;
+
+  final bool profileIsLocked;
+
+  TofaConnection({
+    required this.id,
+    required String baseUrl,
+    required this.serverName,
+    required this.serverId,
+    required String connectUrl,
+    required this.userId,
+    required this.userName,
+    required this.accessToken,
+    required this.refreshToken,
+    required this.profileId,
+    required this.profileName,
+    this.accessTokenExpiresAt,
+    this.isAdministrator = false,
+    this.profileAvatarUrl,
+    this.profileToken,
+    this.profileTokenExpiresAt,
+    this.profileIsLocked = false,
+    required this.createdAt,
+    this.lastAuthenticatedAt,
+  }) : baseUrl = canonicalizeBaseUrl(baseUrl),
+       connectUrl = canonicalizeBaseUrl(connectUrl);
+
+  /// Compound connection id: one account's profile on one server.
+  static String compoundId({required String serverId, required String userId, required String profileId}) =>
+      '$serverId/$userId/$profileId';
+
+  @override
+  MediaBackend get kind => MediaBackend.tofa;
+
+  @override
+  String get displayName => '$profileName · $serverName';
+
+  @override
+  String get displayLabel => serverName;
+
+  @override
+  String? get displaySubtitle {
+    final who = profileName == userName || userName.isEmpty ? profileName : '$profileName ($userName)';
+    final url = baseUrl.length <= 40 ? baseUrl : '${baseUrl.substring(0, 37)}…';
+    return '$who · $url';
+  }
+
+  TofaConnection copyWith({
+    String? baseUrl,
+    String? serverName,
+    String? connectUrl,
+    String? userName,
+    bool? isAdministrator,
+    String? accessToken,
+    String? refreshToken,
+    DateTime? accessTokenExpiresAt,
+    String? profileName,
+    String? profileAvatarUrl,
+    String? profileToken,
+    DateTime? profileTokenExpiresAt,
+    bool clearProfileToken = false,
+    bool? profileIsLocked,
+    DateTime? lastAuthenticatedAt,
+  }) {
+    return TofaConnection(
+      id: id,
+      baseUrl: baseUrl ?? this.baseUrl,
+      serverName: serverName ?? this.serverName,
+      serverId: serverId,
+      connectUrl: connectUrl ?? this.connectUrl,
+      userId: userId,
+      userName: userName ?? this.userName,
+      isAdministrator: isAdministrator ?? this.isAdministrator,
+      accessToken: accessToken ?? this.accessToken,
+      refreshToken: refreshToken ?? this.refreshToken,
+      accessTokenExpiresAt: accessTokenExpiresAt ?? this.accessTokenExpiresAt,
+      profileId: profileId,
+      profileName: profileName ?? this.profileName,
+      profileAvatarUrl: profileAvatarUrl ?? this.profileAvatarUrl,
+      profileToken: clearProfileToken ? null : (profileToken ?? this.profileToken),
+      profileTokenExpiresAt: clearProfileToken ? null : (profileTokenExpiresAt ?? this.profileTokenExpiresAt),
+      profileIsLocked: profileIsLocked ?? this.profileIsLocked,
+      createdAt: createdAt,
+      lastAuthenticatedAt: lastAuthenticatedAt ?? this.lastAuthenticatedAt,
+    );
+  }
+
+  @override
+  Map<String, Object?> toConfigJson() {
+    return {
+      'baseUrl': baseUrl,
+      'serverName': serverName,
+      'serverId': serverId,
+      'connectUrl': connectUrl,
+      'userId': userId,
+      'userName': userName,
+      'isAdministrator': isAdministrator,
+      'accessToken': accessToken,
+      'refreshToken': refreshToken,
+      'accessTokenExpiresAt': accessTokenExpiresAt?.millisecondsSinceEpoch,
+      'profileId': profileId,
+      'profileName': profileName,
+      'profileAvatarUrl': profileAvatarUrl,
+      'profileToken': profileToken,
+      'profileTokenExpiresAt': profileTokenExpiresAt?.millisecondsSinceEpoch,
+      'profileIsLocked': profileIsLocked,
+    };
+  }
+
+  factory TofaConnection.fromConfigJson({
+    required String id,
+    required Map<String, Object?> json,
+    required DateTime createdAt,
+    DateTime? lastAuthenticatedAt,
+  }) {
+    DateTime? millis(Object? raw) {
+      final ms = flexibleInt(raw);
+      return ms == null ? null : DateTime.fromMillisecondsSinceEpoch(ms);
+    }
+
+    final profileToken = json['profileToken'] as String?;
+    return TofaConnection(
+      id: id,
+      baseUrl: json['baseUrl'] as String? ?? '',
+      serverName: json['serverName'] as String? ?? 'Tofa',
+      serverId: json['serverId'] as String? ?? '',
+      connectUrl: json['connectUrl'] as String? ?? '',
+      userId: json['userId'] as String? ?? '',
+      userName: json['userName'] as String? ?? '',
+      isAdministrator: json['isAdministrator'] as bool? ?? false,
+      accessToken: json['accessToken'] as String? ?? '',
+      refreshToken: json['refreshToken'] as String? ?? '',
+      accessTokenExpiresAt: millis(json['accessTokenExpiresAt']),
+      profileId: json['profileId'] as String? ?? '',
+      profileName: json['profileName'] as String? ?? '',
+      profileAvatarUrl: json['profileAvatarUrl'] as String?,
+      profileToken: profileToken == null || profileToken.isEmpty ? null : profileToken,
+      profileTokenExpiresAt: millis(json['profileTokenExpiresAt']),
+      profileIsLocked: json['profileIsLocked'] as bool? ?? false,
+      createdAt: createdAt,
+      lastAuthenticatedAt: lastAuthenticatedAt,
+    );
+  }
+}

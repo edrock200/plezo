@@ -64,7 +64,7 @@ class AccountPreferencesRepository {
     MediaBackend.jellyfin => AccountPreferencesCapabilities.jellyfin,
     MediaBackend.emby => AccountPreferencesCapabilities.emby,
     MediaBackend.plex => AccountPreferencesCapabilities.plex,
-    MediaBackend.silo => AccountPreferencesCapabilities.unsupported,
+    MediaBackend.silo || MediaBackend.tofa => AccountPreferencesCapabilities.unsupported,
   };
 
   /// Last known reachability of [ref] — false once a read failed to resolve a

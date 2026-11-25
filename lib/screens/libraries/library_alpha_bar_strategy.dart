@@ -80,7 +80,11 @@ abstract class LibraryAlphaBarStrategy {
         currentQuery: siloQuery,
         loadLetterIndex: siloLetterIndex,
       ),
-      MediaBackend.jellyfin || MediaBackend.emby || MediaBackend.silo => const MediaBrowserAlphaBarStrategy(),
+      // Tofa: the prefix bar, sent as `/media`'s `letter` (single letters only).
+      MediaBackend.jellyfin ||
+      MediaBackend.emby ||
+      MediaBackend.silo ||
+      MediaBackend.tofa => const MediaBrowserAlphaBarStrategy(),
     };
   }
 }
