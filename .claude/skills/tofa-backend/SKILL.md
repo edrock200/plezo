@@ -218,3 +218,26 @@ to the address the user typed (LAN or custom URL); relay support is a follow-up.
 - For anything the spec leaves open (sort values, codec list format, artwork path format), say in code that it is
   unverified and fail closed.
 - Never let tests write progress or watched state to a real server.
+
+## In Plezilo (first version)
+
+- Code: `lib/services/tofa/` — `tofa_api.dart` (HTTP, headers, token refresh), `tofa_auth_service.dart` (server
+  probe, device flow state machine `TofaDeviceSignIn`, profiles, verify-pin), `tofa_mappers.dart` (JSON → `TofaMediaItem`,
+  ticks), `tofa_playback_caps.dart` (codec query), `tofa_client.dart`, `tofa_api_cache.dart`. Sign-in screen:
+  `lib/screens/settings/add_tofa_screen.dart`. Tests: `test/services/tofa/` (fake server in `tofa_fixtures.dart`) and
+  `test/screens/settings/add_tofa_screen_test.dart`.
+- Item ids: titles keep the media id; seasons are `tofa-season:{mediaId}/{seasonId}`, episodes
+  `tofa-episode:{mediaId}/{episodeId}` (one `/media/{id}` read serves the whole series tree). File ids live in
+  `raw['tofa_file_ids']`; watch state of a detail comes from `POST /media/progress/batch`.
+- Artwork is `tofa-artwork:{mediaId}/{kind}` in the item and becomes `/api/v1/artwork/...?st=` in
+  `TofaClient.thumbnailUrl` (image token renewed at 80% of `expires_in`). Raw `*_path` values are never used.
+- A refreshed pair is persisted (`ConnectionRegistry.updateTofaSession`, awaited) **before** the client uses it.
+- Playback picks the requested file, else `/versions`' recommended file, else the only file; with several files and
+  no recommendation it refuses to play rather than take the first. `resume_ticks` is always sent (0 from the start).
+  Text subtitles: external ones on a direct play, all of them on a remux/transcode, as `full.vtt?st=` sidecars.
+- Not in this version: downloads (`MediaBackend.supportsDownloads` false; actions hidden), external players,
+  playlists, collections, people, watchlist (Plezilo's watchlist UI is Silo-specific), sort/filter/genre lists,
+  chapters/markers, seek-bar previews, relay, live events, sign-out revoke (none in the public spec).
+- Unverified on a real server (all fail closed and are marked in code): codec-list format; `max_bitrate` unit;
+  `force_method` values; `letter` format (only single A–Z sent); whether `stream_url`/HLS variants keep `st`;
+  relative URL base; wrong-PIN status; `X-Tofa-Platform` values for desktops; avatar URLs needing a bearer.

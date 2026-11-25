@@ -60,27 +60,32 @@ agent needs. The code still says "Plezy" in internal names (Dart package `plezy`
 - Running `flutter` as root prints a "Woah!" warning; ignore it.
 
 ## Architecture in one screen
-- `MediaBackend` (`lib/media/media_backend.dart`): `plex`, `jellyfin`, `emby`, `silo`.
+- `MediaBackend` (`lib/media/media_backend.dart`): `plex`, `jellyfin`, `emby`, `silo`, `tofa`.
   `usesMediaBrowserApi` is true only for Jellyfin/Emby; **"not Plex" does not mean MediaBrowser**.
 - `MediaItem` (`lib/media/media_item.dart`) is a sealed freezed union: `PlexMediaItem`,
-  `JellyfinMediaItem` (Jellyfin + Emby via `dialect`), `SiloMediaItem`.
+  `JellyfinMediaItem` (Jellyfin + Emby via `dialect`), `SiloMediaItem`, `TofaMediaItem`.
 - `MediaServerClient` (`lib/media/media_server_client.dart`): the neutral client interface (~90
   members). Implementations: `PlexClient`, `JellyfinClient`, `SiloClient`
-  (`lib/services/silo/silo_client.dart` + `silo_client_playback.dart` part).
+  (`lib/services/silo/silo_client.dart` + `silo_client_playback.dart` part), `TofaClient`
+  (`lib/services/tofa/tofa_client.dart`).
 - `Connection` (`lib/connection/connection.dart`) is sealed: `PlexAccountConnection`,
-  `JellyfinConnection`, `SiloConnection`. Persisted by `ConnectionRegistry`; credentials are
+  `JellyfinConnection`, `SiloConnection`, `TofaConnection`. Persisted by `ConnectionRegistry`; credentials are
   encrypted by `CredentialVault` — every token key of a new kind must be listed in
   `_tokenKeysForKind` or it is stored in plaintext.
-- `MultiServerManager` owns live clients. Jellyfin and Silo clients are per-connection, tracked in
+- `MultiServerManager` owns live clients. Jellyfin, Silo and Tofa clients are per-connection, tracked in
   `_jellyfinByCompoundId` (historic name) with one active client per server id.
 - `ActiveProfileBinder` binds a Plezy profile's connections to clients (`_bindMediaBrowser`,
-  `_bindSilo`). Plezy profiles are local; a Silo connection is one account acting as one Silo profile.
+  `_bindSilo`, `_bindTofa`). Plezy profiles are local; a Silo or Tofa connection is one account acting
+  as one profile of that server.
 - Offline/download metadata lives in per-backend `ApiCache`s (`PlexApiCache`, `JellyfinApiCache`,
-  `SiloApiCache`), registered in `main.dart`. `ApiCache.forBackend` silently falls back to Plex for an
+  `SiloApiCache`, `TofaApiCache`), registered in `main.dart`. `ApiCache.forBackend` silently falls back to Plex for an
   unregistered backend.
 
 ## Rules
 - Silo: `/api/v2` only, never v1. Details and pitfalls are in the `silo-backend` skill.
+- Tofa: `/api/v1` plus the cloud sign-in service; facts in the `tofa-backend` skill. Never use Tofa's
+  logo (not licensed to us): `BackendBadge` draws a neutral "T" badge. Tofa has no downloads yet
+  (`MediaBackend.supportsDownloads` is false for it).
 - The app is one build for phone, tablet, desktop and TV. Every new screen must work with touch
   **and** D-pad: use `FocusableButton`, `FocusableTextFormField`, `FocusableWrapper` and give each
   focusable a `FocusNode` with explicit `onNavigateUp/Down` where the default order is wrong. TV
