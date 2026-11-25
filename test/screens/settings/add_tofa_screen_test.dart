@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -183,5 +184,61 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.pump();
     expect(FocusManager.instance.primaryFocus?.debugLabel, 'AddTofa:FindServer');
+  });
+
+  testWidgets('account-first: the account\'s servers, pick one, then its profiles', (tester) async {
+    fake.on(
+      'GET',
+      '/servers',
+      (_) => jsonResponse({
+        'items': [
+          {
+            'id': 'srv-1',
+            'name': 'Home server',
+            'online': true,
+            'role': 'owner',
+            'connect_url': tofaBase,
+            'connection_type': 'direct',
+            'libraries': <String>[],
+            'library_ids': <String>[],
+          },
+        ],
+        'limit': 100,
+        'offset': 0,
+        'total': 1,
+      }),
+    );
+    fake.on(
+      'POST',
+      '/servers/srv-1/server-session',
+      (_) => jsonResponse({
+        'access_token': 'srv-acc',
+        'refresh_token': 'srv-ref',
+        'token_type': 'Bearer',
+        'expires_in': 2592000,
+      }),
+    );
+    await tester.pumpWidget(
+      _app(
+        AddTofaScreen(
+          authService: TofaAuthService(client: fake.client),
+          pollWait: (_) => polls.stream.first.catchError((_) {}),
+          cloudUrl: tofaCloud,
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.tap(find.text('Sign in with your Tofa account'));
+    await _frames(tester);
+    expect(find.text('WXYZ-9876'), findsOneWidget);
+    expect((jsonDecode(fake.to('POST', '/device/code').single.body) as Map).containsKey('server_id'), isFalse);
+    await approve(tester);
+
+    expect(find.text('Choose a server'), findsOneWidget);
+    expect(find.text('Home server'), findsOneWidget);
+    await tester.tap(find.text('Home server'));
+    await _frames(tester, count: 10);
+    expect(find.text("Who's watching?"), findsOneWidget);
+    expect(fake.to('GET', '/api/v1/profiles').single.headers['Authorization'], 'Bearer srv-acc');
   });
 }

@@ -10,6 +10,7 @@ import '../../utils/media_server_http_client.dart';
 import '../../utils/media_server_timeouts.dart';
 import '../../utils/url_utils.dart';
 import 'tofa_api.dart';
+import 'tofa_endpoints.dart';
 
 /// The OAuth grant type of Tofa's device flow.
 const tofaDeviceCodeGrantType = 'urn:ietf:params:oauth:grant-type:device_code';
@@ -190,6 +191,47 @@ class TofaAccount {
   }
 }
 
+/// One server of the account (`ServerListEntry` of `GET {cloud}/servers`).
+@immutable
+class TofaCloudServer {
+  final String id;
+  final String name;
+  final bool online;
+  final String role;
+
+  /// `connect_url`: the server's direct address, absent when it never
+  /// connected.
+  final String? connectUrl;
+
+  const TofaCloudServer({required this.id, required this.name, this.online = false, this.role = '', this.connectUrl});
+
+  static TofaCloudServer? fromJson(Object? data) {
+    if (data is! Map) return null;
+    final id = data['id'];
+    final name = data['name'];
+    if (id is! String || id.isEmpty || name is! String) return null;
+    final url = data['connect_url'];
+    return TofaCloudServer(
+      id: id,
+      name: name.isEmpty ? id : name,
+      online: data['online'] == true,
+      role: data['role'] is String ? data['role'] as String : '',
+      connectUrl: url is String && (url.startsWith('https://') || url.startsWith('http://')) ? url : null,
+    );
+  }
+
+  /// The server as a sign-in target: its direct address, else its relay
+  /// (the client races the others once signed in).
+  TofaServerInfo toServerInfo(String cloudUrl) => TofaServerInfo(
+    baseUrl: canonicalizeBaseUrl(connectUrl ?? tofaRelayUrl(cloudUrl, id)),
+    serverName: name,
+    claimed: true,
+    claimPending: false,
+    serverId: id,
+    connectUrl: cloudUrl,
+  );
+}
+
 /// A finished device sign-in on one server, not yet saved as a connection.
 @immutable
 class TofaSignIn {
@@ -282,10 +324,19 @@ class TofaAuthService {
   /// a 30-day token for it.
   Future<TofaDeviceCode> startDeviceCode(TofaServerInfo server) async {
     if (!server.canSignIn) throw const TofaSignInException('unclaimed');
+    return _startCode(server.connectUrl, serverId: server.serverId);
+  }
+
+  /// Account-first sign-in: `POST {cloud}/device/code` WITHOUT a server id,
+  /// whose grant is a 15-minute cloud token for [listServers] and
+  /// [serverSession].
+  Future<TofaDeviceCode> startAccountDeviceCode(String cloudUrl) => _startCode(cloudUrl);
+
+  Future<TofaDeviceCode> _startCode(String cloudUrl, {String? serverId}) async {
     final response = await _http.post(
-      '${server.connectUrl}/device/code',
+      '$cloudUrl/device/code',
       headers: const {'Content-Type': 'application/json'},
-      body: {'server_id': server.serverId, 'client_name': TofaClientHeaders.clientName, 'client_type': _clientType},
+      body: {'server_id': ?serverId, 'client_name': TofaClientHeaders.clientName, 'client_type': _clientType},
       timeout: MediaServerTimeouts.receive,
     );
     if (response.statusCode != 200) {
@@ -304,12 +355,16 @@ class TofaAuthService {
 
   /// One poll of `POST {connect_url}/device/token`, form-encoded (JSON gets a
   /// 415). Transport failures throw [MediaServerHttpException].
-  Future<TofaPollResult> pollDeviceToken(TofaServerInfo server, TofaDeviceCode code) async {
+  Future<TofaPollResult> pollDeviceToken(TofaServerInfo server, TofaDeviceCode code) =>
+      pollDeviceTokenAt(server.connectUrl, code);
+
+  /// [pollDeviceToken] at the cloud service [cloudUrl].
+  Future<TofaPollResult> pollDeviceTokenAt(String cloudUrl, TofaDeviceCode code) async {
     final body =
         'grant_type=${Uri.encodeQueryComponent(tofaDeviceCodeGrantType)}'
         '&device_code=${Uri.encodeQueryComponent(code.deviceCode)}';
     final response = await _http.post(
-      '${server.connectUrl}/device/token',
+      '$cloudUrl/device/token',
       headers: const {'Content-Type': 'application/x-www-form-urlencoded'},
       body: body,
       timeout: MediaServerTimeouts.receive,
@@ -331,6 +386,38 @@ class TofaAuthService {
       throw MediaServerHttpException(type: MediaServerHttpErrorType.unknown, statusCode: statusCode);
     }
     return TofaPollRefused(error ?? 'http_$statusCode');
+  }
+
+  /// `GET {cloud}/servers` with a cloud token: the servers this account owns
+  /// or was invited to.
+  Future<List<TofaCloudServer>> listServers(String cloudUrl, TofaTokens cloudTokens) async {
+    final response = await _http.get(
+      '$cloudUrl/servers',
+      queryParameters: {'limit': '100'},
+      headers: {'Authorization': 'Bearer ${cloudTokens.accessToken}'},
+    );
+    TofaApi.throwIfTofaError(response);
+    final data = response.data;
+    final items = data is Map ? data['items'] : null;
+    final servers = [
+      if (items is List)
+        for (final row in items) ?TofaCloudServer.fromJson(row),
+    ];
+    appLogger.i('[tofa] account lists ${servers.length} server(s)');
+    return servers;
+  }
+
+  /// `POST {cloud}/servers/{id}/server-session`: the 30-day server token pair
+  /// for [server], from the cloud token.
+  Future<TofaTokens> serverSession(String cloudUrl, TofaTokens cloudTokens, TofaCloudServer server) async {
+    final response = await _http.post(
+      '$cloudUrl/servers/${Uri.encodeComponent(server.id)}/server-session',
+      headers: {'Authorization': 'Bearer ${cloudTokens.accessToken}'},
+    );
+    TofaApi.throwIfTofaError(response);
+    final tokens = TofaTokens.fromJson(response.data);
+    if (tokens == null) throw const TofaSignInException('bad_token_response');
+    return tokens;
   }
 
   Map<String, String> _bearer(TofaTokens tokens) => {
@@ -465,16 +552,32 @@ class TofaDeviceSignInState {
 class TofaDeviceSignIn extends ValueNotifier<TofaDeviceSignInState> {
   TofaDeviceSignIn({
     required this.auth,
-    required this.server,
+    required TofaServerInfo this.server,
     Future<void> Function(Duration delay)? wait,
     DateTime Function()? now,
     this.unreachableAfter = const Duration(seconds: 30),
   }) : _wait = wait ?? ((delay) => Future<void>.delayed(delay)),
        _now = now ?? DateTime.now,
+       cloudUrl = server.connectUrl,
+       super(const TofaDeviceSignInState(TofaDeviceSignInStatus.gettingCode));
+
+  /// Account-first sign-in at [cloudUrl]: the grant is a cloud token.
+  TofaDeviceSignIn.account({
+    required this.auth,
+    required this.cloudUrl,
+    Future<void> Function(Duration delay)? wait,
+    DateTime Function()? now,
+    this.unreachableAfter = const Duration(seconds: 30),
+  }) : server = null,
+       _wait = wait ?? ((delay) => Future<void>.delayed(delay)),
+       _now = now ?? DateTime.now,
        super(const TofaDeviceSignInState(TofaDeviceSignInStatus.gettingCode));
 
   final TofaAuthService auth;
-  final TofaServerInfo server;
+
+  /// The server signed in to; null for an account-first sign-in.
+  final TofaServerInfo? server;
+  final String cloudUrl;
   final Future<void> Function(Duration delay) _wait;
   final DateTime Function() _now;
   final Duration unreachableAfter;
@@ -493,7 +596,8 @@ class TofaDeviceSignIn extends ValueNotifier<TofaDeviceSignInState> {
     _set(const TofaDeviceSignInState(TofaDeviceSignInStatus.gettingCode));
     final TofaDeviceCode code;
     try {
-      code = await auth.startDeviceCode(server);
+      final target = server;
+      code = target == null ? await auth.startAccountDeviceCode(cloudUrl) : await auth.startDeviceCode(target);
     } catch (e) {
       if (!_current(run)) return;
       appLogger.w('[tofa] device code failed', error: e is TofaSignInException ? e.code : e.runtimeType);
@@ -525,7 +629,7 @@ class TofaDeviceSignIn extends ValueNotifier<TofaDeviceSignInState> {
       }
       final TofaPollResult result;
       try {
-        result = await auth.pollDeviceToken(server, code);
+        result = await auth.pollDeviceTokenAt(cloudUrl, code);
       } catch (e) {
         if (!_current(run)) return;
         failingSince ??= _now();

@@ -290,4 +290,65 @@ void main() {
       expect(connection.refreshToken, 'ref-1');
     });
   });
+
+  group('account-first sign-in', () {
+    test('the account code is asked for without a server id and polled at the cloud', () async {
+      fake.on('POST', '/device/code', (request) {
+        expect((jsonDecode(request.body) as Map).containsKey('server_id'), isFalse);
+        return jsonResponse(_code());
+      });
+      fake.on('POST', '/device/token', (_) => jsonResponse(_tokens()));
+      final flow = TofaDeviceSignIn.account(auth: auth, cloudUrl: tofaCloud, wait: (_) async {});
+      await flow.start();
+      expect(flow.value.status, TofaDeviceSignInStatus.approved);
+      expect(fake.to('POST', '/device/token').single.url.toString(), '$tofaCloud/device/token');
+      flow.dispose();
+    });
+
+    test('the account\'s servers, then a server session for the picked one', () async {
+      fake.on('GET', '/servers', (request) {
+        expect(request.headers['Authorization'], 'Bearer cloud-1');
+        return jsonResponse({
+          'items': [
+            {
+              'id': 'srv-1',
+              'name': 'Home',
+              'online': true,
+              'role': 'owner',
+              'connect_url': 'https://srv-1.direct.example.com:33333',
+              'connection_type': 'direct',
+              'libraries': <String>[],
+              'library_ids': <String>[],
+            },
+            {
+              'id': 'srv-2',
+              'name': 'Friend',
+              'online': false,
+              'role': 'viewer',
+              'connect_url': null,
+              'connection_type': 'relay',
+              'libraries': <String>[],
+              'library_ids': <String>[],
+            },
+          ],
+          'limit': 100,
+          'offset': 0,
+          'total': 2,
+        });
+      });
+      fake.on('POST', '/servers/srv-2/server-session', (request) {
+        expect(request.headers['Authorization'], 'Bearer cloud-1');
+        return jsonResponse(_tokens());
+      });
+      const cloud = TofaTokens(accessToken: 'cloud-1', refreshToken: 'cref-1');
+      final servers = await auth.listServers(tofaCloud, cloud);
+      expect(servers.map((s) => (s.name, s.online)), [('Home', true), ('Friend', false)]);
+      expect(servers.first.toServerInfo(tofaCloud).baseUrl, 'https://srv-1.direct.example.com:33333');
+      final friend = servers.last.toServerInfo(tofaCloud);
+      expect(friend.baseUrl, '$tofaCloud/servers/srv-2/relay', reason: 'no direct address: the relay');
+      expect(friend.canSignIn, isTrue);
+      final tokens = await auth.serverSession(tofaCloud, cloud, servers.last);
+      expect(tokens.refreshToken, 'ref-1');
+    });
+  });
 }

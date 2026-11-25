@@ -20,7 +20,9 @@ import '../../profiles/active_profile_provider.dart';
 import '../../profiles/profile.dart';
 import '../../profiles/profile_connection.dart';
 import '../../profiles/profile_connection_registry.dart';
+import '../../services/tofa/tofa_api.dart';
 import '../../services/tofa/tofa_auth_service.dart';
+import '../../services/tofa/tofa_endpoints.dart';
 import '../../theme/mono_tokens.dart';
 import '../../utils/app_logger.dart';
 import '../../widgets/app_icon.dart';
@@ -60,18 +62,30 @@ class AddTofaScreen extends StatefulWidget {
   @visibleForTesting
   final Future<void> Function(Duration delay)? pollWait;
 
-  const AddTofaScreen({super.key, this.targetProfile, this.initialUrl, this.authService, this.pollWait});
+  /// Tofa's cloud service for account-first sign-in (test seam).
+  final String cloudUrl;
+
+  const AddTofaScreen({
+    super.key,
+    this.targetProfile,
+    this.initialUrl,
+    this.authService,
+    this.pollWait,
+    this.cloudUrl = tofaCloudUrl,
+  });
 
   @override
   State<AddTofaScreen> createState() => _AddTofaScreenState();
 }
 
-enum _Step { address, deviceCode, profile }
+enum _Step { address, deviceCode, servers, profile }
 
 class _AddTofaScreenState extends State<AddTofaScreen> with AsyncFormStateMixin, ControllerDisposerMixin {
   late final _urlController = createTextEditingController(text: widget.initialUrl ?? '');
   final _urlFocus = FocusNode(debugLabel: 'AddTofa:Url');
   final _findServerFocus = FocusNode(debugLabel: 'AddTofa:FindServer');
+  final _accountFocus = FocusNode(debugLabel: 'AddTofa:Account');
+  final _serversBackFocus = FocusNode(debugLabel: 'AddTofa:ServersBack');
   final _newCodeFocus = FocusNode(debugLabel: 'AddTofa:NewCode');
   final _codeChangeServerFocus = FocusNode(debugLabel: 'AddTofa:CodeChangeServer');
   final _profileChangeServerFocus = FocusNode(debugLabel: 'AddTofa:ProfileChangeServer');
@@ -87,12 +101,19 @@ class _AddTofaScreenState extends State<AddTofaScreen> with AsyncFormStateMixin,
   /// The code was approved and the account is being read.
   bool _completing = false;
 
+  /// Account-first sign-in: the cloud token of the approved code and the
+  /// account's servers, while the person picks one.
+  TofaTokens? _cloudTokens;
+  List<TofaCloudServer> _servers = const [];
+
   @override
   void dispose() {
     _disposeFlow();
     if (widget.authService == null) _auth?.close();
     _urlFocus.dispose();
     _findServerFocus.dispose();
+    _accountFocus.dispose();
+    _serversBackFocus.dispose();
     _newCodeFocus.dispose();
     _codeChangeServerFocus.dispose();
     _profileChangeServerFocus.dispose();
@@ -130,11 +151,21 @@ class _AddTofaScreenState extends State<AddTofaScreen> with AsyncFormStateMixin,
     await _startDeviceFlow();
   }
 
+  /// Account-first sign-in: a code for the account (no server yet), then
+  /// the account's servers to pick from. Works away from home from the start.
+  Future<void> _startAccountFlow() async {
+    if (busy) return;
+    _server = null;
+    await _startDeviceFlow();
+  }
+
   Future<void> _startDeviceFlow() async {
     final server = _server;
-    if (server == null) return;
     _disposeFlow();
-    final flow = TofaDeviceSignIn(auth: await _authService(), server: server, wait: widget.pollWait);
+    final auth = await _authService();
+    final flow = server == null
+        ? TofaDeviceSignIn.account(auth: auth, cloudUrl: widget.cloudUrl, wait: widget.pollWait)
+        : TofaDeviceSignIn(auth: auth, server: server, wait: widget.pollWait);
     if (!mounted) {
       flow.dispose();
       return;
@@ -165,8 +196,56 @@ class _AddTofaScreenState extends State<AddTofaScreen> with AsyncFormStateMixin,
   Future<void> _completeSignIn(TofaDeviceSignIn flow, TofaDeviceSignInState state) async {
     final server = _server;
     final tokens = state.tokens;
-    if (server == null || tokens == null) return;
+    if (tokens == null) return;
+    if (server == null) return _completeAccountSignIn(flow, tokens);
     setState(() => _completing = true);
+    await _readProfiles(flow, server, tokens);
+  }
+
+  /// The account's servers, from the cloud token the account code granted.
+  Future<void> _completeAccountSignIn(TofaDeviceSignIn flow, TofaTokens cloudTokens) async {
+    setState(() => _completing = true);
+    List<TofaCloudServer>? servers;
+    try {
+      servers = await (await _authService()).listServers(widget.cloudUrl, cloudTokens);
+    } catch (e) {
+      appLogger.w('[tofa] server list failed', error: e.runtimeType);
+    }
+    if (!mounted || !identical(_flow, flow)) return;
+    _disposeFlow();
+    setState(() {
+      _completing = false;
+      _cloudTokens = cloudTokens;
+      _servers = servers ?? const [];
+      _step = _Step.servers;
+    });
+    setErrorText(
+      servers == null
+          ? t.addServer.tofaSignInFailed
+          : servers.isEmpty
+          ? t.addServer.tofaNoServers
+          : null,
+    );
+    if (_servers.isEmpty) requestFocusAfterFrame(_serversBackFocus);
+  }
+
+  /// A server picked from the account's list: its 30-day server token pair
+  /// (`server-session`), then its profiles.
+  Future<void> _pickServer(TofaCloudServer picked) async {
+    final cloudTokens = _cloudTokens;
+    if (busy || cloudTokens == null) return;
+    final info = picked.toServerInfo(widget.cloudUrl);
+    final tokens = await runAsync(
+      () async => (await _authService()).serverSession(widget.cloudUrl, cloudTokens, picked),
+      errorMapper: (_) => t.addServer.tofaSignInFailed,
+    );
+    if (tokens == null || !mounted) return;
+    _server = info;
+    setState(() => _completing = true);
+    await _readProfiles(null, info, tokens);
+  }
+
+  Future<void> _readProfiles(TofaDeviceSignIn? flow, TofaServerInfo server, TofaTokens tokens) async {
     final auth = await _authService();
     final account = await auth.fetchAccount(server, tokens);
     final signIn = TofaSignIn(server: server, tokens: tokens, account: account);
@@ -176,7 +255,7 @@ class _AddTofaScreenState extends State<AddTofaScreen> with AsyncFormStateMixin,
     } catch (e) {
       appLogger.w('[tofa] profile list failed', error: e.runtimeType);
     }
-    if (!mounted || !identical(_flow, flow)) return;
+    if (!mounted || (flow != null && !identical(_flow, flow))) return;
     _disposeFlow();
     setState(() {
       _completing = false;
@@ -201,6 +280,8 @@ class _AddTofaScreenState extends State<AddTofaScreen> with AsyncFormStateMixin,
       _server = null;
       _signIn = null;
       _profiles = const [];
+      _cloudTokens = null;
+      _servers = const [];
       _completing = false;
       _step = _Step.address;
     });
@@ -370,6 +451,7 @@ class _AddTofaScreenState extends State<AddTofaScreen> with AsyncFormStateMixin,
                     ),
                   ],
                   _Step.deviceCode => _buildAddressStep(theme),
+                  _Step.servers => _buildServersStep(theme),
                   _Step.profile => _buildProfileStep(theme),
                 },
               ),
@@ -407,6 +489,7 @@ class _AddTofaScreenState extends State<AddTofaScreen> with AsyncFormStateMixin,
       focusNode: _findServerFocus,
       useBackgroundFocus: true,
       onNavigateUp: () => _urlFocus.requestFocus(),
+      onNavigateDown: () => _accountFocus.requestFocus(),
       onPressed: busy ? null : () => unawaited(_probe()),
       child: FilledButton.icon(
         onPressed: busy ? null : () => unawaited(_probe()),
@@ -414,8 +497,63 @@ class _AddTofaScreenState extends State<AddTofaScreen> with AsyncFormStateMixin,
         label: Text(t.addServer.findServer),
       ),
     ),
+    const SizedBox(height: 24),
+    Text(
+      t.addServer.tofaAccountLead,
+      style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onSurface.withValues(alpha: 0.7)),
+    ),
+    const SizedBox(height: 8),
+    FocusableButton(
+      focusNode: _accountFocus,
+      useBackgroundFocus: true,
+      onNavigateUp: () => _findServerFocus.requestFocus(),
+      onPressed: busy ? null : () => unawaited(_startAccountFlow()),
+      child: OutlinedButton.icon(
+        onPressed: busy ? null : () => unawaited(_startAccountFlow()),
+        icon: const AppIcon(Symbols.account_circle_rounded, fill: 1),
+        label: Text(t.addServer.tofaSignInWithAccount),
+      ),
+    ),
     ...buildInlineError(theme),
   ];
+
+  List<Widget> _buildServersStep(ThemeData theme) {
+    final tokensRef = tokens(context);
+    final muted = theme.colorScheme.onSurface.withValues(alpha: 0.7);
+    return [
+      Text(t.addServer.tofaChooseServer, style: theme.textTheme.titleLarge),
+      const SizedBox(height: 16),
+      for (final (i, server) in _servers.indexed) ...[
+        if (i > 0) SizedBox(height: tokensRef.groupGap),
+        _TofaChoiceTile(
+          title: server.name,
+          subtitle: server.online ? null : t.addServer.tofaServerOffline,
+          leading: const AppIcon(Symbols.dns_rounded, fill: 1),
+          autofocus: i == 0,
+          borderRadius: groupItemRadii(context, i, _servers.length),
+          onTap: busy ? null : () => unawaited(_pickServer(server)),
+        ),
+      ],
+      ...buildInlineError(theme),
+      if (busy) ...[const SizedBox(height: 12), const Center(child: LoadingIndicatorBox(size: 20))],
+      const SizedBox(height: 16),
+      Text(t.addServer.tofaRelayNote, style: theme.textTheme.bodySmall?.copyWith(color: muted)),
+      const SizedBox(height: 8),
+      Align(
+        alignment: AlignmentDirectional.centerStart,
+        child: FocusableButton(
+          focusNode: _serversBackFocus,
+          useBackgroundFocus: true,
+          onPressed: busy ? null : _changeServer,
+          child: TextButton.icon(
+            onPressed: busy ? null : _changeServer,
+            icon: const AppIcon(Symbols.arrow_back_rounded, fill: 1),
+            label: Text(t.addServer.tofaChangeServer),
+          ),
+        ),
+      ),
+    ];
+  }
 
   String _statusText(TofaDeviceSignInState state) {
     if (_completing) return t.addServer.tofaDeviceSigningIn;
@@ -638,6 +776,82 @@ class _TofaProfileTile extends StatelessWidget {
       onTap: onTap,
       excludeSemantics: true,
       child: tile,
+    );
+  }
+}
+
+/// A plain focusable row (a server of the account).
+class _TofaChoiceTile extends StatelessWidget {
+  final String title;
+  final String? subtitle;
+  final Widget leading;
+  final bool autofocus;
+  final BorderRadius borderRadius;
+  final VoidCallback? onTap;
+
+  const _TofaChoiceTile({
+    required this.title,
+    required this.leading,
+    required this.autofocus,
+    required this.borderRadius,
+    this.subtitle,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Semantics(
+      button: true,
+      label: title,
+      value: subtitle,
+      enabled: onTap != null,
+      onTap: onTap,
+      excludeSemantics: true,
+      child: FocusableWrapper(
+        autofocus: autofocus,
+        disableScale: true,
+        delegateFocusBorder: true,
+        descendantsAreFocusable: false,
+        onSelect: onTap,
+        child: CardFocusBorder(
+          borderRadii: borderRadius,
+          strokeAlign: BorderSide.strokeAlignInside,
+          child: Material(
+            color: theme.colorScheme.surfaceContainerHighest,
+            borderRadius: borderRadius,
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: borderRadius,
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  children: [
+                    leading,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: .start,
+                        children: [
+                          Text(title, style: theme.textTheme.titleSmall),
+                          if (subtitle != null)
+                            Text(
+                              subtitle!,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    const AppIcon(Symbols.chevron_right_rounded, fill: 1),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
