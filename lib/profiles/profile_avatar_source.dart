@@ -96,6 +96,7 @@ String? connectionAvatarUrl({
     ),
     PlexAccountConnection() => _plexHomeUserThumb(plexHomeByConnectionId[connection.id], link.userIdentifier),
     SiloConnection(:final profileAvatarUrl) => profileAvatarUrl,
+    TofaConnection(:final profileAvatarUrl) => profileAvatarUrl,
   };
 }
 

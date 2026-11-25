@@ -588,6 +588,10 @@ class DownloadManagerService {
       // A Silo cache is keyed by the connection id (`server/user/profile`).
       return await _siloProfileScopeId(serverId, activeProfileId) ?? activeClientScopeIdForServer(serverId);
     }
+    if (backend == MediaBackend.tofa) {
+      // A tofa cache is keyed by the connection id (`tofa:server/user/profile`).
+      return await _tofaProfileScopeId(serverId, activeProfileId) ?? activeClientScopeIdForServer(serverId);
+    }
     if (backend.usesMediaBrowserApi) {
       final persisted = await JellyfinCacheResolver(_database).findProfileScopeId(serverId, activeProfileId);
       return persisted ?? activeClientScopeIdForServer(serverId);
@@ -734,6 +738,24 @@ class DownloadManagerService {
     return null;
   }
 
+  Future<String?> _tofaProfileScopeId(ServerId serverId, String profileId) async {
+    final rows = await (_database.select(
+      _database.profileConnections,
+    )..where((t) => t.profileId.equals(profileId))).get();
+    final prefix = 'tofa:$serverId/';
+    final tofaIds = {
+      for (final row in await _tofaConnectionRows())
+        if (row.id.startsWith(prefix)) row.id,
+    };
+    for (final binding in rows) {
+      if (tofaIds.contains(binding.connectionId)) return binding.connectionId;
+    }
+    return null;
+  }
+
+  Future<List<ConnectionRow>> _tofaConnectionRows() =>
+      (_database.select(_database.connections)..where((t) => t.kind.equals(MediaBackend.tofa.id))).get();
+
   Future<List<ConnectionRow>> _siloConnectionRows() =>
       (_database.select(_database.connections)..where((t) => t.kind.equals(MediaBackend.silo.id))).get();
 
@@ -752,6 +774,7 @@ class DownloadManagerService {
     // resolver below only knows Jellyfin and Emby rows.
     final siloPrefix = '$serverId/';
     if ((await _siloConnectionRows()).any((row) => row.id.startsWith(siloPrefix))) return MediaBackend.silo;
+    if ((await _tofaConnectionRows()).any((row) => row.id.startsWith('tofa:$serverId/'))) return MediaBackend.tofa;
     final row = await JellyfinCacheResolver(_database).findConnection(serverId);
     if (row == null) return null;
     // Keep the persisted discriminator intact even though both MediaBrowser

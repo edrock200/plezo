@@ -4,7 +4,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../media/media_backend.dart';
 
 /// Tiny badge for a [MediaBackend] (Plex chevron / Jellyfin or Emby mark /
-/// Silo project icon).
+/// Silo project icon / a neutral "t" mark for tofa).
 /// The SVG marks render in `currentColor` so they pick up whatever foreground
 /// the parent provides — pass [color] to override, otherwise inherits from
 /// [DefaultTextStyle] / `IconTheme`.
@@ -30,7 +30,32 @@ class BackendBadge extends StatelessWidget {
       MediaBackend.jellyfin => 'assets/jellyfin_icon.svg',
       MediaBackend.emby => 'assets/emby_icon.svg',
       MediaBackend.silo => null,
+      MediaBackend.tofa => '',
     };
+    if (asset == '') {
+      // No tofa artwork is bundled: a neutral letter mark names the server type.
+      final tint =
+          color ??
+          DefaultTextStyle.of(context).style.color ??
+          IconTheme.of(context).color ??
+          Theme.of(context).colorScheme.onSurface;
+      return SizedBox(
+        width: size,
+        height: size,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border.all(color: tint, width: size / 12),
+            borderRadius: BorderRadius.circular(size / 4),
+          ),
+          child: Center(
+            child: Text(
+              't',
+              style: TextStyle(color: tint, fontSize: size * 0.7, fontWeight: FontWeight.w700, height: 1),
+            ),
+          ),
+        ),
+      );
+    }
     if (asset == null) {
       return Image.asset(
         siloIconAsset,

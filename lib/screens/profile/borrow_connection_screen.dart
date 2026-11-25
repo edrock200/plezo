@@ -264,6 +264,8 @@ class _BorrowConnectionScreenState extends State<BorrowConnectionScreen> {
           await _borrowJellyfin(cand);
         case SiloConnection():
           await _borrowSilo(cand);
+        case TofaConnection():
+          await _borrowTofa(cand);
       }
     } catch (e, st) {
       // Without this, a throw from the verify/borrow steps (network, DB)
@@ -381,6 +383,20 @@ class _BorrowConnectionScreenState extends State<BorrowConnectionScreen> {
         connectionId: silo.id,
         userToken: null,
         userIdentifier: cand.pc.userIdentifier.isNotEmpty ? cand.pc.userIdentifier : silo.userId,
+        tokenAcquiredAt: DateTime.now(),
+      ),
+    );
+    _finishBorrow();
+  }
+
+  Future<void> _borrowTofa(_BorrowCandidate cand) async {
+    final tofa = cand.connection as TofaConnection;
+    await context.read<ProfileConnectionRegistry>().upsert(
+      ProfileConnection(
+        profileId: widget.targetProfile.id,
+        connectionId: tofa.id,
+        userToken: null,
+        userIdentifier: cand.pc.userIdentifier.isNotEmpty ? cand.pc.userIdentifier : tofa.userId,
         tokenAcquiredAt: DateTime.now(),
       ),
     );

@@ -1,6 +1,6 @@
 # Plezilo (Plezy fork with Silo support) — project rules for Claude Code
 
-Plezilo is a Flutter client for Plex, Jellyfin, Emby and **Silo** on Android, Android TV, iOS, tvOS,
+Plezilo is a Flutter client for Plex, Jellyfin, Emby, **Silo** and tofa on Android, Android TV, iOS, tvOS,
 macOS, Windows and Linux. It is a fork of Plezy (upstream `edde746/plezy`) in `edrock200/plezo` that
 adds Silo as a fourth backend. Read `CONTRIBUTING.md` for the general workflow; this file adds what an
 agent needs. The code still says "Plezy" in internal names (Dart package `plezy`, Kotlin package
@@ -62,23 +62,24 @@ agent needs. The code still says "Plezy" in internal names (Dart package `plezy`
 - Running `flutter` as root prints a "Woah!" warning; ignore it.
 
 ## Architecture in one screen
-- `MediaBackend` (`lib/media/media_backend.dart`): `plex`, `jellyfin`, `emby`, `silo`.
+- `MediaBackend` (`lib/media/media_backend.dart`): `plex`, `jellyfin`, `emby`, `silo`, `tofa`.
   `usesMediaBrowserApi` is true only for Jellyfin/Emby; **"not Plex" does not mean MediaBrowser**.
 - `MediaItem` (`lib/media/media_item.dart`) is a sealed freezed union: `PlexMediaItem`,
-  `JellyfinMediaItem` (Jellyfin + Emby via `dialect`), `SiloMediaItem`.
+  `JellyfinMediaItem` (Jellyfin + Emby via `dialect`), `SiloMediaItem`, `TofaMediaItem`.
 - `MediaServerClient` (`lib/media/media_server_client.dart`): the neutral client interface (~90
   members). Implementations: `PlexClient`, `JellyfinClient`, `SiloClient`
-  (`lib/services/silo/silo_client.dart` + `silo_client_playback.dart` part).
+  (`lib/services/silo/silo_client.dart` + `silo_client_playback.dart` part), `TofaClient`
+  (`lib/services/tofa/tofa_client.dart`).
 - `Connection` (`lib/connection/connection.dart`) is sealed: `PlexAccountConnection`,
-  `JellyfinConnection`, `SiloConnection`. Persisted by `ConnectionRegistry`; credentials are
+  `JellyfinConnection`, `SiloConnection`, `TofaConnection`. Persisted by `ConnectionRegistry`; credentials are
   encrypted by `CredentialVault` — every token key of a new kind must be listed in
   `_tokenKeysForKind` or it is stored in plaintext.
-- `MultiServerManager` owns live clients. Jellyfin and Silo clients are per-connection, tracked in
+- `MultiServerManager` owns live clients. Jellyfin, Silo and tofa clients are per-connection, tracked in
   `_jellyfinByCompoundId` (historic name) with one active client per server id.
 - `ActiveProfileBinder` binds a Plezy profile's connections to clients (`_bindMediaBrowser`,
-  `_bindSilo`). Plezy profiles are local; a Silo connection is one account acting as one Silo profile.
+  `_bindSilo`, `_bindTofa`). Plezy profiles are local; a Silo (or tofa) connection is one account acting as one server profile.
 - Offline/download metadata lives in per-backend `ApiCache`s (`PlexApiCache`, `JellyfinApiCache`,
-  `SiloApiCache`), registered in `main.dart`. `ApiCache.forBackend` silently falls back to Plex for an
+  `SiloApiCache`, `TofaApiCache`), registered in `main.dart`. `ApiCache.forBackend` silently falls back to Plex for an
   unregistered backend.
 
 ## Rules

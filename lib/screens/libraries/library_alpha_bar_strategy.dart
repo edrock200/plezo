@@ -80,7 +80,10 @@ abstract class LibraryAlphaBarStrategy {
         currentQuery: siloQuery,
         loadLetterIndex: siloLetterIndex,
       ),
-      MediaBackend.jellyfin || MediaBackend.emby || MediaBackend.silo => const MediaBrowserAlphaBarStrategy(),
+      MediaBackend.jellyfin ||
+      MediaBackend.emby ||
+      MediaBackend.silo ||
+      MediaBackend.tofa => const MediaBrowserAlphaBarStrategy(),
     };
   }
 }

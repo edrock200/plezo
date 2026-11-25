@@ -42,6 +42,8 @@ class CachedPlaybackMetadataService {
           mediaIndex: mediaIndex,
         ),
         MediaBackend.silo => _fetchSiloMediaSourceInfo(cacheServerId, itemId, mediaIndex: mediaIndex),
+        // tofa negotiates every playback; nothing is cached for offline tracks.
+        MediaBackend.tofa => Future<MediaSourceInfo?>.value(null),
       };
     } catch (e) {
       appLogger.d('Cached media source info unavailable for $cacheServerId:$itemId', error: e);
@@ -81,6 +83,7 @@ class CachedPlaybackMetadataService {
           creditsPattern: creditsPattern,
           forceChapterFallback: forceChapterFallback,
         ),
+        MediaBackend.tofa => Future<PlaybackExtras?>.value(null),
       };
     } catch (e) {
       appLogger.d('Cached playback extras unavailable for $cacheServerId:$itemId', error: e);

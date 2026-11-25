@@ -6157,6 +6157,78 @@ class Translations$addServer$en {
 	/// en: 'Sign in to your Silo server and pick a Silo profile. Binds to ${name}.'
 	String connectToSiloCardSubtitleScoped({required Object name}) => 'Sign in to your Silo server and pick a Silo profile. Binds to ${name}.';
 
+	/// en: 'Sign in with your tofa account, or with an admin API key.'
+	String get connectToTofaCardSubtitle => 'Sign in with your tofa account, or with an admin API key.';
+
+	/// en: 'Sign in to your tofa server and pick a tofa profile. Binds to ${name}.'
+	String connectToTofaCardSubtitleScoped({required Object name}) => 'Sign in to your tofa server and pick a tofa profile. Binds to ${name}.';
+
+	/// en: 'Add tofa server'
+	String get addTofaTitle => 'Add tofa server';
+
+	/// en: 'Sign in on tofa's website with a code; Plezilo never sees your password. Server admins can use an API key instead.'
+	String get tofaIntro => 'Sign in on tofa\'s website with a code; Plezilo never sees your password. Server admins can use an API key instead.';
+
+	/// en: 'Sign in with a code'
+	String get tofaSignInWithCode => 'Sign in with a code';
+
+	/// en: 'Use an admin API key'
+	String get tofaUseApiKey => 'Use an admin API key';
+
+	/// en: 'On your phone or computer, open ${url} and enter this code:'
+	String tofaCodeInstructions({required Object url}) => 'On your phone or computer, open ${url} and enter this code:';
+
+	/// en: 'Waiting for you to approve…'
+	String get tofaWaiting => 'Waiting for you to approve…';
+
+	/// en: 'QR code that opens ${url}'
+	String tofaQrSemantics({required Object url}) => 'QR code that opens ${url}';
+
+	/// en: 'Choose a server'
+	String get tofaChooseServer => 'Choose a server';
+
+	/// en: 'Choose a profile'
+	String get tofaChooseProfile => 'Choose a profile';
+
+	/// en: 'PIN for ${name}'
+	String tofaProfilePin({required Object name}) => 'PIN for ${name}';
+
+	/// en: 'Server address'
+	String get tofaServerUrl => 'Server address';
+
+	/// en: 'Your server's address on your network or domain, for example http://192.168.1.50:33333'
+	String get tofaServerUrlHelper => 'Your server\'s address on your network or domain, for example http://192.168.1.50:33333';
+
+	/// en: 'API key'
+	String get tofaApiKey => 'API key';
+
+	/// en: 'Starts with tofa_. Keys work only on your own network or domain, not through tofa's relay.'
+	String get tofaApiKeyHelper => 'Starts with tofa_. Keys work only on your own network or domain, not through tofa\'s relay.';
+
+	/// en: 'Connect'
+	String get tofaConnect => 'Connect';
+
+	/// en: 'The code expired. Start again for a new one.'
+	String get tofaErrorExpired => 'The code expired. Start again for a new one.';
+
+	/// en: 'Sign-in was declined.'
+	String get tofaErrorDenied => 'Sign-in was declined.';
+
+	/// en: 'Couldn't reach tofa. Check your connection and try again.'
+	String get tofaErrorNetwork => 'Couldn\'t reach tofa. Check your connection and try again.';
+
+	/// en: 'That address doesn't answer as a tofa server.'
+	String get tofaErrorNotTofa => 'That address doesn\'t answer as a tofa server.';
+
+	/// en: 'tofa refused the sign-in. Check the key or PIN and try again.'
+	String get tofaErrorUnauthorized => 'tofa refused the sign-in. Check the key or PIN and try again.';
+
+	/// en: 'Your tofa account has no servers that have come online yet.'
+	String get tofaErrorNoServers => 'Your tofa account has no servers that have come online yet.';
+
+	/// en: 'Sign-in failed. Try again.'
+	String get tofaErrorUnknown => 'Sign-in failed. Try again.';
+
 	/// en: 'Borrow from another profile'
 	String get borrowFromAnotherProfile => 'Borrow from another profile';
 
@@ -11828,6 +11900,30 @@ extension on Translations {
 			'addServer.connectToMediaBrowserCardSubtitleScoped' => ({required Object product, required Object name}) => 'Sign in to your ${product} server. Binds to ${name}.',
 			'addServer.connectToSiloCardSubtitle' => 'Enter your server URL, then sign in with a code or your password.',
 			'addServer.connectToSiloCardSubtitleScoped' => ({required Object name}) => 'Sign in to your Silo server and pick a Silo profile. Binds to ${name}.',
+			'addServer.connectToTofaCardSubtitle' => 'Sign in with your tofa account, or with an admin API key.',
+			'addServer.connectToTofaCardSubtitleScoped' => ({required Object name}) => 'Sign in to your tofa server and pick a tofa profile. Binds to ${name}.',
+			'addServer.addTofaTitle' => 'Add tofa server',
+			'addServer.tofaIntro' => 'Sign in on tofa\'s website with a code; Plezilo never sees your password. Server admins can use an API key instead.',
+			'addServer.tofaSignInWithCode' => 'Sign in with a code',
+			'addServer.tofaUseApiKey' => 'Use an admin API key',
+			'addServer.tofaCodeInstructions' => ({required Object url}) => 'On your phone or computer, open ${url} and enter this code:',
+			'addServer.tofaWaiting' => 'Waiting for you to approve…',
+			'addServer.tofaQrSemantics' => ({required Object url}) => 'QR code that opens ${url}',
+			'addServer.tofaChooseServer' => 'Choose a server',
+			'addServer.tofaChooseProfile' => 'Choose a profile',
+			'addServer.tofaProfilePin' => ({required Object name}) => 'PIN for ${name}',
+			'addServer.tofaServerUrl' => 'Server address',
+			'addServer.tofaServerUrlHelper' => 'Your server\'s address on your network or domain, for example http://192.168.1.50:33333',
+			'addServer.tofaApiKey' => 'API key',
+			'addServer.tofaApiKeyHelper' => 'Starts with tofa_. Keys work only on your own network or domain, not through tofa\'s relay.',
+			'addServer.tofaConnect' => 'Connect',
+			'addServer.tofaErrorExpired' => 'The code expired. Start again for a new one.',
+			'addServer.tofaErrorDenied' => 'Sign-in was declined.',
+			'addServer.tofaErrorNetwork' => 'Couldn\'t reach tofa. Check your connection and try again.',
+			'addServer.tofaErrorNotTofa' => 'That address doesn\'t answer as a tofa server.',
+			'addServer.tofaErrorUnauthorized' => 'tofa refused the sign-in. Check the key or PIN and try again.',
+			'addServer.tofaErrorNoServers' => 'Your tofa account has no servers that have come online yet.',
+			'addServer.tofaErrorUnknown' => 'Sign-in failed. Try again.',
 			'addServer.borrowFromAnotherProfile' => 'Borrow from another profile',
 			'addServer.borrowFromAnotherProfileSubtitle' => 'Reuse another profile\'s connection. PIN-protected profiles require a PIN.',
 			'addServer.invalidCredentials' => 'Invalid username or password',
@@ -11986,6 +12082,8 @@ extension on Translations {
 			'siloCardOverlays.ended' => 'Ended',
 			'siloCardOverlays.cancelled' => 'Cancelled',
 			'siloCardOverlays.upcoming' => 'Upcoming',
+			_ => null,
+		} ?? switch (path) {
 			'siloEditConnection.editTitle' => ({required Object server}) => 'Edit ${server}',
 			'siloEditConnection.signInAgainTitle' => ({required Object server}) => 'Sign in to ${server} again',
 			'siloEditConnection.intro' => ({required Object account, required Object server}) => '${account} on ${server}. Change the address if the server moved, then sign in again if its session expired.',
@@ -12010,8 +12108,6 @@ extension on Translations {
 			'siloRequests.myRequests' => 'My requests',
 			'siloRequests.searchHint' => 'Search for a movie or series to request',
 			'siloRequests.searchResults' => 'Titles to request',
-			_ => null,
-		} ?? switch (path) {
 			'siloRequests.availableToRequest' => 'Available to request',
 			'siloRequests.availableToRequestOnServer' => ({required Object server}) => 'Available to request on ${server}',
 			'siloRequests.noRequests' => 'You haven\'t requested anything yet',

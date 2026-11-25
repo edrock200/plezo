@@ -114,8 +114,9 @@ These features used services the Plezy project runs or registered, which a fork 
 
 ### <img src="assets/readme_icons/customization.svg" height="20" alt="" align="center" /> Platform & Customization
 - Desktop, mobile, and TV — full D-pad, keyboard, and gamepad support
-- Multiple servers at once — Plex, Jellyfin, Emby, and Silo side by side
+- Multiple servers at once — Plex, Jellyfin, Emby, Silo, and tofa side by side
 - Silo servers over Silo's `/api/v2` API: sign in with a code or password, Silo profiles with PINs, server-defined Home rows, and server-chosen Direct Play or transcode[^silo]
+- tofa servers (tofa.tv) over tofa's `/api/v1` API: sign in with a code through your tofa account or with an API key, tofa profiles with PINs, and server-negotiated Direct Play or transcode[^tofa]
 - Profiles with per-profile downloads, watch state, and settings; Plex Home switching with PIN
 - Jellyfin and Emby local-server discovery and multiple URLs per server; Quick Connect sign-in[^jf]
 - TV layout options — corner spotlight backdrop, full-card artwork, and Force TV mode on desktop
@@ -128,6 +129,7 @@ These features used services the Plezy project runs or registered, which a fork 
 [^mb]: Jellyfin and Emby only.
 [^plex]: Plex only.
 [^silo]: Silo support covers movies and TV shows, including downloads of the original file. Playlists, live TV, music and audiobooks are not available for Silo servers yet.
+[^tofa]: Early support: movies and TV shows, Continue Watching, Recently Added and More Like This rows, search, watch state, progress and downloads. Collections, playlists, live TV, chapters and skip markers are not available for tofa servers yet.
 [^connect]: Requires connecting the service under Settings > Services.
 [^hdr]: In-app HDR toggle on Windows, macOS, iOS, tvOS, and Linux — Linux needs a colour-managed Wayland compositor. Dolby Vision on Android, macOS, and Apple TV.
 [^pass]: Desktop, Android TV, and Apple TV.

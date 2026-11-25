@@ -14,6 +14,7 @@ import '../profile/borrow_connection_screen.dart';
 import 'add_jellyfin_screen.dart';
 import 'add_plex_account_screen.dart';
 import 'add_silo_screen.dart';
+import 'add_tofa_screen.dart';
 
 /// Picker shown when the user taps "Add connection".
 ///
@@ -71,6 +72,14 @@ class AddConnectionScreen extends StatelessWidget {
             ? t.addServer.connectToSiloCardSubtitleScoped(name: targetProfile!.displayName)
             : t.addServer.connectToSiloCardSubtitle,
         builder: (_) => AddSiloScreen(targetProfile: targetProfile),
+      ),
+      _BackendOption(
+        backend: MediaBackend.tofa,
+        title: t.addServer.connectToMediaBrowserCard(product: 'tofa'),
+        subtitle: scoped
+            ? t.addServer.connectToTofaCardSubtitleScoped(name: targetProfile!.displayName)
+            : t.addServer.connectToTofaCardSubtitle,
+        builder: (_) => AddTofaScreen(targetProfile: targetProfile),
       ),
       if (scoped)
         _BackendOption(

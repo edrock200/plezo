@@ -178,6 +178,10 @@ class _SyncRuleTileState extends State<_SyncRuleTile> {
           if (serverId == rule.serverId && serverName.isNotEmpty) {
             return _RuleServerInfo(label: serverName, isKnown: true);
           }
+        case TofaConnection(:final serverId, :final serverName):
+          if (serverId == rule.serverId && serverName.isNotEmpty) {
+            return _RuleServerInfo(label: serverName, isKnown: true);
+          }
       }
     }
 

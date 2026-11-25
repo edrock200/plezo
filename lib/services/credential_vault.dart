@@ -135,6 +135,7 @@ class CredentialVault {
     'plex' => const ['accountToken'],
     'jellyfin' || 'emby' => const ['accessToken'],
     'silo' => const ['accessToken', 'refreshToken', 'profileToken'],
+    'tofa' => const ['accessToken', 'refreshToken', 'profileToken'],
     _ => const [],
   };
 

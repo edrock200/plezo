@@ -222,8 +222,8 @@ bool isMediaDeletionAllowed({
   null => false,
   MediaBackend.jellyfin || MediaBackend.emby => resolvedItemPermission == true,
   MediaBackend.plex => isAdminActionAllowed && resolvedItemPermission == true,
-  // This client does not delete media on Silo.
-  MediaBackend.silo => false,
+  // This client does not delete media on Silo or tofa.
+  MediaBackend.silo || MediaBackend.tofa => false,
 };
 
 /// A reusable wrapper widget that adds a context menu (long press / right click)

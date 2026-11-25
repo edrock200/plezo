@@ -12,13 +12,17 @@ enum MediaBackend {
   emby,
 
   /// Silo (siloserver.org), spoken over its own `/api/v2` REST contract.
-  silo;
+  silo,
+
+  /// tofa (tofa.tv), spoken over its public `/api/v1` HTTP API.
+  tofa;
 
   String get id => switch (this) {
     MediaBackend.plex => 'plex',
     MediaBackend.jellyfin => 'jellyfin',
     MediaBackend.emby => 'emby',
     MediaBackend.silo => 'silo',
+    MediaBackend.tofa => 'tofa',
   };
 
   static MediaBackend fromId(String id) => switch (id) {
@@ -26,6 +30,7 @@ enum MediaBackend {
     'jellyfin' => MediaBackend.jellyfin,
     'emby' => MediaBackend.emby,
     'silo' => MediaBackend.silo,
+    'tofa' => MediaBackend.tofa,
     _ => throw ArgumentError('Unknown MediaBackend id: $id'),
   };
 
@@ -36,13 +41,14 @@ enum MediaBackend {
   ///   surfaces corrupted cache rows or schema drift instead of silently
   ///   misclassifying Jellyfin items as Plex.
   static MediaBackend fromString(String? id) {
-    if (id != null && id != 'plex' && id != 'jellyfin' && id != 'emby' && id != 'silo') {
+    if (id != null && id != 'plex' && id != 'jellyfin' && id != 'emby' && id != 'silo' && id != 'tofa') {
       appLogger.w('Unknown MediaBackend id "$id"; defaulting to plex');
     }
     return switch (id) {
       'jellyfin' => MediaBackend.jellyfin,
       'emby' => MediaBackend.emby,
       'silo' => MediaBackend.silo,
+      'tofa' => MediaBackend.tofa,
       _ => MediaBackend.plex,
     };
   }
@@ -53,9 +59,9 @@ enum MediaBackend {
   /// of comparing against [MediaBackend.jellyfin].
   bool get usesMediaBrowserApi => dialect != null;
 
-  /// The MediaBrowser dialect this backend speaks, or `null` for Plex and Silo.
+  /// The MediaBrowser dialect this backend speaks, or `null` for Plex, Silo and tofa.
   MediaBrowserDialect? get dialect => switch (this) {
-    MediaBackend.plex || MediaBackend.silo => null,
+    MediaBackend.plex || MediaBackend.silo || MediaBackend.tofa => null,
     MediaBackend.jellyfin => MediaBrowserDialect.jellyfin,
     MediaBackend.emby => MediaBrowserDialect.emby,
   };

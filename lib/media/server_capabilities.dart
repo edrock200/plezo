@@ -173,6 +173,15 @@ class ServerCapabilities {
     scrubThumbnails: true,
   );
 
+  /// tofa (`/api/v1`): server-built home rows, Continue Watching dismissals
+  /// (`/users/me/dismiss`) and transcoding. No live TV, folder browsing,
+  /// favorites, numeric ratings or metadata editing in this client yet.
+  static const ServerCapabilities tofa = ServerCapabilities(
+    videoTranscoding: true,
+    richHubs: true,
+    continueWatchingRemoval: true,
+  );
+
   ServerCapabilities copyWith({bool? videoTranscoding}) {
     return ServerCapabilities(
       liveTv: liveTv,

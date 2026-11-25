@@ -16,6 +16,7 @@ import 'jellyfin_client.dart';
 import 'jellyfin_endpoint_discovery.dart';
 import 'silo/silo_card_overlay_store.dart';
 import 'silo/silo_client.dart';
+import 'tofa/tofa_client.dart';
 import 'plex_client.dart';
 import '../models/plex/plex_config.dart';
 import '../utils/app_logger.dart';
@@ -98,6 +99,13 @@ class MultiServerManager {
   /// edit, a removal or a new sign-in (`ConnectionRegistry.updateSiloSession`).
   FutureOr<void> Function(SiloConnection connection, bool Function(String refreshToken) ownsRefreshToken)?
   onSiloConnectionUpdated;
+
+  /// Persists tofa token refreshes ([TofaConnection.accessToken] and the
+  /// rotating refresh token) into the stored row.
+  FutureOr<void> Function(TofaConnection connection)? onTofaConnectionUpdated;
+
+  /// Builds tofa clients; replaceable in tests.
+  Future<TofaClient> Function(TofaConnection connection) tofaClientFactory = TofaClient.create;
 
   final Map<String, MediaServerClient> _clients = {};
 
@@ -210,6 +218,7 @@ class MultiServerManager {
   static String? _boundConnectionId(MediaServerClient client) => switch (client) {
     JellyfinClient(:final connection) => connection.id,
     SiloClient(:final connection) => connection.id,
+    TofaClient(:final connection) => connection.id,
     _ => null,
   };
 
@@ -482,6 +491,9 @@ class MultiServerManager {
       return client.connection.isAdministrator;
     }
     if (client is SiloClient) {
+      return client.connection.isAdministrator;
+    }
+    if (client is TofaClient) {
       return client.connection.isAdministrator;
     }
     return false;
@@ -1239,6 +1251,72 @@ class MultiServerManager {
       appLogger.d('Silo: logout on removal failed', error: e.runtimeType);
     } finally {
       if (client != null) await _closeClientGracefully(client);
+    }
+  }
+
+  /// Add a tofa server backed by [connection]. Returns true when it answered
+  /// healthy. Like Silo, every tofa connection (account + tofa profile) has
+  /// its own client and one is the active client for the server id; adds of
+  /// one connection are serialized so two clients never refresh one token.
+  Future<bool> addTofaConnection(TofaConnection connection) {
+    final previous = _tofaAddsInFlight[connection.id] ?? Future<bool>.value(false);
+    final next = previous.catchError((_) => false).then((_) => _addTofaConnection(connection));
+    _tofaAddsInFlight[connection.id] = next;
+    return next.whenComplete(() {
+      if (identical(_tofaAddsInFlight[connection.id], next)) _tofaAddsInFlight.remove(connection.id);
+    });
+  }
+
+  final Map<String, Future<bool>> _tofaAddsInFlight = {};
+
+  Future<bool> _addTofaConnection(TofaConnection connection) async {
+    try {
+      final existing = _jellyfinByCompoundId[connection.id];
+      if (existing is TofaClient &&
+          existing.connection.baseUrl == connection.baseUrl &&
+          existing.connection.profileToken == connection.profileToken &&
+          existing.connection.accessToken == connection.accessToken) {
+        return await _reuseConnectionClient(existing, connectionId: connection.id, machineId: connection.serverId);
+      }
+      final client = await tofaClientFactory(connection);
+      final compoundId = connection.id;
+      final machineId = connection.serverId;
+      client.onConnectionUpdated = (updated) async {
+        if (_jellyfinByCompoundId[compoundId] != client) return;
+        try {
+          await onTofaConnectionUpdated?.call(updated);
+        } catch (e, st) {
+          appLogger.w('Failed to persist tofa connection update', error: e, stackTrace: st);
+        }
+        _emitStatus();
+      };
+      final oldClient = _jellyfinByCompoundId[compoundId];
+      if (oldClient != null) unawaited(_closeClientGracefully(oldClient));
+      _jellyfinByCompoundId[compoundId] = client;
+      _clients[machineId] = client;
+      _activeJellyfinMachine[machineId] = compoundId;
+
+      final health = await client.checkHealth();
+      _jellyfinHealthByCompoundId[compoundId] = health;
+      if (!_isActiveJellyfin(machineId, compoundId)) return health == HealthStatus.online;
+      _applyHealth(ServerId(machineId), health);
+      final healthy = health == HealthStatus.online;
+      appLogger.i('Added tofa server: ${connection.serverName}${healthy ? '' : ' (unhealthy)'}');
+      return healthy;
+    } catch (e, stackTrace) {
+      appLogger.e('Failed to add tofa server ${connection.serverName}', error: e, stackTrace: stackTrace);
+      return false;
+    }
+  }
+
+  /// Tear down a specific tofa connection's client.
+  void removeTofaConnection(TofaConnection connection) {
+    final client = _jellyfinByCompoundId.remove(connection.id);
+    _jellyfinHealthByCompoundId.remove(connection.id);
+    if (client != null) unawaited(_closeClientGracefully(client));
+    if (_isActiveJellyfin(connection.serverId, connection.id)) {
+      _forgetServer(connection.serverId);
+      _emitStatus();
     }
   }
 

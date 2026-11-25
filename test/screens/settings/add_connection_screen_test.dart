@@ -24,7 +24,7 @@ void main() {
   Profile profile(String id) =>
       Profile.local(id: id, displayName: id, sortOrder: 0, createdAt: DateTime.fromMillisecondsSinceEpoch(0));
 
-  testWidgets('offers Plex, Jellyfin, Emby and Silo, each with its own badge', (tester) async {
+  testWidgets('offers Plex, Jellyfin, Emby, Silo and tofa, each with its own badge', (tester) async {
     await tester.pumpWidget(app(const AddConnectionScreen()));
     await tester.pumpAndSettle();
 
@@ -32,11 +32,18 @@ void main() {
     expect(find.text('Connect to Jellyfin'), findsOneWidget);
     expect(find.text('Connect to Emby'), findsOneWidget);
     expect(find.text('Connect to Silo'), findsOneWidget);
+    expect(find.text('Connect to tofa'), findsOneWidget);
 
     final badges = tester.widgetList<BackendBadge>(find.byType(BackendBadge)).map((b) => b.backend).toList();
     expect(
       badges,
-      containsAll(<MediaBackend>[MediaBackend.plex, MediaBackend.jellyfin, MediaBackend.emby, MediaBackend.silo]),
+      containsAll(<MediaBackend>[
+        MediaBackend.plex,
+        MediaBackend.jellyfin,
+        MediaBackend.emby,
+        MediaBackend.silo,
+        MediaBackend.tofa,
+      ]),
     );
   });
 
@@ -107,20 +114,20 @@ void main() {
     expect(screen.targetProfile?.id, target.id);
   });
 
-  testWidgets('the D-pad steps through all four backend cards', (tester) async {
+  testWidgets('the D-pad steps through all five backend cards', (tester) async {
     await tester.pumpWidget(app(const AddConnectionScreen()));
     await tester.pumpAndSettle();
 
     // The cards share a debugLabel, so track focus-node identity instead.
     final visited = <FocusNode>{};
-    for (var i = 0; i < 8; i++) {
+    for (var i = 0; i < 10; i++) {
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
       await tester.pumpAndSettle();
       final focused = FocusManager.instance.primaryFocus;
       if (focused != null) visited.add(focused);
     }
 
-    expect(find.byType(FocusableWrapper), findsNWidgets(4));
-    expect(visited.length, greaterThanOrEqualTo(4), reason: 'D-pad did not reach every backend card');
+    expect(find.byType(FocusableWrapper), findsNWidgets(5));
+    expect(visited.length, greaterThanOrEqualTo(5), reason: 'D-pad did not reach every backend card');
   });
 }

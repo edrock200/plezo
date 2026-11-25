@@ -118,6 +118,29 @@ class ConnectionRegistry {
     return written;
   }
 
+  /// Store the token pair a live tofa client refreshed, keeping every other
+  /// stored field. Written only while the stored refresh token is one the
+  /// client held (tofa rotates refresh tokens and revokes a reused one).
+  Future<bool> updateTofaSession(
+    TofaConnection updated, {
+    required bool Function(String refreshToken) ownsRefreshToken,
+  }) async {
+    return _db.runIdentityMutation(() async {
+      final existing = await (_db.select(_db.connections)..where((t) => t.id.equals(updated.id))).getSingleOrNull();
+      if (existing == null) return false;
+      final current = await _rowToConnection(existing);
+      if (current is! TofaConnection || !ownsRefreshToken(current.refreshToken)) return false;
+      final next = current.copyWith(
+        accessToken: updated.accessToken,
+        refreshToken: updated.refreshToken,
+        accessTokenExpiresAt: updated.accessTokenExpiresAt,
+      );
+      if (hasSameConfig(current, next)) return true;
+      await _writeRow(next, createdAt: existing.createdAt);
+      return true;
+    });
+  }
+
   Future<void> _writeRow(Connection connection, {required int createdAt, void Function()? checkCurrent}) async {
     final protectedConfig = await CredentialVault.protectConnectionConfig(
       connection.kind.id,
@@ -205,6 +228,12 @@ class ConnectionRegistry {
           dialect: kind.dialect!,
         ),
         MediaBackend.silo => SiloConnection.fromConfigJson(
+          id: row.id,
+          json: revealed.config,
+          createdAt: createdAt,
+          lastAuthenticatedAt: lastAuth,
+        ),
+        MediaBackend.tofa => TofaConnection.fromConfigJson(
           id: row.id,
           json: revealed.config,
           createdAt: createdAt,

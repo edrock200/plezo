@@ -83,6 +83,7 @@ import 'services/connectivity_probe.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'services/jellyfin_api_cache.dart';
 import 'services/silo/silo_api_cache.dart';
+import 'services/tofa/tofa_api_cache.dart';
 import 'services/silo/silo_catalog_strings.dart';
 import 'services/silo/silo_managed_downloads.dart';
 import 'services/plex_api_cache.dart';
@@ -1477,6 +1478,7 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
     PlexApiCache.initialize(_appDatabase);
     JellyfinApiCache.initialize(_appDatabase);
     SiloApiCache.initialize(_appDatabase);
+    TofaApiCache.initialize(_appDatabase);
 
     _downloadManager = DownloadManagerService(
       database: _appDatabase,
@@ -1848,6 +1850,10 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
             final registry = context.read<ConnectionRegistry>();
             _serverManager.onSiloConnectionUpdated = (connection, ownsRefreshToken) =>
                 registry.updateSiloSession(connection, ownsRefreshToken: ownsRefreshToken);
+            // tofa refreshes tokens in place; store each new pair at once (a
+            // reused refresh token can revoke the session).
+            _serverManager.onTofaConnectionUpdated = (connection) =>
+                registry.updateTofaSession(connection, ownsRefreshToken: (_) => true);
             return MultiServerProvider(_serverManager, _aggregationService);
           },
         ),

@@ -438,7 +438,9 @@ class AccountPreferencesController extends ChangeNotifier with DisposableChangeN
         if (token == null || token.isEmpty) return null;
         return PlexAccountPreferencesSource(authToken: token, serviceFactory: _plexServiceFactory);
       case MediaBackend.silo:
-        // Silo's server-synced settings are not mapped to account preferences.
+      case MediaBackend.tofa:
+        // Silo's and tofa's server-synced settings are not mapped to account
+        // preferences.
         return null;
     }
   }
