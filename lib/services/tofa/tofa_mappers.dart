@@ -682,6 +682,50 @@ abstract final class TofaMappers {
     );
   }
 
+  /// A Ready to Binge season (`BingeReadySeason`): the season of its series,
+  /// with the series as its parent.
+  static TofaMediaItem? bingeReadySeason(Map<String, dynamic> json, TofaMappingContext ctx) {
+    final media = json['media'];
+    final seasonId = _string(json['season_id']);
+    final number = flexibleInt(json['season_number']);
+    if (media is! Map<String, dynamic> || seasonId == null || number == null) return null;
+    final show = summary(media, ctx);
+    if (show == null || show.kind != MediaKind.show) return null;
+    final episodes = flexibleInt(json['episode_count']);
+    return TofaMediaItem(
+      id: seasonItemId(show.id, seasonId),
+      kind: MediaKind.season,
+      title: _string(json['season_title']),
+      index: number,
+      parentId: show.id,
+      parentTitle: show.title,
+      parentThumbPath: show.thumbPath,
+      thumbPath: _absoluteUrl(json['season_poster_path']) ?? show.thumbPath,
+      artPath: show.artPath,
+      leafCount: episodes,
+      viewedLeafCount: episodes == null ? null : 0,
+      viewCount: 0,
+      libraryId: show.libraryId,
+      serverId: ctx.serverId,
+      serverName: ctx.serverName,
+      raw: {TofaRaw.mediaId: show.id, TofaRaw.seasonId: seasonId, TofaRaw.seasonNumber: number},
+    );
+  }
+
+  /// A watchlist entry (`WatchlistItem`) that is in the library (`owned`
+  /// with a `media_id`); titles not in the library are left out.
+  static TofaMediaItem? watchlistItem(Map<String, dynamic> json, TofaMappingContext ctx) {
+    final mediaId = _string(json['media_id']);
+    if (json['owned'] != true || mediaId == null) return null;
+    final type = json['media_type'] ?? json['media_kind'];
+    return summary({
+      ...json,
+      'id': mediaId,
+      'media_type': type == 'show' || type == 'series' ? 'tv' : type,
+      'release_date': json['year'] == null ? null : '${json['year']}-01-01',
+    }, ctx);
+  }
+
   /// The playable file ids a mapped item carries.
   static List<String> fileIdsOf(MediaItem item) {
     final raw = item.raw?[TofaRaw.fileIds];

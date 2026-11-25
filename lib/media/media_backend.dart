@@ -59,14 +59,6 @@ enum MediaBackend {
   /// of comparing against [MediaBackend.jellyfin].
   bool get usesMediaBrowserApi => dialect != null;
 
-  /// Whether Plezilo can download this backend's media for offline use.
-  /// Tofa's first version cannot (its download links and offline sync are a
-  /// follow-up), so its download actions are hidden.
-  bool get supportsDownloads => switch (this) {
-    MediaBackend.plex || MediaBackend.jellyfin || MediaBackend.emby || MediaBackend.silo => true,
-    MediaBackend.tofa => false,
-  };
-
   /// The MediaBrowser dialect this backend speaks, or `null` for Plex, Silo and Tofa.
   MediaBrowserDialect? get dialect => switch (this) {
     MediaBackend.plex || MediaBackend.silo || MediaBackend.tofa => null,

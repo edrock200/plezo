@@ -821,7 +821,6 @@ class MediaContextMenuState extends State<MediaContextMenu> {
     // skip entirely.
     final canDownload =
         !PlatformDetector.isAppleTV() &&
-        mediaItem.backend.supportsDownloads &&
         (mediaItem.isVideoContent || mediaKind == MediaKind.album || mediaKind == MediaKind.track) &&
         !SiloMappers.isAudiobook(mediaItem);
     final downloadProvider = canDownload ? Provider.of<DownloadProvider>(context, listen: false) : null;

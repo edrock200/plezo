@@ -9,6 +9,7 @@ import '../../utils/app_version.dart';
 import '../../utils/device_identity.dart';
 import '../../utils/media_server_http_client.dart';
 import '../../utils/media_server_timeouts.dart';
+import '../storage_service.dart';
 
 /// Client identification Tofa reads on playback negotiation (`X-Tofa-*`).
 /// Sent on every request: they cost nothing and describe this device on the
@@ -19,11 +20,16 @@ class TofaClientHeaders {
   final String deviceName;
   final String? deviceModel;
 
+  /// This install's id (`X-Tofa-Device-Id`, and `device_id` of download
+  /// registrations and offline progress): the app's per-install client id.
+  final String deviceId;
+
   const TofaClientHeaders({
     required this.clientVersion,
     required this.platform,
     required this.deviceName,
     this.deviceModel,
+    this.deviceId = '',
   });
 
   static const clientName = 'Plezilo';
@@ -31,6 +37,12 @@ class TofaClientHeaders {
   /// The headers for this install. Never throws.
   static Future<TofaClientHeaders> resolve() async {
     final version = (await AppVersion.current()).version ?? '1.0';
+    var deviceId = '';
+    try {
+      deviceId = await (await StorageService.getInstance()).getOrCreateClientIdentifier();
+    } catch (_) {
+      // Tests and non-platform contexts: no device id, no downloads.
+    }
     final identity = await DeviceIdentityService.resolve();
     final name = [
       identity.deviceName,
@@ -42,6 +54,7 @@ class TofaClientHeaders {
       platform: platformValue(identity),
       deviceName: name,
       deviceModel: identity.deviceModel == null ? null : asciiHeaderValue(identity.deviceModel!),
+      deviceId: deviceId,
     );
   }
 
@@ -68,6 +81,7 @@ class TofaClientHeaders {
     'X-Tofa-Platform': platform,
     'X-Tofa-Device-Name': deviceName,
     if (deviceModel != null && deviceModel!.isNotEmpty) 'X-Tofa-Device-Model': deviceModel!,
+    if (deviceId.isNotEmpty) 'X-Tofa-Device-Id': deviceId,
   };
 }
 
@@ -166,6 +180,21 @@ class TofaApi {
   String? _refusedRefreshToken;
 
   String get baseUrl => _http.baseUrl;
+
+  /// Switch to another address of the same server (a won connection race,
+  /// a failover). Requests already in flight finish where they went.
+  set baseUrl(String value) => _http.baseUrl = value;
+
+  /// Called after [unreachableAfterFailures] connection failures in a row,
+  /// so the owner can look for another address (local, direct, relay).
+  void Function()? onUnreachable;
+  static const unreachableAfterFailures = 2;
+  int _consecutiveFailures = 0;
+
+  /// Waits between retries of a 503 `server_relay_not_connected` (the relay
+  /// channel is not up yet; Tofa's guide: "That clears on its own, so
+  /// retry"). Shortened in tests.
+  List<Duration> relayRetryDelays = const [Duration(seconds: 1), Duration(seconds: 2), Duration(seconds: 4)];
   TofaTokens? get tokens => _tokens;
   String? get accessToken => _tokens?.accessToken;
 
@@ -221,13 +250,19 @@ class TofaApi {
     }
     if (auth) await _refreshIfExpiring();
     final usedToken = _tokens?.accessToken;
-    var response = await _send(method, path, query, body, auth, profile, timeout, abort);
+    var response = await _sendTracked(method, path, query, body, auth, profile, timeout, abort);
+    for (final delay in relayRetryDelays) {
+      if (response.statusCode != 503 || tofaErrorCode(response.data) != 'server_relay_not_connected') break;
+      appLogger.d('[tofa] relay not connected yet; retrying in ${delay.inSeconds} s');
+      await Future<void>.delayed(delay);
+      response = await _sendTracked(method, path, query, body, auth, profile, timeout, abort);
+    }
     // A missing or expired profile token is a 403, not a 401.
     if (auth && response.statusCode == 401 && _tokens != null) {
       final current = _tokens?.accessToken;
       final refreshed = current != usedToken ? _tokens : await refreshTokens();
       if (refreshed != null) {
-        response = await _send(method, path, query, body, auth, profile, timeout, abort);
+        response = await _sendTracked(method, path, query, body, auth, profile, timeout, abort);
       }
     }
     return response;
@@ -283,6 +318,45 @@ class TofaApi {
       requestUri: response.requestUri,
       message: 'HTTP ${response.statusCode}${code == null ? '' : ' $code'}',
       display: tofaErrorMessage(response.data),
+    );
+  }
+
+  /// [_send], counting connection failures in a row for [onUnreachable]
+  /// (timeouts of a slow answer and cancellations say nothing about
+  /// reachability and are not counted).
+  Future<MediaServerResponse> _sendTracked(
+    String method,
+    String path,
+    Map<String, dynamic>? query,
+    Object? body,
+    bool auth,
+    bool profile,
+    Duration? timeout,
+    AbortController? abort,
+  ) async {
+    try {
+      final response = await _send(method, path, query, body, auth, profile, timeout, abort);
+      _consecutiveFailures = 0;
+      return response;
+    } on MediaServerHttpException catch (e) {
+      if (e.type == MediaServerHttpErrorType.connectionError || e.type == MediaServerHttpErrorType.connectionTimeout) {
+        if (++_consecutiveFailures >= unreachableAfterFailures) {
+          _consecutiveFailures = 0;
+          onUnreachable?.call();
+        }
+      }
+      rethrow;
+    }
+  }
+
+  /// GET an absolute URL with the bearer and no profile (Tofa's cloud
+  /// routes, address probes). Returns the raw response.
+  Future<MediaServerResponse> getAbsolute(String url, {bool bearer = true, Duration? timeout}) {
+    final token = _tokens?.accessToken;
+    return _http.get(
+      url,
+      headers: {if (bearer && token != null && token.isNotEmpty) 'Authorization': 'Bearer $token'},
+      timeout: timeout,
     );
   }
 

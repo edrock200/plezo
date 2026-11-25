@@ -9,15 +9,15 @@ import '../../media/media_item.dart';
 import '../../utils/global_key_utils.dart';
 import '../../utils/isolate_helper.dart';
 import '../api_cache.dart';
+import 'tofa_downloads.dart';
 
 /// Cache for Tofa. Registered so `ApiCache.forBackend(MediaBackend.tofa)`
 /// never falls back to the Plex cache.
 ///
-/// Plezilo's first Tofa version has no downloads, so nothing is pinned for
-/// offline use in practice; mapped items are still stored under
-/// [itemEndpoint] (as serialized [MediaItem]s) so a detail screen opened
-/// moments ago can paint from them and watch-state patches have somewhere to
-/// land.
+/// Mapped items are stored under [itemEndpoint] (serialized [MediaItem]s).
+/// A download pins its item, its [TofaDownloadRecord] ([downloadEndpoint])
+/// and its file's QuickView answer ([quickViewEndpoint]: chapters and skip
+/// segments), which is everything offline playback reads.
 class TofaApiCache extends ApiCache {
   static final _singleton = ApiCacheSingleton<TofaApiCache>(const {MediaBackend.tofa}, 'TofaApiCache');
   static TofaApiCache get instance => _singleton.instance;
@@ -28,6 +28,15 @@ class TofaApiCache extends ApiCache {
 
   static const _itemPrefix = 'tofa:item/';
   static String itemEndpoint(String itemId) => '$_itemPrefix$itemId';
+
+  /// A file's `GET /media/{file_id}/quickview` answer.
+  static String quickViewEndpoint(String fileId) => 'tofa:quickview/$fileId';
+
+  /// An item's download registration ([TofaDownloadRecord]).
+  static String downloadEndpoint(String itemId) => 'tofa:download/$itemId';
+
+  /// The download quality picked for an item (and the episodes under it).
+  static String qualityEndpoint(String itemId) => 'tofa:download-quality/$itemId';
   static final RegExp _itemKeyPattern = RegExp(r'^[^:]+:tofa:item/(.+)$');
 
   Future<void> putItem(ServerId serverId, MediaItem item) => put(serverId, itemEndpoint(item.id), item.toJson());
@@ -44,11 +53,37 @@ class TofaApiCache extends ApiCache {
   }
 
   @override
-  Future<void> pinForOffline(ServerId serverId, String itemId) => pin(serverId, itemEndpoint(itemId));
+  Future<void> pinForOffline(ServerId serverId, String itemId) async {
+    await pin(serverId, itemEndpoint(itemId));
+    final record = await getDownloadRecord(serverId, itemId);
+    if (record == null) return;
+    await pin(serverId, downloadEndpoint(itemId));
+    await pin(serverId, quickViewEndpoint(record.fileId));
+  }
 
   @override
   Future<void> deleteForItem(ServerId serverId, String itemId) async {
-    final key = '$serverId:${itemEndpoint(itemId)}';
+    final record = await getDownloadRecord(serverId, itemId);
+    final keys = [
+      '$serverId:${itemEndpoint(itemId)}',
+      '$serverId:${downloadEndpoint(itemId)}',
+      if (record != null) '$serverId:${quickViewEndpoint(record.fileId)}',
+    ];
+    await (database.delete(database.apiCache)..where((t) => t.cacheKey.isIn(keys))).go();
+  }
+
+  Future<TofaDownloadRecord?> getDownloadRecord(ServerId serverId, String itemId) async =>
+      TofaDownloadRecord.fromJson(await get(serverId, downloadEndpoint(itemId)));
+
+  /// Stores [record] pinned: offline playback and sync need it until the
+  /// download is deleted.
+  Future<void> putDownloadRecord(ServerId serverId, String itemId, TofaDownloadRecord record) async {
+    await put(serverId, downloadEndpoint(itemId), record.toJson());
+    await pin(serverId, downloadEndpoint(itemId));
+  }
+
+  Future<void> removeDownloadRecord(ServerId serverId, String itemId) async {
+    final key = '$serverId:${downloadEndpoint(itemId)}';
     await (database.delete(database.apiCache)..where((t) => t.cacheKey.equals(key))).go();
   }
 

@@ -15,6 +15,9 @@ import '../providers/multi_server_provider.dart';
 import '../services/playlist_items_loader.dart';
 import '../services/settings_service.dart';
 import '../services/silo/silo_client.dart';
+import '../services/tofa/tofa_client.dart';
+import '../services/tofa/tofa_downloads.dart';
+import 'formatters.dart';
 import '../services/sync_rule_executor.dart';
 import '../widgets/background_download_warning_banner.dart';
 import 'app_logger.dart';
@@ -170,15 +173,13 @@ Future<DownloadResult?> showDownloadOptionsAndQueue(
   }
 
   if (!context.mounted) return null;
-  if (!metadata.backend.supportsDownloads) {
-    appLogger.d('Downloads are not supported for ${metadata.backend.id} items');
-    return null;
-  }
 
   final versionConfig = await resolveDownloadVersion(context, metadata, client);
   if (versionConfig == null || !context.mounted) return null;
 
   if (client is SiloClient && !await chooseSiloDownloadQuality(context, client, metadata)) return null;
+  if (!context.mounted) return null;
+  if (client is TofaClient && !await chooseTofaDownloadQuality(context, client, metadata)) return null;
   if (!context.mounted) return null;
 
   // Create or update sync rule before queueing (so the rule exists even if queue fails)
@@ -244,6 +245,39 @@ Future<bool> chooseSiloDownloadQuality(BuildContext context, SiloClient client, 
   );
   if (picked == null) return false;
   await client.setDownloadQuality(metadata.id, picked);
+  return true;
+}
+
+/// Offer the Tofa file's download qualities (`download_options`: Original
+/// and the smaller versions the server prepares, each with its size) when
+/// there is more than one, and remember the pick for [metadata] (and the
+/// episodes under a season or show). False when the user dismissed the
+/// picker.
+Future<bool> chooseTofaDownloadQuality(BuildContext context, TofaClient client, MediaItem metadata) async {
+  final choices = await client.downloadQualityChoices(metadata);
+  if (choices.isEmpty) return true;
+  if (!context.mounted) return false;
+  String label(TofaDownloadQuality q) {
+    final size = q.sizeBytes;
+    if (size == null || size <= 0) return q.label;
+    final formatted = ByteFormatter.formatBytes(size);
+    return '${q.label} · ${q.sizeIsEstimate ? t.downloads.tofaSizeEstimate(size: formatted) : formatted}';
+  }
+
+  final picked = await showOptionPickerDialog<TofaDownloadQuality>(
+    context,
+    title: t.downloads.tofaQualityTitle,
+    options: [
+      for (final quality in choices)
+        (
+          icon: quality.isOriginal ? Symbols.high_quality_rounded : Symbols.compress_rounded,
+          label: label(quality),
+          value: quality,
+        ),
+    ],
+  );
+  if (picked == null) return false;
+  await client.setDownloadQuality(metadata, picked);
   return true;
 }
 

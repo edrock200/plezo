@@ -38,13 +38,27 @@ import '../../utils/external_ids.dart';
 import '../../utils/log_redaction_manager.dart';
 import '../../utils/media_server_http_client.dart';
 import '../../utils/url_utils.dart';
+import '../../media/chapter_marker_classifier.dart';
+import '../../utils/global_key_utils.dart';
 import '../api_cache.dart';
+import '../download_artwork_helpers.dart';
+import '../jellyfin_trickplay_service.dart';
+import 'package:uuid/uuid.dart';
 import '../playback_initialization_types.dart';
+import '../silo/silo_memberships.dart';
 import '../scrub_preview_source.dart';
 import 'tofa_api.dart';
 import 'tofa_api_cache.dart';
+import 'tofa_downloads.dart';
+import 'tofa_endpoints.dart';
+import 'tofa_library_options.dart';
 import 'tofa_mappers.dart';
 import 'tofa_playback_caps.dart';
+
+part 'tofa_client_connect.dart';
+part 'tofa_client_downloads.dart';
+part 'tofa_client_home.dart';
+part 'tofa_client_quickview.dart';
 
 /// One live Tofa stream session (`/stream/{file}/info`'s `session_id`).
 class _TofaStreamSession {
@@ -71,7 +85,7 @@ class _TofaStreamSession {
 /// out (playlists, collections, people, live TV, downloads, sort and filter
 /// lists whose values the spec does not enumerate), answers empty or throws
 /// [UnsupportedError] as the other clients do.
-class TofaClient implements MediaServerClient, ScopedMediaServerClient, GracefullyCloseable {
+class TofaClient implements MediaServerClient, ScopedMediaServerClient, GracefullyCloseable, MembershipListsClient {
   TofaClient._({required this._connection, required this._api});
 
   /// Build a client for [connection]. Network I/O stays lazy.
@@ -109,13 +123,38 @@ class TofaClient implements MediaServerClient, ScopedMediaServerClient, Graceful
       client: httpClient,
     );
     final client = TofaClient._(connection: connection, api: api);
+    TofaDownloadTracker.instance.attach(client);
     api.onTokensRefreshed = client._handleTokensRefreshed;
     api.onSessionExpired = () => client._sessionExpired = true;
+    api.onUnreachable = client._onUnreachable;
     return client;
   }
 
   TofaConnection _connection;
   TofaConnection get connection => _connection;
+
+  // Address selection (see `tofa_client_connect.dart`).
+  ({DateTime at, TofaConnectionInfo info})? _connectionInfoCache;
+  Future<void>? _endpointRace;
+  TofaEndpointKind? _endpointKind;
+  DateTime? _lastFailover;
+  HealthStatus? _lastHealth;
+  static const failoverInterval = Duration(seconds: 15);
+
+  /// Test seam: how the address race waits out a candidate's stagger.
+  @visibleForTesting
+  Future<void> Function(Duration delay)? raceWait;
+  Future<void> Function(Duration delay)? get _raceWait => raceWait;
+
+  /// How this client reaches its server now: null before the first check.
+  TofaEndpointKind? get endpointKind => _endpointKind;
+
+  /// The address requests go to now.
+  String get activeBaseUrl => _api.baseUrl;
+
+  /// Test seam: retry waits of a 503 `server_relay_not_connected`.
+  @visibleForTesting
+  set relayRetryDelays(List<Duration> value) => _api.relayRetryDelays = value;
   final TofaApi _api;
 
   bool _offlineMode = false;
@@ -202,6 +241,7 @@ class TofaClient implements MediaServerClient, ScopedMediaServerClient, Graceful
   void close() {
     _closed = true;
     _imageTokenTimer?.cancel();
+    TofaDownloadTracker.instance.detach(this);
     _api.close();
   }
 
@@ -209,6 +249,7 @@ class TofaClient implements MediaServerClient, ScopedMediaServerClient, Graceful
   Future<void> closeGracefully({Duration drainTimeout = const Duration(seconds: 2)}) async {
     _closed = true;
     _imageTokenTimer?.cancel();
+    TofaDownloadTracker.instance.detach(this);
     await _api.closeGracefully(drainTimeout: drainTimeout);
   }
 
@@ -234,6 +275,17 @@ class TofaClient implements MediaServerClient, ScopedMediaServerClient, Graceful
   /// [HealthStatus.accessDenied] (the account or the profile is refused).
   @override
   Future<HealthStatus> checkHealth() async {
+    // The first check, and every check after the server stopped answering,
+    // races the server's addresses first (local, direct, relay).
+    if (_endpointKind == null || _lastHealth == HealthStatus.offline) {
+      await _selectEndpoint(reason: _endpointKind == null ? 'first check' : 'reconnect');
+    }
+    final status = await _probeHealth();
+    _lastHealth = status;
+    return status;
+  }
+
+  Future<HealthStatus> _probeHealth() async {
     try {
       final response = await _api.request('GET', '/api/v1/users/me', timeout: const Duration(seconds: 10));
       if (response.statusCode == 200) {
@@ -361,17 +413,61 @@ class TofaClient implements MediaServerClient, ScopedMediaServerClient, Graceful
     return libraries;
   }
 
-  /// Unverified: the spec leaves `sort` / `order` free strings, so no sort is
-  /// offered and the server's default order is used.
-  @override
-  Future<List<MediaSort>> fetchSortOptions(String libraryId, {String? libraryType}) async => const [];
+  /// Facets per library (`''` for all), read once per [_facetsFreshness], one
+  /// read in flight per scope. A failed read leaves no sort or filter on
+  /// offer rather than guessed ones.
+  final Map<String, ({DateTime at, TofaFacets facets})> _facets = {};
+  final Map<String, Future<TofaFacets?>> _facetsInFlight = {};
+  static const _facetsFreshness = Duration(minutes: 10);
 
-  @override
-  Future<LibraryFilterResult> fetchLibraryFiltersWithValues(String libraryId, {MediaKind? libraryKind}) async =>
-      LibraryFilterResult.empty;
+  Future<TofaFacets?> _facetsFor(String? libraryId) {
+    if (libraryId != null && libraryId.isEmpty) libraryId = null;
+    final scope = libraryId ?? '';
+    final known = _facets[scope];
+    if (known != null && DateTime.now().difference(known.at) < _facetsFreshness) return Future.value(known.facets);
+    return _facetsInFlight[scope] ??= () async {
+      try {
+        final data = await _api.getJson('/api/v1/media/facets', query: {'library_id': ?libraryId});
+        final facets = TofaFacets.fromJson(data);
+        if (facets != null) _facets[scope] = (at: DateTime.now(), facets: facets);
+        appLogger.d('[tofa] facets sorts=${facets?.sorts.length ?? 0} genres=${facets?.genres.length ?? 0}');
+        return facets;
+      } on MediaServerHttpException catch (e) {
+        if (e.isCancellation) rethrow;
+        appLogger.w('[tofa] facets read failed (HTTP ${e.statusCode}); no sorts or filters offered');
+        return known?.facets;
+      } finally {
+        _facetsInFlight.removeWhere((key, _) => key == scope);
+      }
+    }();
+  }
 
+  /// The sort values `/media/facets` lists for the library.
   @override
-  Future<List<LibraryGenre>> fetchLibraryGenres(String libraryId, {required MediaKind libraryKind}) async => const [];
+  Future<List<MediaSort>> fetchSortOptions(String libraryId, {String? libraryType}) async {
+    final facets = await _facetsFor(libraryId);
+    return facets == null ? const [] : TofaLibraryOptions.sorts(facets);
+  }
+
+  /// Genre, watch status, quality and year from `/media/facets`, plus the
+  /// documented `available_only` switch.
+  @override
+  Future<LibraryFilterResult> fetchLibraryFiltersWithValues(String libraryId, {MediaKind? libraryKind}) async {
+    final facets = await _facetsFor(libraryId);
+    return facets == null ? LibraryFilterResult.empty : TofaLibraryOptions.filters(facets);
+  }
+
+  /// `GET /api/v1/media/genres` for the library.
+  @override
+  Future<List<LibraryGenre>> fetchLibraryGenres(String libraryId, {required MediaKind libraryKind}) async {
+    final data = await _api.getJson('/api/v1/media/genres', query: {'library_id': libraryId});
+    final names = [
+      if (data is List)
+        for (final g in data)
+          if (g is String && g.isNotEmpty) g,
+    ]..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    return TofaLibraryOptions.genres(names);
+  }
 
   @override
   Future<void> refreshLibraryMetadata(String libraryId) =>
@@ -398,25 +494,28 @@ class TofaClient implements MediaServerClient, ScopedMediaServerClient, Graceful
     AbortController? abort,
   }) async {
     final limit = query.limit <= 0 ? 50 : query.limit;
+    final facets = await _facetsFor(libraryId);
     final prefix = query.nameStartsWith;
     String? letter;
     if (prefix != null && prefix.isNotEmpty) {
-      // Unverified: `letter`'s format. A single letter is sent as is; "#"
-      // (not a letter) and longer prefixes are not guessed at: an empty page
-      // beats a list that claims to be filtered and is not.
-      if (!RegExp(r'^[A-Za-z]$').hasMatch(prefix)) {
-        appLogger.d('[tofa] letter filter "$prefix" not sent (format unverified); empty page');
+      // `letter` takes the values `/media/facets` lists in `letters`; a
+      // prefix it does not list is not guessed at: an empty page beats a
+      // list that claims to be filtered and is not.
+      final listed = facets?.letters.where((l) => l.toLowerCase() == prefix.toLowerCase()).firstOrNull;
+      if (listed == null && !RegExp(r'^[A-Za-z]$').hasMatch(prefix)) {
+        appLogger.d('[tofa] letter filter "$prefix" is not a listed letter; empty page');
         return LibraryPage(items: const [], totalCount: 0, offset: query.offset);
       }
-      letter = prefix.toUpperCase();
+      letter = listed ?? prefix.toUpperCase();
     }
     final kind = query.kind ?? (query.includeKinds.length == 1 ? query.includeKinds.single : null);
     final params = <String, String>{
-      'library_id': libraryId,
+      if (libraryId.isNotEmpty) 'library_id': libraryId,
       if (kind == MediaKind.movie) 'media_type': 'movie',
       if (kind == MediaKind.show) 'media_type': 'tv',
       if (query.search case final q? when q.trim().isNotEmpty) 'q': q.trim(),
       'letter': ?letter,
+      ...TofaLibraryOptions.queryParams(query, facets),
     };
     final items = <MediaItem>[];
     var total = 0;
@@ -558,7 +657,8 @@ class TofaClient implements MediaServerClient, ScopedMediaServerClient, Graceful
 
   Future<MediaItem?> _fetchItem(String id, {bool fresh = false}) async {
     final mediaId = TofaMappers.mediaIdOf(id);
-    final d = await _detail(mediaId, fresh: fresh);
+    final isTitle = mediaId == id;
+    final (d, _) = await (_detail(mediaId, fresh: fresh), isTitle ? _ensureWatchlistIds() : Future<void>.value()).wait;
     if (d == null) return null;
     final title = _mapDetail(mediaId, d);
     if (title == null) return null;
@@ -805,16 +905,19 @@ class TofaClient implements MediaServerClient, ScopedMediaServerClient, Graceful
     ];
   }
 
-  /// Home rows beyond Continue Watching: none yet. Tofa documents no
-  /// "recently added" list (`/media`'s sort values are not enumerated), and
-  /// Continue Watching is read through [fetchContinueWatching].
+  /// Rows read for Home, by hub id, for their "View all" pages.
+  final Map<String, List<MediaItem>> _homeLists = {};
+
+  /// Home rows beyond Continue Watching (see `tofa_client_home.dart`), read
+  /// together; a failed row is left out and recorded in [diagnostics].
   @override
   Future<List<MediaHub>> fetchGlobalHubs({
     int limit = defaultHubPreviewLimit,
     bool includePlaybackHubs = true,
     HubFetchDiagnostics? diagnostics,
-  }) async => const [];
+  }) => _globalHubs(limit, diagnostics);
 
+  /// A library's Recently Added row, when its facets list a date-added sort.
   @override
   Future<List<MediaHub>> fetchLibraryHubs(
     String libraryId, {
@@ -823,7 +926,7 @@ class TofaClient implements MediaServerClient, ScopedMediaServerClient, Graceful
     bool includePlaybackHubs = true,
     MediaKind? libraryKind,
     HubFetchDiagnostics? diagnostics,
-  }) async => const [];
+  }) => _libraryHubs(libraryId, libraryName, limit, diagnostics);
 
   /// `GET /api/v1/media/{id}/similar`'s `owned` titles as "More Like This".
   @override
@@ -868,22 +971,19 @@ class TofaClient implements MediaServerClient, ScopedMediaServerClient, Graceful
       MediaPersonDetails.empty;
 
   @override
-  Future<List<MediaItem>> fetchMoreHubItems(String hubId, {int? limit}) async => const [];
+  Future<List<MediaItem>> fetchMoreHubItems(String hubId, {int? limit}) async =>
+      (await _moreHubItemsPage(hubId, 0, limit)).items;
 
   @override
-  Future<LibraryPage<MediaItem>> fetchMoreHubItemsPage(
-    String hubId, {
-    int? start,
-    int? size,
-    AbortController? abort,
-  }) async => const LibraryPage(items: [], totalCount: 0);
+  Future<LibraryPage<MediaItem>> fetchMoreHubItemsPage(String hubId, {int? start, int? size, AbortController? abort}) =>
+      _moreHubItemsPage(hubId, start ?? 0, size);
 
   // ---------------------------------------------------------------------------
   // Watch state
   // ---------------------------------------------------------------------------
 
   /// Watched / unwatched, per Tofa's id kinds: a movie's or episode's files
-  /// (`PUT /media/{file_id}/watched`), a season (`PUT /seasons/{id}/watched`),
+  /// (`POST /media/watched/batch`), a season (`PUT /seasons/{id}/watched`),
   /// a series (`PUT /shows/{id}/watched`). Tofa marks every version of a
   /// title together, and clears the resume point of a watched file.
   Future<void> _setWatched(MediaItem item, bool watched) async {
@@ -901,9 +1001,17 @@ class TofaClient implements MediaServerClient, ScopedMediaServerClient, Graceful
           appLogger.w('[tofa] not marked: no file is known for ${item.kind.id}');
           throw StateError('No Tofa file to mark');
         }
-        await Future.wait([
-          for (final file in files) _api.send('PUT', '/api/v1/media/${_seg(file)}/watched', body: body),
-        ]);
+        // One batch for every file (at most 500; a title has a handful).
+        // Offline marks replayed later go the same way.
+        await _api.send(
+          'POST',
+          '/api/v1/media/watched/batch',
+          body: {
+            'items': [
+              for (final file in files.take(500)) {'media_file_id': file, 'watched': watched},
+            ],
+          },
+        );
     }
     _details.remove(TofaMappers.mediaIdOf(item.id));
     appLogger.d('[tofa] marked ${item.kind.id} watched=$watched');
@@ -931,6 +1039,55 @@ class TofaClient implements MediaServerClient, ScopedMediaServerClient, Graceful
     final mediaId = item.raw?[TofaRaw.mediaId] as String? ?? TofaMappers.mediaIdOf(item.id);
     await _api.send('POST', '/api/v1/users/me/dismiss/${_seg(mediaId)}');
   }
+
+  // ---------------------------------------------------------------------------
+  // Watchlist (`/users/me/watchlist`)
+  // ---------------------------------------------------------------------------
+
+  /// Media ids on the profile's watchlist, from the last full read; null
+  /// until one succeeded. Titles carry no watchlist flag of their own.
+  Set<String>? _watchlistIds;
+  DateTime? _watchlistReadAt;
+  Future<void>? _watchlistInFlight;
+  static const _watchlistFreshness = Duration(minutes: 2);
+
+  /// Read the watchlist when the known one is missing or stale, one read in
+  /// flight. Never throws: an unread watchlist shows titles as not on it.
+  Future<void> _ensureWatchlistIds() {
+    final at = _watchlistReadAt;
+    if (_watchlistIds != null && at != null && DateTime.now().difference(at) < _watchlistFreshness) {
+      return Future.value();
+    }
+    return _watchlistInFlight ??= _watchlistItems()
+        .then<void>((_) {})
+        .catchError((Object e) => appLogger.d('[tofa] watchlist read failed', error: e.runtimeType))
+        .whenComplete(() => _watchlistInFlight = null);
+  }
+
+  @override
+  Set<SiloMembership> get membershipKinds => const {SiloMembership.watchlist};
+
+  /// Watchlist state for this connection, with the session's presses (the
+  /// same store Silo's toggles use). `POST` / `DELETE
+  /// /users/me/watchlist/{media_id}`.
+  @override
+  late final SiloMembershipStore memberships = SiloMembershipStore(
+    serverId: serverId.value,
+    known: (item, kind) {
+      if (kind != SiloMembership.watchlist) return false;
+      final ids = _watchlistIds;
+      return ids?.contains(TofaMappers.mediaIdOf(item.id));
+    },
+    write: (item, kind, value) async {
+      if (kind != SiloMembership.watchlist) throw UnsupportedError('Tofa has no favorites.');
+      final mediaId = TofaMappers.mediaIdOf(item.id);
+      await _api.send(value ? 'POST' : 'DELETE', '/api/v1/users/me/watchlist/${_seg(mediaId)}');
+      final ids = _watchlistIds ??= <String>{};
+      value ? ids.add(mediaId) : ids.remove(mediaId);
+      _homeLists.remove(_TofaHome._watchlistId);
+      appLogger.d('[tofa] watchlist ${value ? 'add' : 'remove'} done');
+    },
+  );
 
   @override
   Future<void> rate(MediaItem item, double rating) => throw UnsupportedError('Tofa has no user ratings in Plezilo.');
@@ -1282,6 +1439,8 @@ class TofaClient implements MediaServerClient, ScopedMediaServerClient, Graceful
       playMethod: playMethod,
       selectedMediaIndex: versionIndex < 0 ? 0 : versionIndex,
       selectedMediaSourceId: fileId,
+      // Tofa's relay caps each stream's bandwidth (2 Mbps on the free tier).
+      playbackNotice: _endpointKind == TofaEndpointKind.relay ? t.videoControls.tofaRelayNotice : null,
     );
   }
 
@@ -1291,6 +1450,10 @@ class TofaClient implements MediaServerClient, ScopedMediaServerClient, Graceful
     '/api/v1/stream/s/${_seg(sessionId)}/subtitles/$index/full.vtt?st=${Uri.encodeQueryComponent(sessionToken)}',
   );
 
+  /// QuickView answers read this session, by file id.
+  final Map<String, Map<String, dynamic>> _quickViews = {};
+
+  /// Chapters and skip markers from the playing file's QuickView.
   @override
   Future<PlaybackExtras> fetchPlaybackExtras(
     String itemId, {
@@ -1298,16 +1461,38 @@ class TofaClient implements MediaServerClient, ScopedMediaServerClient, Graceful
     String? creditsPattern,
     bool forceChapterFallback = false,
     bool forceRefresh = false,
-  }) async => PlaybackExtras(chapters: const [], markers: const []);
+  }) {
+    if (forceRefresh) {
+      final fileId = _playingFileIds[itemId];
+      if (fileId != null) _quickViews.remove(fileId);
+    }
+    return _extras(
+      itemId,
+      introPattern: introPattern,
+      creditsPattern: creditsPattern,
+      forceChapterFallback: forceChapterFallback,
+    );
+  }
 
+  /// The same from what a download pinned.
   @override
   Future<PlaybackExtras?> fetchPlaybackExtrasFromCacheOnly(
     String itemId, {
     String? introPattern,
     String? creditsPattern,
     bool forceChapterFallback = false,
-  }) async => null;
+  }) async {
+    final extras = await _extras(
+      itemId,
+      introPattern: introPattern,
+      creditsPattern: creditsPattern,
+      forceChapterFallback: forceChapterFallback,
+      cacheOnly: true,
+    );
+    return extras.chapters.isEmpty && extras.markers.isEmpty ? null : extras;
+  }
 
+  /// A downloaded file's tracks, from its registration.
   @override
   Future<MediaSourceInfo?> fetchCachedMediaSourceInfo(
     String itemId, {
@@ -1315,13 +1500,14 @@ class TofaClient implements MediaServerClient, ScopedMediaServerClient, Graceful
     String? mediaSourceId,
     String? preferredVersionSignature,
     TranscodeQualityPreset? qualityPreset,
-  }) async => null;
+  }) async => (await _downloadRecord(itemId))?.sourceInfo();
 
+  /// Seek-bar previews from the file's QuickView tiles.
   @override
   Future<ScrubPreviewSource?> createScrubPreviewSource({
     required MediaItem item,
     required MediaSourceInfo mediaSource,
-  }) async => null;
+  }) => _scrubPreview(item, mediaSource);
 
   /// One progress post. A 410 means the server ended the session: nothing
   /// more is sent for it, and it is not restarted behind the viewer's back.
@@ -1440,9 +1626,12 @@ class TofaClient implements MediaServerClient, ScopedMediaServerClient, Graceful
   }) async {
     final session = playSessionId == null ? null : _sessions[playSessionId];
     if (session == null) {
-      // A report without a session (offline replay, external player) saves
-      // the position on the file.
-      if (playSessionId == null) await _putProgress(itemId, position, duration);
+      if (playSessionId != null) return;
+      // A downloaded file's play (replayed after an offline stretch, or
+      // played online from the file) goes up as offline progress; any other
+      // report without a session saves the position on the file.
+      if (await _sendOfflineProgress(itemId, position, report.recordedAt)) return;
+      await _putProgress(itemId, position, duration);
       return;
     }
     try {
@@ -1461,18 +1650,35 @@ class TofaClient implements MediaServerClient, ScopedMediaServerClient, Graceful
     }
   }
 
+  /// Registers the download and answers its URL (see
+  /// `tofa_client_downloads.dart`).
   @override
-  Future<DownloadResolution> resolveDownload(MediaItem item, {int mediaIndex = 0, String? mediaSourceId}) =>
-      _unsupported('downloads');
+  Future<DownloadResolution> resolveDownload(MediaItem item, {int mediaIndex = 0, String? mediaSourceId}) async {
+    await _ensureImageToken().catchError((_) {});
+    return _resolveDownload(item, mediaSourceId: mediaSourceId);
+  }
+
+  /// The qualities [item] can be downloaded at, when there is a choice.
+  Future<List<TofaDownloadQuality>> downloadQualityChoices(MediaItem item) => _qualityChoices(item);
+
+  /// Download [item] (and the episodes queued under a season or show) at
+  /// [quality] from now on.
+  Future<void> setDownloadQuality(MediaItem item, TofaDownloadQuality quality) => _setQuality(item, quality);
 
   @override
   Future<MediaItem> stampLibrary(MediaItem item) async {
     if (item.libraryId != null) return item;
-    return item;
+    final mediaId = TofaMappers.mediaIdOf(item.id);
+    final title = await _fetchItem(mediaId);
+    final libraryId = title?.libraryId;
+    if (libraryId == null) return item;
+    return (item as TofaMediaItem).copyWith(libraryId: libraryId, libraryTitle: _libraryTitles[libraryId]);
   }
 
+  /// Artwork through the artwork route with the image token in the URL; the
+  /// local key is the `tofa-artwork:` path, which holds no token.
   @override
-  List<DownloadArtworkSpec> resolveDownloadArtwork(MediaItem item) => const [];
+  List<DownloadArtworkSpec> resolveDownloadArtwork(MediaItem item) => buildArtworkSpecs(item, thumbnailUrl);
 
   /// Not offered yet: an external player cannot report to a Tofa stream
   /// session, and Tofa's download links are a follow-up.

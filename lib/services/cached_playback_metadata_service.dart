@@ -8,6 +8,8 @@ import '../media/media_source_info.dart';
 import '../utils/app_logger.dart';
 import 'silo/silo_api_cache.dart';
 import 'silo/silo_mappers.dart';
+import 'tofa/tofa_api_cache.dart';
+import 'tofa/tofa_downloads.dart';
 import '../utils/plex_cache_parser.dart';
 import 'api_cache.dart';
 import 'jellyfin_api_cache.dart';
@@ -42,8 +44,7 @@ class CachedPlaybackMetadataService {
           mediaIndex: mediaIndex,
         ),
         MediaBackend.silo => _fetchSiloMediaSourceInfo(cacheServerId, itemId, mediaIndex: mediaIndex),
-        // No Tofa downloads, so nothing is cached for offline playback.
-        MediaBackend.tofa => Future<MediaSourceInfo?>.value(),
+        MediaBackend.tofa => _fetchTofaMediaSourceInfo(cacheServerId, itemId),
       };
     } catch (e) {
       appLogger.d('Cached media source info unavailable for $cacheServerId:$itemId', error: e);
@@ -83,7 +84,13 @@ class CachedPlaybackMetadataService {
           creditsPattern: creditsPattern,
           forceChapterFallback: forceChapterFallback,
         ),
-        MediaBackend.tofa => Future<PlaybackExtras?>.value(),
+        MediaBackend.tofa => _fetchTofaPlaybackExtras(
+          cacheServerId,
+          itemId,
+          introPattern: introPattern,
+          creditsPattern: creditsPattern,
+          forceChapterFallback: forceChapterFallback,
+        ),
       };
     } catch (e) {
       appLogger.d('Cached playback extras unavailable for $cacheServerId:$itemId', error: e);
@@ -151,6 +158,35 @@ class CachedPlaybackMetadataService {
     // The file on disk is the downloaded version, whatever was played last.
     final index = SiloMappers.selectVersionIndex(versions, watch, requestedIndex: mediaIndex);
     return SiloMappers.sourceInfo(versions[index], videoUrl: '', mediaIndex: index, ctx: _siloContext(cacheServerId));
+  }
+
+  /// A Tofa download's tracks, from its pinned registration.
+  static Future<MediaSourceInfo?> _fetchTofaMediaSourceInfo(String cacheServerId, String itemId) async =>
+      (await TofaApiCache.instance.getDownloadRecord(ServerId(cacheServerId), itemId))?.sourceInfo();
+
+  /// A Tofa download's chapters and skip markers: its pinned QuickView, else
+  /// the skip segments its registration listed.
+  static Future<PlaybackExtras?> _fetchTofaPlaybackExtras(
+    String cacheServerId,
+    String itemId, {
+    String? introPattern,
+    String? creditsPattern,
+    bool forceChapterFallback = false,
+  }) async {
+    final cache = TofaApiCache.instance;
+    final scope = ServerId(cacheServerId);
+    final record = await cache.getDownloadRecord(scope, itemId);
+    if (record == null) return null;
+    final quickView = await cache.get(scope, TofaApiCache.quickViewEndpoint(record.fileId));
+    final extras = TofaOfflineExtras.build(
+      record: record,
+      quickView: quickView,
+      classifier: await ChapterMarkerClassifier.bundled,
+      introPattern: introPattern,
+      creditsPattern: creditsPattern,
+      forceChapterFallback: forceChapterFallback,
+    );
+    return extras.chapters.isEmpty && extras.markers.isEmpty ? null : extras;
   }
 
   static Future<PlaybackExtras?> _fetchSiloPlaybackExtras(

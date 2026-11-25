@@ -2596,6 +2596,9 @@ class Translations$videoControls$en {
 	String osdAudio({required Object track}) => 'Audio: ${track}';
 
 	late final Translations$videoControls$siloSubtitles$en siloSubtitles = Translations$videoControls$siloSubtitles$en.internal(_root);
+
+	/// en: 'Playing through Tofa's relay, so quality is limited to the relay's bandwidth (2 Mbps on Tofa's free tier).'
+	String get tofaRelayNotice => 'Playing through Tofa\'s relay, so quality is limited to the relay\'s bandwidth (2 Mbps on Tofa\'s free tier).';
 }
 
 // Path: messages
@@ -3440,6 +3443,15 @@ class Translations$discover$en {
 	);
 
 	late final Translations$discover$person$en person = Translations$discover$person$en.internal(_root);
+
+	/// en: 'Suggested for You'
+	String get tofaSuggested => 'Suggested for You';
+
+	/// en: 'Ready to Binge'
+	String get tofaReadyToBinge => 'Ready to Binge';
+
+	/// en: 'Watchlist'
+	String get tofaWatchlist => 'Watchlist';
 }
 
 // Path: errors
@@ -3656,6 +3668,21 @@ class Translations$libraries$en {
 	late final Translations$libraries$filterCategories$en filterCategories = Translations$libraries$filterCategories$en.internal(_root);
 	late final Translations$libraries$sortLabels$en sortLabels = Translations$libraries$sortLabels$en.internal(_root);
 	late final Translations$libraries$advancedFilters$en advancedFilters = Translations$libraries$advancedFilters$en.internal(_root);
+
+	/// en: 'In progress'
+	String get tofaInProgress => 'In progress';
+
+	/// en: 'Watched'
+	String get tofaWatched => 'Watched';
+
+	/// en: 'Watch status'
+	String get tofaWatchStatus => 'Watch status';
+
+	/// en: 'Quality'
+	String get tofaQuality => 'Quality';
+
+	/// en: 'Available only'
+	String get tofaAvailableOnly => 'Available only';
 }
 
 // Path: about
@@ -5136,6 +5163,15 @@ class Translations$downloads$en {
 
 	/// en: 'Download paused'
 	String get notificationPaused => 'Download paused';
+
+	/// en: 'The server is preparing this download…'
+	String get tofaPreparing => 'The server is preparing this download…';
+
+	/// en: 'Download quality'
+	String get tofaQualityTitle => 'Download quality';
+
+	/// en: 'about ${size}'
+	String tofaSizeEstimate({required Object size}) => 'about ${size}';
 }
 
 // Path: shaders
@@ -6492,6 +6528,24 @@ class Translations$addServer$en {
 
 	/// en: 'Couldn't finish signing in. Try again.'
 	String get tofaSignInFailed => 'Couldn\'t finish signing in. Try again.';
+
+	/// en: 'Away from home, or don't know the address? Sign in with your Tofa account and pick your server.'
+	String get tofaAccountLead => 'Away from home, or don\'t know the address? Sign in with your Tofa account and pick your server.';
+
+	/// en: 'Sign in with your Tofa account'
+	String get tofaSignInWithAccount => 'Sign in with your Tofa account';
+
+	/// en: 'Choose a server'
+	String get tofaChooseServer => 'Choose a server';
+
+	/// en: 'This Tofa account has no servers.'
+	String get tofaNoServers => 'This Tofa account has no servers.';
+
+	/// en: 'Offline'
+	String get tofaServerOffline => 'Offline';
+
+	/// en: 'Away from home, Plezilo may stream through Tofa's relay, which limits quality (2 Mbps on Tofa's free tier).'
+	String get tofaRelayNote => 'Away from home, Plezilo may stream through Tofa\'s relay, which limits quality (2 Mbps on Tofa\'s free tier).';
 }
 
 // Path: deepLinks
@@ -10422,6 +10476,7 @@ extension on Translations {
 			'videoControls.siloSubtitles.track' => ({required Object number}) => 'Track ${number}',
 			'videoControls.siloSubtitles.hearingImpaired' => 'Hearing impaired',
 			'videoControls.siloSubtitles.searchFailed' => 'Subtitle search failed',
+			'videoControls.tofaRelayNotice' => 'Playing through Tofa\'s relay, so quality is limited to the relay\'s bandwidth (2 Mbps on Tofa\'s free tier).',
 			'messages.markedAsWatched' => 'Marked as watched',
 			'messages.markedAsUnwatched' => 'Marked as unwatched',
 			'messages.markedAsWatchedOffline' => 'Marked as watched (will sync when online)',
@@ -10545,9 +10600,9 @@ extension on Translations {
 			'profiles.active' => 'Active',
 			'profiles.manage' => 'Manage',
 			'profiles.delete' => 'Delete',
-			'profiles.signOut' => 'Sign out',
 			_ => null,
 		} ?? switch (path) {
+			'profiles.signOut' => 'Sign out',
 			'profiles.signOutPlexTitle' => 'Sign out of Plex?',
 			'profiles.signOutPlexMessage' => ({required Object displayName}) => 'Remove ${displayName} and all Plex Home users? Sign back in anytime.',
 			'profiles.signOutPlexDeleteDownloads' => 'Also delete downloads',
@@ -10715,6 +10770,9 @@ extension on Translations {
 			'discover.person.birthplace' => 'Birthplace',
 			'discover.person.dateWithAge' => ({required Object date, required Object age}) => '${date} (age ${age})',
 			'discover.person.dateWithAgeAtDeath' => ({required Object date, required Object age}) => '${date} (aged ${age})',
+			'discover.tofaSuggested' => 'Suggested for You',
+			'discover.tofaReadyToBinge' => 'Ready to Binge',
+			'discover.tofaWatchlist' => 'Watchlist',
 			'errors.searchFailed' => ({required Object error}) => 'Search failed: ${error}',
 			'errors.searchUnavailable' => 'Search could not reach any media server.',
 			'errors.connectionTimeout' => ({required Object context}) => 'Connection timeout while loading ${context}',
@@ -10867,6 +10925,11 @@ extension on Translations {
 			'libraries.advancedFilters.dateLastYear' => 'Past year',
 			'libraries.advancedFilters.dateOlderThanDays' => ({required Object count}) => 'Older than ${count} days',
 			'libraries.advancedFilters.dateOlderThanYear' => 'Older than a year',
+			'libraries.tofaInProgress' => 'In progress',
+			'libraries.tofaWatched' => 'Watched',
+			'libraries.tofaWatchStatus' => 'Watch status',
+			'libraries.tofaQuality' => 'Quality',
+			'libraries.tofaAvailableOnly' => 'Available only',
 			'about.title' => 'About',
 			'about.openSourceLicenses' => 'Open Source Licenses',
 			'about.versionLabel' => ({required Object version}) => 'Version ${version}',
@@ -11051,6 +11114,8 @@ extension on Translations {
 			'explore.detail.contentAdvisory' => 'Age guidance',
 			'explore.detail.tags' => 'Tags',
 			'explore.detail.revealSpoilerTags' => 'Show spoiler tags',
+			_ => null,
+		} ?? switch (path) {
 			'explore.detail.links' => 'Links',
 			'explore.detail.watchOn' => 'Watch on',
 			'explore.detail.watchTrailer' => 'Watch trailer',
@@ -11060,8 +11125,6 @@ extension on Translations {
 			'explore.detail.crew' => 'Crew',
 			'explore.detail.ratings' => 'Ratings',
 			'explore.detail.schedule' => 'Schedule',
-			_ => null,
-		} ?? switch (path) {
 			'explore.detail.recommendedByUsers' => ({required num n}) => (_root.$meta.cardinalResolver ?? PluralResolvers.cardinal('en'))(n, one: 'Recommended by ${n} user', other: 'Recommended by ${n} users', ), 
 			'explore.detail.recommendedBy' => ({required Object who}) => 'Recommended by ${who}',
 			'explore.detail.favoritedBy' => ({required Object who}) => 'Favorited by ${who}',
@@ -11512,6 +11575,9 @@ extension on Translations {
 			'downloads.notificationDownloading' => 'Downloading...',
 			'downloads.notificationComplete' => 'Download complete',
 			'downloads.notificationPaused' => 'Download paused',
+			'downloads.tofaPreparing' => 'The server is preparing this download…',
+			'downloads.tofaQualityTitle' => 'Download quality',
+			'downloads.tofaSizeEstimate' => ({required Object size}) => 'about ${size}',
 			'shaders.title' => 'Shaders',
 			'shaders.noShaderDescription' => 'No video enhancement',
 			'shaders.nvscalerDescription' => 'NVIDIA image scaling for sharper video',
@@ -11562,6 +11628,8 @@ extension on Translations {
 			'companionRemote.remote.attemptOf' => ({required Object current}) => 'Attempt ${current} of 5',
 			'companionRemote.remote.retryNow' => 'Retry Now',
 			'companionRemote.remote.tabRemote' => 'Remote',
+			_ => null,
+		} ?? switch (path) {
 			'companionRemote.remote.tabPlay' => 'Play',
 			'companionRemote.remote.tabMore' => 'More',
 			'companionRemote.remote.menu' => 'Menu',
@@ -11574,8 +11642,6 @@ extension on Translations {
 			'companionRemote.remote.previous' => 'Previous',
 			'companionRemote.remote.playPause' => 'Play/Pause',
 			'companionRemote.remote.next' => 'Next',
-			_ => null,
-		} ?? switch (path) {
 			'companionRemote.remote.seekBack' => 'Seek Back',
 			'companionRemote.remote.stop' => 'Stop',
 			'companionRemote.remote.seekForward' => 'Seek Fwd',
@@ -12018,6 +12084,12 @@ extension on Translations {
 			'addServer.tofaTooManyPinAttempts' => 'Too many PIN attempts. Wait a moment and try again.',
 			'addServer.tofaPinNetworkError' => 'Couldn\'t check the PIN. Check your connection and try again.',
 			'addServer.tofaSignInFailed' => 'Couldn\'t finish signing in. Try again.',
+			'addServer.tofaAccountLead' => 'Away from home, or don\'t know the address? Sign in with your Tofa account and pick your server.',
+			'addServer.tofaSignInWithAccount' => 'Sign in with your Tofa account',
+			'addServer.tofaChooseServer' => 'Choose a server',
+			'addServer.tofaNoServers' => 'This Tofa account has no servers.',
+			'addServer.tofaServerOffline' => 'Offline',
+			'addServer.tofaRelayNote' => 'Away from home, Plezilo may stream through Tofa\'s relay, which limits quality (2 Mbps on Tofa\'s free tier).',
 			'deepLinks.invalid' => 'This Plezilo link isn\'t valid.',
 			'deepLinks.profileNotFound' => ({required Object profile}) => 'No profile matches "${profile}".',
 			'deepLinks.serverUnavailable' => 'Couldn\'t reach the server for this link.',
@@ -12070,6 +12142,8 @@ extension on Translations {
 			'siloPairing.summarySwitchHint' => 'Switch profiles to use an account that is in another profile.',
 			'siloPairing.done' => 'Done',
 			'siloPairing.unreachableTitle' => ({required Object server}) => 'Can\'t reach ${server}',
+			_ => null,
+		} ?? switch (path) {
 			'siloPairing.unreachableProvider' => ({required Object server, required Object provider}) => 'This device can\'t reach ${server} through ${provider}. Install or open the ${provider} app on this device and make sure it can reach the server\'s network, then try again.',
 			'siloPairing.unreachablePublic' => ({required Object server, required Object url}) => 'This device can\'t reach ${server} at ${url}. Check its network connection and try again.',
 			'siloPairing.useAlternate' => ({required Object url}) => 'Use ${url}',
@@ -12088,8 +12162,6 @@ extension on Translations {
 			'siloCardOverlays.runtimeMinutes' => ({required Object minutes}) => '${minutes}m',
 			'siloCardOverlays.returning' => 'Returning',
 			'siloCardOverlays.ended' => 'Ended',
-			_ => null,
-		} ?? switch (path) {
 			'siloCardOverlays.cancelled' => 'Cancelled',
 			'siloCardOverlays.upcoming' => 'Upcoming',
 			'siloEditConnection.editTitle' => ({required Object server}) => 'Edit ${server}',

@@ -173,10 +173,14 @@ class ServerCapabilities {
     scrubThumbnails: true,
   );
 
-  /// Tofa (`/api/v1`): server transcoding and Continue Watching dismissals
-  /// (`/users/me/dismiss`). Plezilo's first Tofa version has no ratings,
-  /// favorites, seek-bar previews, live TV, folders or metadata editing.
-  static const ServerCapabilities tofa = ServerCapabilities(videoTranscoding: true, continueWatchingRemoval: true);
+  /// Tofa (`/api/v1`): server transcoding, Continue Watching dismissals
+  /// (`/users/me/dismiss`) and seek-bar previews (QuickView tiles). No
+  /// ratings, favorites, live TV, folders or metadata editing in this client.
+  static const ServerCapabilities tofa = ServerCapabilities(
+    videoTranscoding: true,
+    continueWatchingRemoval: true,
+    scrubThumbnails: true,
+  );
 
   ServerCapabilities copyWith({bool? videoTranscoding}) {
     return ServerCapabilities(

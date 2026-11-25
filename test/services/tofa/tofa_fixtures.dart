@@ -251,9 +251,29 @@ class FakeTofa {
   void on(String method, String path, http.Response Function(http.Request request) answer) =>
       routes['$method $path'] = answer;
 
+  /// A route on one host only (several addresses of one server).
+  void onHost(String host, String method, String path, http.Response Function(http.Request request) answer) =>
+      routes['$method //$host$path'] = answer;
+
+  /// Routes for every path under a prefix (ids made up at run time).
+  final Map<String, http.Response Function(http.Request request)> prefixRoutes = {};
+
+  void onPrefix(String method, String prefix, http.Response Function(http.Request request) answer) =>
+      prefixRoutes['$method $prefix'] = answer;
+
+  /// Hosts that refuse connections.
+  final Set<String> downHosts = {};
+
   MockClient get client => MockClient((request) async {
     requests.add(request);
-    final route = routes['${request.method} ${request.url.path}'];
+    if (downHosts.contains(request.url.host)) throw http.ClientException('connection refused', request.url);
+    final route =
+        routes['${request.method} //${request.url.host}${request.url.path}'] ??
+        routes['${request.method} ${request.url.path}'] ??
+        [
+          for (final e in prefixRoutes.entries)
+            if ('${request.method} ${request.url.path}'.startsWith(e.key)) e.value,
+        ].firstOrNull;
     if (route == null) return tofaError(404, 'not_found', 'No route ${request.method} ${request.url.path}');
     return route(request);
   });

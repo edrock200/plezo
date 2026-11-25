@@ -51,7 +51,6 @@ void main() {
       final c = client();
       expect(c.backend, MediaBackend.tofa);
       expect(c.backend.usesMediaBrowserApi, isFalse);
-      expect(c.backend.supportsDownloads, isFalse);
       expect(c.scopedServerId, 'srv-1/u-1/p-1');
       expect(c.serverId.value, 'srv-1');
     });
@@ -216,12 +215,12 @@ void main() {
         'lib-1',
         query: const LibraryQuery(offset: 50, limit: 25, kind: MediaKind.movie),
       );
-      final request = fake.requests.single;
+      final request = fake.to('GET', '/api/v1/media').single;
       expect(request.url.queryParameters, containsPair('library_id', 'lib-1'));
       expect(request.url.queryParameters, containsPair('page', '3'));
       expect(request.url.queryParameters, containsPair('per_page', '25'));
       expect(request.url.queryParameters, containsPair('media_type', 'movie'));
-      expect(request.url.queryParameters.containsKey('sort'), isFalse, reason: 'sort values are unverified');
+      expect(request.url.queryParameters.containsKey('sort'), isFalse, reason: 'no sort was asked for');
       expect(page.items.first.id, 'm-50');
       expect(page.items, hasLength(25));
       expect(page.totalCount, 95);
@@ -234,10 +233,10 @@ void main() {
       expect(TofaClient.pagesFor(30, 20), [(page: 2, skip: 10), (page: 3, skip: 0)]);
     });
 
-    test('a non-letter prefix is not guessed at: an empty page, no request', () async {
+    test('a prefix that is not a listed letter is not guessed at: an empty page, no media read', () async {
       final page = await client().fetchLibraryPagedContent('lib-1', query: const LibraryQuery(nameStartsWith: '#'));
       expect(page.items, isEmpty);
-      expect(fake.requests, isEmpty);
+      expect(fake.to('GET', '/api/v1/media'), isEmpty);
     });
 
     test('a movie detail carries its files, artwork paths and watch state from the progress batch', () async {
@@ -384,15 +383,18 @@ void main() {
   });
 
   group('watch state', () {
-    test('a movie is marked on each of its files', () async {
-      fake.on('PUT', '/api/v1/media/f-1/watched', (_) => jsonResponse(progressRow('f-1', completed: true)));
-      fake.on('PUT', '/api/v1/media/f-2/watched', (_) => jsonResponse(progressRow('f-2', completed: true)));
+    test('a movie is marked on all of its files in one watched batch', () async {
+      fake.on('POST', '/api/v1/media/watched/batch', (_) => jsonResponse({'updated': 2}));
       serveMovie(files: [mediaFile('f-1'), mediaFile('f-2')]);
       final c = client();
       final movie = await c.fetchItem('m-1');
       await c.markWatched(movie!);
-      expect(jsonDecode(fake.to('PUT', '/api/v1/media/f-1/watched').single.body), {'watched': true});
-      expect(fake.to('PUT', '/api/v1/media/f-2/watched'), hasLength(1));
+      expect(jsonDecode(fake.to('POST', '/api/v1/media/watched/batch').single.body), {
+        'items': [
+          {'media_file_id': 'f-1', 'watched': true},
+          {'media_file_id': 'f-2', 'watched': true},
+        ],
+      });
     });
 
     test('seasons and shows use their own routes', () async {
@@ -548,12 +550,13 @@ void main() {
         '/api/v1/stream/f-1/info',
         (_) => tofaError(503, 'server_relay_not_connected', 'Your server is offline.'),
       );
-      final c = client();
+      final c = client()..relayRetryDelays = const [Duration.zero];
       final movie = await c.fetchItem('m-1');
       await expectLater(
         c.getPlaybackInitialization(PlaybackInitializationOptions(metadata: movie!, selectedMediaIndex: 0)),
         throwsA(isA<PlaybackException>().having((e) => e.message, 'message', 'Your server is offline.')),
       );
+      expect(fake.to('GET', '/api/v1/stream/f-1/info'), hasLength(2), reason: 'one retry while the relay connects');
     });
 
     test('progress goes to the session in ticks with its st token; a 410 stops reporting', () async {
@@ -642,19 +645,15 @@ void main() {
     final c = client();
     expect(await c.fetchPlaylistsPage(), isA<LibraryPage<Object>>().having((p) => p.items, 'items', isEmpty));
     expect(await c.searchPeople('x'), isEmpty);
-    expect(await c.fetchSortOptions('lib-1'), isEmpty);
+    expect(await c.fetchSortOptions('lib-1'), isEmpty, reason: 'no facets answer, no sorts');
     expect(
       await c.resolveExternalPlayback(MediaItem(id: 'm-1', backend: MediaBackend.tofa, kind: MediaKind.movie)),
       isNull,
     );
     expect(
-      () => c.resolveDownload(MediaItem(id: 'm-1', backend: MediaBackend.tofa, kind: MediaKind.movie)),
-      throwsUnsupportedError,
-    );
-    expect(
       () => c.rate(MediaItem(id: 'm-1', backend: MediaBackend.tofa, kind: MediaKind.movie), 5),
       throwsUnsupportedError,
     );
-    expect(fake.requests, isEmpty);
+    expect(fake.requests.where((r) => r.url.path != '/api/v1/media/facets'), isEmpty);
   });
 }

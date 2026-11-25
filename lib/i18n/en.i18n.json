@@ -960,7 +960,8 @@
       "track": "Track ${number}",
       "hearingImpaired": "Hearing impaired",
       "searchFailed": "Subtitle search failed"
-    }
+    },
+    "tofaRelayNotice": "Playing through Tofa's relay, so quality is limited to the relay's bandwidth (2 Mbps on Tofa's free tier)."
   },
   "userStatus": {},
   "messages": {
@@ -1290,7 +1291,10 @@
       "birthplace": "Birthplace",
       "dateWithAge": "${date} (age ${age})",
       "dateWithAgeAtDeath": "${date} (aged ${age})"
-    }
+    },
+    "tofaSuggested": "Suggested for You",
+    "tofaReadyToBinge": "Ready to Binge",
+    "tofaWatchlist": "Watchlist"
   },
   "errors": {
     "searchFailed": "Search failed: ${error}",
@@ -1456,7 +1460,12 @@
       "dateLastYear": "Past year",
       "dateOlderThanDays": "Older than ${count} days",
       "dateOlderThanYear": "Older than a year"
-    }
+    },
+    "tofaInProgress": "In progress",
+    "tofaWatched": "Watched",
+    "tofaWatchStatus": "Watch status",
+    "tofaQuality": "Quality",
+    "tofaAvailableOnly": "Available only"
   },
   "about": {
     "title": "About",
@@ -2182,7 +2191,10 @@
     "reasonDeviceStorageFull": "this device is out of storage",
     "notificationDownloading": "Downloading...",
     "notificationComplete": "Download complete",
-    "notificationPaused": "Download paused"
+    "notificationPaused": "Download paused",
+    "tofaPreparing": "The server is preparing this download…",
+    "tofaQualityTitle": "Download quality",
+    "tofaSizeEstimate": "about ${size}"
   },
   "shaders": {
     "title": "Shaders",
@@ -2730,7 +2742,13 @@
     "tofaWrongPin": "Wrong PIN. Try again.",
     "tofaTooManyPinAttempts": "Too many PIN attempts. Wait a moment and try again.",
     "tofaPinNetworkError": "Couldn't check the PIN. Check your connection and try again.",
-    "tofaSignInFailed": "Couldn't finish signing in. Try again."
+    "tofaSignInFailed": "Couldn't finish signing in. Try again.",
+    "tofaAccountLead": "Away from home, or don't know the address? Sign in with your Tofa account and pick your server.",
+    "tofaSignInWithAccount": "Sign in with your Tofa account",
+    "tofaChooseServer": "Choose a server",
+    "tofaNoServers": "This Tofa account has no servers.",
+    "tofaServerOffline": "Offline",
+    "tofaRelayNote": "Away from home, Plezilo may stream through Tofa's relay, which limits quality (2 Mbps on Tofa's free tier)."
   },
   "deepLinks": {
     "invalid": "This Plezilo link isn't valid.",
