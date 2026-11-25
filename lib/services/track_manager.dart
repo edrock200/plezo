@@ -481,15 +481,22 @@ class TrackManager {
 
   // ── Explicit picks for [sourceTrackPickSink] ───────────────────────
 
-  /// Hands an explicit pick that reopens the source (a server-side audio
-  /// switch, a source subtitle) to [sourceTrackPickSink]. The ids are the
-  /// source's own (`MediaAudioTrack.id`, `MediaSubtitleTrack.id`).
-  void recordSourceTrackPick({int? audioStreamId, int? subtitleStreamId, bool subtitlesOff = false}) {
+  /// Hands an explicit pick that went through a source switch (a
+  /// server-side audio switch, a source subtitle) to [sourceTrackPickSink],
+  /// once the switch took effect. The ids are the source's own
+  /// (`MediaAudioTrack.id`, `MediaSubtitleTrack.id`); [reopened] says the
+  /// switch opened a new playback, which the sink checks plays the audio.
+  void recordSourceTrackPick({
+    int? audioStreamId,
+    int? subtitleStreamId,
+    bool subtitlesOff = false,
+    bool reopened = false,
+  }) {
     final sink = sourceTrackPickSink;
     if (sink == null) return;
     unawaited(
       _whenPicksAreRemembered(() {
-        if (audioStreamId != null) sink.audioPicked(audioStreamId);
+        if (audioStreamId != null) sink.audioPicked(audioStreamId, reopened: reopened);
         if (subtitlesOff) {
           sink.subtitlePicked(null);
         } else if (subtitleStreamId != null) {

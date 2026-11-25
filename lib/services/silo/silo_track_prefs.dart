@@ -16,20 +16,26 @@ import 'silo_subtitles.dart';
 /// also carry the profile's defaults when the series has no choice).
 ///
 /// Plezilo applies them to Silo **movies and episodes** (not extras), as Silo's
-/// apps do: a movie's watch detail carries the profile's defaults too. Only an
-/// episode has a series to remember; Plezilo writes only a viewer's own pick
-/// in the player.
+/// apps do. A choice is kept under the episode's series, or under the movie
+/// itself (the same routes, with the movie's content id: Silo Android's
+/// `seriesTrackChoiceKey`, Silo's Roku app 3ae62aa `playback.trackPrefs.key`).
+/// Plezilo writes only a viewer's own pick in the player, once the playback
+/// plays it.
 class SiloTrackPrefs {
   const SiloTrackPrefs._();
 
-  /// The series a watch detail's choices are remembered under, or null for
-  /// anything that is not an episode of a series (movies, extras).
+  /// The key a watch detail's choices are remembered under: an episode's
+  /// series, else the item's own `content_id` (a movie, or an episode the
+  /// server names no series for). Null for anything else (extras) and when
+  /// neither is known.
   static String? seriesKey(Map<String, dynamic>? watch) {
     if (watch == null) return null;
     final type = watch['type']?.toString().toLowerCase();
-    if (type != null && type != 'episode') return null;
-    final series = watch['series_id']?.toString().trim() ?? '';
-    return series.isEmpty ? null : series;
+    if (type != null && type != 'episode' && type != 'movie') return null;
+    final series = type == 'movie' ? '' : (watch['series_id']?.toString().trim() ?? '');
+    if (series.isNotEmpty) return series;
+    final content = watch['content_id']?.toString().trim() ?? '';
+    return content.isEmpty ? null : content;
   }
 
   static String audioPath(String seriesKey) => '/api/v2/audio-prefs/${Uri.encodeComponent(seriesKey)}';

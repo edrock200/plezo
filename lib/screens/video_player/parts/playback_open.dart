@@ -737,8 +737,11 @@ extension _VideoPlayerOpenMethods on VideoPlayerScreenState {
       enableTrackSelectionMemory: mediaClient is JellyfinClient
           ? _mediaBrowserTrackMemoryEnabler(mediaClient, context.read<AccountPreferencesController>())
           : null,
-      // Silo remembers an episode's picks for its whole series.
-      sourceTrackPickSink: mediaClient is SiloClient ? mediaClient.seriesTrackPickSink(metadata.id) : null,
+      // Silo remembers a pick for the episode's whole series, or the movie.
+      sourceTrackPickSink: switch (mediaClient) {
+        final SourceTrackPickClient picks => picks.trackPickSink(metadata.id),
+        _ => null,
+      },
       getProfileSettings: getProfileSettings,
       waitForProfileSettings: _waitForProfileSettingsIfNeeded,
       metadata: metadata,

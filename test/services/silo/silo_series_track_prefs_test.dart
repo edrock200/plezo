@@ -72,10 +72,16 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('SiloTrackPrefs', () {
-    test('only episodes of a series have a key', () {
-      expect(SiloTrackPrefs.seriesKey({'type': 'episode', 'series_id': 'series:s1'}), 'series:s1');
-      expect(SiloTrackPrefs.seriesKey({'type': 'movie', 'content_id': 'movie:m1'}), isNull);
+    test("an episode's choices are kept under its series, a movie's under the movie", () {
+      expect(
+        SiloTrackPrefs.seriesKey({'type': 'episode', 'content_id': 'episode:e1', 'series_id': 'series:s1'}),
+        'series:s1',
+      );
+      expect(SiloTrackPrefs.seriesKey({'type': 'movie', 'content_id': 'movie:m1'}), 'movie:m1');
+      // Silo Android's seriesTrackChoiceKey: no series named, the item itself.
+      expect(SiloTrackPrefs.seriesKey({'type': 'episode', 'content_id': 'episode:e1'}), 'episode:e1');
       expect(SiloTrackPrefs.seriesKey({'type': 'episode'}), isNull);
+      expect(SiloTrackPrefs.seriesKey({'type': 'extra', 'content_id': 'extra:x1'}), isNull);
       expect(SiloTrackPrefs.seriesKey(null), isNull);
       expect(SiloTrackPrefs.audioPath('series:s1'), '/api/v2/audio-prefs/series%3As1');
       expect(SiloTrackPrefs.subtitlePath('series:s1'), '/api/v2/subtitle-prefs/series%3As1');
@@ -365,6 +371,8 @@ void main() {
     late String type;
     late Map<String, Object?> effective;
     late int putStatus;
+    late String delivery;
+    late int? planAudio;
 
     setUp(() {
       final db = AppDatabase.forTesting(NativeDatabase.memory());
@@ -373,6 +381,8 @@ void main() {
       requests = [];
       type = 'episode';
       putStatus = 204;
+      delivery = 'original_http';
+      planAudio = null;
       effective = {
         'effective_subtitle_language': 'en',
         'effective_subtitle_mode': 'always',
@@ -424,8 +434,12 @@ void main() {
             'outcome': 'playable',
             'session_id': 'sess-${requests.length}',
             'playback_plan': {
-              'delivery': 'original_http',
+              'delivery': delivery,
               'stream': {'url': '/api/v2/stream/s?st=sig'},
+              if (planAudio != null)
+                'selected_tracks': {
+                  'audio': {'index': planAudio},
+                },
               'subtitle': {
                 'inventory': [
                   {
@@ -498,7 +512,7 @@ void main() {
       c.close();
     });
 
-    test("a movie starts with the profile's effective audio and subtitle, with no series to write", () async {
+    test("a movie starts with the profile's effective audio and subtitle; a pick is kept for the movie", () async {
       type = 'movie';
       final c = client();
       final result = await c.getPlaybackInitialization(
@@ -508,9 +522,13 @@ void main() {
       // The same effective fields an episode gets (the profile's defaults on a movie).
       expect(info.audioTracks.map((t) => t.selected), [false, true]);
       expect(info.subtitleTracks.where((t) => t.selected).map((t) => t.id), [1]);
-      c.seriesTrackPickSink(_movie.id).audioPicked(2);
+      c.trackPickSink(_movie.id).audioPicked(1);
+      c.trackPickSink(_movie.id).subtitlePicked(null);
       await Future<void>.delayed(const Duration(milliseconds: 1700));
-      expect(puts(), isEmpty, reason: 'a movie has no series preference to write');
+      // Under the movie's own content id, as Silo's Android TV, tvOS and Roku apps keep it.
+      expect(puts().map((r) => r.url.path), ['/api/v2/audio-prefs/movie%3Am1', '/api/v2/subtitle-prefs/movie%3Am1']);
+      expect((jsonDecode(puts().first.body) as Map)['audio_track_index'], 0);
+      expect((jsonDecode(puts().last.body) as Map)['subtitle_mode'], 'off');
       c.close();
     });
 
@@ -528,7 +546,7 @@ void main() {
     test('a pick in the player is written to the series once', () async {
       final c = client();
       await c.getPlaybackInitialization(PlaybackInitializationOptions(metadata: _episode, selectedMediaIndex: 0));
-      final sink = c.seriesTrackPickSink(_episode.id);
+      final sink = c.trackPickSink(_episode.id);
       sink.audioPicked(1);
       sink.audioPicked(2);
       sink.subtitlePicked(2);
@@ -548,10 +566,45 @@ void main() {
       c.close();
     });
 
+    test('an audio pick that reopened the stream is kept only when the new plan plays it', () async {
+      delivery = 'server_transcode_hls';
+      final c = client();
+      final sink = c.trackPickSink(_episode.id);
+      // The viewer asked for track 2 (ordinal 1); the server's plan plays ordinal 0.
+      planAudio = 0;
+      await c.getPlaybackInitialization(
+        PlaybackInitializationOptions(metadata: _episode, selectedMediaIndex: 0, selectedAudioStreamId: 2),
+      );
+      sink.audioPicked(2, reopened: true);
+      await Future<void>.delayed(const Duration(milliseconds: 1700));
+      expect(puts(), isEmpty, reason: 'the plan plays another track: nothing is remembered');
+
+      planAudio = 1;
+      await c.getPlaybackInitialization(
+        PlaybackInitializationOptions(metadata: _episode, selectedMediaIndex: 0, selectedAudioStreamId: 2),
+      );
+      sink.audioPicked(2, reopened: true);
+      await Future<void>.delayed(const Duration(milliseconds: 1700));
+      expect(puts().map((r) => r.url.path), ['/api/v2/audio-prefs/series%3As1']);
+      expect((jsonDecode(puts().single.body) as Map)['audio_track_index'], 1);
+      c.close();
+    });
+
+    test('a reopened pick on an original file whose plan names no audio is kept', () async {
+      final c = client();
+      await c.getPlaybackInitialization(
+        PlaybackInitializationOptions(metadata: _episode, selectedMediaIndex: 0, selectedAudioStreamId: 1),
+      );
+      c.trackPickSink(_episode.id).audioPicked(1, reopened: true);
+      await Future<void>.delayed(const Duration(milliseconds: 1700));
+      expect(puts().map((r) => r.url.path), ['/api/v2/audio-prefs/series%3As1']);
+      c.close();
+    });
+
     test('a pick still queued when the client closes gracefully is sent before the API closes', () async {
       final c = client();
       await c.getPlaybackInitialization(PlaybackInitializationOptions(metadata: _episode, selectedMediaIndex: 0));
-      c.seriesTrackPickSink(_episode.id).audioPicked(1);
+      c.trackPickSink(_episode.id).audioPicked(1);
       await c.closeGracefully();
       expect(puts().map((r) => r.url.path), ['/api/v2/audio-prefs/series%3As1']);
     });
@@ -559,7 +612,7 @@ void main() {
     test('a successor on the same login session sends the queued pick instead of the closing client', () async {
       final c = client();
       await c.getPlaybackInitialization(PlaybackInitializationOptions(metadata: _episode, selectedMediaIndex: 0));
-      c.seriesTrackPickSink(_episode.id).audioPicked(1);
+      c.trackPickSink(_episode.id).audioPicked(1);
       final successor = client();
       successor.inheritSession(c);
       await c.closeGracefully();
@@ -573,7 +626,7 @@ void main() {
       putStatus = 500;
       final c = client();
       await c.getPlaybackInitialization(PlaybackInitializationOptions(metadata: _episode, selectedMediaIndex: 0));
-      c.seriesTrackPickSink(_episode.id).subtitlePicked(null);
+      c.trackPickSink(_episode.id).subtitlePicked(null);
       await Future<void>.delayed(const Duration(milliseconds: 1700));
       expect(puts(), hasLength(1));
       // The next episode starts (the start resends the pick first, which
@@ -630,8 +683,9 @@ void main() {
       await tm.onSubtitleTrackSelectedByUser(SubtitleTrack.off);
       await tm.onSubtitleTrackSelectedByUser(const SubtitleTrack(id: '5', language: 'eng'), sourceStreamId: 1);
       tm.recordSourceTrackPick(audioStreamId: 1);
+      tm.recordSourceTrackPick(audioStreamId: 2, reopened: true);
       await pumpEventQueue();
-      expect(sink.events, ['audio 2', 'subtitle null', 'subtitle 1', 'audio 1']);
+      expect(sink.events, ['audio 2', 'subtitle null', 'subtitle 1', 'audio 1', 'audio 2 reopened']);
       tm.dispose();
     });
 
@@ -677,7 +731,8 @@ class _Sink implements SourceTrackPickSink {
   final events = <String>[];
 
   @override
-  void audioPicked(int sourceAudioId) => events.add('audio $sourceAudioId');
+  void audioPicked(int sourceAudioId, {bool reopened = false}) =>
+      events.add(reopened ? 'audio $sourceAudioId reopened' : 'audio $sourceAudioId');
 
   @override
   void subtitlePicked(int? sourceSubtitleId) => events.add('subtitle $sourceSubtitleId');

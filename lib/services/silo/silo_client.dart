@@ -112,7 +112,8 @@ class SiloClient
         DownloadCompletionRecorder,
         PersonalRecommendationsClient,
         HomeWatchStateClient,
-        PlaybackSessionRestartGuard {
+        PlaybackSessionRestartGuard,
+        SourceTrackPickClient {
   SiloClient._({required this._connection, required this._api});
 
   /// Build a client for [connection]. Network I/O stays lazy.

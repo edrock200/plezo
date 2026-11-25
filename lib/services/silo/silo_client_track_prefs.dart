@@ -1,10 +1,11 @@
 part of 'silo_client.dart';
 
 /// Series-wide audio and subtitle memory (Silo Android #680): a Silo episode
-/// starts with the server's effective choice for its series, and a viewer's
-/// own pick in the player is written back to the series' preferences.
-/// Movies start with the profile's effective tracks too (no series pick to
-/// lay over them); extras and other backends are untouched. See [SiloTrackPrefs].
+/// starts with the server's effective choice for its series, a movie with
+/// its own, and a viewer's own pick in the player is written back to the
+/// series' (or the movie's) preferences once the playback plays it, as Silo's
+/// Android TV, tvOS and Roku players do. Extras and other backends are
+/// untouched. See [SiloTrackPrefs].
 mixin _SiloTrackPrefsMethods on MediaServerCacheMixin, _SiloPlaybackMethods {
   @override
   late final SiloSeriesTrackChoices _trackChoices = SiloSeriesTrackChoices(
@@ -15,9 +16,8 @@ mixin _SiloTrackPrefsMethods on MediaServerCacheMixin, _SiloPlaybackMethods {
   );
 
   /// The sink the player hands explicit picks for [itemId] to. A pick made
-  /// while no session of that item is known, or on an item that is not an
-  /// episode, is ignored.
-  SourceTrackPickSink seriesTrackPickSink(String itemId) => _SiloSeriesTrackPickSink(this, itemId);
+  /// while no session of that item is known, or on an extra, is ignored.
+  SourceTrackPickSink trackPickSink(String itemId) => _SiloSeriesTrackPickSink(this, itemId);
 
   _SiloPlaybackSession? _latestSession(String itemId) {
     _SiloPlaybackSession? latest;
@@ -27,13 +27,27 @@ mixin _SiloTrackPrefsMethods on MediaServerCacheMixin, _SiloPlaybackMethods {
     return latest;
   }
 
-  void _recordAudioPick(String itemId, int sourceAudioId) {
+  void _recordAudioPick(String itemId, int sourceAudioId, {required bool reopened}) {
     final session = _latestSession(itemId);
     final seriesKey = session?.seriesKey;
     if (session == null || seriesKey == null) return;
+    // The id is the version's audio ordinal + 1 (`SiloMappers.trackId`).
     final ordinal = sourceAudioId - 1;
     if (ordinal < 0 || ordinal >= session.audioTracks.length) return;
+    if (reopened && !_planPlaysAudio(session, ordinal)) {
+      appLogger.i('Silo track pick not remembered: the new plan plays another audio track');
+      return;
+    }
     _trackChoices.saveAudio(seriesKey, SiloTrackPrefs.audioBody(session.audioTracks[ordinal], ordinal));
+  }
+
+  /// Whether the plan [session] was started with plays audio [ordinal]: the
+  /// track its `selected_tracks` names, or, when it names none, any track of
+  /// an original file (the player selects it there itself).
+  static bool _planPlaysAudio(_SiloPlaybackSession session, int ordinal) {
+    final named = session.planAudioIndex;
+    if (named != null) return named == ordinal;
+    return session.isOriginal;
   }
 
   void _recordSubtitlePick(String itemId, int? sourceSubtitleId) {
@@ -144,9 +158,9 @@ class _SiloSeriesTrackPickSink implements SourceTrackPickSink {
   final String _itemId;
 
   @override
-  void audioPicked(int sourceAudioId) {
+  void audioPicked(int sourceAudioId, {bool reopened = false}) {
     try {
-      _client._recordAudioPick(_itemId, sourceAudioId);
+      _client._recordAudioPick(_itemId, sourceAudioId, reopened: reopened);
     } catch (e) {
       appLogger.d('Silo series audio pick not recorded', error: e.runtimeType);
     }

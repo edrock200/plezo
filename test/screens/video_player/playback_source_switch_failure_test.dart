@@ -27,6 +27,7 @@ import 'package:plezy/services/playback_coordinator.dart';
 import 'package:plezy/services/playback_initialization_types.dart';
 import 'package:plezy/services/saf_storage_service.dart';
 import 'package:plezy/services/settings_service.dart';
+import 'package:plezy/services/source_track_pick_sink.dart';
 import 'package:plezy/utils/video_player_navigation.dart';
 import 'package:plezy/widgets/video_controls/video_controls.dart';
 import 'package:provider/provider.dart';
@@ -142,6 +143,32 @@ void main() {
     );
   });
 
+  group('a track pick the backend remembers (Silo)', () {
+    testWidgets('is handed on once the switch played it, and not when the switch failed', (tester) async {
+      final fakePlayer = _SwitchPlayer();
+      final client = _SwitchClient();
+      await withMockPlayerChannels(
+        methodChannelName: 'com.plezy/mpv_player',
+        eventChannelName: 'com.plezy/mpv_player/events',
+        testBody: () async {
+          final key = await _pushScreen(tester, db: db, fakePlayer: fakePlayer, client: client);
+
+          expect(await switchSource(tester, key, newAudioStreamId: 2), PlaybackSourceChangeOutcome.applied);
+          await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+          expect(client.picks, ['switch audio 2 reopened']);
+
+          client.failNextStart = true;
+          expect(await switchSource(tester, key, newAudioStreamId: 1), PlaybackSourceChangeOutcome.failed);
+          await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+          expect(client.picks, ['switch audio 2 reopened'], reason: 'a refused track change remembers nothing');
+
+          await tester.pumpWidget(const SizedBox.shrink());
+          await tester.pump();
+        },
+      );
+    });
+  });
+
   group('a downloaded copy of the playing item (issue #2466)', () {
     const localCopy = 'content://sdcard/switch.mkv';
 
@@ -220,8 +247,9 @@ Future<GlobalKey<VideoPlayerScreenState>> _pushScreen(
   required AppDatabase db,
   required _SwitchPlayer fakePlayer,
   TranscodeQualityPreset? selectedQualityPreset = TranscodeQualityPreset.original,
+  _SwitchClient? client,
 }) async {
-  final client = _SwitchClient();
+  client ??= _SwitchClient();
   final multi = testMultiServer(clients: [client]);
   final offlineWatch = OfflineWatchSyncService(database: db, serverManager: multi.manager);
   final offlineMode = OfflineModeProvider(multi.manager, multiServerProvider: multi.provider);
@@ -372,7 +400,17 @@ class _SwitchPlayer extends FakeSyncPlayer {
 
 /// Names the requested preset and audio stream in the URL so the opens the
 /// player receives say which request produced them.
-class _SwitchClient with PlaybackReportRecorder implements MediaServerClient {
+/// Also stands in for a backend that remembers track picks (Silo's
+/// [SourceTrackPickClient]), recording what reaches its sink.
+class _SwitchClient with PlaybackReportRecorder implements MediaServerClient, SourceTrackPickClient {
+  final picks = <String>[];
+
+  /// The next start fails, as a refused track change does.
+  bool failNextStart = false;
+
+  @override
+  SourceTrackPickSink trackPickSink(String itemId) => _RecordingSink(itemId, picks);
+
   @override
   ServerId get serverId => ServerId('srv-1');
   @override
@@ -389,14 +427,19 @@ class _SwitchClient with PlaybackReportRecorder implements MediaServerClient {
   Map<String, String> get streamHeaders => const {};
 
   @override
-  Future<PlaybackInitializationResult> getPlaybackInitialization(PlaybackInitializationOptions options) async =>
-      PlaybackInitializationResult(
-        availableVersions: const [],
-        activeAudioStreamId: options.selectedAudioStreamId,
-        videoUrl:
-            'https://example.invalid/${options.metadata.id}/${options.qualityPreset.name}'
-            '/audio-${options.selectedAudioStreamId}',
-      );
+  Future<PlaybackInitializationResult> getPlaybackInitialization(PlaybackInitializationOptions options) async {
+    if (failNextStart) {
+      failNextStart = false;
+      throw PlaybackException('refused', reason: PlaybackFailureReason.noPlayableSource);
+    }
+    return PlaybackInitializationResult(
+      availableVersions: const [],
+      activeAudioStreamId: options.selectedAudioStreamId,
+      videoUrl:
+          'https://example.invalid/${options.metadata.id}/${options.qualityPreset.name}'
+          '/audio-${options.selectedAudioStreamId}',
+    );
+  }
 
   @override
   Future<void> onPlaybackReport(PlaybackReportCall call) async {}
@@ -406,4 +449,18 @@ class _SwitchClient with PlaybackReportRecorder implements MediaServerClient {
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
+}
+
+class _RecordingSink implements SourceTrackPickSink {
+  _RecordingSink(this.itemId, this.picks);
+
+  final String itemId;
+  final List<String> picks;
+
+  @override
+  void audioPicked(int sourceAudioId, {bool reopened = false}) =>
+      picks.add('$itemId audio $sourceAudioId${reopened ? ' reopened' : ''}');
+
+  @override
+  void subtitlePicked(int? sourceSubtitleId) => picks.add('$itemId subtitle $sourceSubtitleId');
 }

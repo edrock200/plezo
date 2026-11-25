@@ -4,6 +4,12 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **Audio and subtitles you pick in the player are remembered for the whole show, and for movies:** when you change the audio or subtitles while a Silo episode plays, Plezilo already saved the choice on your Silo server for the rest of the series. It now does the same for movies, so the next time you start that movie it plays your pick, also in Silo's own apps. A pick is saved only once it actually plays: if the server cannot switch to that track (or plays a different one instead), nothing is saved and your earlier choice stays. Plex and Jellyfin are unchanged. *(From Silo's own apps.)*
+
+## silo-preview-2.62.0
+
+Released November 24, 2026. Android and Windows.
+
 - **Sports games show their date instead of a made-up episode number:** some Silo servers number a sports league's games by year and game (so a basketball game read "S2026 E296"). When your Silo server marks a series that way, Plezilo now shows the game's date, written the way your language writes dates ("Nov 20, 2026"), wherever the season and episode number used to go: episode cards (Continue Watching too), the big banner at the top of Home and the TV detail page, the season's episode list, the Play button on a series page, the player's title, the media notification and the Play Next card. A game without a date keeps its numbers, and the order of games and what plays next do not change. This needs a Silo server new enough to send it; other series, and Plex and Jellyfin, are unchanged. *(From Silo's own apps.)*
 
 ## silo-preview-2.61.0

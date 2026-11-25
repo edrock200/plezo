@@ -689,12 +689,8 @@ PIN length (matches Silo's apps). Open follow-ups: an edit screen for an existin
   that flag marks rows of the managed `/downloads` registry, and Plezy's direct-link downloads
   create no registry rows, so there is nothing the server can report revoked or for Plezy to
   `DELETE /api/v2/downloads/{id}`. Revisit if Plezy ever moves to the registry.
-- Series-wide audio/subtitle memory (Silo Android #680: `PUT|DELETE /api/v2/audio-prefs/{series_id}`
-  and `/subtitle-prefs/{series_id}` with track signatures, read back as `effective_audio_track_index`
-  / `effective_subtitle_*` on the watch and item detail) is not implemented: Plezy's
-  `TrackManager` persists per file part (Plex) or through account flags (Jellyfin), and Silo's
-  subtitle start is resolved client-side; honouring it needs a series-scoped persister in the
-  shared player plus a resolver for the signatures. Plezy saves no Silo track pick to the server.
+- Series/movie track memory (Silo Android #680) is implemented since 2.25.15 (see "Added in 2.25.15"); Plezilo
+  never DELETEs a choice (its track sheet has no Auto row), and only player picks are written.
 - Box sets reuse Plezy's collection UI: no "Box set" badge, sleeves or "THIS FILM" outline, the
   card caption is the film count, Play queues the films from the next unwatched one (Silo plays
   that one film), and the movie page's row shows every film (Silo fits as many as the screen holds).
@@ -811,6 +807,12 @@ PIN length (matches Silo's apps). Open follow-ups: an edit screen for an existin
   track_signature?}` (Off = `"", -1, "off"`); episodes only; start applies the server's effective choice (direct play audio;
   subtitles via a port of `resolveAutoSubtitle`, Off reaches the player as `defaultSubtitleStreamIndex: -1`); manual picks are
   debounced 1.5 s, one in flight per series/kind, retried once, held in memory only; no DELETE (no Auto row).
+  Key (`SiloTrackPrefs.seriesKey`, Silo Android `seriesTrackChoiceKey`, silo-roku 3ae62aa): an episode's `series_id`,
+  else the watch detail's `content_id` (a movie, same routes). A pick is saved only once it plays: `_switchPlaybackSource`
+  hands it to the sink (`SourceTrackPickClient.trackPickSink`) after the switch's outcome is `applied`/`unchanged`
+  (failed, busy, superseded save nothing); an audio switch that reopened the stream (`reopened: true`) is saved only
+  when the new session's plan `selected_tracks.audio.index` is that ordinal (or names none on `original_http`);
+  local mpv picks are already playing. Subtitles are matched to the session inventory by `combined_index` / stored id.
   `inheritSession` moves queued picks to the successor client; `closeGracefully` sends what is left before the API closes.
 - **Audiobooks** (`silo_audiobook.dart`, `silo_audiobook_player.dart`, part `silo_client_audiobooks.dart`,
   `lib/screens/silo/silo_audiobook_*`): mapped as `MediaKind.album` + `raw['type']=='audiobook'`, opened from
@@ -857,4 +859,4 @@ PIN length (matches Silo's apps). Open follow-ups: an edit screen for an existin
   `sortedBySiloBindingPreference` is the only account-order rule. Open: `removeServer` still closes Silo clients without
   logout. (Linux packaging was renamed to `com.edrock200.plezilo` / `plezilo` on 2026-11-12.)
 
-- Profile tracks on movies (2026-11-12, the user's request): `_seriesStartAudio` / `_seriesStartSubtitle` apply the watch detail's `effective_audio_track_index` / `effective_subtitle_*` to movies too (`profileTracks`: not extras); series pending picks and PUTs stay episode-only. Plezilo's Default subtitles setting (TrackSelectionPriority.appDefault, 1b) still runs before the server's selection (priority 2).
+- Profile tracks on movies (2026-11-12, the user's request): `_seriesStartAudio` / `_seriesStartSubtitle` apply the watch detail's `effective_audio_track_index` / `effective_subtitle_*` to movies too (`profileTracks`: not extras). Since 2.63.0 a movie's player picks are PUT under the movie's content id too (pending picks apply to its next start). Plezilo's Default subtitles setting (TrackSelectionPriority.appDefault, 1b) still runs before the server's selection (priority 2).

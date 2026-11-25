@@ -66,18 +66,9 @@ extension _VideoPlayerReloadMethods on VideoPlayerScreenState {
     if (widget.isLive && !isLiveSubtitleSwitch) return PlaybackSourceChangeOutcome.unavailable;
     final transitionLease = _transitionGate.tryAcquire(PlaybackTransition.switchingSource);
     if (transitionLease == null) return PlaybackSourceChangeOutcome.busy;
-    // A viewer's audio or subtitle pick (Silo keeps it for the series). On a
-    // version change the ids name the other version's tracks: not recorded.
-    if (newMediaIndex == null) {
-      _trackManager?.recordSourceTrackPick(
-        audioStreamId: newAudioStreamId,
-        subtitleStreamId: newSubtitleChoice?.sourceStreamId,
-        subtitlesOff: newSubtitleChoice?.isOff ?? false,
-      );
-    }
     try {
       if (isLiveSubtitleSwitch) return await _switchLiveSubtitle(newSubtitleChoice);
-      return await _performPlaybackSourceSwitch(
+      final outcome = await _performPlaybackSourceSwitch(
         currentPlayer: currentPlayer,
         transitionLease: transitionLease,
         newMediaIndex: newMediaIndex,
@@ -85,6 +76,20 @@ extension _VideoPlayerReloadMethods on VideoPlayerScreenState {
         newAudioStreamId: newAudioStreamId,
         newSubtitleChoice: newSubtitleChoice,
       );
+      // A viewer's audio or subtitle pick (Silo keeps it for the series or
+      // movie), once the switch took effect: a refused, failed or superseded
+      // switch remembers nothing. On a version change the ids name the other
+      // version's tracks: not recorded.
+      if (newMediaIndex == null &&
+          (outcome == PlaybackSourceChangeOutcome.applied || outcome == PlaybackSourceChangeOutcome.unchanged)) {
+        _trackManager?.recordSourceTrackPick(
+          audioStreamId: newAudioStreamId,
+          subtitleStreamId: newSubtitleChoice?.sourceStreamId,
+          subtitlesOff: newSubtitleChoice?.isOff ?? false,
+          reopened: outcome == PlaybackSourceChangeOutcome.applied && newAudioStreamId != null,
+        );
+      }
+      return outcome;
     } finally {
       _transitionGate.release(transitionLease);
     }

@@ -11,6 +11,8 @@ class _SiloPlaybackSession {
     this.subtitleInventory = const [],
     this.audioTracks = const [],
     this.selectedAudioIndex,
+    this.planAudioIndex,
+    this.isOriginal = false,
     this.seriesKey,
   });
 
@@ -29,8 +31,15 @@ class _SiloPlaybackSession {
   final List<Map<dynamic, dynamic>> audioTracks;
   final int? selectedAudioIndex;
 
-  /// The series an episode's track picks are remembered under (Silo Android
-  /// #680); null for movies and extras.
+  /// The audio ordinal the plan's `selected_tracks` names, null when it names
+  /// none; and whether the plan streams the original file (whose every audio
+  /// track the player can switch to itself). A pick that reopened the source
+  /// is remembered only when this plan plays it.
+  final int? planAudioIndex;
+  final bool isOriginal;
+
+  /// The key track picks are remembered under (Silo Android #680): an
+  /// episode's series, or the movie itself; null for extras.
   final String? seriesKey;
 
   /// Strictly increasing per session; the server rejects lower values.
@@ -343,14 +352,15 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
     final subtitle = plan['subtitle'];
     final inventory = subtitle is Map ? subtitle['inventory'] : null;
     final selected = plan['selected_tracks'];
-    final planAudio = selected is Map && selected['audio'] is Map
+    final namedAudio = selected is Map && selected['audio'] is Map
         ? ((selected['audio'] as Map)['index'] as num?)?.toInt()
-        : audioIndex;
-    // Episodes start with the series' remembered audio (Silo Android #680)
-    // unless the viewer asked for a track.
+        : null;
+    final planAudio = selected is Map && selected['audio'] is Map ? namedAudio : audioIndex;
+    // Episodes start with the series' remembered audio (Silo Android #680),
+    // movies with their own, unless the viewer asked for a track.
     final seriesKey = extraFileId == null ? SiloTrackPrefs.seriesKey(watch) : null;
     // Movies and episodes (not extras) start with the profile's effective
-    // tracks, as Silo's apps do; only an episode has a series pick to write.
+    // tracks, as Silo's apps do; a pick is written under [seriesKey].
     final profileTracks = extraFileId == null && watch != null;
     final selectedAudio = audioIndex != null
         ? planAudio
@@ -373,6 +383,8 @@ mixin _SiloPlaybackMethods on MediaServerCacheMixin {
           ? (version['audio_tracks'] as List).whereType<Map>().toList()
           : const [],
       selectedAudioIndex: selectedAudio,
+      planAudioIndex: namedAudio,
+      isOriginal: isOriginal,
       seriesKey: seriesKey,
     );
 
