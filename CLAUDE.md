@@ -39,6 +39,8 @@ agent needs. The code still says "Plezy" in internal names (Dart package `plezy`
 - `.claude/skills/media-backend-integration/SKILL.md` — the checklist for adding or changing a
   server backend (enum, `MediaItem` union, connection persistence, server manager, profile binder,
   caches, UI, tests). Use before touching `MediaBackend`, `Connection` or `MultiServerManager`.
+- `.claude/skills/tofa-backend/SKILL.md` — the Tofa API contract (device-flow sign-in, `/api/v1` browsing, playback
+  negotiation, progress) for the fifth backend, and how to query Tofa's OpenAPI spec (never committed: proprietary).
 - `.claude/skills/android-preview-release/SKILL.md` — building, publishing and verifying the
   Android preview APKs.
 
