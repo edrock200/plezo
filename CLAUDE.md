@@ -89,8 +89,10 @@ agent needs. The code still says "Plezy" in internal names (Dart package `plezy`
   Watchlist through `MembershipListsClient`; keep Silo's behaviour identical when touching it. Tofa is a
   `richHubs` backend (Home reads `fetchGlobalHubs`) with Live TV and recording. Its Discover, Requests, History and
   profile switch live in `lib/screens/tofa/` (profile-menu rows like Silo's), subtitle search in
-  `lib/widgets/video_controls/tofa/`; the skill lists what stays declined (Watch Together, remote control, cancelling
-  one scheduled recording) and why.
+  `lib/widgets/video_controls/tofa/`; the skill lists what stays declined (Watch Together, remote control) and why.
+  Tofa artwork is `{base}/cache/{path}?st=<image token>` (never `/api/v1/artwork`), and every `/live/*` call sends
+  `X-Tofa-Live-Capabilities: live_session`; both were read from Tofa's own web app (facts marked "observed in Tofa's
+  web app", which rank between the spec and "unverified"). Never commit Tofa's web bundles.
 - The app is one build for phone, tablet, desktop and TV. Every new screen must work with touch
   **and** D-pad: use `FocusableButton`, `FocusableTextFormField`, `FocusableWrapper` and give each
   focusable a `FocusNode` with explicit `onNavigateUp/Down` where the default order is wrong. TV

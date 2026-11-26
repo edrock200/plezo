@@ -255,8 +255,18 @@ to the address the user typed (LAN or custom URL); relay support is a follow-up.
   `tofa-episode:{mediaId}/{episodeId}` (one `/media/{id}` read serves the whole series tree). File ids live in
   `raw['tofa_file_ids']`; a detail's watch state comes from `POST /media/progress/batch`; watched writes for files use
   `POST /media/watched/batch`.
-- Artwork is `tofa-artwork:{mediaId}/{kind}` in the item and becomes `/api/v1/artwork/...?st=` in
-  `TofaClient.thumbnailUrl` (image token renewed at 80% of `expires_in`). Raw `*_path` values are never used.
+- **Artwork** (observed in Tofa's web app, 2026-11-26, `resolveImageUrl` / `wd`; device-tested: the old
+  `/api/v1/artwork/{id}/{kind}?st=` route answered 401 for every image): items keep the raw `*_path` / `*_url`
+  value (`poster_path`, `backdrop_path`, `backdrop_thumb`, `logo_path`, `still_path`, season `poster_path`,
+  collection `poster_url`/`poster_path`, `profile_url`, `avatar_image_url`, Live `logo_image_url`/`image_url`,
+  Discover paths). `TofaClient.thumbnailUrl`: absolute URLs as they are; any other path at
+  `{base}/cache/{path without a leading /}` (a `/cache/…` path as it is) with `?st=<image token>` and **no size
+  parameters** (the web app sends none). `/cache/x.jpg` without a token answers 401. The image token
+  (`GET /auth/image-token` with bearer + profile headers) lives until its JWT `exp` (else `expires_in`, else 5 min)
+  and is renewed a minute before; the health check waits up to 5 s for it so the first cards have images. Paths
+  saved by earlier versions (`tofa-artwork:`) draw nothing until re-read. QuickView tiles and chapter images keep
+  the spec's `/media/{file}/quickview/...` routes with the image token (the saved web bundles do not show how the
+  web app signs them: unverified).
 - A refreshed pair is persisted (`ConnectionRegistry.updateTofaSession`, awaited) **before** the client uses it.
 - Playback picks the requested file, else `/versions`' recommended file, else the only file; with several files and
   no recommendation it refuses to play. `resume_ticks` is always sent. Text subtitles: external ones on a direct play,
@@ -287,21 +297,41 @@ to the address the user typed (LAN or custom URL); relay support is a follow-up.
   a 4xx answer (unverified: custom ids there) plays the members in order. Artwork `poster_url`/`backdrop_url`/
   `logo_url`/`poster_path` is used only when absolute or a `/api/…` route (signed with the image token; form
   unverified). Read-only: no edit, delete or "add to collection". Search adds `SearchResponse.collections`.
-- **Live TV** (`tofa_client_live.dart`, capabilities `liveTv`/`liveTvDvr`): available when `GET /live/channels`
-  lists a channel (403/404 = none, other errors kept as transient). Channels page by `next_cursor`; the guide is
-  read in ≤24 h windows (`from`/`to` in UTC ms) with its cursor; an entry's `guid` (`tofa-airing:{channel}/{airing}`)
-  is set only when `recordable` and not a `placeholder`; an inline `recording` gives `rec:{id}` / `rule:{rule_id}`
-  keys. Playing a channel: `GET /stream/{channel_id}/info` with the usual caps, a per-client uuid `live_viewer_id` and
-  the channel's `revision` as `live_revision` (unverified: the spec names no live route; `live_playout_id` and
-  `X-Tofa-Live-Capabilities` are not sent); the session's progress posts are the heartbeats, `…/stopped` ends it,
-  no time-shift. The player's live path is used, so the VOD `live_start_index=0` never applies. Favourite channels
-  are kept on the device per connection (no favourites route in the spec). Recording: "this programme" `POST
-  /live/recordings/scheduled {airing_id, channel_id}` (201 new, 200 = already set → "already scheduled"; 409 is a
-  tuner/quota refusal, reported as a failure); "every airing" `POST /live/recording-rules` with `from_airing_id`,
-  `new_only`, `any_channel` or `channel_id`, `keep_last`; rules list/edit (`PATCH`, `keep_all` for "keep all") and
-  delete. Scheduled recordings are `GET /live/recordings?include=scheduled` rows without `actual_end`,
-  `missed_reason` or `error` (`state` lists no values). No documented route cancels one scheduled recording: the UI
-  says so. Finished recordings are not listed in Plezilo's Live TV.
+- **Live TV** (`tofa_client_live.dart`, capabilities `liveTv`/`liveTvDvr`). Observed in Tofa's web app
+  (2026-11-26), above the spec's silence:
+  - Every `/live/*` call sends `X-Tofa-Live-Capabilities: live_session` (the web app's `Ks`); without it the server
+    listed no channels (device-tested: no Live TV tab).
+  - Availability: `live_tv` in `GET /system/info`'s `capabilities` (when the list exists; an unreadable info still
+    checks channels), then `GET /live/channels?limit=1` with a channel. The outcome is logged at info level.
+  - Tune: `GET /live/channels/{id}/tune` (`viewer_id` of the last tune to reuse it; `at` omitted for the live edge)
+    → `viewer_id`, `tune_generation`, `mode`, `current`, `revision`. `mode: live_session` (provider/tuner channels):
+    `POST /live/viewers/{viewer}/session {profile, at: null, audio_stream_index: null, max_bitrate? (kbps)}` with
+    `profile` = the codec lists comma-joined plus `hdr_supported`, `h264_10bit_supported`,
+    `dolby_vision_supported`, `deinterlacing_supported: false` (`TofaPlaybackCaps.liveProfile`), polled each second
+    until `live_edge_at` (15 s; 90 s while `ingest.state` is `connecting`/`buffering`; `failed_terminal` refuses);
+    the stream is its `playlist_url` (carries its own `lt` token). Library channels: `current` with `kind: media`
+    → `/stream/{media_file_id}/info` with `live_viewer_id`, `live_playout_id` (`current.playout_id`),
+    `live_revision` and `resume_ticks` = `in_ms` + time since `start_at` + 3 s, within `out_ms`; another `kind`
+    is off air. Renew: `POST /live/viewers/{viewer}/renew {current_session_id, current_playout_id}` at once and
+    then every `max(5, renew_after_seconds)` s; 401/403/404/410 stop it. Stop: `DELETE
+    /live/viewers/{viewer}?tune_generation=…&grace=skip` (plus the file session's `…/stopped` for a library
+    channel). `recover` re-tunes with the same viewer. Telemetry (`/live/stream/{session}/telemetry?lt=`),
+    `events` and `catchup` are not used. Unverified: whether Plezilo's live player re-tunes by itself when a
+    library row ends (it plays the row's file; `recover` tunes the next row).
+  - Favourites: the builtin tab of `GET /live/tabs` (`GET /live/channels?tab_id=`), changed with `PUT`/`DELETE
+    /live/favorites/{channel}`.
+  - Recordings: `DELETE /live/recordings/{id}` cancels a scheduled recording (also the guide's Manage on a `rec:`
+    key); rule deletes send `cancel_upcoming=true`. Not used (no place in Plezilo's Live TV UI):
+    `/live/recordings/{id}/stop` and `/extend {minutes}`, `/live/categories`, `/live/tabs` editing, `/live/pins`,
+    `/live/search`, `/live/preferences`, `/live/channels/around`, rule `matches` and `preview`.
+  - The guide is read in ≤24 h windows (`from`/`to` in UTC ms) with its cursor; an entry's `guid`
+    (`tofa-airing:{channel}/{airing}`) is set only when `recordable` and not a `placeholder`; an inline `recording`
+    gives `rec:{id}` / `rule:{rule_id}` keys. Recording: "this programme" `POST /live/recordings/scheduled
+    {airing_id, channel_id}` (201 new, 200 = already set; 409 a tuner/quota refusal); "every airing" `POST
+    /live/recording-rules` with `from_airing_id`, `new_only`, `any_channel` or `channel_id`, `keep_last`; rules
+    list/edit (`PATCH`, `keep_all`). Scheduled = `GET /live/recordings?include=scheduled` rows without
+    `actual_end`, `missed_reason` or `error`. The player's live path is used, so the VOD `live_start_index=0`
+    never applies.
 - **People**: a cast member's id is `tofa-person:{name}`; their titles are `GET /media?cast={name}` (unverified that
   `cast` takes a name), the biography `GET /discovery/people/by-name` (fails soft when discovery is off). People
   search: `GET /search`'s `actors` with `media_count` > 0.
@@ -365,11 +395,10 @@ to the address the user typed (LAN or custom URL); relay support is a follow-up.
     out of 100, unverified) shown as words (`ratingTextLabel`: "Tofa critics 85"), no mark; IMDb, RT and Metacritic
     were already shown.
   - **Recordings**: finished ones (`GET /live/recordings` rows with `actual_end`, no `error`, a `media_id`) in the
-    Recordings tab's "Recorded" group (`LiveTvRecordedItems`). Re-checked: still no route cancels one scheduled
-    recording, and no documented live playback route (only the `live_*` parameters on `/stream/{id}/info`).
+    Recordings tab's "Recorded" group (`LiveTvRecordedItems`). (The spec has no recording cancel or live
+    playback route; both were later found in Tofa's web app, see Live TV above.)
 - Declined, with the reason:
   - Watch Together (`wt_` frames) and remote control (`/remote/*`): Plezilo's own features use their own protocols.
-  - Cancelling a single scheduled recording: no route in the spec.
   - Playlists: none in the spec. Sign-out revoke: no public route. External players: not offered for Tofa.
   - Admin-only routes (libraries, scans, users, settings, lifecycle, webhooks, problem-report resolution,
     `subtitles/fetch-now`, `subtitles/fetch/status`, approving requests) are out of scope.
@@ -379,6 +408,6 @@ to the address the user typed (LAN or custom URL); relay support is a follow-up.
   that `auth.token` is the download route's `st` and `quality` takes the option's tag; that `request_id` of the
   preparation route is the `client_request_id`; `bandwidth_limit`'s unit (not turned into a cap); whether
   `stream_url`/HLS variants keep `st`, also through the relay; relative URL base; wrong-PIN status;
-  `X-Tofa-Platform` values for desktops; avatar URLs needing a bearer; the live channel playback route and params;
-  collection artwork URL form; `/collections/{id}/play` for custom ids; `/media?cast=` taking a name; the events
+  `X-Tofa-Platform` values for desktops; QuickView image signing; the live library-row
+  hand-over; `/collections/{id}/play` for custom ids; `/media?cast=` taking a name; the events
   socket's profile.

@@ -4,6 +4,9 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **Tofa posters and pictures show again:** no Tofa artwork loaded anywhere (posters, backdrops, episode pictures, profile pictures; Continue Watching showed empty cards). Plezilo now loads them the way Tofa's own apps do, so they appear.
+- **Tofa Live TV appears:** Live TV stayed hidden for Tofa servers that have it, because Plezilo didn't tell the server it can play live channels. It does now, and channels play the way Tofa's own apps play them: provider and antenna channels as a live stream, channels made from your library from the programme on air right now. Favourite channels are now your Tofa favourites, the same as in Tofa's apps. *(please test)*
+- **Cancel a scheduled Tofa recording:** in Live TV's *Recordings*, picking a scheduled recording now cancels it (after you confirm), as for other servers.
 - **Continue Watching no longer offers other episodes as "versions":** when two of your servers have the same show, its Continue Watching card used to list each server's episode under *Select Version*, even when they were different episodes (for example S5 E19 on one server and S5 E15 on another). The card now shows the episode you watched most recently, and *Select Version* only appears when another server has that same episode.
 
 ## silo-preview-2.68.0
