@@ -482,9 +482,26 @@ class DataAggregationService {
       if (members.length < 2) continue;
       final shown = _preferLocallyLastPlayed(members, lastPlayed);
       result[slot.key] = shown;
-      copies[shown.globalKey] = [...members]..sort(compareLibraryCopies);
+      // A show's group can hold different episodes from different servers
+      // (one at S5 E19, another at S5 E15). The card shows one of them; only
+      // copies of that same episode are its versions, never other episodes.
+      final versions = members.where((m) => _sameContinueWatchingEntry(m, shown)).toList();
+      if (versions.length < 2) continue;
+      copies[shown.globalKey] = versions..sort(compareLibraryCopies);
     }
     return (items: result, copies: copies);
+  }
+
+  /// Whether [a] and [b] are copies of the same Continue Watching entry:
+  /// for episodes the same season and episode number (unknown numbers never
+  /// match a different item), otherwise any member of the identity group.
+  static bool _sameContinueWatchingEntry(MediaItem a, MediaItem b) {
+    if (identical(a, b) || a.globalKey == b.globalKey) return true;
+    if (a.kind != MediaKind.episode && b.kind != MediaKind.episode) return true;
+    if (a.kind != b.kind) return false;
+    final season = a.parentIndex, episode = a.index;
+    if (season == null || episode == null) return false;
+    return season == b.parentIndex && episode == b.index;
   }
 
   /// The duplicate-group member most recently played on this device (by item

@@ -1,8 +1,14 @@
 # Plezilo (Plezy with Silo) — preview change log
 
-What changed in each preview (Android, and Windows and macOS where the release has them), in plain language. Each `## silo-preview-…` section is copied onto the GitHub release page with that tag by `.github/workflows/silo-release-notes.yml` whenever this file changes. Write the next preview's notes under `## Next preview` before pushing its `[release-apk]` commit; the build puts them on the new release, and the next edit of this file should rename the heading to the new tag.
+What changed in each preview (Android, and Windows and macOS where the release has them), in plain language. Each `## silo-preview-…` section is copied onto the GitHub release page with that tag by `.github/workflows/silo-release-notes.yml` whenever this file changes. Write the next preview's notes under `## Next preview
 
 ## Next preview
+
+- **Continue Watching no longer offers other episodes as "versions":** when two of your servers have the same show, its Continue Watching card used to list each server's episode under *Select Version*, even when they were different episodes (for example S5 E19 on one server and S5 E15 on another). The card now shows the episode you watched most recently, and *Select Version* only appears when another server has that same episode.
+
+## silo-preview-2.68.0
+
+Released November 26, 2026. Android and Windows.
 
 - **Tofa Discover and requests:** the profile menu now has *Discover* for each Tofa server: its featured titles, shelves, themes you can follow and *Coming soon*. A title's page shows whether you have it (*Open*), plays its trailer, lists its cast with their own pages, and lets you mark it *Seen it* or *Not interested*. Where your server takes requests, *Requests* lets you search for a movie or series and request it (in 4K too, where you may), shows how many requests you have left and follows the ones you made.
 - **Tofa watch history:** *History* in the profile menu lists what this Tofa profile played, newest first. Remove one entry, or clear it all after confirming.

@@ -1094,6 +1094,74 @@ void main() {
       expect(result.succeededServerIds, {'plex-1'});
     });
 
+    test('a merged show card offers only copies of the episode it shows as versions', () async {
+      Map<String, dynamic> ep(String key, String show, int episode, int viewed, int library) => {
+        'ratingKey': key,
+        'type': 'episode',
+        'title': 'Episode $episode',
+        'grandparentRatingKey': show,
+        'grandparentTitle': 'Shared Show',
+        'parentIndex': 5,
+        'index': episode,
+        'lastViewedAt': viewed,
+        'librarySectionID': library,
+      };
+      registerContinueWatchingPlex(
+        [ep('e19-a', 'show-a', 19, 300, 1), ep('e15-b', 'show-b', 15, 200, 2), ep('e19-c', 'show-c', 19, 100, 3)],
+        metadata: (ratingKey) {
+          if (!ratingKey.startsWith('show-')) return null;
+          return {
+            'ratingKey': ratingKey,
+            'type': 'show',
+            'title': 'Shared Show',
+            'Guid': [
+              {'id': 'tvdb://12345'},
+            ],
+          };
+        },
+      );
+
+      final result = await service.getOnDeckFromAllServers(limit: 10);
+
+      expect(result.items.map((item) => item.id), ['e19-a']);
+      expect(result.copies['plex-1:e19-a']!.map((copy) => copy.id).toSet(), {
+        'e19-a',
+        'e19-c',
+      }, reason: 'S5 E15 is another episode, not a version of S5 E19');
+    });
+
+    test('a merged show card with no other copy of its episode offers no versions', () async {
+      Map<String, dynamic> ep(String key, String show, int episode, int viewed) => {
+        'ratingKey': key,
+        'type': 'episode',
+        'title': 'Episode $episode',
+        'grandparentRatingKey': show,
+        'grandparentTitle': 'Shared Show',
+        'parentIndex': 5,
+        'index': episode,
+        'lastViewedAt': viewed,
+        'librarySectionID': 1,
+      };
+      registerContinueWatchingPlex(
+        [ep('e19', 'show-a', 19, 300), ep('e15', 'show-b', 15, 200)],
+        metadata: (ratingKey) => ratingKey.startsWith('show-')
+            ? {
+                'ratingKey': ratingKey,
+                'type': 'show',
+                'title': 'Shared Show',
+                'Guid': [
+                  {'id': 'tvdb://12345'},
+                ],
+              }
+            : null,
+      );
+
+      final result = await service.getOnDeckFromAllServers(limit: 10);
+
+      expect(result.items.map((item) => item.id), ['e19']);
+      expect(result.copies, isEmpty);
+    });
+
     test('getOnDeckFromAllServers prefers the locally last-played duplicate sibling', () async {
       // Two libraries carry the same show (1080p + 4K, matched by tvdb id);
       // the server syncs watch state so lastViewedAt favours neither
