@@ -4,6 +4,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:http/http.dart' as http;
+import 'package:uuid/uuid.dart';
 
 import '../../connection/connection.dart';
 import '../../exceptions/media_server_exceptions.dart';
@@ -30,7 +31,11 @@ import '../../media/media_sort.dart';
 import '../../media/media_source_info.dart';
 import '../../media/playback_report_metadata.dart';
 import '../../media/server_capabilities.dart';
+import '../../models/livetv_capture_buffer.dart';
 import '../../models/livetv_channel.dart';
+import '../../models/livetv_dvr.dart';
+import '../../models/media_grab_operation.dart';
+import '../../models/media_subscription.dart';
 import '../../models/livetv_program.dart';
 import '../../models/transcode_quality_preset.dart';
 import '../../mpv/mpv.dart';
@@ -38,14 +43,15 @@ import '../../utils/app_logger.dart';
 import '../../utils/external_ids.dart';
 import '../../utils/log_redaction_manager.dart';
 import '../../utils/media_server_http_client.dart';
+import '../../utils/media_server_timeouts.dart';
 import '../../utils/url_utils.dart';
 import '../../media/chapter_marker_classifier.dart';
 import '../../utils/global_key_utils.dart';
 import '../../utils/json_utils.dart';
+import '../favorite_channels_repository.dart';
 import '../api_cache.dart';
 import '../download_artwork_helpers.dart';
 import '../jellyfin_trickplay_service.dart';
-import 'package:uuid/uuid.dart';
 import '../playback_initialization_types.dart';
 import '../silo/silo_memberships.dart';
 import '../scrub_preview_source.dart';
@@ -61,6 +67,7 @@ part 'tofa_client_connect.dart';
 part 'tofa_client_downloads.dart';
 part 'tofa_client_collections.dart';
 part 'tofa_client_home.dart';
+part 'tofa_client_live.dart';
 part 'tofa_client_quickview.dart';
 
 /// One live Tofa stream session (`/stream/{file}/info`'s `session_id`).
@@ -405,6 +412,13 @@ class TofaClient implements MediaServerClient, ScopedMediaServerClient, Graceful
   // ---------------------------------------------------------------------------
 
   final Map<String, String> _libraryTitles = {};
+
+  // Live TV (see `tofa_client_live.dart`): each channel's last `revision`,
+  // this device's viewer id, and where favourite channels are kept.
+  final Map<String, int> _liveRevisions = {};
+  String? _liveViewer;
+  @visibleForTesting
+  FavoriteChannelsRepository favoritesRepository = const SharedPreferencesFavoriteChannelsRepository();
 
   /// The collections list (both kinds), shared while it is read and kept
   /// briefly so the Collections tab's pages slice one read.
@@ -1267,7 +1281,7 @@ class TofaClient implements MediaServerClient, ScopedMediaServerClient, Graceful
   bool get marksWatchedOnPlaybackStopped => true;
 
   @override
-  LiveTvSupport get liveTv => const _TofaNoLiveTv();
+  LiveTvSupport get liveTv => _TofaLiveTvSupport(this);
 
   /// The file to play for [item]: [requestedFileId] when it is one of the
   /// item's files, else the one `GET /media/{id}/versions` recommends for
@@ -1725,41 +1739,3 @@ class TofaClient implements MediaServerClient, ScopedMediaServerClient, Graceful
 }
 
 /// Tofa's live TV is not wired in Plezilo.
-class _TofaNoLiveTv implements LiveTvSupport {
-  const _TofaNoLiveTv();
-
-  @override
-  LiveTvDvrSupport? get dvr => null;
-
-  @override
-  Future<bool> isAvailable() async => false;
-
-  @override
-  Future<List<LiveTvChannel>> fetchChannels({String? lineup}) async => const [];
-
-  @override
-  Future<List<LiveTvProgram>> fetchSchedule({DateTime? from, DateTime? to}) async => const [];
-
-  @override
-  Future<LiveTvPlaybackSession?> startPlayback(
-    String channelKey, {
-    String? dvrKey,
-    TranscodeQualityPreset quality = TranscodeQualityPreset.original,
-  }) async => null;
-
-  @override
-  Future<String> buildFavoriteChannelSource({String? lineup}) async => '';
-
-  @override
-  String get favoriteStoreKey => 'tofa';
-
-  @override
-  FavoriteChannelPersistenceMode get favoritePersistenceMode => FavoriteChannelPersistenceMode.serverSlice;
-
-  @override
-  Future<List<FavoriteChannel>> fetchFavoriteChannels({bool migrate = true, void Function()? checkCurrent}) async =>
-      const [];
-
-  @override
-  Future<void> setFavoriteChannels(List<FavoriteChannel> channels, {void Function()? checkCurrent}) async {}
-}

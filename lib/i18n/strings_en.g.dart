@@ -4228,6 +4228,9 @@ class Translations$liveTv$en {
 	/// en: 'Couldn't schedule recording'
 	String get recordingFailed => 'Couldn\'t schedule recording';
 
+	/// en: 'This server doesn't let apps cancel a single scheduled recording.'
+	String get cancelRecordingUnsupported => 'This server doesn\'t let apps cancel a single scheduled recording.';
+
 	/// en: 'Couldn't determine recording library'
 	String get recordingTargetMissing => 'Couldn\'t determine recording library';
 
@@ -11219,6 +11222,7 @@ extension on Translations {
 			'liveTv.alreadyScheduled' => 'This program is already scheduled',
 			'liveTv.dvrAdminRequired' => 'DVR settings require an admin account',
 			'liveTv.recordingFailed' => 'Couldn\'t schedule recording',
+			'liveTv.cancelRecordingUnsupported' => 'This server doesn\'t let apps cancel a single scheduled recording.',
 			'liveTv.recordingTargetMissing' => 'Couldn\'t determine recording library',
 			'liveTv.recordNotAvailable' => 'Recording not available for this program',
 			'liveTv.recordingCancelled' => 'Recording canceled',
@@ -11645,9 +11649,9 @@ extension on Translations {
 			'companionRemote.pairing.connectionTimedOut' => 'Connection timed out. Use the same network on both devices.',
 			'companionRemote.pairing.sessionNotFound' => 'Device not found. Make sure Plezilo is running on the host.',
 			'companionRemote.pairing.authFailed' => 'Authentication failed. Both devices need the same Plex account.',
-			'companionRemote.pairing.failedToConnect' => ({required Object error}) => 'Failed to connect: ${error}',
 			_ => null,
 		} ?? switch (path) {
+			'companionRemote.pairing.failedToConnect' => ({required Object error}) => 'Failed to connect: ${error}',
 			'companionRemote.remote.disconnectConfirm' => 'Do you want to disconnect from the remote session?',
 			'companionRemote.remote.reconnecting' => 'Reconnecting...',
 			'companionRemote.remote.attemptOf' => ({required Object current}) => 'Attempt ${current} of 5',
@@ -12159,9 +12163,9 @@ extension on Translations {
 			'siloPairing.savingAccounts' => 'Setting up the accounts from your phone or tablet…',
 			'siloPairing.skipAccount' => 'Skip this account',
 			'siloPairing.summaryTitle' => ({required num n}) => (_root.$meta.cardinalResolver ?? PluralResolvers.cardinal('en'))(n, one: '${n} account added', other: '${n} accounts added', ), 
-			'siloPairing.summaryNoneTitle' => 'No accounts were added',
 			_ => null,
 		} ?? switch (path) {
+			'siloPairing.summaryNoneTitle' => 'No accounts were added',
 			'siloPairing.summaryAdded' => ({required Object account, required Object server, required Object profile}) => '${account} on ${server}, in the profile ${profile}',
 			'siloPairing.summaryAddedNewProfile' => ({required Object account, required Object server, required Object profile}) => '${account} on ${server}, in a new profile, ${profile}',
 			'siloPairing.summaryNotAdded' => ({required Object account, required Object server}) => '${account} on ${server} was not added',

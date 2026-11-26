@@ -123,6 +123,10 @@ Future<bool> confirmCancelGrab(BuildContext context, MediaServerClient client, M
       showSnackBar(context, t.liveTv.recordingCancelled, type: SnackBarType.success);
     }
     return true;
+  } on UnsupportedError {
+    // Tofa documents no route that cancels one scheduled recording.
+    if (context.mounted) showSnackBar(context, t.liveTv.cancelRecordingUnsupported, type: SnackBarType.error);
+    return false;
   } catch (e) {
     appLogger.e('Failed to cancel grab', error: e);
     if (context.mounted) {
@@ -152,6 +156,9 @@ Future<bool> confirmDeleteRule(BuildContext context, MediaServerClient client, M
       showSnackBar(context, t.liveTv.recordingRuleDeleted, type: SnackBarType.success);
     }
     return true;
+  } on UnsupportedError {
+    if (context.mounted) showSnackBar(context, t.liveTv.cancelRecordingUnsupported, type: SnackBarType.error);
+    return false;
   } catch (e) {
     appLogger.e('Failed to delete recording rule', error: e);
     if (context.mounted) {

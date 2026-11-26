@@ -177,6 +177,10 @@ class ServerCapabilities {
   /// (`/users/me/dismiss`) and seek-bar previews (QuickView tiles). No
   /// ratings, favorites, live TV, folders or metadata editing in this client.
   static const ServerCapabilities tofa = ServerCapabilities(
+    // Channels, guide and playing a channel (`/live/*`); recording through
+    // `/live/recordings/scheduled` and `/live/recording-rules`.
+    liveTv: true,
+    liveTvDvr: true,
     videoTranscoding: true,
     // Home reads `fetchGlobalHubs` (Recently Added per Browse section,
     // Suggested, Ready to Binge, Watchlist, pinned collections).
