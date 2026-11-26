@@ -53,7 +53,9 @@ import '../../media/chapter_marker_classifier.dart';
 import '../../utils/global_key_utils.dart';
 import '../../utils/json_utils.dart';
 import '../favorite_channels_repository.dart';
+import 'tofa_auth_service.dart';
 import 'tofa_events.dart';
+import 'tofa_extras.dart';
 import '../api_cache.dart';
 import '../download_artwork_helpers.dart';
 import '../jellyfin_trickplay_service.dart';
@@ -70,6 +72,7 @@ import 'tofa_playback_caps.dart';
 
 part 'tofa_client_connect.dart';
 part 'tofa_client_downloads.dart';
+part 'tofa_client_extras.dart';
 part 'tofa_client_collections.dart';
 part 'tofa_client_home.dart';
 part 'tofa_client_live.dart';

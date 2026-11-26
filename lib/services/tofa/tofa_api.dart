@@ -244,25 +244,26 @@ class TofaApi {
     bool profile = true,
     Duration? timeout,
     AbortController? abort,
+    Map<String, String>? headers,
   }) async {
     if (!path.startsWith('/api/v1/')) {
       throw ArgumentError.value(path, 'path', 'Tofa requests must target /api/v1/');
     }
     if (auth) await _refreshIfExpiring();
     final usedToken = _tokens?.accessToken;
-    var response = await _sendTracked(method, path, query, body, auth, profile, timeout, abort);
+    var response = await _sendTracked(method, path, query, body, auth, profile, timeout, abort, headers);
     for (final delay in relayRetryDelays) {
       if (response.statusCode != 503 || tofaErrorCode(response.data) != 'server_relay_not_connected') break;
       appLogger.d('[tofa] relay not connected yet; retrying in ${delay.inSeconds} s');
       await Future<void>.delayed(delay);
-      response = await _sendTracked(method, path, query, body, auth, profile, timeout, abort);
+      response = await _sendTracked(method, path, query, body, auth, profile, timeout, abort, headers);
     }
     // A missing or expired profile token is a 403, not a 401.
     if (auth && response.statusCode == 401 && _tokens != null) {
       final current = _tokens?.accessToken;
       final refreshed = current != usedToken ? _tokens : await refreshTokens();
       if (refreshed != null) {
-        response = await _sendTracked(method, path, query, body, auth, profile, timeout, abort);
+        response = await _sendTracked(method, path, query, body, auth, profile, timeout, abort, headers);
       }
     }
     return response;
@@ -332,10 +333,11 @@ class TofaApi {
     bool auth,
     bool profile,
     Duration? timeout,
-    AbortController? abort,
-  ) async {
+    AbortController? abort, [
+    Map<String, String>? extra,
+  ]) async {
     try {
-      final response = await _send(method, path, query, body, auth, profile, timeout, abort);
+      final response = await _send(method, path, query, body, auth, profile, timeout, abort, extra);
       _consecutiveFailures = 0;
       return response;
     } on MediaServerHttpException catch (e) {
@@ -368,9 +370,10 @@ class TofaApi {
     bool auth,
     bool profile,
     Duration? timeout,
-    AbortController? abort,
-  ) {
-    final headers = auth ? authHeaders(includeProfile: profile) : const <String, String>{};
+    AbortController? abort, [
+    Map<String, String>? extra,
+  ]) {
+    final headers = {...auth ? authHeaders(includeProfile: profile) : const <String, String>{}, ...?extra};
     return switch (method) {
       'GET' => _http.get(path, queryParameters: query, headers: headers, timeout: timeout, abort: abort),
       'POST' => _http.post(path, queryParameters: query, headers: headers, body: body, timeout: timeout, abort: abort),

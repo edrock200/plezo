@@ -76,6 +76,7 @@ class Translations with BaseTranslations<AppLocale, Translations> {
 	late final Translations$licenses$en licenses = Translations$licenses$en.internal(_root);
 	late final Translations$navigation$en navigation = Translations$navigation$en.internal(_root);
 	late final Translations$explore$en explore = Translations$explore$en.internal(_root);
+	late final Translations$tofaExtras$en tofaExtras = Translations$tofaExtras$en.internal(_root);
 	late final Translations$liveTv$en liveTv = Translations$liveTv$en.internal(_root);
 	late final Translations$collections$en collections = Translations$collections$en.internal(_root);
 	late final Translations$playlists$en playlists = Translations$playlists$en.internal(_root);
@@ -4029,6 +4030,156 @@ class Translations$explore$en {
 		one: '${n} result',
 		other: '${n} results',
 	);
+}
+
+// Path: tofaExtras
+class Translations$tofaExtras$en {
+	Translations$tofaExtras$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Discover'
+	String get discover => 'Discover';
+
+	/// en: 'Requests'
+	String get requests => 'Requests';
+
+	/// en: 'Ask for titles that aren't in the library'
+	String get requestsSubtitle => 'Ask for titles that aren\'t in the library';
+
+	/// en: 'History'
+	String get history => 'History';
+
+	/// en: 'Switch Tofa profile'
+	String get switchProfile => 'Switch Tofa profile';
+
+	/// en: '${label} on ${server}'
+	String onServer({required Object label, required Object server}) => '${label} on ${server}';
+
+	/// en: 'Coming soon'
+	String get radar => 'Coming soon';
+
+	/// en: 'Titles arriving in the next weeks'
+	String get radarSubtitle => 'Titles arriving in the next weeks';
+
+	/// en: 'Featured'
+	String get featured => 'Featured';
+
+	/// en: 'Browse'
+	String get shelves => 'Browse';
+
+	/// en: 'Themes'
+	String get lanes => 'Themes';
+
+	/// en: 'Follow'
+	String get follow => 'Follow';
+
+	/// en: 'Unfollow'
+	String get unfollow => 'Unfollow';
+
+	/// en: 'Load more'
+	String get loadMore => 'Load more';
+
+	/// en: 'Nothing here right now.'
+	String get empty => 'Nothing here right now.';
+
+	/// en: 'Couldn't load this from your Tofa server.'
+	String get loadFailed => 'Couldn\'t load this from your Tofa server.';
+
+	/// en: 'Your Tofa server didn't accept that. Try again.'
+	String get actionFailed => 'Your Tofa server didn\'t accept that. Try again.';
+
+	/// en: 'Open'
+	String get openInLibrary => 'Open';
+
+	/// en: 'In your library'
+	String get inLibrary => 'In your library';
+
+	/// en: 'Request'
+	String get request => 'Request';
+
+	/// en: 'Add to library'
+	String get requestNow => 'Add to library';
+
+	/// en: 'Request in 4K'
+	String get request4k => 'Request in 4K';
+
+	/// en: 'Requested.'
+	String get requested => 'Requested.';
+
+	/// en: 'The request didn't go through. You may be out of requests, or the title can't be requested.'
+	String get requestFailed => 'The request didn\'t go through. You may be out of requests, or the title can\'t be requested.';
+
+	/// en: 'Trailer'
+	String get trailer => 'Trailer';
+
+	/// en: 'Seen it'
+	String get markSeen => 'Seen it';
+
+	/// en: 'Not seen'
+	String get unmarkSeen => 'Not seen';
+
+	/// en: 'Not interested'
+	String get notInterested => 'Not interested';
+
+	/// en: 'Interested again'
+	String get interestedAgain => 'Interested again';
+
+	/// en: 'Cast'
+	String get cast => 'Cast';
+
+	/// en: 'Known for'
+	String get credits => 'Known for';
+
+	/// en: 'Search for a movie or series'
+	String get searchToRequest => 'Search for a movie or series';
+
+	/// en: 'not allowed'
+	String get rightsOff => 'not allowed';
+
+	/// en: 'needs approval'
+	String get rightsAsk => 'needs approval';
+
+	/// en: 'added right away'
+	String get rightsAuto => 'added right away';
+
+	/// en: '${n} left'
+	String remaining({required Object n}) => '${n} left';
+
+	/// en: 'Requests are turned off on this server.'
+	String get requestsOff => 'Requests are turned off on this server.';
+
+	/// en: 'Search above for something to request.'
+	String get noRequestsSubtitle => 'Search above for something to request.';
+
+	/// en: 'Clear history'
+	String get clearHistory => 'Clear history';
+
+	/// en: 'Clear your watch history?'
+	String get clearHistoryTitle => 'Clear your watch history?';
+
+	/// en: 'This removes every play from this Tofa profile's history. What you watched stays marked watched.'
+	String get clearHistoryMessage => 'This removes every play from this Tofa profile\'s history. What you watched stays marked watched.';
+
+	/// en: 'History cleared.'
+	String get historyCleared => 'History cleared.';
+
+	/// en: 'Nothing watched yet.'
+	String get historyEmpty => 'Nothing watched yet.';
+
+	/// en: 'Remove from history'
+	String get removeFromHistory => 'Remove from history';
+
+	/// en: 'This title is no longer in the library.'
+	String get titleGone => 'This title is no longer in the library.';
+
+	/// en: 'In use'
+	String get currentProfile => 'In use';
+
+	/// en: 'Now using ${name}.'
+	String profileSwitched({required Object name}) => 'Now using ${name}.';
 }
 
 // Path: liveTv
@@ -11177,6 +11328,53 @@ extension on Translations {
 			'explore.detail.relatedTitles' => 'Related titles',
 			'explore.detail.background' => 'Background',
 			'explore.totalResults' => ({required num n}) => (_root.$meta.cardinalResolver ?? PluralResolvers.cardinal('en'))(n, one: '${n} result', other: '${n} results', ), 
+			'tofaExtras.discover' => 'Discover',
+			'tofaExtras.requests' => 'Requests',
+			'tofaExtras.requestsSubtitle' => 'Ask for titles that aren\'t in the library',
+			'tofaExtras.history' => 'History',
+			'tofaExtras.switchProfile' => 'Switch Tofa profile',
+			'tofaExtras.onServer' => ({required Object label, required Object server}) => '${label} on ${server}',
+			'tofaExtras.radar' => 'Coming soon',
+			'tofaExtras.radarSubtitle' => 'Titles arriving in the next weeks',
+			'tofaExtras.featured' => 'Featured',
+			'tofaExtras.shelves' => 'Browse',
+			'tofaExtras.lanes' => 'Themes',
+			'tofaExtras.follow' => 'Follow',
+			'tofaExtras.unfollow' => 'Unfollow',
+			'tofaExtras.loadMore' => 'Load more',
+			'tofaExtras.empty' => 'Nothing here right now.',
+			'tofaExtras.loadFailed' => 'Couldn\'t load this from your Tofa server.',
+			'tofaExtras.actionFailed' => 'Your Tofa server didn\'t accept that. Try again.',
+			'tofaExtras.openInLibrary' => 'Open',
+			'tofaExtras.inLibrary' => 'In your library',
+			'tofaExtras.request' => 'Request',
+			'tofaExtras.requestNow' => 'Add to library',
+			'tofaExtras.request4k' => 'Request in 4K',
+			'tofaExtras.requested' => 'Requested.',
+			'tofaExtras.requestFailed' => 'The request didn\'t go through. You may be out of requests, or the title can\'t be requested.',
+			'tofaExtras.trailer' => 'Trailer',
+			'tofaExtras.markSeen' => 'Seen it',
+			'tofaExtras.unmarkSeen' => 'Not seen',
+			'tofaExtras.notInterested' => 'Not interested',
+			'tofaExtras.interestedAgain' => 'Interested again',
+			'tofaExtras.cast' => 'Cast',
+			'tofaExtras.credits' => 'Known for',
+			'tofaExtras.searchToRequest' => 'Search for a movie or series',
+			'tofaExtras.rightsOff' => 'not allowed',
+			'tofaExtras.rightsAsk' => 'needs approval',
+			'tofaExtras.rightsAuto' => 'added right away',
+			'tofaExtras.remaining' => ({required Object n}) => '${n} left',
+			'tofaExtras.requestsOff' => 'Requests are turned off on this server.',
+			'tofaExtras.noRequestsSubtitle' => 'Search above for something to request.',
+			'tofaExtras.clearHistory' => 'Clear history',
+			'tofaExtras.clearHistoryTitle' => 'Clear your watch history?',
+			'tofaExtras.clearHistoryMessage' => 'This removes every play from this Tofa profile\'s history. What you watched stays marked watched.',
+			'tofaExtras.historyCleared' => 'History cleared.',
+			'tofaExtras.historyEmpty' => 'Nothing watched yet.',
+			'tofaExtras.removeFromHistory' => 'Remove from history',
+			'tofaExtras.titleGone' => 'This title is no longer in the library.',
+			'tofaExtras.currentProfile' => 'In use',
+			'tofaExtras.profileSwitched' => ({required Object name}) => 'Now using ${name}.',
 			'liveTv.title' => 'Live TV',
 			'liveTv.guide' => 'Guide',
 			'liveTv.noChannels' => 'No channels available',
@@ -11617,6 +11815,8 @@ extension on Translations {
 			'downloads.errorHttpStatus' => ({required Object status}) => 'Download failed (HTTP ${status})',
 			'downloads.errorPostProcessing' => ({required Object reason}) => 'Post-processing failed: ${reason}',
 			'downloads.reasonFileNotSaved' => 'the file could not be saved on this device',
+			_ => null,
+		} ?? switch (path) {
 			'downloads.reasonCannotResume' => 'the partial download could not be resumed',
 			'downloads.reasonDeviceStorageFull' => 'this device is out of storage',
 			'downloads.notificationDownloading' => 'Downloading...',
@@ -11664,8 +11864,6 @@ extension on Translations {
 			'companionRemote.pairing.availableDevices' => 'Available Devices',
 			'companionRemote.pairing.manualConnection' => 'Manual Connection',
 			'companionRemote.pairing.cryptoInitFailed' => 'Couldn\'t start secure connection. Sign in to Plex first.',
-			_ => null,
-		} ?? switch (path) {
 			'companionRemote.pairing.validationHostRequired' => 'Please enter host address',
 			'companionRemote.pairing.validationHostFormat' => 'Format must be IP:port (e.g., 192.168.1.100:48632)',
 			'companionRemote.pairing.connectionTimedOut' => 'Connection timed out. Use the same network on both devices.',
@@ -12131,6 +12329,8 @@ extension on Translations {
 			'addServer.tofaTooManyPinAttempts' => 'Too many PIN attempts. Wait a moment and try again.',
 			'addServer.tofaPinNetworkError' => 'Couldn\'t check the PIN. Check your connection and try again.',
 			'addServer.tofaSignInFailed' => 'Couldn\'t finish signing in. Try again.',
+			_ => null,
+		} ?? switch (path) {
 			'addServer.tofaServerUnreachable' => 'Couldn\'t reach this Tofa server from this device, at home, over the internet or through Tofa\'s relay. Check that the server is online, then try again.',
 			'addServer.tofaAccountLead' => 'Away from home, or don\'t know the address? Sign in with your Tofa account and pick your server.',
 			'addServer.tofaSignInWithAccount' => 'Sign in with your Tofa account',
@@ -12178,8 +12378,6 @@ extension on Translations {
 			'siloPairing.signedInTitle' => 'Signed in',
 			'siloPairing.signedInCount' => ({required Object n}) => 'Signed in ${n} accounts',
 			'siloPairing.signedInBody' => ({required Object server}) => 'Signed in to ${server}. Choose another account on your phone or tablet, or continue here.',
-			_ => null,
-		} ?? switch (path) {
 			'siloPairing.continueHere' => 'Continue',
 			'siloPairing.completedTitle' => 'You\'re all set',
 			'siloPairing.savingAccounts' => 'Setting up the accounts from your phone or tablet…',
