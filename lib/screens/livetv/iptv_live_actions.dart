@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../media/media_item.dart';
 import '../../models/livetv_channel.dart';
 import '../../providers/multi_server_provider.dart';
 import '../../utils/dialogs.dart';
 import '../../utils/live_tv_player_navigation.dart';
 import '../../models/livetv_program.dart';
 import '../../services/iptv/iptv_client.dart';
+import '../../services/iptv/iptv_ids.dart';
+import 'live_tv_actions_mixin.dart';
 import '../../services/iptv/iptv_reminders.dart';
 import '../../services/iptv/iptv_store.dart';
 import '../../utils/snackbar_helper.dart';
@@ -70,5 +73,40 @@ Future<void> showIptvReminderDialog(BuildContext context, IptvReminder reminder)
     multiServer: multiServer,
     channel: channel.copyWith(liveDvrKey: dvrKey),
     channels: scoped,
+  );
+}
+
+/// Tune the channel of an IPTV channel card (Home's favourites row, a search
+/// hit). A guide-programme hit that has ended, on a channel with catch-up,
+/// starts at the programme's beginning in the archive.
+Future<void> tuneIptvChannelItem(BuildContext context, MediaItem item) async {
+  final multiServer = context.read<MultiServerProvider>();
+  final serverId = item.serverId;
+  final client = serverId == null ? null : multiServer.serverManager.iptvClient(serverId);
+  final parsed = IptvItemId.parse(item.id);
+  if (client == null || parsed is! IptvChannelItemId) {
+    showErrorSnackBar(context, t.liveTv.serverNotConnected);
+    return;
+  }
+  if (!multiServer.liveTvServers.any((s) => s.serverId == client.serverId.value)) {
+    await multiServer.checkLiveTvAvailability();
+  }
+  final dvrKey = multiServer.liveTvServers.where((s) => s.serverId == client.serverId.value).firstOrNull?.dvrKey;
+  final channels = [for (final c in await client.liveTv.fetchChannels()) c.copyWith(liveDvrKey: dvrKey)];
+  final channel = channels.where((c) => c.key == parsed.channelId).firstOrNull;
+  if (channel == null || !context.mounted) return;
+  final start = item.raw?['start'];
+  final stop = item.raw?['stop'];
+  final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+  final program = start is int
+      ? LiveTvProgram(title: item.title ?? '', beginsAt: start, endsAt: stop is int ? stop : null)
+      : null;
+  final catchUp = program != null && (program.endsAt ?? now) <= now && LiveTvActionsMixin.canCatchUp(channel, program);
+  await navigateToLiveTv(
+    context,
+    multiServer: multiServer,
+    channel: channel,
+    channels: channels,
+    startAtEpoch: catchUp ? program.beginsAt : null,
   );
 }

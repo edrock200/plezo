@@ -8165,6 +8165,12 @@ class Translations$iptv$en {
 
 	/// en: 'Source settings'
 	String get sourceSettings => 'Source settings';
+
+	/// en: 'Favourite Channels on ${source}'
+	String favoriteChannelsRow({required Object source}) => 'Favourite Channels on ${source}';
+
+	/// en: 'Channel ${number}'
+	String channelResult({required Object number}) => 'Channel ${number}';
 }
 
 // Path: appIcon.names
@@ -13324,6 +13330,8 @@ extension on Translations {
 			'iptv.addSourceCardSubtitle' => 'Your own M3U playlist or Xtream Codes login, with its guide.',
 			'iptv.addSourceCardSubtitleScoped' => ({required Object name}) => 'Your own M3U playlist or Xtream Codes login. Binds to ${name}.',
 			'iptv.sourceSettings' => 'Source settings',
+			'iptv.favoriteChannelsRow' => ({required Object source}) => 'Favourite Channels on ${source}',
+			'iptv.channelResult' => ({required Object number}) => 'Channel ${number}',
 			_ => null,
 		};
 	}

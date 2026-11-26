@@ -3280,6 +3280,8 @@
     "addSourceButton": "Add an IPTV source",
     "addSourceCardSubtitle": "Your own M3U playlist or Xtream Codes login, with its guide.",
     "addSourceCardSubtitleScoped": "Your own M3U playlist or Xtream Codes login. Binds to ${name}.",
-    "sourceSettings": "Source settings"
+    "sourceSettings": "Source settings",
+    "favoriteChannelsRow": "Favourite Channels on ${source}",
+    "channelResult": "Channel ${number}"
   }
 }

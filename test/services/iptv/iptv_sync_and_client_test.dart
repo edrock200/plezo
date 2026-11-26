@@ -215,6 +215,28 @@ void main() {
       expect(await store.recentChannelIds(client.connection.id), [channel.key]);
     });
 
+    test('Home gets a favourite-channels row with what is on, and search finds channels and programmes', () async {
+      final client = await m3uClient();
+      final live = client.liveTv;
+      final channels = await live.fetchChannels();
+      final source = await live.buildFavoriteChannelSource();
+      expect(await client.fetchGlobalHubs(), isEmpty, reason: 'no favourites, no VOD: no row');
+      await live.setFavoriteChannels([FavoriteChannel.fromLiveTvChannel(channels.first, source)]);
+      final hubs = await client.fetchGlobalHubs();
+      expect(hubs.single.title, 'Favourite Channels on Test playlist');
+      final card = hubs.single.items.single;
+      expect(card.kind, MediaKind.clip);
+      expect(card.title, 'Channel 1 HD');
+      expect(card.parentTitle, startsWith('Now: Show 6 on'));
+      expect((await client.fetchMoreHubItemsPage(hubs.single.id)).items, hasLength(1));
+
+      final byName = await client.searchItems('Channel 3');
+      expect(byName.first.title, 'Channel 3 HD');
+      final byProgramme = await client.searchItems('Show 9 on 2');
+      expect(byProgramme.where((i) => i.title == 'Show 9 on 2'), isNotEmpty);
+      expect(byProgramme.first.raw?['start'], isA<int>());
+    });
+
     test('favourites are kept per source', () async {
       final client = await m3uClient();
       final live = client.liveTv;

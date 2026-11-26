@@ -888,7 +888,7 @@ class IptvClient implements MediaServerClient, RemoteTrailerClient {
   }) async {
     final q = query.trim();
     if (q.isEmpty) return const [];
-    final out = <MediaItem>[];
+    final out = <MediaItem>[...await _liveSearchItems(q, limit: (limit ~/ 4).clamp(5, 30))];
     if (_hasVod) {
       for (final kind in const [IptvGroupKind.movie, IptvGroupKind.series]) {
         final libraryId = kind == IptvGroupKind.movie ? IptvLibraryIds.movies : IptvLibraryIds.series;
@@ -906,6 +906,37 @@ class IptvClient implements MediaServerClient, RemoteTrailerClient {
       }
     }
     return out;
+  }
+
+  /// Channels and guide programmes matching [query], as cards that tune the
+  /// channel (a past programme in the archive starts at its beginning).
+  Future<List<MediaItem>> _liveSearchItems(String query, {required int limit}) async {
+    final found = await searchLive(query, limit: limit);
+    return [
+      for (final c in found.channels)
+        MediaItem.iptv(
+          id: IptvChannelItemId(c.key).toString(),
+          kind: MediaKind.clip,
+          title: c.displayName,
+          parentTitle: t.iptv.channelResult(number: c.number ?? ''),
+          thumbPath: c.thumb,
+          serverId: serverId.value,
+          serverName: serverName,
+          raw: {'key': c.key},
+        ),
+      for (final p in found.programmes)
+        MediaItem.iptv(
+          id: IptvChannelItemId(p.channel.key).toString(),
+          kind: MediaKind.clip,
+          title: p.programme.displayTitle,
+          summary: p.programme.summary,
+          parentTitle: p.channel.displayName,
+          thumbPath: p.programme.thumb ?? p.channel.thumb,
+          serverId: serverId.value,
+          serverName: serverName,
+          raw: {'key': p.channel.key, 'start': ?p.programme.beginsAt, 'stop': ?p.programme.endsAt},
+        ),
+    ];
   }
 
   @override
@@ -968,6 +999,23 @@ class IptvClient implements MediaServerClient, RemoteTrailerClient {
   static const _recentMoviesHub = 'iptv:recent-movies';
   static const _recentSeriesHub = 'iptv:recent-series';
   static const _continueHub = 'iptv:continue';
+  static const _liveFavoritesHub = 'iptv:live-favorites';
+
+  /// Favourite channels as cards: the channel's name and logo, what is on
+  /// now as the caption. Selecting one tunes it.
+  Future<List<MediaItem>> _favouriteChannelItems({int limit = 30}) async => [
+    for (final row in await favoriteChannelsNow(limit: limit))
+      MediaItem.iptv(
+        id: IptvChannelItemId(row.channel.key).toString(),
+        kind: MediaKind.clip,
+        title: row.channel.displayName,
+        parentTitle: row.now == null ? null : t.liveTv.nowOn(title: row.now!.title),
+        thumbPath: row.channel.thumb,
+        serverId: serverId.value,
+        serverName: serverName,
+        raw: {'key': row.channel.key, 'number': ?row.channel.number},
+      ),
+  ];
 
   @override
   Future<List<MediaHub>> fetchGlobalHubs({
@@ -975,8 +1023,17 @@ class IptvClient implements MediaServerClient, RemoteTrailerClient {
     bool includePlaybackHubs = true,
     HubFetchDiagnostics? diagnostics,
   }) async {
-    if (!_hasVod) return const [];
     final hubs = <MediaHub>[];
+    try {
+      final favourites = await _favouriteChannelItems(limit: limit);
+      if (favourites.isNotEmpty) {
+        hubs.add(_hub(_liveFavoritesHub, t.iptv.favoriteChannelsRow(source: _connection.name), favourites, false));
+      }
+    } catch (e) {
+      diagnostics?.recordFailure(e);
+      appLogger.w('[iptv] favourite channels row failed (${e.runtimeType})');
+    }
+    if (!_hasVod) return hubs;
     try {
       if (includePlaybackHubs) {
         final continuing = await fetchContinueWatching(count: limit);
@@ -1152,6 +1209,7 @@ class IptvClient implements MediaServerClient, RemoteTrailerClient {
       final all = await fetchContinueWatching(count: 200);
       return _slice(all, offset, limit);
     }
+    if (hubId == _liveFavoritesHub) return _slice(await _favouriteChannelItems(limit: 500), offset, limit);
     IptvGroupKind? kind;
     String? category;
     var sort = 'added';

@@ -13,6 +13,7 @@ import '../media/media_playlist.dart';
 import '../providers/discover_provider.dart';
 import '../screens/actor_media_screen.dart';
 import '../screens/collection_detail_screen.dart';
+import '../screens/livetv/iptv_live_actions.dart';
 import '../screens/main_screen.dart';
 import '../screens/media_detail_screen.dart';
 import '../screens/playlist/playlist_detail_screen.dart';
@@ -248,6 +249,12 @@ Future<MediaNavigationResult> navigateToMediaItem(
       return MediaNavigationResult.librarySelected;
     }
     return MediaNavigationResult.unsupported;
+  }
+
+  // An IPTV channel card (Home's favourites, a search hit) tunes the channel.
+  if (mi.backend == MediaBackend.iptv && mi.kind == MediaKind.clip) {
+    await tuneIptvChannelItem(context, mi);
+    return MediaNavigationResult.navigated;
   }
 
   switch (mi.kind) {
