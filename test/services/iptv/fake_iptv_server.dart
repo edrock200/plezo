@@ -25,6 +25,10 @@ class FakeIptvServer {
   /// Answer every request with HTTP 500.
   bool failEverything = false;
 
+  /// Give channels logo addresses (widget tests turn them off: image loading
+  /// needs platform plugins there).
+  bool logos = true;
+
   /// The address it answers at: the socket once [start]ed, else a made-up
   /// host for [respond] (an in-process `MockClient`).
   String get base => _server == null ? 'http://iptv.test' : 'http://${_server!.address.host}:${_server!.port}';
@@ -51,7 +55,7 @@ class FakeIptvServer {
     for (var i = 1; i <= channelCount; i++) {
       b
         ..writeln(
-          '#EXTINF:-1 tvg-id="ch$i.fake" tvg-name="Channel $i" tvg-logo="$base/logo/$i.png" '
+          '#EXTINF:-1 tvg-id="ch$i.fake" tvg-name="Channel $i"${logos ? ' tvg-logo="$base/logo/$i.png"' : ''} '
           'tvg-chno="${100 + i}" group-title="${i.isOdd ? 'News' : 'Sport'}",Channel $i HD',
         )
         ..writeln('#EXTVLCOPT:http-user-agent=FakePlayer/1.0')

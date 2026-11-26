@@ -32,13 +32,18 @@ import '../libraries/state_messages.dart';
 import 'guide_search_sheet.dart';
 import 'live_tv_server_iteration.dart';
 import 'reorder_favorites_sheet.dart';
+import '../../services/iptv/iptv_client.dart';
+import '../../services/iptv/iptv_parental.dart';
+import '../../services/iptv/iptv_sync_service.dart';
+import 'live_tv_group_bar.dart';
+import 'tabs/channels_tab.dart';
 import 'tabs/guide_tab.dart';
 import 'tabs/recordings_tab.dart';
 import 'tabs/whats_on_tab.dart';
 
 typedef _FavoriteScope = ({String source, String storeKey, FavoriteChannelPersistenceMode mode});
 
-enum LiveTvTab { guide, whatsOn, recordings }
+enum LiveTvTab { guide, channels, whatsOn, recordings }
 
 class LiveTvScreen extends StatefulWidget {
   const LiveTvScreen({super.key});
@@ -51,6 +56,20 @@ class _LiveTvScreenState extends State<LiveTvScreen>
     with TickerProviderStateMixin, TabNavigationMixin
     implements FocusableTab, ManualRefreshable {
   final _guideTabFocusNode = FocusNode(debugLabel: 'tab_chip_guide');
+  final _channelsTabFocusNode = FocusNode(debugLabel: 'tab_chip_channels');
+  final _channelsTabKey = GlobalKey<ChannelsTabState>();
+  final _groupBarKey = GlobalKey<LiveTvGroupBarState>();
+
+  /// Channel groups (IPTV group-title / Xtream categories) in first-seen
+  /// order; empty when no channel has one, which hides the group bar.
+  List<String> _groups = const [];
+
+  /// The group filter: null for all channels, [LiveTvGroupBar.recentKey] for
+  /// the recently watched ones, else a group name.
+  String? _selectedGroup;
+
+  /// Recently watched channels (sources that keep them), newest first.
+  List<String> _recentScopeKeys = const [];
   final _whatsOnTabFocusNode = FocusNode(debugLabel: 'tab_chip_whats_on');
   final _recordingsTabFocusNode = FocusNode(debugLabel: 'tab_chip_recordings');
   final _guideTabKey = GlobalKey<GuideTabState>();
@@ -101,13 +120,65 @@ class _LiveTvScreenState extends State<LiveTvScreen>
   bool _favoritesLoaded = false;
   bool _favoritesWritable = false;
 
-  List<LiveTvChannel> get _filteredChannels => filterLiveTvChannelsForFavorites(
-    channels: _channels,
-    favoritesOnly: _showFavoritesOnly,
-    favoritesLoaded: _favoritesLoaded,
-    favorites: _favoriteChannels,
-    sourceForChannel: _sourceForChannel,
+  List<LiveTvChannel> get _filteredChannels => _applyGroupFilter(
+    filterLiveTvChannelsForFavorites(
+      channels: _channels,
+      favoritesOnly: _showFavoritesOnly,
+      favoritesLoaded: _favoritesLoaded,
+      favorites: _favoriteChannels,
+      sourceForChannel: _sourceForChannel,
+    ),
   );
+
+  List<LiveTvChannel> _applyGroupFilter(List<LiveTvChannel> channels) {
+    final group = _selectedGroup;
+    if (group == null) return channels;
+    if (group == LiveTvGroupBar.recentKey) {
+      final byKey = {for (final c in channels) liveTvChannelScopeKey(c): c};
+      return [for (final key in _recentScopeKeys) ?byKey[key]];
+    }
+    return channels.where((c) => c.group == group).toList();
+  }
+
+  static List<String> _groupsOf(List<LiveTvChannel> channels) {
+    final seen = <String>{};
+    return [
+      for (final c in channels)
+        if (c.group case final g? when g.isNotEmpty && seen.add(g)) g,
+    ];
+  }
+
+  Future<void> _loadRecents(MultiServerProvider multiServer) async {
+    final keys = <String>[];
+    await forEachLiveTvServer(
+      multiServer,
+      resolveClient: multiServer.getClientForServer,
+      body: (client, serverInfo) async {
+        final live = client.liveTv;
+        if (live is! LiveTvChannelGroups) return;
+        for (final key in await (live as LiveTvChannelGroups).fetchRecentChannelKeys()) {
+          keys.add('${serverInfo.serverId}\u0000${serverInfo.dvrKey}\u0000$key');
+        }
+      },
+      onError: (client, serverInfo, error, stackTrace) => appLogger.d('Recent channels unavailable', error: error),
+    );
+    if (mounted) setState(() => _recentScopeKeys = keys);
+  }
+
+  void _selectGroup(String? group) {
+    if (_selectedGroup == group) return;
+    setState(() => _selectedGroup = group);
+  }
+
+  /// Up from a tab's content: the group bar when shown, else the tab bar.
+  void _navigateUpFromContent() {
+    final bar = _groupBarKey.currentState;
+    if (bar != null && _groups.isNotEmpty) {
+      bar.focusSelected();
+    } else {
+      focusTabBar();
+    }
+  }
 
   /// True when the favorites filter removed every loaded channel, so the guide
   /// tab shows an explanatory empty state instead of a bare timeline.
@@ -137,6 +208,7 @@ class _LiveTvScreenState extends State<LiveTvScreen>
 
   FocusNode _focusNodeForTab(LiveTvTab tab) => switch (tab) {
     LiveTvTab.guide => _guideTabFocusNode,
+    LiveTvTab.channels => _channelsTabFocusNode,
     LiveTvTab.whatsOn => _whatsOnTabFocusNode,
     LiveTvTab.recordings => _recordingsTabFocusNode,
   };
@@ -151,11 +223,28 @@ class _LiveTvScreenState extends State<LiveTvScreen>
     _canProcessRules = initialTabs.canProcessRules;
     initTabNavigation();
     _loadChannels();
+    // An IPTV refresh, a channel or group change, or unlocking the parental
+    // filter changes the channel list.
+    IptvDataRevision.changes.addListener(_onSourceDataChanged);
+    IptvParentalGate.revision.addListener(_onSourceDataChanged);
+  }
+
+  Timer? _sourceChangeDebounce;
+
+  void _onSourceDataChanged() {
+    _sourceChangeDebounce?.cancel();
+    _sourceChangeDebounce = Timer(const Duration(milliseconds: 400), () {
+      if (mounted) unawaited(_loadChannels());
+    });
   }
 
   @override
   void dispose() {
+    IptvDataRevision.changes.removeListener(_onSourceDataChanged);
+    IptvParentalGate.revision.removeListener(_onSourceDataChanged);
+    _sourceChangeDebounce?.cancel();
     _guideTabFocusNode.dispose();
+    _channelsTabFocusNode.dispose();
     _whatsOnTabFocusNode.dispose();
     _recordingsTabFocusNode.dispose();
     _guideEmptyStateActionFocusNode.dispose();
@@ -173,14 +262,22 @@ class _LiveTvScreenState extends State<LiveTvScreen>
         case LiveTvTab.guide:
           _whatsOnTabKey.currentState?.pauseRefresh();
           _recordingsTabKey.currentState?.pauseRefresh();
+          _channelsTabKey.currentState?.pauseRefresh();
           _guideTabKey.currentState?.resumeRefresh();
+        case LiveTvTab.channels:
+          _guideTabKey.currentState?.pauseRefresh();
+          _whatsOnTabKey.currentState?.pauseRefresh();
+          _recordingsTabKey.currentState?.pauseRefresh();
+          _channelsTabKey.currentState?.resumeRefresh();
         case LiveTvTab.whatsOn:
           _guideTabKey.currentState?.pauseRefresh();
           _recordingsTabKey.currentState?.pauseRefresh();
+          _channelsTabKey.currentState?.pauseRefresh();
           _whatsOnTabKey.currentState?.resumeRefresh();
         case LiveTvTab.recordings:
           _guideTabKey.currentState?.pauseRefresh();
           _whatsOnTabKey.currentState?.pauseRefresh();
+          _channelsTabKey.currentState?.pauseRefresh();
           _recordingsTabKey.currentState?.resumeRefresh();
       }
     }
@@ -202,6 +299,18 @@ class _LiveTvScreenState extends State<LiveTvScreen>
     if (_currentTab == LiveTvTab.recordings) {
       await _recordingsTabKey.currentState?.reload();
       return;
+    }
+    // IPTV sources re-read their playlist and guide on the device.
+    final iptvRefreshes = <Future<void>>[
+      for (final serverInfo in context.read<MultiServerProvider>().liveTvServers)
+        if (context.read<MultiServerProvider>().getClientForServer(ServerId(serverInfo.serverId))
+            case final IptvClient client)
+          IptvSyncService.instance.refresh(client.connection.id, connection: client.connection),
+    ];
+    if (iptvRefreshes.isNotEmpty) {
+      showSnackBar(context, t.liveTv.guideReloadRequested);
+      await Future.wait(iptvRefreshes);
+      if (!mounted) return;
     }
     await _broadcastToDvrs(
       actionLabel: 'Reload guide',
@@ -272,8 +381,10 @@ class _LiveTvScreenState extends State<LiveTvScreen>
     var hasPlexServer = false;
     var hasDvr = false;
     var canProcessRules = false;
+    var hasChannelSources = false;
     for (final s in multiServer.liveTvServers) {
       final serverId = ServerId(s.serverId);
+      hasChannelSources = hasChannelSources || multiServer.getClientForServer(serverId)?.liveTv is LiveTvChannelGroups;
       // What's On lists Plex's Live TV hubs; Jellyfin and Emby have none, so
       // the tab would only ever be empty for them.
       hasPlexServer = hasPlexServer || multiServer.getPlexClientForServer(serverId) != null;
@@ -283,7 +394,12 @@ class _LiveTvScreenState extends State<LiveTvScreen>
       canProcessRules = canProcessRules || dvr.supportsRuleProcessing;
     }
     return (
-      tabs: [LiveTvTab.guide, if (hasPlexServer) LiveTvTab.whatsOn, if (hasDvr) LiveTvTab.recordings],
+      tabs: [
+        LiveTvTab.guide,
+        if (hasChannelSources) LiveTvTab.channels,
+        if (hasPlexServer) LiveTvTab.whatsOn,
+        if (hasDvr) LiveTvTab.recordings,
+      ],
       canProcessRules: canProcessRules,
     );
   }
@@ -464,8 +580,13 @@ class _LiveTvScreenState extends State<LiveTvScreen>
 
       appLogger.d('Live TV: loaded ${allChannels.length} channels');
 
+      final groups = _groupsOf(allChannels);
       setState(() {
         _channels = allChannels;
+        _groups = groups;
+        if (_selectedGroup != null && _selectedGroup != LiveTvGroupBar.recentKey && !groups.contains(_selectedGroup)) {
+          _selectedGroup = null;
+        }
         _favoriteScopeByLiveServer
           ..clear()
           ..addAll(favoriteScopeByLiveServer);
@@ -479,6 +600,7 @@ class _LiveTvScreenState extends State<LiveTvScreen>
       });
 
       _refreshVisibleTabs(multiServer);
+      unawaited(_loadRecents(multiServer));
 
       // Load favorites by backend store: Plex is cloud/account-scoped, Jellyfin per server.
       final favoritesLoad = _loadFavorites(multiServer);
@@ -739,6 +861,8 @@ class _LiveTvScreenState extends State<LiveTvScreen>
           } else if (_guideShowsFavoritesEmptyState && _guideEmptyStateActionFocusNode.context != null) {
             _guideEmptyStateActionFocusNode.requestFocus();
           }
+        case LiveTvTab.channels:
+          _channelsTabKey.currentState?.focusContent();
         case LiveTvTab.whatsOn:
           _whatsOnTabKey.currentState?.focusFirstHub();
         case LiveTvTab.recordings:
@@ -756,6 +880,7 @@ class _LiveTvScreenState extends State<LiveTvScreen>
   String _getTabLabel(LiveTvTab tab) {
     return switch (tab) {
       LiveTvTab.guide => t.liveTv.guide,
+      LiveTvTab.channels => t.liveTv.channels,
       LiveTvTab.whatsOn => t.liveTv.whatsOn,
       LiveTvTab.recordings => t.liveTv.recordings,
     };
@@ -851,9 +976,17 @@ class _LiveTvScreenState extends State<LiveTvScreen>
                 channels: guideChannels,
                 isFavoriteChannel: _isFavoriteChannel,
                 onToggleFavorite: _toggleFavorite,
-                onNavigateUp: focusTabBar,
+                onNavigateUp: _navigateUpFromContent,
                 onBack: onTabBarBack,
               ),
+      LiveTvTab.channels => ChannelsTab(
+        key: _channelsTabKey,
+        channels: guideChannels,
+        isFavoriteChannel: _isFavoriteChannel,
+        onToggleFavorite: _toggleFavorite,
+        onNavigateUp: _navigateUpFromContent,
+        onBack: onTabBarBack,
+      ),
       LiveTvTab.whatsOn => WhatsOnTab(
         key: _whatsOnTabKey,
         channels: _channels,
@@ -882,6 +1015,7 @@ class _LiveTvScreenState extends State<LiveTvScreen>
     }
 
     final guideChannels = _filteredChannels;
+    final showGroups = _groups.isNotEmpty && (_currentTab == LiveTvTab.guide || _currentTab == LiveTvTab.channels);
 
     return Column(
       children: [
@@ -890,6 +1024,17 @@ class _LiveTvScreenState extends State<LiveTvScreen>
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             alignment: .centerLeft,
             child: TabChipStrip(children: _buildTabChipItems()),
+          ),
+        if (showGroups)
+          LiveTvGroupBar(
+            key: _groupBarKey,
+            groups: _groups,
+            selected: _selectedGroup,
+            showRecent: _recentScopeKeys.isNotEmpty,
+            onSelected: _selectGroup,
+            onNavigateUp: focusTabBar,
+            onNavigateDown: _focusCurrentTab,
+            onBack: onTabBarBack,
           ),
         Expanded(
           child: TabBarView(

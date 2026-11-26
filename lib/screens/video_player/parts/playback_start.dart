@@ -47,7 +47,15 @@ extension _VideoPlayerPlaybackStartMethods on VideoPlayerScreenState {
         int? offsetSeconds;
         final captureBuffer = session.captureBuffer;
         final programBeginsAt = session.program.beginsAt;
-        if (captureBuffer != null && programBeginsAt != null) {
+        final startAt = widget.live!.startAtEpoch;
+        if (startAt != null &&
+            captureBuffer != null &&
+            startAt >= captureBuffer.seekableStartEpoch &&
+            startAt < captureBuffer.seekableEndEpoch - 60) {
+          // Catch-up of a chosen programme: no prompt, start there.
+          offsetSeconds = startAt - captureBuffer.startedAt.round();
+          appLogger.d('Live start at a chosen point ${captureBuffer.seekableEndEpoch - startAt}s behind live');
+        } else if (captureBuffer != null && programBeginsAt != null) {
           final nowEpoch = DateTime.now().millisecondsSinceEpoch ~/ 1000;
           final offsetProgramStart = programBeginsAt - captureBuffer.startedAt.round();
           // If a session recording started after current program start, offset of program start at will be negative.

@@ -1,3 +1,6 @@
+import '../services/iptv/iptv_reminders.dart';
+import '../services/iptv/iptv_sync_service.dart';
+import 'livetv/iptv_live_actions.dart';
 import 'dart:async';
 import '../media/ids.dart';
 import '../media/media_server_client.dart';
@@ -547,6 +550,7 @@ class _MainScreenState extends State<MainScreen>
 
     WidgetsBinding.instance.addObserver(this);
     _contentFocusScope.addListener(_syncSidebarFocusWithContent);
+    _wireIptv();
 
     if (PlatformDetector.isDesktopOS()) {
       windowManager.addListener(this);
@@ -1057,8 +1061,27 @@ class _MainScreenState extends State<MainScreen>
     }
   }
 
+  /// An IPTV refresh can bring the first channels (Live TV appears) or new
+  /// movies and series; a due reminder offers to tune its channel.
+  void _wireIptv() {
+    IptvSyncService.instance.onSourceUpdated = (_) {
+      if (!mounted) return;
+      unawaited(context.read<MultiServerProvider>().checkLiveTvAvailability());
+      unawaited(context.read<LibrariesProvider>().refresh());
+    };
+    IptvReminders.instance.onDue = (reminder) {
+      if (mounted) unawaited(showIptvReminderDialog(context, reminder));
+    };
+  }
+
+  void _unwireIptv() {
+    IptvSyncService.instance.onSourceUpdated = null;
+    IptvReminders.instance.onDue = null;
+  }
+
   @override
   void dispose() {
+    _unwireIptv();
     if (_watchTogether?.navigatorOpener == _navigateToWatchTogetherMedia) _watchTogether?.navigatorOpener = null;
     WidgetsBinding.instance.removeObserver(this);
     _profileRouteObserver?.unsubscribe(this);

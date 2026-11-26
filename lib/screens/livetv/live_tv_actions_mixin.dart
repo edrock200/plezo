@@ -8,6 +8,8 @@ import '../../providers/multi_server_provider.dart';
 import '../../utils/live_tv_matching.dart';
 import '../../utils/live_tv_player_navigation.dart';
 import '../../utils/media_image_helper.dart';
+import '../../services/iptv/iptv_client.dart';
+import 'iptv_live_actions.dart';
 import 'program_details_sheet.dart';
 
 /// Shared live-TV actions: channel lookup, tuning, and program-details sheet.
@@ -29,9 +31,24 @@ mixin LiveTvActionsMixin<T extends StatefulWidget> on State<T> {
   /// scrobble, channel up/down nav, no resume bookmark). The player starts
   /// the backend-neutral session itself (Plex tune / Jellyfin stream
   /// negotiation under its loading spinner).
-  Future<void> tuneChannel(LiveTvChannel channel) async {
+  Future<void> tuneChannel(LiveTvChannel channel, {int? startAtEpoch}) async {
     final multiServer = context.read<MultiServerProvider>();
-    await navigateToLiveTv(context, multiServer: multiServer, channel: channel, channels: liveTvChannels);
+    await navigateToLiveTv(
+      context,
+      multiServer: multiServer,
+      channel: channel,
+      channels: liveTvChannels,
+      startAtEpoch: startAtEpoch,
+    );
+  }
+
+  /// Whether [program] on [channel] can be played from its start out of the
+  /// channel's catch-up archive: it started within the archive window.
+  static bool canCatchUp(LiveTvChannel? channel, LiveTvProgram program) {
+    final begins = program.beginsAt;
+    if (channel == null || channel.catchupDays <= 0 || begins == null) return false;
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    return begins < now - 60 && begins > now - channel.catchupDays * 86400;
   }
 
   /// Open the program-details bottom sheet. The poster is resolved from
@@ -66,6 +83,10 @@ mixin LiveTvActionsMixin<T extends StatefulWidget> on State<T> {
       channel: channel,
       posterUrl: posterUrl,
       onTuneChannel: channel != null ? () => tuneChannel(channel) : null,
+      onPlayFromStart: canCatchUp(channel, program)
+          ? () => tuneChannel(channel!, startAtEpoch: program.beginsAt)
+          : null,
+      reminder: client is IptvClient && channel != null ? iptvReminderFor(client, channel, program) : null,
       client: client,
       onRecordingStateChanged: onRecordingStateChanged,
     );

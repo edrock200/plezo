@@ -30,12 +30,24 @@ import 'livetv_styles.dart';
 /// [client] is the resolved [MediaServerClient] for the program's owning server.
 /// Recording affordances appear only when the client supports DVR
 /// (`capabilities.liveTvDvr`) and the program has a recordable guid.
+/// A reminder for a programme that has not started: whether one is set and
+/// how to set or clear it.
+class ProgramReminderAction {
+  const ProgramReminderAction({required this.isSet, required this.toggle});
+  final bool isSet;
+
+  /// Set the reminder when [isSet] is false, clear it otherwise.
+  final Future<void> Function() toggle;
+}
+
 void showProgramDetailsSheet(
   BuildContext context, {
   required LiveTvProgram program,
   required LiveTvChannel? channel,
   required String? posterUrl,
   required VoidCallback? onTuneChannel,
+  VoidCallback? onPlayFromStart,
+  ProgramReminderAction? reminder,
   MediaServerClient? client,
   ValueChanged<bool>? onRecordingStateChanged,
 }) {
@@ -48,6 +60,8 @@ void showProgramDetailsSheet(
         channel: channel,
         posterUrl: posterUrl,
         onTuneChannel: onTuneChannel,
+        onPlayFromStart: onPlayFromStart,
+        reminder: reminder,
         client: client,
         onRecordingStateChanged: onRecordingStateChanged,
       );
@@ -76,6 +90,11 @@ class _ProgramDetailsSheetContent extends StatefulWidget {
   final LiveTvChannel? channel;
   final String? posterUrl;
   final VoidCallback? onTuneChannel;
+
+  /// Play the programme from its start out of the channel's catch-up
+  /// archive (a programme on now, or one that has ended).
+  final VoidCallback? onPlayFromStart;
+  final ProgramReminderAction? reminder;
   final MediaServerClient? client;
   final ValueChanged<bool>? onRecordingStateChanged;
 
@@ -84,6 +103,8 @@ class _ProgramDetailsSheetContent extends StatefulWidget {
     required this.channel,
     required this.posterUrl,
     required this.onTuneChannel,
+    this.onPlayFromStart,
+    this.reminder,
     required this.client,
     required this.onRecordingStateChanged,
   });
@@ -198,6 +219,24 @@ class _ProgramDetailsSheetContentState extends State<_ProgramDetailsSheetContent
     final program = widget.program;
     final client = widget.client;
     final actions = <_SheetAction>[];
+    final nowEpoch = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    final ended = program.endsAt != null && program.endsAt! <= nowEpoch;
+    final playFromStart = widget.onPlayFromStart;
+
+    // A past programme in the catch-up archive plays first.
+    if (ended && playFromStart != null) {
+      actions.add(
+        _SheetAction(
+          label: t.liveTv.watchCatchUp,
+          icon: Symbols.history_rounded,
+          style: _ActionStyle.filled,
+          onPressed: () {
+            _closeSheet();
+            playFromStart();
+          },
+        ),
+      );
+    }
 
     if (widget.onTuneChannel != null) {
       final isLive = program.isCurrentlyAiring;
@@ -209,6 +248,34 @@ class _ProgramDetailsSheetContentState extends State<_ProgramDetailsSheetContent
           onPressed: () {
             _closeSheet();
             widget.onTuneChannel!();
+          },
+        ),
+      );
+    }
+
+    if (!ended && program.isCurrentlyAiring && playFromStart != null) {
+      actions.add(
+        _SheetAction(
+          label: t.liveTv.watchFromBeginning,
+          icon: Symbols.replay_rounded,
+          onPressed: () {
+            _closeSheet();
+            playFromStart();
+          },
+        ),
+      );
+    }
+
+    final reminder = widget.reminder;
+    final upcoming = program.beginsAt != null && program.beginsAt! > nowEpoch;
+    if (reminder != null && upcoming) {
+      actions.add(
+        _SheetAction(
+          label: reminder.isSet ? t.liveTv.cancelReminder : t.liveTv.remindMe,
+          icon: reminder.isSet ? Symbols.notifications_off_rounded : Symbols.notifications_rounded,
+          onPressed: () async {
+            await reminder.toggle();
+            if (mounted) _closeSheet();
           },
         ),
       );

@@ -33,6 +33,7 @@ Future<void> navigateToLiveTv(
   PlaybackLaunchObserver? launchObserver,
   bool Function()? isLaunchCurrent,
   LiveTvStartPosition startPosition = LiveTvStartPosition.ask,
+  int? startAtEpoch,
 }) async {
   if (!(isLaunchCurrent?.call() ?? true) || !(launchObserver?.isCurrent ?? true)) return;
   final serverInfo = liveTvServerInfoForChannel(multiServer, channel);
@@ -74,7 +75,12 @@ Future<void> navigateToLiveTv(
         channel: channel,
         channels: normalizedChannels,
         currentChannelIndex: currentChannelIndex,
-        startPosition: startPosition,
+        // An IPTV channel's catch-up archive is always there: joining live is
+        // the default, "Watch from start" is offered in the guide and player.
+        startPosition: client.backend == MediaBackend.iptv && startPosition == LiveTvStartPosition.ask
+            ? LiveTvStartPosition.live
+            : startPosition,
+        startAtEpoch: startAtEpoch,
       ),
       launchObserver: launchObserver,
       isLaunchCurrent: isLaunchCurrent,

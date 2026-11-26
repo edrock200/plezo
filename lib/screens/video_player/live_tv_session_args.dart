@@ -35,10 +35,16 @@ class LiveTvSessionArgs {
   /// the player always ask.
   final LiveTvStartPosition startPosition;
 
+  /// Start the first tune at this epoch second of the channel's seekable
+  /// history (catch-up of a programme that started earlier or has ended),
+  /// when the session offers a window holding it. Overrides [startPosition].
+  final int? startAtEpoch;
+
   const LiveTvSessionArgs({
     required this.channel,
     this.channels,
     this.currentChannelIndex,
     this.startPosition = LiveTvStartPosition.ask,
+    this.startAtEpoch,
   });
 }

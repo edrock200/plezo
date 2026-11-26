@@ -4495,6 +4495,69 @@ class Translations$liveTv$en {
 
 	/// en: 'Couldn't switch channel: ${reason}'
 	String channelSwitchFailed({required Object reason}) => 'Couldn\'t switch channel: ${reason}';
+
+	/// en: 'Watch'
+	String get watchCatchUp => 'Watch';
+
+	/// en: 'Watch from start'
+	String get watchFromBeginning => 'Watch from start';
+
+	/// en: 'Remind me'
+	String get remindMe => 'Remind me';
+
+	/// en: 'Cancel reminder'
+	String get cancelReminder => 'Cancel reminder';
+
+	/// en: 'Plezilo will remind you a minute before it starts, while it is open.'
+	String get reminderSet => 'Plezilo will remind you a minute before it starts, while it is open.';
+
+	/// en: 'Reminder cancelled'
+	String get reminderCancelled => 'Reminder cancelled';
+
+	/// en: 'Starting now'
+	String get reminderTitle => 'Starting now';
+
+	/// en: '${title} on ${channel}'
+	String reminderMessage({required Object title, required Object channel}) => '${title} on ${channel}';
+
+	/// en: 'Watch'
+	String get reminderWatch => 'Watch';
+
+	/// en: 'Dismiss'
+	String get reminderDismiss => 'Dismiss';
+
+	/// en: 'All'
+	String get allGroups => 'All';
+
+	/// en: 'Recent'
+	String get recentChannels => 'Recent';
+
+	/// en: 'Channels'
+	String get channels => 'Channels';
+
+	/// en: 'Search channels'
+	String get searchChannels => 'Search channels';
+
+	/// en: 'No channels here'
+	String get noChannelsInGroup => 'No channels here';
+
+	/// en: 'Now: ${title}'
+	String nowOn({required Object title}) => 'Now: ${title}';
+
+	/// en: 'Next: ${title}'
+	String nextOn({required Object title}) => 'Next: ${title}';
+
+	/// en: 'Catch-up'
+	String get catchUpBadge => 'Catch-up';
+
+	/// en: 'Live TV'
+	String get favoriteChannelsRow => 'Live TV';
+
+	/// en: 'Add to favourites'
+	String get addFavorite => 'Add to favourites';
+
+	/// en: 'Remove from favourites'
+	String get removeFavorite => 'Remove from favourites';
 }
 
 // Path: collections
@@ -11953,6 +12016,27 @@ extension on Translations {
 			'liveTv.failedToBuildStreamUrl' => 'Could not build the stream URL',
 			'liveTv.playbackStartFailed' => ({required Object reason}) => 'Couldn\'t start the channel: ${reason}',
 			'liveTv.channelSwitchFailed' => ({required Object reason}) => 'Couldn\'t switch channel: ${reason}',
+			'liveTv.watchCatchUp' => 'Watch',
+			'liveTv.watchFromBeginning' => 'Watch from start',
+			'liveTv.remindMe' => 'Remind me',
+			'liveTv.cancelReminder' => 'Cancel reminder',
+			'liveTv.reminderSet' => 'Plezilo will remind you a minute before it starts, while it is open.',
+			'liveTv.reminderCancelled' => 'Reminder cancelled',
+			'liveTv.reminderTitle' => 'Starting now',
+			'liveTv.reminderMessage' => ({required Object title, required Object channel}) => '${title} on ${channel}',
+			'liveTv.reminderWatch' => 'Watch',
+			'liveTv.reminderDismiss' => 'Dismiss',
+			'liveTv.allGroups' => 'All',
+			'liveTv.recentChannels' => 'Recent',
+			'liveTv.channels' => 'Channels',
+			'liveTv.searchChannels' => 'Search channels',
+			'liveTv.noChannelsInGroup' => 'No channels here',
+			'liveTv.nowOn' => ({required Object title}) => 'Now: ${title}',
+			'liveTv.nextOn' => ({required Object title}) => 'Next: ${title}',
+			'liveTv.catchUpBadge' => 'Catch-up',
+			'liveTv.favoriteChannelsRow' => 'Live TV',
+			'liveTv.addFavorite' => 'Add to favourites',
+			'liveTv.removeFavorite' => 'Remove from favourites',
 			'collections.title' => 'Collections',
 			'collections.collection' => 'Collection',
 			'collections.empty' => 'Collection is empty',
@@ -12263,6 +12347,8 @@ extension on Translations {
 			'downloads.backgroundWarning.sheetTitleDegraded' => 'Background downloads may be limited',
 			'downloads.backgroundWarning.sheetIntro' => 'Android is preventing Plezilo from downloading reliably in the background.',
 			'downloads.backgroundWarning.sheetIntroDegraded' => 'Your device is limiting when Plezilo can download in the background.',
+			_ => null,
+		} ?? switch (path) {
 			'downloads.backgroundWarning.reasonBackgroundRestricted' => 'Plezilo\'s background usage is restricted. Set its battery or background usage to "Unrestricted".',
 			'downloads.backgroundWarning.reasonStandbyRestricted' => 'Android has put Plezilo in a restricted standby state. Set its battery usage to "Unrestricted".',
 			'downloads.backgroundWarning.reasonDownloadChannelBlocked' => 'Download notifications are turned off, so progress and controls may be unavailable.',
@@ -12284,8 +12370,6 @@ extension on Translations {
 			'downloads.backgroundWarning.linkUnavailable' => 'Couldn\'t open dontkillmyapp.com on this device',
 			'downloads.options' => 'Downloads options',
 			'downloads.groupings.library' => 'Library',
-			_ => null,
-		} ?? switch (path) {
 			'downloads.groupings.collections' => 'Collections',
 			'downloads.unknownLibrary' => 'Unknown library',
 			'downloads.unknownShow' => 'Unknown Show',
@@ -12777,6 +12861,8 @@ extension on Translations {
 			'addServer.siloPasswordErrorMismatch' => 'The new passwords don\'t match.',
 			'addServer.siloPasswordErrorTooShort' => ({required Object count}) => 'Use at least ${count} characters.',
 			'addServer.siloPasswordErrorTooLong' => 'That password is too long. Use a shorter one.',
+			_ => null,
+		} ?? switch (path) {
 			'addServer.siloPasswordErrorWrongTemporary' => 'That temporary password is incorrect.',
 			'addServer.siloPasswordErrorRejected' => 'Choose a different password, then try again.',
 			'addServer.siloPasswordErrorRateLimited' => 'Too many attempts. Wait a moment, then try again.',
@@ -12798,8 +12884,6 @@ extension on Translations {
 			'addServer.tofaDeviceDenied' => 'Sign-in was declined or cancelled.',
 			'addServer.tofaDeviceFailed' => 'Couldn\'t get a sign-in code.',
 			'addServer.tofaDeviceSigningIn' => 'Signing in…',
-			_ => null,
-		} ?? switch (path) {
 			'addServer.tofaShowNewCode' => 'Show a new code',
 			'addServer.tofaChangeServer' => 'Change server',
 			'addServer.tofaCodeSemantics' => ({required Object code}) => 'Sign-in code: ${code}',
