@@ -145,8 +145,8 @@ class _AddIptvScreenState extends State<AddIptvScreen> with AsyncFormStateMixin,
 
   Future<void> _pickFile() async {
     final result = await FilePickerService.instance.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: const ['m3u', 'm3u8', 'txt'],
+      // Any file: Android has no MIME type for .m3u to filter by.
+      type: FileType.any,
     );
     final path = result?.files.singleOrNull?.path;
     if (path == null || !mounted) return;

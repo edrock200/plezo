@@ -379,6 +379,13 @@ class _IptvSourceSettingsScreenState extends State<IptvSourceSettingsScreen> {
                     },
                   ),
                   _switch(
+                    icon: Symbols.history_rounded,
+                    title: t.iptv.timeshiftPhp,
+                    subtitle: t.iptv.timeshiftPhpHint,
+                    value: c.xtreamTimeshiftPhp,
+                    onChanged: (v) => unawaited(_save(c.copyWith(xtreamTimeshiftPhp: v))),
+                  ),
+                  _switch(
                     icon: Symbols.video_library_rounded,
                     title: t.iptv.includeVod,
                     subtitle: t.iptv.includeVodHint,

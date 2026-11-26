@@ -310,6 +310,19 @@ void main() {
       expect(await noArchive.streamUrlAt(offsetSeconds: 10), isNull);
     });
 
+    test('the timeshift.php catch-up route', () async {
+      final base = await xtreamClient();
+      final client = IptvClient(
+        base.connection.copyWith(xtreamTimeshiftPhp: true),
+        store: store,
+        now: () => server.now,
+      );
+      final session = (await client.liveTv.startPlayback('x1001'))!;
+      final url = await session.streamUrlAt(offsetSeconds: session.captureBuffer!.seekEndSeconds.round() - 900);
+      expect(url, contains('/streaming/timeshift.php?username=demo&password=secret&stream=1001&start='));
+      expect(url, endsWith('&duration=15'));
+    });
+
     test('the HLS output format', () async {
       final base = await xtreamClient();
       final client = IptvClient(base.connection.copyWith(xtreamOutput: 'm3u8'), store: store);

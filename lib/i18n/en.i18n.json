@@ -3282,6 +3282,8 @@
     "addSourceCardSubtitleScoped": "Your own M3U playlist or Xtream Codes login. Binds to ${name}.",
     "sourceSettings": "Source settings",
     "favoriteChannelsRow": "Favourite Channels on ${source}",
-    "channelResult": "Channel ${number}"
+    "channelResult": "Channel ${number}",
+    "timeshiftPhp": "Catch-up through timeshift.php",
+    "timeshiftPhpHint": "Turn on if catch-up does not play: some servers answer only this route"
   }
 }

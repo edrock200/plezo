@@ -8171,6 +8171,12 @@ class Translations$iptv$en {
 
 	/// en: 'Channel ${number}'
 	String channelResult({required Object number}) => 'Channel ${number}';
+
+	/// en: 'Catch-up through timeshift.php'
+	String get timeshiftPhp => 'Catch-up through timeshift.php';
+
+	/// en: 'Turn on if catch-up does not play: some servers answer only this route'
+	String get timeshiftPhpHint => 'Turn on if catch-up does not play: some servers answer only this route';
 }
 
 // Path: appIcon.names
@@ -13332,6 +13338,8 @@ extension on Translations {
 			'iptv.sourceSettings' => 'Source settings',
 			'iptv.favoriteChannelsRow' => ({required Object source}) => 'Favourite Channels on ${source}',
 			'iptv.channelResult' => ({required Object number}) => 'Channel ${number}',
+			'iptv.timeshiftPhp' => 'Catch-up through timeshift.php',
+			'iptv.timeshiftPhpHint' => 'Turn on if catch-up does not play: some servers answer only this route',
 			_ => null,
 		};
 	}

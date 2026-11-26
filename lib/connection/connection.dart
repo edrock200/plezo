@@ -891,6 +891,10 @@ class IptvConnection extends Connection {
   /// `ts` or `m3u8` for Xtream live streams.
   final String xtreamOutput;
 
+  /// Xtream catch-up through `streaming/timeshift.php` instead of the
+  /// `/timeshift/…` path (some servers answer only one of them).
+  final bool xtreamTimeshiftPhp;
+
   /// Guide addresses the user added (XMLTV, `.gz` allowed).
   final List<String> epgUrls;
 
@@ -930,6 +934,7 @@ class IptvConnection extends Connection {
     this.xtreamUsername = '',
     this.xtreamPassword = '',
     this.xtreamOutput = 'ts',
+    this.xtreamTimeshiftPhp = false,
     this.epgUrls = const [],
     this.useSourceEpg = true,
     this.userAgent,
@@ -988,6 +993,7 @@ class IptvConnection extends Connection {
     String? xtreamUsername,
     String? xtreamPassword,
     String? xtreamOutput,
+    bool? xtreamTimeshiftPhp,
     List<String>? epgUrls,
     bool? useSourceEpg,
     String? userAgent,
@@ -1015,6 +1021,7 @@ class IptvConnection extends Connection {
       xtreamUsername: xtreamUsername ?? this.xtreamUsername,
       xtreamPassword: xtreamPassword ?? this.xtreamPassword,
       xtreamOutput: xtreamOutput ?? this.xtreamOutput,
+      xtreamTimeshiftPhp: xtreamTimeshiftPhp ?? this.xtreamTimeshiftPhp,
       epgUrls: epgUrls ?? this.epgUrls,
       useSourceEpg: useSourceEpg ?? this.useSourceEpg,
       userAgent: clearUserAgent ? null : (userAgent ?? this.userAgent),
@@ -1046,6 +1053,7 @@ class IptvConnection extends Connection {
     'xtreamUsername': xtreamUsername,
     'xtreamPassword': xtreamPassword,
     'xtreamOutput': xtreamOutput,
+    if (xtreamTimeshiftPhp) 'xtreamTimeshiftPhp': true,
     'epgUrls': epgUrls.join('\n'),
     'useSourceEpg': useSourceEpg,
     'userAgent': userAgent,
@@ -1085,6 +1093,7 @@ class IptvConnection extends Connection {
       xtreamUsername: json['xtreamUsername'] as String? ?? '',
       xtreamPassword: json['xtreamPassword'] as String? ?? '',
       xtreamOutput: json['xtreamOutput'] == 'm3u8' ? 'm3u8' : 'ts',
+      xtreamTimeshiftPhp: json['xtreamTimeshiftPhp'] == true,
       epgUrls: epgUrls,
       useSourceEpg: json['useSourceEpg'] as bool? ?? true,
       userAgent: optional(json['userAgent']),

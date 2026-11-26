@@ -250,6 +250,7 @@ extension IptvClientLive on IptvClient {
         start: start,
         duration: length,
         serverOffset: _serverOffset ?? Duration.zero,
+        phpRoute: _connection.xtreamTimeshiftPhp,
       );
     }
     final live = liveUrlOf(ch);
