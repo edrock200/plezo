@@ -147,14 +147,30 @@ extension _TofaHome on TofaClient {
 
   /// One row read, degrading to none: a failed leg is recorded in
   /// [diagnostics] and never sinks the page.
-  Future<List<MediaHub>> _leg(String name, Future<List<MediaHub>> Function() read, HubFetchDiagnostics? d) async {
+  Future<List<MediaHub>> _leg(
+    String name,
+    Future<List<MediaHub>> Function() read,
+    HubFetchDiagnostics? d, {
+    List<Object>? failures,
+  }) async {
     try {
       return await read();
     } catch (e) {
       appLogger.d('[tofa] row $name failed', error: e.runtimeType);
       d?.recordFailure(e);
+      failures?.add(e);
       return const [];
     }
+  }
+
+  /// A failure a later Home read may not hit: a timeout, a lost connection,
+  /// 408, 429 or a 5xx (as for Silo's Home).
+  static bool _transient(Object error) {
+    if (error is TimeoutException) return true;
+    if (error is! MediaServerHttpException || error.isCancellation) return false;
+    if (error.isTransient) return true;
+    final status = error.statusCode;
+    return status == 408 || status == 429 || (status != null && status >= 500 && status <= 599);
   }
 
   /// Browse sections (`GET /browse/sections`): the server's chosen layout.
@@ -212,25 +228,42 @@ extension _TofaHome on TofaClient {
   }
 
   Future<List<MediaHub>> _globalHubs(int limit, HubFetchDiagnostics? diagnostics) async {
+    final failures = <Object>[];
     final legs = await Future.wait([
-      _leg('recent', () => _recentRows(limit), diagnostics),
-      _leg('suggested', () async {
-        final items = await _suggestedItems();
-        _homeLists[_suggestedId] = items;
-        return [if (items.isNotEmpty) _hub(_suggestedId, t.discover.tofaSuggested, items, limit: limit)];
-      }, diagnostics),
-      _leg('binge', () async {
-        final items = await _bingeItems(limit + 1);
-        _homeLists[_bingeId] = items;
-        return [if (items.isNotEmpty) _hub(_bingeId, t.discover.tofaReadyToBinge, items, limit: limit)];
-      }, diagnostics),
-      _leg('watchlist', () async {
-        final items = await _watchlistItems();
-        _homeLists[_watchlistId] = items;
-        return [if (items.isNotEmpty) _hub(_watchlistId, t.discover.tofaWatchlist, items, limit: limit)];
-      }, diagnostics),
-      _leg('collections', () => _pinnedCollections(limit), diagnostics),
+      _leg('recent', () => _recentRows(limit), diagnostics, failures: failures),
+      _leg(
+        'suggested',
+        () async {
+          final items = await _suggestedItems();
+          _homeLists[_suggestedId] = items;
+          return [if (items.isNotEmpty) _hub(_suggestedId, t.discover.tofaSuggested, items, limit: limit)];
+        },
+        diagnostics,
+        failures: failures,
+      ),
+      _leg(
+        'binge',
+        () async {
+          final items = await _bingeItems(limit + 1);
+          _homeLists[_bingeId] = items;
+          return [if (items.isNotEmpty) _hub(_bingeId, t.discover.tofaReadyToBinge, items, limit: limit)];
+        },
+        diagnostics,
+        failures: failures,
+      ),
+      _leg(
+        'watchlist',
+        () async {
+          final items = await _watchlistItems();
+          _homeLists[_watchlistId] = items;
+          return [if (items.isNotEmpty) _hub(_watchlistId, t.discover.tofaWatchlist, items, limit: limit)];
+        },
+        diagnostics,
+        failures: failures,
+      ),
+      _leg('collections', () => _pinnedCollections(limit), diagnostics, failures: failures),
     ]);
+    _lastHomeIncomplete = failures.any(_transient);
     return [for (final hubs in legs) ...hubs];
   }
 

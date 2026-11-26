@@ -26,6 +26,7 @@ import '../../media/media_kind.dart';
 import '../../media/media_library.dart';
 import '../../media/media_person.dart';
 import '../../media/remote_trailer.dart';
+import '../../media/home_watch_state.dart';
 import '../../media/media_playlist.dart';
 import '../../media/media_server_client.dart';
 import '../../media/media_sort.dart';
@@ -50,6 +51,7 @@ import '../../media/chapter_marker_classifier.dart';
 import '../../utils/global_key_utils.dart';
 import '../../utils/json_utils.dart';
 import '../favorite_channels_repository.dart';
+import 'tofa_events.dart';
 import '../api_cache.dart';
 import '../download_artwork_helpers.dart';
 import '../jellyfin_trickplay_service.dart';
@@ -103,7 +105,8 @@ class TofaClient
         ScopedMediaServerClient,
         GracefullyCloseable,
         MembershipListsClient,
-        RemoteTrailerClient {
+        RemoteTrailerClient,
+        HomeWatchStateClient {
   TofaClient._({required this._connection, required this._api});
 
   /// Build a client for [connection]. Network I/O stays lazy.
@@ -424,6 +427,12 @@ class TofaClient
   // Live TV (see `tofa_client_live.dart`): each channel's last `revision`,
   // this device's viewer id, and where favourite channels are kept.
   final Map<String, int> _liveRevisions = {};
+
+  /// Home's watch-state events (`tofa_events.dart`).
+  bool _lastHomeIncomplete = false;
+  @visibleForTesting
+  TofaEventsConnector eventsConnector = (url, headers) => connectTofaEventsSocket(url, headers);
+  Future<bool?>? _watchStateOffered;
   String? _liveViewer;
   @visibleForTesting
   FavoriteChannelsRepository favoritesRepository = const SharedPreferencesFavoriteChannelsRepository();
@@ -1302,6 +1311,41 @@ class TofaClient
 
   @override
   LiveTvSupport get liveTv => _TofaLiveTvSupport(this);
+
+  @override
+  bool get lastHomeReadIncomplete => _lastHomeIncomplete;
+
+  /// Whether `GET /system/info` lists `ws.watch_state_changed`; null when it
+  /// lists no capabilities or could not be read (the socket is tried).
+  Future<bool?> _watchStateEventsOffered() => _watchStateOffered ??= () async {
+    try {
+      final data = await _api.getJson('/api/v1/system/info');
+      final caps = data is Map ? data['capabilities'] : null;
+      if (caps is! List) return null;
+      return caps.contains(TofaEvents.watchStateCapability);
+    } catch (e) {
+      appLogger.d('[tofa] system info unavailable', error: e.runtimeType);
+      _watchStateOffered = null;
+      return null;
+    }
+  }();
+
+  @override
+  HomeWatchStateWatch? watchHomeWatchState(void Function(HomeWatchStateSignal signal) onSignal) {
+    if (_closed || _sessionExpired || isOfflineMode) return null;
+    return TofaHomeEventsWatcher(
+      url: TofaEvents.socketUrl(_api.baseUrl),
+      profileId: connection.profileId,
+      token: () => _api.accessToken,
+      // The REST calls' client and profile headers; the token goes in the
+      // sign-in frame, never in the URL or a log.
+      headers: () => {..._api.headers.toHeaders(), ..._api.authHeaders()..remove('Authorization')},
+      connect: (url, headers) => eventsConnector(url, headers),
+      onSignal: onSignal,
+      supported: _watchStateEventsOffered,
+      isClientUsable: () => !_closed && !_sessionExpired && !isOfflineMode,
+    )..start();
+  }
 
   /// The file to play for [item]: [requestedFileId] when it is one of the
   /// item's files, else the one `GET /media/{id}/versions` recommends for
