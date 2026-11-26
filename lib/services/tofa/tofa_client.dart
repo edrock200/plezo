@@ -349,7 +349,9 @@ class TofaClient
             appLogger.w('[tofa] persisting the connection update failed', error: e, stackTrace: st);
           }
         }
-        unawaited(_ensureImageToken().catchError((_) => null));
+        // Artwork URLs are built once per card: have the image token before
+        // the server counts as online, so the first Home has its images.
+        await _ensureImageToken().timeout(const Duration(seconds: 5)).catchError((_) => null);
         return HealthStatus.online;
       }
       if (_sessionExpired || (response.statusCode == 401 && (_api.tokens?.refreshToken ?? '').isEmpty)) {
