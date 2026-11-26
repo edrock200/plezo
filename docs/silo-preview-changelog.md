@@ -5,12 +5,6 @@ What changed in each preview (Android, and Windows and macOS where the release h
 ## Next preview
 
 - **New "Expand on Focus" option:** in Settings › Appearance (Library & Cards). When it's on and you move to a poster in a row (Home, a library's Recommended page, More Like This and other rows on a detail page), the poster smoothly widens into a wide card showing the title's background art, with its name or logo on top; the cards beside it slide aside and it shrinks back when you move on. It works with a TV remote and the keyboard. Titles without background art stay as posters, and library and search grids keep their usual size. It's off unless you turn it on.
-
-## silo-preview-2.66.0
-
-Released November 26, 2026. Android and Windows.
-
-- **Signing in to Tofa with your account finds a way to your server:** after you sign in with the code and pick your server from the list, Plezilo used to try only the address Tofa's cloud gives for it, and gave up with "Couldn't finish signing in" when that address doesn't answer from your device (common when the server is reached through its own domain, or its port isn't open to the internet). It now tries every address Tofa lists for the server, at home, over the internet (including the server's custom address) and through Tofa's relay, and uses the first that answers. If none does, it says it can't reach the server instead of a vague error. Playing through the relay works now too: Plezilo's address check didn't send your sign-in to the relay, so it never picked it.
 - **Every row in a Tofa library's Recommended tab:** a Tofa library's *Recommended* tab used to show only Recently Added. It now shows Continue Watching, Recently Added, Suggested for You and Ready to Binge for that library, Recently Released, Top Rated, Unwatched and rows for the library's main genres, each only when your server offers it. *View all* on any of them pages through the whole list.
 - **Tofa Home rows that were missing:** Suggested for You, Ready to Binge, your Watchlist and the collections your server pins to Home now appear on Home (Plezilo only read the per-library rows before). Recently Added comes once per section of your server's Browse page, as in Tofa's own apps.
 - **Tofa collections:** each Tofa library's *Collections* tab lists your server's collections (franchises, curated ones, and your own collections and lists). Opening one shows the titles of it you have; *Play* and *Shuffle* play them, series with their episodes in order. Search finds collections too. Plezilo doesn't edit Tofa collections.
@@ -19,6 +13,12 @@ Released November 26, 2026. Android and Windows.
 - **Tofa Home stays up to date:** when you watch or mark something on another device, Plezilo's Home reads your Tofa rows again; on servers that don't send these updates it checks every two minutes while Home is open.
 - **Explore finds titles on your Tofa server:** titles from Explore and other catalogs are now matched to your Tofa library, so you can play them from there.
 - Not there yet for Tofa, on purpose for now: requests and Tofa's Discover pages, subtitle search, the later parts of movies split over several files, Watch Together and Tofa's remote control. All of this was built from Tofa's published API; please report what doesn't work.
+
+## silo-preview-2.66.0
+
+Released November 26, 2026. Android and Windows.
+
+- **Signing in to Tofa with your account finds a way to your server:** after you sign in with the code and pick your server from the list, Plezilo used to try only the address Tofa's cloud gives for it, and gave up with "Couldn't finish signing in" when that address doesn't answer from your device (common when the server is reached through its own domain, or its port isn't open to the internet). It now tries every address Tofa lists for the server, at home, over the internet (including the server's custom address) and through Tofa's relay, and uses the first that answers. If none does, it says it can't reach the server instead of a vague error. Playing through the relay works now too: Plezilo's address check didn't send your sign-in to the relay, so it never picked it.
 
 ## silo-preview-2.65.0
 
