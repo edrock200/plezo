@@ -273,14 +273,118 @@ void main() {
       expect(fake.to('GET', '/api/v1/media'), isEmpty);
     });
 
-    test('a library gets its own Recently Added row and View All pages through /media', () async {
+    test('Home gives each Browse section its own Recently Added row', () async {
       serveHome();
+      fake.on(
+        'GET',
+        '/api/v1/browse/sections',
+        (_) => jsonResponse({
+          'sections': [
+            {
+              'key': 'lib-1',
+              'kind': 'library',
+              'library_id': 'lib-1',
+              'media_type': 'movie',
+              'name': 'Movies',
+              'total': 3,
+              'libraries': [
+                {'id': 'lib-1', 'name': 'Movies'},
+              ],
+            },
+            {
+              'key': 'tv',
+              'kind': 'type',
+              'library_id': null,
+              'media_type': 'tv',
+              'name': 'TV Shows',
+              'total': 2,
+              'libraries': <Object>[],
+            },
+            {
+              'key': 'empty',
+              'kind': 'library',
+              'library_id': 'lib-9',
+              'media_type': 'movie',
+              'name': 'Empty',
+              'total': 0,
+              'libraries': <Object>[],
+            },
+          ],
+        }),
+      );
+      final hubs = await client().fetchGlobalHubs();
+      expect(hubs.take(2).map((h) => h.title), ['Recently Added in Movies', 'Recently Added in TV Shows']);
+      final queries = [for (final r in fake.to('GET', '/api/v1/media')) r.url.queryParameters];
+      expect(queries.any((q) => q['library_id'] == 'lib-1'), isTrue);
+      expect(queries.any((q) => q['media_type'] == 'tv' && q['library_id'] == null), isTrue);
+      expect(queries.any((q) => q['library_id'] == 'lib-9'), isFalse, reason: 'an empty section gets no row');
+    });
+
+    test('a library Recommended tab gets every row its facets allow, and View All pages its query', () async {
+      fake.on(
+        'GET',
+        '/api/v1/media/facets',
+        (_) => jsonResponse(_facets(sorts: ['title', 'added_at', 'release_date', 'rating', 'random'])),
+      );
+      fake.on('GET', '/api/v1/media', (r) {
+        expect(r.url.queryParameters['library_id'], 'lib-1');
+        return jsonResponse(_page([mediaSummary('m-${r.url.queryParameters.length}')]));
+      });
+      fake.on(
+        'GET',
+        '/api/v1/users/me/suggested',
+        (_) => jsonResponse({
+          'items': [mediaSummary('m-sug'), mediaSummary('m-other', library: 'lib-2')],
+        }),
+      );
+      fake.on('GET', '/api/v1/media/binge-ready', (_) => jsonResponse({'items': <Object>[]}));
       final c = client();
       final hubs = await c.fetchLibraryHubs('lib-1', libraryName: 'Movies');
-      expect(hubs.single.title, 'Recently Added in Movies');
-      final page = await c.fetchMoreHubItemsPage(hubs.single.id, start: 0, size: 10);
-      expect(page.items.single.id, 'm-new');
-      expect(fake.to('GET', '/api/v1/media').last.url.queryParameters['library_id'], 'lib-1');
+      expect(hubs.map((h) => h.title), [
+        'Continue Watching in Movies',
+        'Recently Added in Movies',
+        'Suggested for You',
+        'Recently Released',
+        'Top Rated',
+        'Unwatched',
+        'Drama',
+        'Comedy',
+      ]);
+      expect(hubs[2].items.map((i) => i.id), ['m-sug'], reason: 'other libraries are left out');
+      final queries = [for (final r in fake.to('GET', '/api/v1/media')) r.url.queryParameters];
+      expect(queries.any((q) => q['watched'] == 'in_progress'), isTrue);
+      expect(queries.any((q) => q['sort'] == 'release_date' && q['released_only'] == 'true'), isTrue);
+      expect(queries.any((q) => q['sort'] == 'rating' && q['order'] == 'desc'), isTrue);
+      expect(queries.any((q) => q['watched'] == 'unwatched' && q['sort'] == 'random'), isTrue);
+      expect(queries.any((q) => q['genre'] == 'Drama'), isTrue);
+
+      final before = fake.to('GET', '/api/v1/media').length;
+      final page = await c.fetchMoreHubItemsPage(hubs[6].id, start: 0, size: 10);
+      expect(page.items, isNotEmpty);
+      final viewAll = fake.to('GET', '/api/v1/media');
+      expect(viewAll.length, before + 1);
+      expect(viewAll.last.url.queryParameters['genre'], 'Drama');
+
+      final noPlayback = await c.fetchLibraryHubs('lib-1', libraryName: 'Movies', includePlaybackHubs: false);
+      expect(noPlayback.first.title, 'Recently Added in Movies');
+    });
+
+    test('a library offers only rows its facets list', () async {
+      fake.on(
+        'GET',
+        '/api/v1/media/facets',
+        (_) => jsonResponse(
+          _facets(sorts: ['title'])
+            ..['genres'] = <Object>[]
+            ..['watched'] = <String, Object>{},
+        ),
+      );
+      fake.on('GET', '/api/v1/media', (_) => jsonResponse(_page([mediaSummary('m-x')])));
+      fake.on('GET', '/api/v1/users/me/suggested', (_) => jsonResponse({'items': <Object>[]}));
+      fake.on('GET', '/api/v1/media/binge-ready', (_) => jsonResponse({'items': <Object>[]}));
+      final hubs = await client().fetchLibraryHubs('lib-1', libraryName: 'Movies');
+      expect(hubs, isEmpty);
+      expect(fake.to('GET', '/api/v1/media'), isEmpty);
     });
   });
 

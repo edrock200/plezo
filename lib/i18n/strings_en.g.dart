@@ -3452,6 +3452,15 @@ class Translations$discover$en {
 
 	/// en: 'Watchlist'
 	String get tofaWatchlist => 'Watchlist';
+
+	/// en: 'Recently Released'
+	String get tofaRecentlyReleased => 'Recently Released';
+
+	/// en: 'Top Rated'
+	String get tofaTopRated => 'Top Rated';
+
+	/// en: 'Unwatched'
+	String get tofaUnwatched => 'Unwatched';
 }
 
 // Path: errors
@@ -10776,6 +10785,9 @@ extension on Translations {
 			'discover.tofaSuggested' => 'Suggested for You',
 			'discover.tofaReadyToBinge' => 'Ready to Binge',
 			'discover.tofaWatchlist' => 'Watchlist',
+			'discover.tofaRecentlyReleased' => 'Recently Released',
+			'discover.tofaTopRated' => 'Top Rated',
+			'discover.tofaUnwatched' => 'Unwatched',
 			'errors.searchFailed' => ({required Object error}) => 'Search failed: ${error}',
 			'errors.searchUnavailable' => 'Search could not reach any media server.',
 			'errors.connectionTimeout' => ({required Object context}) => 'Connection timeout while loading ${context}',
@@ -11114,11 +11126,11 @@ extension on Translations {
 			'explore.detail.yourRating' => 'Your rating',
 			'explore.detail.budget' => 'Budget',
 			'explore.detail.revenue' => 'Box office',
+			_ => null,
+		} ?? switch (path) {
 			'explore.detail.contentAdvisory' => 'Age guidance',
 			'explore.detail.tags' => 'Tags',
 			'explore.detail.revealSpoilerTags' => 'Show spoiler tags',
-			_ => null,
-		} ?? switch (path) {
 			'explore.detail.links' => 'Links',
 			'explore.detail.watchOn' => 'Watch on',
 			'explore.detail.watchTrailer' => 'Watch trailer',
@@ -11628,11 +11640,11 @@ extension on Translations {
 			'companionRemote.pairing.failedToConnect' => ({required Object error}) => 'Failed to connect: ${error}',
 			'companionRemote.remote.disconnectConfirm' => 'Do you want to disconnect from the remote session?',
 			'companionRemote.remote.reconnecting' => 'Reconnecting...',
+			_ => null,
+		} ?? switch (path) {
 			'companionRemote.remote.attemptOf' => ({required Object current}) => 'Attempt ${current} of 5',
 			'companionRemote.remote.retryNow' => 'Retry Now',
 			'companionRemote.remote.tabRemote' => 'Remote',
-			_ => null,
-		} ?? switch (path) {
 			'companionRemote.remote.tabPlay' => 'Play',
 			'companionRemote.remote.tabMore' => 'More',
 			'companionRemote.remote.menu' => 'Menu',
@@ -12142,11 +12154,11 @@ extension on Translations {
 			'siloPairing.summaryNoneTitle' => 'No accounts were added',
 			'siloPairing.summaryAdded' => ({required Object account, required Object server, required Object profile}) => '${account} on ${server}, in the profile ${profile}',
 			'siloPairing.summaryAddedNewProfile' => ({required Object account, required Object server, required Object profile}) => '${account} on ${server}, in a new profile, ${profile}',
+			_ => null,
+		} ?? switch (path) {
 			'siloPairing.summaryNotAdded' => ({required Object account, required Object server}) => '${account} on ${server} was not added',
 			'siloPairing.summarySwitchHint' => 'Switch profiles to use an account that is in another profile.',
 			'siloPairing.done' => 'Done',
-			_ => null,
-		} ?? switch (path) {
 			'siloPairing.unreachableTitle' => ({required Object server}) => 'Can\'t reach ${server}',
 			'siloPairing.unreachableProvider' => ({required Object server, required Object provider}) => 'This device can\'t reach ${server} through ${provider}. Install or open the ${provider} app on this device and make sure it can reach the server\'s network, then try again.',
 			'siloPairing.unreachablePublic' => ({required Object server, required Object url}) => 'This device can\'t reach ${server} at ${url}. Check its network connection and try again.',

@@ -178,6 +178,9 @@ class ServerCapabilities {
   /// ratings, favorites, live TV, folders or metadata editing in this client.
   static const ServerCapabilities tofa = ServerCapabilities(
     videoTranscoding: true,
+    // Home reads `fetchGlobalHubs` (Recently Added per Browse section,
+    // Suggested, Ready to Binge, Watchlist, pinned collections).
+    richHubs: true,
     continueWatchingRemoval: true,
     scrubThumbnails: true,
   );

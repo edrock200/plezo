@@ -1,30 +1,56 @@
 part of 'tofa_client.dart';
 
-/// Home rows beyond Continue Watching, each from a documented source:
+/// Home rows and library Recommended rows, each from a documented source.
 ///
-/// - Recently Added: `GET /media` sorted by a date-added sort that
-///   `/media/facets` lists (newest first), only when it lists one.
-/// - Suggested for You: `GET /users/me/suggested` (`items`, titles in the
-///   library; its `requestable` titles are left out).
+/// Home ([_globalHubs]):
+/// - Recently Added per Browse section (`GET /browse/sections`: a library of
+///   its own, or a type such as Movies across libraries), as Tofa's own Home
+///   gives each one a Recently Added row; only where `/media/facets` lists a
+///   date-added sort (newest first). Without sections, one row for all.
+/// - Suggested for You: `GET /users/me/suggested` (`items` only; its
+///   `requestable` titles are not in the library).
 /// - Ready to Binge: `GET /media/binge-ready` (complete seasons).
-/// - Pinned collections: `GET /collections/home-rows`, rows of kind
-///   `pinned_collection` with their `items` (`finish_sets` rows list titles
-///   not in the library and are left out).
 /// - Watchlist: `GET /users/me/watchlist`, titles in the library.
+/// - Pinned collections: `GET /collections/home-rows`, `pinned_collection`
+///   rows (`finish_sets` rows list titles not in the library).
 ///
-/// `POST /media/latest-episodes` answers which episode is newest for given
-/// shows (not a row of its own) and `/browse/sections` names the Browse
-/// sections; neither makes a Home row.
+/// A library's Recommended tab ([_libraryHubs]), every row built from
+/// `/media` parameters and the values that library's facets list (the spec
+/// has no per-library row list): in progress, recently added, suggested and
+/// Ready to Binge narrowed to the library, recently released, top rated,
+/// unwatched, and one row per most common genre.
+///
+/// Rows read from `/media` carry their query in the hub id
+/// (`tofa:q:<base64 json>`), so "View all" pages through the same query.
 extension _TofaHome on TofaClient {
-  static const _recentPrefix = 'tofa:recent';
+  static const _queryPrefix = 'tofa:q:';
   static const _suggestedId = 'tofa:suggested';
   static const _bingeId = 'tofa:binge';
   static const _watchlistId = 'tofa:watchlist';
   static const _collectionPrefix = 'tofa:collection:';
 
-  /// The date-added sort `/media/facets` lists, or null.
-  Future<String?> _dateAddedSort(String? libraryId) async {
-    final facets = await _facetsFor(libraryId);
+  /// How many genre rows a library's Recommended tab shows.
+  static const genreRows = 5;
+
+  static String _queryHubId(Map<String, String> params) =>
+      '$_queryPrefix${base64Url.encode(utf8.encode(jsonEncode(params)))}';
+
+  static Map<String, String>? _queryOf(String hubId) {
+    if (!hubId.startsWith(_queryPrefix)) return null;
+    try {
+      final decoded = jsonDecode(utf8.decode(base64Url.decode(hubId.substring(_queryPrefix.length))));
+      if (decoded is! Map) return null;
+      return {
+        for (final e in decoded.entries)
+          if (e.key is String && e.value is String) e.key as String: e.value as String,
+      };
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// The date-added sort the facets list, or null.
+  static String? _dateAddedSort(TofaFacets? facets) {
     if (facets == null || !facets.ordersAscDesc) return null;
     for (final sort in tofaDateAddedSorts) {
       if (facets.sorts.contains(sort)) return sort;
@@ -32,21 +58,12 @@ extension _TofaHome on TofaClient {
     return null;
   }
 
-  Future<List<MediaItem>> _recentItems(String? libraryId, {required int offset, required int limit}) async {
-    final sort = await _dateAddedSort(libraryId);
-    if (sort == null) {
-      appLogger.d('[tofa] no date-added sort listed; no Recently Added row');
-      return const [];
+  static String? _listedSort(TofaFacets? facets, List<String> candidates) {
+    if (facets == null || !facets.ordersAscDesc) return null;
+    for (final sort in candidates) {
+      if (facets.sorts.contains(sort)) return sort;
     }
-    final page = await fetchLibraryPagedContent(
-      libraryId ?? '',
-      query: LibraryQuery(
-        offset: offset,
-        limit: limit,
-        sort: LibrarySort(field: sort, direction: LibrarySortDirection.descending),
-      ),
-    );
-    return page.items;
+    return null;
   }
 
   MediaHub _hub(String id, String title, List<MediaItem> items, {int? limit, bool more = false, String? libraryId}) {
@@ -63,6 +80,16 @@ extension _TofaHome on TofaClient {
       serverId: serverId.value,
       serverName: serverName,
     );
+  }
+
+  /// A row of `/media` with [params]: one more than [limit] is read so the
+  /// row knows whether "View all" has more.
+  Future<List<MediaHub>> _queryRow(String title, Map<String, String> params, int limit, {String? libraryId}) async {
+    final page = await _mediaQuery(params, offset: 0, limit: limit + 1);
+    if (page.items.isEmpty) return const [];
+    return [
+      _hub(_queryHubId(params), title, page.items, limit: limit, more: page.totalCount > limit, libraryId: libraryId),
+    ];
   }
 
   Future<List<MediaItem>> _suggestedItems() async {
@@ -119,23 +146,74 @@ extension _TofaHome on TofaClient {
   }
 
   /// One row read, degrading to none: a failed leg is recorded in
-  /// [diagnostics] and never sinks Home.
+  /// [diagnostics] and never sinks the page.
   Future<List<MediaHub>> _leg(String name, Future<List<MediaHub>> Function() read, HubFetchDiagnostics? d) async {
     try {
       return await read();
     } catch (e) {
-      appLogger.d('[tofa] Home row $name failed', error: e.runtimeType);
+      appLogger.d('[tofa] row $name failed', error: e.runtimeType);
       d?.recordFailure(e);
       return const [];
     }
   }
 
+  /// Browse sections (`GET /browse/sections`): the server's chosen layout.
+  Future<List<Map<String, dynamic>>> _browseSections() async {
+    final data = await _api.getJson('/api/v1/browse/sections');
+    final rows = data is Map && data['sections'] is List ? data['sections'] as List : const [];
+    return [
+      for (final s in rows.whereType<Map<String, dynamic>>())
+        if (s['name'] is String && ((s['total'] as num?)?.toInt() ?? 1) > 0) s,
+    ];
+  }
+
+  /// Recently Added rows for Home: one per Browse section, else one for all.
+  Future<List<MediaHub>> _recentRows(int limit) async {
+    List<Map<String, dynamic>> sections;
+    try {
+      sections = await _browseSections();
+    } catch (e) {
+      appLogger.d('[tofa] browse sections unavailable; one Recently Added row', error: e.runtimeType);
+      sections = const [];
+    }
+    if (sections.isEmpty) {
+      final sort = _dateAddedSort(await _facetsFor(null));
+      if (sort == null) return const [];
+      return _queryRow(t.discover.recentlyAdded, {'sort': sort, 'order': 'desc'}, limit);
+    }
+    final rows = await Future.wait([
+      for (final section in sections)
+        () async {
+          // `BrowseSection`: `kind` `library` names one library; `type`
+          // spans the libraries of its (required) `media_type`.
+          final libraryId = section['kind'] == 'library' && section['library_id'] is String
+              ? section['library_id'] as String
+              : null;
+          final mediaType = section['media_type'];
+          if (libraryId == null && (section['kind'] != 'type' || mediaType is! String)) {
+            return const <MediaHub>[];
+          }
+          final facets = await _facetsFor(libraryId);
+          final sort = _dateAddedSort(facets);
+          if (sort == null) return const <MediaHub>[];
+          return _queryRow(
+            t.discover.recentlyAddedIn(library: section['name'] as String),
+            {
+              ...libraryId != null ? {'library_id': libraryId} : {'media_type': mediaType as String},
+              'sort': sort,
+              'order': 'desc',
+            },
+            limit,
+            libraryId: libraryId,
+          );
+        }(),
+    ]);
+    return [for (final r in rows) ...r];
+  }
+
   Future<List<MediaHub>> _globalHubs(int limit, HubFetchDiagnostics? diagnostics) async {
     final legs = await Future.wait([
-      _leg('recent', () async {
-        final items = await _recentItems(null, offset: 0, limit: limit + 1);
-        return [if (items.isNotEmpty) _hub(_recentPrefix, t.discover.recentlyAdded, items, limit: limit)];
-      }, diagnostics),
+      _leg('recent', () => _recentRows(limit), diagnostics),
       _leg('suggested', () async {
         final items = await _suggestedItems();
         _homeLists[_suggestedId] = items;
@@ -156,38 +234,107 @@ extension _TofaHome on TofaClient {
     return [for (final hubs in legs) ...hubs];
   }
 
+  /// Every row Plezilo can build for one library, read together.
   Future<List<MediaHub>> _libraryHubs(
     String libraryId,
     String libraryName,
     int limit,
-    HubFetchDiagnostics? diagnostics,
-  ) => _leg('recent:$libraryId', () async {
-    final items = await _recentItems(libraryId, offset: 0, limit: limit + 1);
-    return [
-      if (items.isNotEmpty)
-        _hub(
-          '$_recentPrefix:$libraryId',
-          t.discover.recentlyAddedIn(library: libraryName),
-          items,
-          limit: limit,
-          libraryId: libraryId,
+    HubFetchDiagnostics? diagnostics, {
+    bool includePlaybackHubs = true,
+  }) async {
+    final facets = await _facetsFor(libraryId);
+    final lib = {'library_id': libraryId};
+    final added = _dateAddedSort(facets);
+    final released = _listedSort(facets, const ['release_date']);
+    final rated = _listedSort(facets, const ['rating', 'imdb_rating']);
+    final watched = facets?.watched ?? const <String>[];
+    final genres = [...?facets?.genres].take(genreRows).toList();
+    String inLibrary(MediaItem item) => item.libraryId ?? '';
+    final legs = await Future.wait([
+      if (includePlaybackHubs && watched.contains('in_progress'))
+        _leg(
+          'in_progress:$libraryId',
+          () => _queryRow(
+            t.discover.continueWatchingIn(library: libraryName),
+            {...lib, 'watched': 'in_progress'},
+            limit,
+            libraryId: libraryId,
+          ),
+          diagnostics,
         ),
-    ];
-  }, diagnostics);
+      if (added != null)
+        _leg(
+          'recent:$libraryId',
+          () => _queryRow(
+            t.discover.recentlyAddedIn(library: libraryName),
+            {...lib, 'sort': added, 'order': 'desc'},
+            limit,
+            libraryId: libraryId,
+          ),
+          diagnostics,
+        ),
+      _leg('suggested:$libraryId', () async {
+        final items = [
+          for (final i in await _suggestedItems())
+            if (inLibrary(i) == libraryId) i,
+        ];
+        final id = '$_suggestedId:$libraryId';
+        _homeLists[id] = items;
+        return [if (items.isNotEmpty) _hub(id, t.discover.tofaSuggested, items, limit: limit, libraryId: libraryId)];
+      }, diagnostics),
+      _leg('binge:$libraryId', () async {
+        final items = [
+          for (final i in await _bingeItems(50))
+            if (inLibrary(i) == libraryId) i,
+        ];
+        final id = '$_bingeId:$libraryId';
+        _homeLists[id] = items;
+        return [if (items.isNotEmpty) _hub(id, t.discover.tofaReadyToBinge, items, limit: limit, libraryId: libraryId)];
+      }, diagnostics),
+      if (released != null)
+        _leg(
+          'released:$libraryId',
+          () => _queryRow(
+            t.discover.tofaRecentlyReleased,
+            {...lib, 'sort': released, 'order': 'desc', 'released_only': 'true'},
+            limit,
+            libraryId: libraryId,
+          ),
+          diagnostics,
+        ),
+      if (rated != null)
+        _leg(
+          'rated:$libraryId',
+          () =>
+              _queryRow(t.discover.tofaTopRated, {...lib, 'sort': rated, 'order': 'desc'}, limit, libraryId: libraryId),
+          diagnostics,
+        ),
+      if (watched.contains('unwatched'))
+        _leg(
+          'unwatched:$libraryId',
+          () => _queryRow(
+            t.discover.tofaUnwatched,
+            {...lib, 'watched': 'unwatched', if (facets?.sorts.contains('random') ?? false) 'sort': 'random'},
+            limit,
+            libraryId: libraryId,
+          ),
+          diagnostics,
+        ),
+      for (final genre in genres)
+        _leg(
+          'genre:$genre',
+          () => _queryRow(genre, {...lib, 'genre': genre}, limit, libraryId: libraryId),
+          diagnostics,
+        ),
+    ]);
+    return [for (final hubs in legs) ...hubs];
+  }
 
-  /// "View all" of a Home row: Recently Added pages through `/media`; the
-  /// list rows page through what their last read returned.
+  /// "View all" of a row: `/media` rows page through their query; the list
+  /// rows page through what their last read returned.
   Future<LibraryPage<MediaItem>> _moreHubItemsPage(String hubId, int start, int? size) async {
-    if (hubId == _recentPrefix || hubId.startsWith('$_recentPrefix:')) {
-      final libraryId = hubId == _recentPrefix ? null : hubId.substring(_recentPrefix.length + 1);
-      final limit = size ?? 50;
-      final items = await _recentItems(libraryId, offset: start, limit: limit);
-      return LibraryPage(
-        items: items,
-        totalCount: fallbackPageTotal(offset: start, itemCount: items.length, requestedSize: limit),
-        offset: start,
-      );
-    }
+    final query = _queryOf(hubId);
+    if (query != null) return _mediaQuery(query, offset: start, limit: size ?? 50);
     var items = _homeLists[hubId];
     if (items == null) {
       items = switch (hubId) {

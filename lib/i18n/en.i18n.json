@@ -1294,7 +1294,10 @@
     },
     "tofaSuggested": "Suggested for You",
     "tofaReadyToBinge": "Ready to Binge",
-    "tofaWatchlist": "Watchlist"
+    "tofaWatchlist": "Watchlist",
+    "tofaRecentlyReleased": "Recently Released",
+    "tofaTopRated": "Top Rated",
+    "tofaUnwatched": "Unwatched"
   },
   "errors": {
     "searchFailed": "Search failed: ${error}",

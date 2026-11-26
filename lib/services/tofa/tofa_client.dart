@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:collection';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:http/http.dart' as http;
@@ -517,10 +518,22 @@ class TofaClient implements MediaServerClient, ScopedMediaServerClient, Graceful
       'letter': ?letter,
       ...TofaLibraryOptions.queryParams(query, facets),
     };
+    return _mediaQuery(params, offset: query.offset, limit: limit, abort: abort);
+  }
+
+  /// One offset page of `GET /api/v1/media` with [params], mapped onto Tofa's
+  /// `page` / `per_page` ([pagesFor]).
+  Future<LibraryPage<MediaItem>> _mediaQuery(
+    Map<String, String> params, {
+    required int offset,
+    required int limit,
+    AbortController? abort,
+  }) async {
+    final libraryId = params['library_id'];
     final items = <MediaItem>[];
     var total = 0;
     var any = false;
-    for (final (:page, :skip) in pagesFor(query.offset, limit)) {
+    for (final (:page, :skip) in pagesFor(offset, limit)) {
       final data = await _api.getJson(
         '/api/v1/media',
         query: {...params, 'page': '$page', 'per_page': '$limit'},
@@ -539,8 +552,8 @@ class TofaClient implements MediaServerClient, ScopedMediaServerClient, Graceful
     final pageItems = items.take(limit).toList();
     return LibraryPage(
       items: pageItems,
-      totalCount: any ? total : fallbackPageTotal(offset: query.offset, itemCount: pageItems.length),
-      offset: query.offset,
+      totalCount: any ? total : fallbackPageTotal(offset: offset, itemCount: pageItems.length),
+      offset: offset,
     );
   }
 
@@ -926,7 +939,7 @@ class TofaClient implements MediaServerClient, ScopedMediaServerClient, Graceful
     bool includePlaybackHubs = true,
     MediaKind? libraryKind,
     HubFetchDiagnostics? diagnostics,
-  }) => _libraryHubs(libraryId, libraryName, limit, diagnostics);
+  }) => _libraryHubs(libraryId, libraryName, limit, diagnostics, includePlaybackHubs: includePlaybackHubs);
 
   /// `GET /api/v1/media/{id}/similar`'s `owned` titles as "More Like This".
   @override
