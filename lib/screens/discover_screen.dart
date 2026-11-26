@@ -45,6 +45,7 @@ import '../profiles/active_profile_provider.dart';
 import '../profiles/profile.dart';
 import '../profiles/profile_activation.dart';
 import '../profiles/profile_avatar.dart';
+import '../services/iptv/iptv_sync_service.dart';
 import '../services/settings_service.dart';
 import '../widgets/settings_builder.dart';
 import '../widgets/fitting_title_text.dart';
@@ -457,6 +458,8 @@ class _DiscoverScreenState extends State<DiscoverScreen>
     // TV also claims once the first pass settles without content — the claim
     // then parks on Retry or the toolbar — since an empty Home otherwise
     // leaves the D-pad nothing to focus (#3117).
+    // Automatic IPTV refreshes wait for Home's first load.
+    if (!_isLoading && !_areHubsLoading) IptvSyncService.markHomeLoaded();
     if (!_initialLoadComplete) {
       final hasContent = _onDeck.isNotEmpty || _hubs.isNotEmpty;
       if (PlatformDetector.isTV() && (hasContent || (!_isLoading && !_areHubsLoading))) {

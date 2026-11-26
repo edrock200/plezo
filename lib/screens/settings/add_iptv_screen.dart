@@ -215,6 +215,9 @@ class _AddIptvScreenState extends State<AddIptvScreen> with AsyncFormStateMixin,
           if (filePath != null) unawaited(File(filePath).delete().catchError((_) => File(filePath)));
           throw _ImportFailure(record.error);
         }
+        // The guide follows in the background (automatic refreshes may not
+        // have started yet this run).
+        unawaited(_sync.refresh(id, connection: connection, playlist: false, epg: true));
         return connection;
       },
       errorMapper: (e) {

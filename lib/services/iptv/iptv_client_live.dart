@@ -21,7 +21,7 @@ extension IptvClientLive on IptvClient {
       return cached.channels;
     }
     final channels = await store.channels(_connection.id);
-    final groups = await store.groups(_connection.id, IptvGroupKind.live);
+    final groups = await store.groups(_connection.id, IptvGroupKind.live, withCounts: false);
     final locked = _lockedNames;
     final hiddenGroups = {
       for (final g in groups)
@@ -40,8 +40,49 @@ extension IptvClientLive on IptvClient {
       return a.sortIndex.compareTo(b.sortIndex);
     });
     final shown = numberChannels(visible, _connection.numbering);
-    _channelCache = (revision: revision, dataRevision: IptvDataRevision.of(_connection.id), channels: shown);
+    _channelCache = (
+      revision: revision,
+      dataRevision: IptvDataRevision.of(_connection.id),
+      channels: shown,
+      byId: {for (final s in shown) s.channel.id: s},
+    );
     return shown;
+  }
+
+  /// The shown-channel list when it is already built, else null (never loads
+  /// every channel: a source can have tens of thousands).
+  ({List<IptvShownChannel> channels, Map<String, IptvShownChannel> byId})? get _warmChannels {
+    final cached = _channelCache;
+    if (cached == null ||
+        cached.revision != IptvParentalGate.revision.value ||
+        cached.dataRevision != IptvDataRevision.of(_connection.id)) {
+      return null;
+    }
+    return (channels: cached.channels, byId: cached.byId);
+  }
+
+  /// Live groups hidden by the user or locked by the parental filter.
+  Future<Set<String>> _hiddenLiveGroups() async {
+    final locked = _lockedNames;
+    return {
+      for (final g in await store.groups(_connection.id, IptvGroupKind.live, withCounts: false))
+        if (g.hidden || locked.contains(g.name)) g.name,
+    };
+  }
+
+  /// [ids]' channels as shown, read one by one (no full list): Home's
+  /// favourites and search. Hidden ones are left out; the number is the
+  /// shown list's when it is built, else the channel's own.
+  Future<List<IptvShownChannel>> _shownByIds(Iterable<String> ids) async {
+    final warm = _warmChannels;
+    if (warm != null) return [for (final id in ids) ?warm.byId[id]];
+    final hidden = await _hiddenLiveGroups();
+    final out = <IptvShownChannel>[];
+    for (final ch in await store.channelsByIds(_connection.id, ids.toList())) {
+      if (ch.hidden || (ch.group != null && hidden.contains(ch.group))) continue;
+      out.add(IptvShownChannel(ch, ch.number ?? ch.playlistNumber ?? ''));
+    }
+    return out;
   }
 
   /// Number [channels] (already in display order): the user's number first;
@@ -97,10 +138,8 @@ extension IptvClientLive on IptvClient {
   }
 
   Future<IptvShownChannel?> _shownChannel(String channelId) async {
-    for (final shown in await shownChannels()) {
-      if (shown.channel.id == channelId) return shown;
-    }
-    return null;
+    await shownChannels();
+    return _warmChannels?.byId[channelId];
   }
 
   /// Total guide shift of [ch] in seconds.
@@ -170,7 +209,8 @@ extension IptvClientLive on IptvClient {
   /// Now and next on [channelId]: from the stored guide, else (Xtream) the
   /// provider's short guide.
   Future<IptvNowNext> nowNext(String channelId, {DateTime? at}) async {
-    final shown = await _shownChannel(channelId) ?? await _anyChannel(channelId);
+    // Only the channel's own fields are needed: no shown-list build.
+    final shown = _warmChannels?.byId[channelId] ?? await _anyChannel(channelId);
     if (shown == null) return (now: null, next: null);
     final ch = shown.channel;
     final now = (at ?? _now()).millisecondsSinceEpoch ~/ 1000;
@@ -333,12 +373,9 @@ extension IptvClientLive on IptvClient {
   Future<List<({LiveTvChannel channel, IptvProgramme? now})>> favoriteChannelsNow({int limit = 30}) async {
     final ids = await store.favoriteChannelIds(_connection.id);
     if (ids.isEmpty) return const [];
-    final shown = {for (final s in await shownChannels()) s.channel.id: s};
     final out = <({LiveTvChannel channel, IptvProgramme? now})>[];
-    for (final id in ids.take(limit)) {
-      final s = shown[id];
-      if (s == null) continue;
-      final nn = await nowNext(id);
+    for (final s in (await _shownByIds(ids)).take(limit)) {
+      final nn = await nowNext(s.channel.id);
       out.add((channel: _liveChannel(s), now: nn.now));
     }
     return out;
@@ -354,18 +391,37 @@ extension IptvClientLive on IptvClient {
         programmes: const <({LiveTvChannel channel, LiveTvProgram programme})>[],
       );
     }
-    final shown = await shownChannels();
-    final channels = [
-      for (final s in shown)
-        if (s.channel.name.toLowerCase().contains(q) || s.number == q) _liveChannel(s),
-    ].take(limit).toList();
-    final byEpg = <String, List<IptvShownChannel>>{};
-    for (final s in shown) {
-      final epg = s.channel.epgChannelId;
-      if (epg != null) byEpg.putIfAbsent(epg, () => []).add(s);
+    // SQL-limited: matching channels, and only the channels of matching
+    // programmes, are read (never the whole list).
+    final warm = _warmChannels;
+    final List<LiveTvChannel> channels;
+    if (warm != null) {
+      channels = [
+        for (final s in warm.channels)
+          if (s.channel.name.toLowerCase().contains(q) || s.number == q) _liveChannel(s),
+      ].take(limit).toList();
+    } else {
+      final matches = await store.searchChannels(_connection.id, q, limit: limit * 2);
+      channels = [
+        for (final s in await _shownByIds([for (final ch in matches) ch.id])) _liveChannel(s),
+      ].take(limit).toList();
     }
     final now = _now().millisecondsSinceEpoch ~/ 1000;
     final rows = await store.searchProgrammes(_connection.id, q, from: now, limit: limit * 2);
+    final byEpg = <String, List<IptvShownChannel>>{};
+    final epgIds = {for (final p in rows) p.epgChannelId};
+    if (warm != null) {
+      for (final s in warm.channels) {
+        final epg = s.channel.epgChannelId;
+        if (epg != null && epgIds.contains(epg)) byEpg.putIfAbsent(epg, () => []).add(s);
+      }
+    } else if (epgIds.isNotEmpty) {
+      final ids = await store.channelIdsByEpg(_connection.id, epgIds);
+      for (final s in await _shownByIds(ids)) {
+        final epg = s.channel.epgChannelId;
+        if (epg != null) byEpg.putIfAbsent(epg, () => []).add(s);
+      }
+    }
     final programmes = <({LiveTvChannel channel, LiveTvProgram programme})>[];
     for (final p in rows) {
       final target = byEpg[p.epgChannelId]?.firstOrNull;
@@ -397,7 +453,12 @@ class _IptvLiveTvSupport implements LiveTvSupport, LiveTvChannelGroups, LiveTvRe
   LiveTvDvrSupport? get dvr => _IptvDvr(_client);
 
   @override
-  Future<bool> isAvailable() async => (await _client.shownChannels()).isNotEmpty;
+  Future<bool> isAvailable() async {
+    final warm = _client._warmChannels;
+    if (warm != null) return warm.channels.isNotEmpty;
+    // A count, not the whole list (checked at every start).
+    return await _client.store.channelCount(_client.connection.id) > 0;
+  }
 
   @override
   Future<List<LiveTvChannel>> fetchChannels({String? lineup}) async => [

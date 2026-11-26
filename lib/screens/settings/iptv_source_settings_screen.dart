@@ -261,7 +261,9 @@ class _IptvSourceSettingsScreenState extends State<IptvSourceSettingsScreen> {
         ? t.iptv.neverRefreshed
         : t.iptv.refreshedAt(when: DateFormat.MMMd().add_Hm().format(last), what: counted(record.count));
     final error = record.error;
-    return error == null ? base : '$base\n${t.iptv.lastError(error: error)}';
+    if (error == null) return base;
+    if (error == IptvSyncService.interruptedError) return '$base\n${t.iptv.refreshInterrupted}';
+    return '$base\n${t.iptv.lastError(error: error)}';
   }
 
   @override

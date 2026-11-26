@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
 import '../../utils/app_logger.dart';
 import 'iptv_catchup.dart';
+import 'json_array_splitter.dart';
 
 /// The provider refused the username and password (`user_info.auth` 0, or
 /// HTTP 401/403).
@@ -248,7 +250,7 @@ class XtreamApi {
     http.Client? client,
     this.userAgent,
     this.timeout = const Duration(seconds: 30),
-    this.maxListBytes = defaultMaxListBytes,
+    this.maxListRows = defaultMaxListRows,
   }) : _client = client ?? http.Client(),
        _ownsClient = client == null;
 
@@ -326,20 +328,29 @@ class XtreamApi {
   Future<List<XtreamCategory>> vodCategories() => _categories('get_vod_categories');
   Future<List<XtreamCategory>> seriesCategories() => _categories('get_series_categories');
 
-  /// The most a list answer may hold. A provider with a very large catalogue
-  /// answers tens of megabytes; past this the refresh fails instead of
-  /// running the phone out of memory.
-  static const defaultMaxListBytes = 384 * 1024 * 1024;
-  final int maxListBytes;
+  /// The most rows a list may hold: far above any real catalogue (the largest
+  /// seen have a few hundred thousand), it only stops an endless answer.
+  static const defaultMaxListRows = 5000000;
+  static const _sliceBytes = 32 * 1024;
+  final int maxListRows;
 
-  /// A large list answer, decoded while it downloads: the body is never held
-  /// whole as bytes and again as text next to the decoded rows.
-  Future<Object?> _getList(Map<String, String> params, {required Duration timeout}) async {
-    final action = params['action'] ?? 'list';
-    final request = http.Request('GET', apiUri(params))..headers.addAll(_headers);
+  /// Rows of a large list (`get_live_streams`, `get_vod_streams`,
+  /// `get_series`), handed to [onBatch] about [batchSize] at a time while the
+  /// answer downloads: the list is never held whole, as bytes, text or rows
+  /// ([JsonArraySplitter] decodes one row at a time). Returns the row count.
+  /// An answer that ends early throws, so the caller keeps its old data.
+  Future<int> forEachRow(
+    String action,
+    Future<void> Function(List<Map<String, dynamic>> rows) onBatch, {
+    String? categoryId,
+    int batchSize = 2000,
+    Duration timeout = const Duration(minutes: 15),
+  }) async {
+    final request = http.Request('GET', apiUri({'action': action, 'category_id': ?categoryId}))
+      ..headers.addAll(_headers);
     http.StreamedResponse response;
     try {
-      response = await _client.send(request).timeout(timeout);
+      response = await _client.send(request).timeout(const Duration(seconds: 60));
     } on TimeoutException {
       appLogger.w('[iptv] xtream $action timed out');
       throw const XtreamRequestException('timeout');
@@ -356,49 +367,57 @@ class XtreamApi {
       appLogger.w('[iptv] xtream $action answered HTTP ${response.statusCode}');
       throw XtreamRequestException('http', statusCode: response.statusCode);
     }
-    final declared = response.contentLength;
-    if (declared != null && declared > maxListBytes) {
-      unawaited(response.stream.drain<void>().catchError((_) {}));
-      appLogger.w('[iptv] xtream $action too large (${declared ~/ (1024 * 1024)} MB)');
-      throw const XtreamRequestException('too large');
-    }
-    var received = 0;
-    var empty = true;
-    final bytes = response.stream.map((chunk) {
-      received += chunk.length;
-      if (received > maxListBytes) throw const XtreamRequestException('too large');
-      if (empty && chunk.any((b) => b > 0x20)) empty = false;
-      return chunk;
-    });
+    final splitter = JsonArraySplitter();
+    var batch = <Map<String, dynamic>>[];
+    var rows = 0;
+    final deadline = DateTime.now().add(timeout);
     try {
-      final values = await const Utf8Decoder(
-        allowMalformed: true,
-      ).fuse(json.decoder).bind(bytes).toList().timeout(timeout);
-      return values.isEmpty ? null : values.first;
-    } on XtreamRequestException {
-      appLogger.w('[iptv] xtream $action too large (over ${maxListBytes ~/ (1024 * 1024)} MB)');
+      await for (final chunk in response.stream.timeout(const Duration(seconds: 60))) {
+        final bytes = chunk is Uint8List ? chunk : Uint8List.fromList(chunk);
+        // A network chunk can be megabytes: split it so a batch stays near
+        // [batchSize] rows.
+        for (var at = 0; at < bytes.length && !splitter.done; at += _sliceBytes) {
+          final end = at + _sliceBytes > bytes.length ? bytes.length : at + _sliceBytes;
+          for (final element in splitter.add(Uint8List.sublistView(bytes, at, end))) {
+            if (element is! Map) continue;
+            batch.add(element.cast<String, dynamic>());
+            rows++;
+          }
+          if (rows > maxListRows) throw const XtreamRequestException('too many rows');
+          if (batch.length >= batchSize) {
+            final full = batch;
+            batch = [];
+            await onBatch(full);
+          }
+        }
+        if (DateTime.now().isAfter(deadline)) throw TimeoutException('list');
+        if (splitter.done) break;
+      }
+      splitter.close();
+      if (batch.isNotEmpty) await onBatch(batch);
+      return rows;
+    } on XtreamRequestException catch (e) {
+      appLogger.w('[iptv] xtream $action stopped: ${e.message} after $rows rows');
+      rethrow;
+    } on XtreamAuthException {
       rethrow;
     } on TimeoutException {
-      appLogger.w('[iptv] xtream $action timed out');
+      appLogger.w('[iptv] xtream $action timed out after $rows rows');
       throw const XtreamRequestException('timeout');
     } on FormatException {
-      if (empty) return null;
-      appLogger.w('[iptv] xtream $action answered something other than JSON');
+      appLogger.w('[iptv] xtream $action answered something other than a JSON list (after $rows rows)');
       throw const XtreamRequestException('not json');
-    } catch (e) {
-      appLogger.w('[iptv] xtream $action failed (${e.runtimeType})');
-      throw XtreamRequestException(e.runtimeType.toString());
     }
   }
 
   Future<List<Map<String, dynamic>>> _rows(String action, {String? categoryId}) async {
-    final data = await _getList({'action': action, 'category_id': ?categoryId}, timeout: const Duration(minutes: 3));
-    if (data is List) return [for (final row in data.whereType<Map>()) row.cast<String, dynamic>()];
-    // Some servers answer an object keyed by index.
-    if (data is Map) return [for (final row in data.values.whereType<Map>()) row.cast<String, dynamic>()];
-    return const [];
+    final all = <Map<String, dynamic>>[];
+    await forEachRow(action, (rows) async => all.addAll(rows), categoryId: categoryId);
+    return all;
   }
 
+  /// The whole list at once: only for small lists (one category) and tests;
+  /// imports use [forEachRow].
   Future<List<Map<String, dynamic>>> liveStreams({String? categoryId}) =>
       _rows('get_live_streams', categoryId: categoryId);
   Future<List<Map<String, dynamic>>> vodStreams({String? categoryId}) =>

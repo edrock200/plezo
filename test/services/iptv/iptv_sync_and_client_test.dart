@@ -481,18 +481,18 @@ void main() {
       expect((await client.fetchItem('s3001'))!.viewedLeafCount, 0);
     });
 
-    test('large lists are decoded while they download, up to a cap', () async {
+    test('large lists are read row by row while they download, up to a row count', () async {
       XtreamApi api({int? cap}) => XtreamApi(
         XtreamCredentials(baseUrl: server.base, username: 'demo', password: 'secret'),
-        maxListBytes: cap ?? XtreamApi.defaultMaxListBytes,
+        maxListRows: cap ?? XtreamApi.defaultMaxListRows,
       );
       final normal = api();
       expect(await normal.vodStreams(), hasLength(4));
       normal.close();
-      final capped = api(cap: 64);
+      final capped = api(cap: 2);
       await expectLater(
         capped.vodStreams(),
-        throwsA(isA<XtreamRequestException>().having((e) => e.message, 'message', 'too large')),
+        throwsA(isA<XtreamRequestException>().having((e) => e.message, 'message', 'too many rows')),
       );
       capped.close();
     });

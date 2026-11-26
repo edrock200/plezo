@@ -80,13 +80,133 @@ Future<String?> _spawn(_SyncJob job) => Isolate.run(() => _runSyncJob(job));
 /// are connected and every 15 minutes after; a source is refreshed when its
 /// playlist or guide is older than its interval, or never loaded.
 class IptvSyncService {
-  IptvSyncService({this.storeOverride, this.useIsolate = true, this.httpClientFactory});
+  IptvSyncService({
+    this.storeOverride,
+    this.useIsolate = true,
+    this.httpClientFactory,
+    this.startDelay = Duration.zero,
+    this.startDeadline = Duration.zero,
+    DateTime Function()? now,
+  }) : _now = now ?? DateTime.now {
+    if (startDelay > Duration.zero) {
+      Timer(startDelay, () {
+        _delayPassed = true;
+        _maybeStart();
+      });
+    } else {
+      _delayPassed = true;
+    }
+    if (startDeadline > Duration.zero && !_homeSeen) {
+      _deadlineTimer = Timer(startDeadline, () {
+        _homeLoaded = true;
+        _maybeStart();
+      });
+    } else {
+      _homeLoaded = true;
+    }
+    _maybeStart();
+  }
+
+  /// The app's service: automatic refreshes wait about a minute after launch
+  /// and for Home's first load (or at most three minutes), so a large source
+  /// never competes with the app starting up. Asked refreshes run at once.
+  static IptvSyncService _production() =>
+      IptvSyncService(startDelay: const Duration(seconds: 60), startDeadline: const Duration(minutes: 3));
+
+  final DateTime Function() _now;
+
+  /// How long after creation automatic refreshes may start.
+  final Duration startDelay;
+
+  /// Automatic refreshes also wait for [homeLoaded], at most this long.
+  final Duration startDeadline;
+
+  Timer? _deadlineTimer;
+  bool _delayPassed = false;
+  bool _homeLoaded = false;
+  bool _started = false;
+
+  static bool _homeSeen = false;
+
+  /// Home finished its first load (called by Home; never creates the
+  /// service): automatic refreshes may start once the start delay passed.
+  static void markHomeLoaded() {
+    _homeSeen = true;
+    _instance?.homeLoaded();
+  }
+
+  /// Home finished its first load: automatic refreshes may start (once the
+  /// start delay has passed).
+  void homeLoaded() {
+    if (_homeLoaded) return;
+    _homeLoaded = true;
+    _maybeStart();
+  }
+
+  bool get automaticStarted => _started;
+
+  void _maybeStart() {
+    if (_started || !_delayPassed || !_homeLoaded) return;
+    _started = true;
+    _deadlineTimer?.cancel();
+    appLogger.i('[iptv] automatic refreshes start (${_sources.length} source(s))');
+    unawaited(checkAll());
+  }
+
+  // ---- crash-loop guard ----------------------------------------------------
+
+  /// Meta keys: when the running refresh started (cleared when it ends), how
+  /// many refreshes in a row the app died in, and until when automatic
+  /// refreshes wait after that.
+  static const runningSinceKey = 'refresh_running_since';
+  static const interruptedKey = 'refresh_interrupted';
+  static const holdUntilKey = 'refresh_hold_until';
+
+  /// The sync error a source shows after a refresh the app died in.
+  static const interruptedError = 'interrupted';
+
+  /// Each source's marker is looked at once per run (shared by concurrent
+  /// checks).
+  final Map<String, Future<void>> _markerChecks = {};
+
+  /// Sources whose automatic refresh is skipped for the rest of this run.
+  final Set<String> _skipThisRun = {};
+
+  Future<void> _checkMarker(IptvConnection c) async {
+    final since = await store.meta(c.id, runningSinceKey);
+    if (since == null) return;
+    final count = (int.tryParse(await store.meta(c.id, interruptedKey) ?? '') ?? 0) + 1;
+    await store.putMeta(c.id, interruptedKey, '$count');
+    await store.putMeta(c.id, runningSinceKey, null);
+    await store.recordSync(c.id, IptvSyncWorker.playlistKind, ok: false, error: interruptedError);
+    _skipThisRun.add(c.id);
+    if (count >= 2) {
+      final until = _now().add(Duration(hours: c.playlistRefreshHours.clamp(1, 24 * 14)));
+      await store.putMeta(c.id, holdUntilKey, '${until.millisecondsSinceEpoch}');
+      appLogger.w(
+        '[iptv] last refresh did not finish ($count in a row); automatic refresh waits for the next interval',
+      );
+    } else {
+      appLogger.w('[iptv] last refresh did not finish; automatic refresh skipped this run');
+    }
+    await _loadStatus(c.id);
+  }
+
+  /// Looks for a refresh the app died in (its marker is still there); true
+  /// when the automatic refresh must wait.
+  Future<bool> _guarded(IptvConnection c) async {
+    await (_markerChecks[c.id] ??= _checkMarker(c));
+    if (_skipThisRun.contains(c.id)) return true;
+    final hold = int.tryParse(await store.meta(c.id, holdUntilKey) ?? '');
+    if (hold != null && _now().millisecondsSinceEpoch < hold) return true;
+    return false;
+  }
 
   /// The HTTP client of an in-process refresh (tests).
   final http.Client Function()? httpClientFactory;
 
   static IptvSyncService? _instance;
-  static IptvSyncService get instance => _instance ??= IptvSyncService();
+  static IptvSyncService get instance => _instance ??= _production();
   static set testInstance(IptvSyncService? service) => _instance = service;
 
   /// The store to use instead of the app's (tests).
@@ -119,9 +239,12 @@ class IptvSyncService {
   /// Start watching [connection]: refresh what is stale.
   void watch(IptvConnection connection) {
     _sources[connection.id] = connection;
-    _timer ??= Timer.periodic(const Duration(minutes: 15), (_) => unawaited(checkAll()));
+    _timer ??= Timer.periodic(const Duration(minutes: 15), (_) {
+      if (_started) unawaited(checkAll());
+    });
     unawaited(_loadStatus(connection.id));
-    unawaited(check(connection.id));
+    _maybeStart();
+    if (_started) unawaited(check(connection.id));
   }
 
   /// Adopt edited settings of a watched source without refreshing it.
@@ -158,7 +281,8 @@ class IptvSyncService {
   /// Refresh [sourceId]'s playlist and/or guide when stale.
   Future<void> check(String sourceId) async {
     final c = _sources[sourceId];
-    if (c == null) return;
+    if (c == null || _running.containsKey(sourceId)) return;
+    if (await _guarded(c)) return;
     final playlist = await store.syncRecord(sourceId, IptvSyncWorker.playlistKind);
     final epg = await store.syncRecord(sourceId, IptvSyncWorker.epgKind);
     final now = DateTime.now();
@@ -200,6 +324,11 @@ class IptvSyncService {
       progress: IptvSyncProgress(playlist ? IptvSyncPhase.playlist : IptvSyncPhase.guide),
     );
     appLogger.i('[iptv] refresh started playlist=$playlist guide=$epg');
+    // Left behind only if the app dies during the refresh ([_guarded]).
+    await (_markerChecks[c.id] ??= _checkMarker(c));
+    try {
+      await store.putMeta(c.id, runningSinceKey, '${_now().millisecondsSinceEpoch}');
+    } catch (_) {}
     String? error;
     void onProgress(IptvSyncProgress p) {
       notifier.value = notifier.value.copyWith(progress: p);
@@ -240,6 +369,14 @@ class IptvSyncService {
     } catch (e) {
       error = 'refresh failed (${e.runtimeType})';
     }
+    try {
+      await store.putMeta(c.id, runningSinceKey, null);
+      if (error == null) {
+        await store.putMeta(c.id, interruptedKey, null);
+        await store.putMeta(c.id, holdUntilKey, null);
+        _skipThisRun.remove(c.id);
+      }
+    } catch (_) {}
     await _loadStatus(c.id);
     notifier.value = notifier.value.copyWith(
       running: false,
@@ -254,6 +391,8 @@ class IptvSyncService {
   /// Forget a removed source's status.
   void forget(String sourceId) {
     unwatch(sourceId);
+    _markerChecks.remove(sourceId);
+    _skipThisRun.remove(sourceId);
     _status.remove(sourceId)?.dispose();
   }
 }

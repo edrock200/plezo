@@ -99,7 +99,8 @@ class IptvClient implements MediaServerClient, RemoteTrailerClient {
 
   /// Shown channels, rebuilt when the parental gate or the stored data
   /// changes (see `iptv_client_live.dart`).
-  ({int revision, int dataRevision, List<IptvShownChannel> channels})? _channelCache;
+  ({int revision, int dataRevision, List<IptvShownChannel> channels, Map<String, IptvShownChannel> byId})?
+  _channelCache;
 
   /// The Xtream server clock's offset from UTC (archive addresses).
   Duration? _serverOffset;
@@ -260,7 +261,7 @@ class IptvClient implements MediaServerClient, RemoteTrailerClient {
 
   /// Categories hidden by the user or locked by the parental filter.
   Future<Set<String>> _hiddenCategoryIds(IptvGroupKind kind) async {
-    final groups = await store.groups(_connection.id, kind);
+    final groups = await store.groups(_connection.id, kind, withCounts: false);
     final locked = _lockedNames;
     return {
       for (final g in groups)

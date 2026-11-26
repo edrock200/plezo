@@ -164,18 +164,25 @@ class IptvSyncWorker {
 
   static final _yearInName = RegExp(r'[\(\[]((?:19|20)\d{2})[\)\]]\s*$');
 
+  /// Rows written per batch while a list imports (never the whole list).
+  static const importBatch = 2000;
+
   Future<int> _importM3u(IptvConnection c) async {
     _progress(IptvSyncPhase.playlist);
     final address = c.m3uFilePath ?? c.m3uUrl;
     if (address.trim().isEmpty) throw const IptvSyncException('no playlist address');
     final bytes = await _open(address, c);
-    final channels = <IptvChannel>[];
+    var channels = <IptvChannel>[];
+    var movies = <IptvVodRow>[];
     final groups = <String, int>{};
-    final seenIds = <String, int>{};
-    final movies = <IptvVodRow>[];
     final movieGroups = <String, int>{};
-    var index = 0;
-    final header = await M3uStreamParser.parse(M3uStreamParser.linesOf(bytes), (entry) {
+    final seenIds = <String, int>{};
+    var channelCount = 0;
+    var movieCount = 0;
+    await store.beginChannelImport(c.id);
+    await store.beginVodImport(c.id, IptvGroupKind.movie);
+    late final M3uStreamParser parser;
+    parser = M3uStreamParser((entry) {
       if (entry.url.isEmpty) return;
       if (c.m3uMoviesAsVod && looksLikeMovie(entry)) {
         var id = 'm${m3uChannelId(entry)}';
@@ -193,7 +200,7 @@ class IptvSyncWorker {
             kind: IptvGroupKind.movie,
             id: id,
             name: name,
-            sortIndex: movies.length,
+            sortIndex: movieCount++,
             categoryId: group,
             poster: entry.tvgLogo,
             year: year == null ? null : int.tryParse(year.group(1)!),
@@ -209,6 +216,10 @@ class IptvSyncWorker {
       if (dup > 1) id = '$id~$dup';
       final group = entry.group;
       if (group != null) groups.putIfAbsent(group, () => groups.length);
+      // The header comes first, so its playlist-wide defaults are known here.
+      final header = parser.header;
+      final own = IptvCatchupMode.parse(entry.catchup);
+      final useHeader = own == IptvCatchupMode.none && header.catchup != null;
       channels.add(
         IptvChannel(
           sourceId: c.id,
@@ -216,65 +227,58 @@ class IptvSyncWorker {
           name: entry.displayName,
           originalName: entry.displayName,
           playlistNumber: entry.tvgChno,
-          sortIndex: index++,
+          sortIndex: channelCount++,
           group: group,
           logo: entry.tvgLogo,
           url: entry.url,
           tvgId: entry.tvgId,
           tvgName: entry.tvgName,
-          tvgShiftHours: entry.tvgShift,
-          catchupMode: IptvCatchupMode.parse(entry.catchup),
-          catchupDays: entry.catchupDays,
-          catchupSource: entry.catchupSource,
+          tvgShiftHours: useHeader ? entry.tvgShift ?? header.tvgShift : entry.tvgShift,
+          catchupMode: useHeader ? IptvCatchupMode.parse(header.catchup) : own,
+          catchupDays: useHeader ? entry.catchupDays ?? header.catchupDays : entry.catchupDays,
+          catchupSource: useHeader ? entry.catchupSource ?? header.catchupSource : entry.catchupSource,
           radio: entry.isRadio,
           headers: entry.headers,
         ),
       );
-      if (index % 5000 == 0) _progress(IptvSyncPhase.playlist, count: index);
     });
-    // Playlist-wide catch-up defaults for entries that named none.
-    final withDefaults = header.catchup == null
-        ? channels
-        : [
-            for (final ch in channels)
-              ch.catchupMode != IptvCatchupMode.none
-                  ? ch
-                  : IptvChannel(
-                      sourceId: ch.sourceId,
-                      id: ch.id,
-                      name: ch.name,
-                      originalName: ch.originalName,
-                      playlistNumber: ch.playlistNumber,
-                      sortIndex: ch.sortIndex,
-                      group: ch.group,
-                      logo: ch.logo,
-                      url: ch.url,
-                      tvgId: ch.tvgId,
-                      tvgName: ch.tvgName,
-                      tvgShiftHours: ch.tvgShiftHours ?? header.tvgShift,
-                      catchupMode: IptvCatchupMode.parse(header.catchup),
-                      catchupDays: ch.catchupDays ?? header.catchupDays,
-                      catchupSource: ch.catchupSource ?? header.catchupSource,
-                      radio: ch.radio,
-                      headers: ch.headers,
-                    ),
-          ];
-    if (withDefaults.isEmpty && movies.isEmpty) throw const IptvSyncException('the playlist has no channels');
-    await store.replaceChannels(c.id, withDefaults, [
+    await for (final line in M3uStreamParser.linesOf(bytes)) {
+      parser.addLine(line);
+      if (channels.length >= importBatch) {
+        final batch = channels;
+        channels = [];
+        await store.stageChannels(c.id, batch);
+        _progress(IptvSyncPhase.playlist, count: channelCount);
+      }
+      if (movies.length >= importBatch) {
+        final batch = movies;
+        movies = [];
+        await store.stageVod(c.id, IptvGroupKind.movie, batch);
+      }
+    }
+    await store.stageChannels(c.id, channels);
+    await store.stageVod(c.id, IptvGroupKind.movie, movies);
+    final header = parser.header;
+    if (channelCount == 0 && movieCount == 0) {
+      await store.beginChannelImport(c.id);
+      await store.beginVodImport(c.id, IptvGroupKind.movie);
+      throw const IptvSyncException('the playlist has no channels');
+    }
+    await store.commitChannelImport(c.id, [
       for (final e in groups.entries) IptvGroup(kind: IptvGroupKind.live, id: e.key, name: e.key, sortIndex: e.value),
     ]);
     // Movie files (when asked for) become the Movies library; turning the
     // setting off clears it.
-    await store.replaceVod(c.id, IptvGroupKind.movie, movies, [
+    await store.commitVodImport(c.id, IptvGroupKind.movie, [
       for (final e in movieGroups.entries)
         IptvGroup(kind: IptvGroupKind.movie, id: e.key, name: e.key, sortIndex: e.value),
     ]);
-    if (c.m3uMoviesAsVod) appLogger.i('[iptv] playlist movies=${movies.length} categories=${movieGroups.length}');
+    if (c.m3uMoviesAsVod) appLogger.i('[iptv] playlist movies=$movieCount categories=${movieGroups.length}');
     await store.putMeta(c.id, IptvMetaKeys.headerEpg, header.epgUrls.isEmpty ? null : header.epgUrls.join('\n'));
     appLogger.i(
-      '[iptv] playlist imported channels=${withDefaults.length} groups=${groups.length} guides=${header.epgUrls.length}',
+      '[iptv] playlist imported channels=$channelCount groups=${groups.length} guides=${header.epgUrls.length}',
     );
-    return withDefaults.length;
+    return channelCount;
   }
 
   XtreamApi _xtream(IptvConnection c) => XtreamApi(
@@ -288,136 +292,165 @@ class IptvSyncWorker {
     final api = _xtream(c);
     final account = await api.account();
     await store.putMeta(c.id, IptvMetaKeys.account, jsonEncode(account.toJson()));
-    final results = await Future.wait([api.liveCategories(), api.liveStreams()]);
-    final categories = results[0] as List<XtreamCategory>;
-    final streams = results[1] as List<Map<String, dynamic>>;
+    final categories = await api.liveCategories();
     final categoryName = {for (final cat in categories) cat.id: cat.name};
-    final channels = <IptvChannel>[];
-    var index = 0;
-    for (final row in streams) {
-      final streamId = xtreamString(row['stream_id']);
-      if (streamId == null) continue;
-      final type = xtreamString(row['stream_type']);
-      final archive = xtreamBool(row['tv_archive']);
-      final categoryId = xtreamString(row['category_id']);
-      final name = xtreamString(row['name']) ?? streamId;
-      channels.add(
-        IptvChannel(
-          sourceId: c.id,
-          id: 'x$streamId',
-          name: name,
-          originalName: name,
-          playlistNumber: xtreamString(row['num']),
-          sortIndex: index++,
-          group: categoryId == null ? null : categoryName[categoryId] ?? categoryId,
-          logo: xtreamString(row['stream_icon']),
-          tvgId: xtreamString(row['epg_channel_id']),
-          tvgName: name,
-          catchupMode: archive ? IptvCatchupMode.xtream : IptvCatchupMode.none,
-          catchupDays: archive ? xtreamInt(row['tv_archive_duration']) : null,
-          radio: type == 'radio_streams',
-          xtreamId: streamId,
-        ),
-      );
-    }
-    // Groups by name (the channel's `grp`), in the provider's order.
+    // Groups by name (the channel's `grp`), in the provider's order; only the
+    // names are kept while the rows stream past.
     final groupOrder = <String, int>{};
     for (final cat in categories) {
       groupOrder.putIfAbsent(cat.name, () => groupOrder.length);
     }
-    for (final ch in channels) {
-      final g = ch.group;
-      if (g != null) groupOrder.putIfAbsent(g, () => groupOrder.length);
+    var index = 0;
+    await store.beginChannelImport(c.id);
+    try {
+      await api.forEachRow('get_live_streams', batchSize: importBatch, (rows) async {
+        final channels = <IptvChannel>[];
+        for (final row in rows) {
+          final streamId = xtreamString(row['stream_id']);
+          if (streamId == null) continue;
+          final type = xtreamString(row['stream_type']);
+          final archive = xtreamBool(row['tv_archive']);
+          final categoryId = xtreamString(row['category_id']);
+          final name = xtreamString(row['name']) ?? streamId;
+          final group = categoryId == null ? null : categoryName[categoryId] ?? categoryId;
+          if (group != null) groupOrder.putIfAbsent(group, () => groupOrder.length);
+          channels.add(
+            IptvChannel(
+              sourceId: c.id,
+              id: 'x$streamId',
+              name: name,
+              originalName: name,
+              playlistNumber: xtreamString(row['num']),
+              sortIndex: index++,
+              group: group,
+              logo: xtreamString(row['stream_icon']),
+              tvgId: xtreamString(row['epg_channel_id']),
+              tvgName: name,
+              catchupMode: archive ? IptvCatchupMode.xtream : IptvCatchupMode.none,
+              catchupDays: archive ? xtreamInt(row['tv_archive_duration']) : null,
+              radio: type == 'radio_streams',
+              xtreamId: streamId,
+            ),
+          );
+        }
+        await store.stageChannels(c.id, channels);
+        _progress(IptvSyncPhase.playlist, count: index);
+      });
+    } catch (_) {
+      await store.beginChannelImport(c.id);
+      rethrow;
     }
-    await store.replaceChannels(c.id, channels, [
+    await store.commitChannelImport(c.id, [
       for (final e in groupOrder.entries)
         IptvGroup(kind: IptvGroupKind.live, id: e.key, name: e.key, sortIndex: e.value),
     ]);
-    appLogger.i('[iptv] xtream live imported channels=${channels.length} categories=${categories.length}');
+    appLogger.i('[iptv] xtream live imported channels=$index categories=${categories.length}');
     if (c.includeVod) {
       await _importXtreamVod(c, api);
     } else {
       await store.replaceVod(c.id, IptvGroupKind.movie, const [], const []);
       await store.replaceVod(c.id, IptvGroupKind.series, const [], const []);
     }
-    return channels.length;
+    return index;
+  }
+
+  /// Stream one Xtream VOD list into the staging table, then swap it in.
+  /// Optional: a provider without it (or a failure) keeps the stored rows.
+  Future<int?> _importVodList(
+    IptvConnection c,
+    XtreamApi api,
+    IptvGroupKind kind, {
+    required Future<List<XtreamCategory>> Function() categories,
+    required String action,
+    required IptvVodRow? Function(Map<String, dynamic> row, int sortIndex) map,
+  }) async {
+    await store.beginVodImport(c.id, kind);
+    try {
+      final cats = await categories();
+      var count = 0;
+      await api.forEachRow(action, batchSize: importBatch, (rows) async {
+        final mapped = <IptvVodRow>[];
+        for (final row in rows) {
+          final r = map(row, count);
+          if (r == null) continue;
+          mapped.add(r);
+          count++;
+        }
+        await store.stageVod(c.id, kind, mapped);
+        _progress(kind == IptvGroupKind.movie ? IptvSyncPhase.movies : IptvSyncPhase.series, count: count);
+      });
+      await store.commitVodImport(c.id, kind, [
+        for (var i = 0; i < cats.length; i++) IptvGroup(kind: kind, id: cats[i].id, name: cats[i].name, sortIndex: i),
+      ]);
+      return count;
+    } on XtreamAuthException {
+      await store.beginVodImport(c.id, kind);
+      rethrow;
+    } catch (e) {
+      // Movies and series are optional: a provider without them must not
+      // fail the refresh; the stored ones stay.
+      await store.beginVodImport(c.id, kind);
+      appLogger.w('[iptv] xtream ${kind.id} not imported (${e is XtreamRequestException ? e.message : e.runtimeType})');
+      return null;
+    }
   }
 
   Future<void> _importXtreamVod(IptvConnection c, XtreamApi api) async {
     _progress(IptvSyncPhase.movies);
-    try {
-      final results = await Future.wait([api.vodCategories(), api.vodStreams()]);
-      final cats = results[0] as List<XtreamCategory>;
-      final rows = results[1] as List<Map<String, dynamic>>;
-      final movies = <IptvVodRow>[];
-      for (final row in rows) {
+    final movies = await _importVodList(
+      c,
+      api,
+      IptvGroupKind.movie,
+      categories: api.vodCategories,
+      action: 'get_vod_streams',
+      map: (row, i) {
         final id = xtreamString(row['stream_id']);
-        if (id == null) continue;
-        movies.add(
-          IptvVodRow(
-            sourceId: c.id,
-            kind: IptvGroupKind.movie,
-            id: id,
-            name: xtreamString(row['name']) ?? id,
-            sortIndex: movies.length,
-            categoryId: xtreamString(row['category_id']),
-            poster: xtreamString(row['stream_icon']),
-            rating: xtreamDouble(row['rating']),
-            year: _year(row),
-            added: xtreamInt(row['added']),
-            extension: xtreamString(row['container_extension']),
-            plot: xtreamString(row['plot']),
-            genre: xtreamString(row['genre']),
-          ),
+        if (id == null) return null;
+        return IptvVodRow(
+          sourceId: c.id,
+          kind: IptvGroupKind.movie,
+          id: id,
+          name: xtreamString(row['name']) ?? id,
+          sortIndex: i,
+          categoryId: xtreamString(row['category_id']),
+          poster: xtreamString(row['stream_icon']),
+          rating: xtreamDouble(row['rating']),
+          year: _year(row),
+          added: xtreamInt(row['added']),
+          extension: xtreamString(row['container_extension']),
+          plot: xtreamString(row['plot']),
+          genre: xtreamString(row['genre']),
         );
-      }
-      await store.replaceVod(c.id, IptvGroupKind.movie, movies, [
-        for (var i = 0; i < cats.length; i++)
-          IptvGroup(kind: IptvGroupKind.movie, id: cats[i].id, name: cats[i].name, sortIndex: i),
-      ]);
-      appLogger.i('[iptv] xtream movies imported=${movies.length}');
-    } on XtreamAuthException {
-      rethrow;
-    } catch (e) {
-      // Movies are optional: a provider without them must not fail the refresh.
-      appLogger.w('[iptv] xtream movies not imported (${e.runtimeType})');
-    }
+      },
+    );
+    if (movies != null) appLogger.i('[iptv] xtream movies imported=$movies');
     _progress(IptvSyncPhase.series);
-    try {
-      final results = await Future.wait([api.seriesCategories(), api.series()]);
-      final cats = results[0] as List<XtreamCategory>;
-      final rows = results[1] as List<Map<String, dynamic>>;
-      final series = <IptvVodRow>[];
-      for (final row in rows) {
+    final series = await _importVodList(
+      c,
+      api,
+      IptvGroupKind.series,
+      categories: api.seriesCategories,
+      action: 'get_series',
+      map: (row, i) {
         final id = xtreamString(row['series_id']);
-        if (id == null) continue;
-        series.add(
-          IptvVodRow(
-            sourceId: c.id,
-            kind: IptvGroupKind.series,
-            id: id,
-            name: xtreamString(row['name']) ?? id,
-            sortIndex: series.length,
-            categoryId: xtreamString(row['category_id']),
-            poster: xtreamString(row['cover']),
-            rating: xtreamDouble(row['rating']),
-            year: _year(row),
-            added: xtreamInt(row['last_modified']),
-            plot: xtreamString(row['plot']),
-            genre: xtreamString(row['genre']),
-          ),
+        if (id == null) return null;
+        return IptvVodRow(
+          sourceId: c.id,
+          kind: IptvGroupKind.series,
+          id: id,
+          name: xtreamString(row['name']) ?? id,
+          sortIndex: i,
+          categoryId: xtreamString(row['category_id']),
+          poster: xtreamString(row['cover']),
+          rating: xtreamDouble(row['rating']),
+          year: _year(row),
+          added: xtreamInt(row['last_modified']),
+          plot: xtreamString(row['plot']),
+          genre: xtreamString(row['genre']),
         );
-      }
-      await store.replaceVod(c.id, IptvGroupKind.series, series, [
-        for (var i = 0; i < cats.length; i++)
-          IptvGroup(kind: IptvGroupKind.series, id: cats[i].id, name: cats[i].name, sortIndex: i),
-      ]);
-      appLogger.i('[iptv] xtream series imported=${series.length}');
-    } on XtreamAuthException {
-      rethrow;
-    } catch (e) {
-      appLogger.w('[iptv] xtream series not imported (${e.runtimeType})');
-    }
+      },
+    );
+    if (series != null) appLogger.i('[iptv] xtream series imported=$series');
   }
 
   static int? _year(Map<String, dynamic> row) {
@@ -461,10 +494,9 @@ class IptvSyncWorker {
       return 0;
     }
     _progress(IptvSyncPhase.guide);
-    final channels = await store.channels(c.id);
     final wantedIds = <String>{};
     final wantedNames = <String>{};
-    for (final ch in channels) {
+    await store.forEachChannelGuideKey(c.id, (ch) {
       for (final id in [ch.tvgId, ch.manualEpgId]) {
         if (id != null && id.isNotEmpty) wantedIds.add(id.toLowerCase());
       }
@@ -473,12 +505,15 @@ class IptvSyncWorker {
         final norm = normaliseChannelName(name);
         if (norm.isNotEmpty) wantedNames.add(norm);
       }
-    }
+    });
     final now = _now().millisecondsSinceEpoch ~/ 1000;
     final from = now - c.epgPastDays.clamp(0, 14) * 86400;
     final to = now + c.epgFutureDays.clamp(1, 14) * 86400;
 
-    final guideChannelRows = <({String id, String displayName, String norm, String? icon})>[];
+    // Guide channels are staged in batches as they are read (a guide can list
+    // tens of thousands, each under several names).
+    var guideChannelRows = <({String id, String displayName, String norm, String? icon})>[];
+    await store.beginEpgChannelImport(c.id);
     final coveredByEarlier = <String>{};
     var stored = 0;
     var failures = 0;
@@ -492,10 +527,16 @@ class IptvSyncWorker {
       final buffer = <IptvProgramme>[];
       var pending = Future<void>.value();
       void flush() {
-        if (buffer.isEmpty) return;
-        final batch = List<IptvProgramme>.of(buffer);
-        buffer.clear();
-        pending = pending.then((_) => store.stageProgrammes(c.id, batch));
+        if (buffer.isNotEmpty) {
+          final batch = List<IptvProgramme>.of(buffer);
+          buffer.clear();
+          pending = pending.then((_) => store.stageProgrammes(c.id, batch));
+        }
+        if (guideChannelRows.isNotEmpty) {
+          final rows = guideChannelRows;
+          guideChannelRows = [];
+          pending = pending.then((_) => store.stageEpgChannels(c.id, rows));
+        }
       }
 
       final parser = XmltvStreamParser(
@@ -515,6 +556,7 @@ class IptvSyncWorker {
             guideChannelRows.add((id: channel.id, displayName: channel.id, norm: '', icon: channel.icon));
           }
           if (wanted && !coveredByEarlier.contains(channel.id)) kept.add(channel.id);
+          if (guideChannelRows.length >= importBatch) flush();
         },
         keepProgramme: (channel, start, stop) {
           if (stop < from || start > to) return false;
@@ -569,12 +611,13 @@ class IptvSyncWorker {
     }
     if (failures == urls.length) {
       await store.beginProgrammeImport(c.id);
+      await store.beginEpgChannelImport(c.id);
       await store.recordSync(c.id, epgKind, ok: false, error: lastError);
       _progress(IptvSyncPhase.failed, message: lastError);
       throw IptvSyncException(lastError ?? 'guide failed');
     }
     final total = await store.commitProgrammeImport(c.id);
-    await store.replaceEpgChannels(c.id, guideChannelRows);
+    await store.commitEpgChannelImport(c.id);
     await rematch(c);
     await store.recordSync(c.id, epgKind, ok: true, count: total, error: failures == 0 ? null : lastError);
     appLogger.i('[iptv] guide imported programmes=$total from ${urls.length - failures}/${urls.length} guides');
@@ -586,21 +629,20 @@ class IptvSyncWorker {
   Future<void> rematch(IptvConnection c) async {
     _progress(IptvSyncPhase.matching);
     final guide = await store.epgChannels(c.id);
-    final channels = await store.channels(c.id);
-    if (channels.isEmpty) return;
     final matcher = IptvEpgMatcher(guideIds: guide.names.keys, guideNames: guide.byNorm);
     final updates = <String, String?>{};
     var byId = 0;
     var byName = 0;
-    for (final ch in channels) {
+    await store.forEachChannelGuideKey(c.id, (ch) {
       final result = matcher.match(tvgId: ch.tvgId, tvgName: ch.tvgName, title: ch.originalName ?? ch.name);
       // Xtream's own guide id stays when the guide has not been read yet.
       final id = result.id ?? (guide.names.isEmpty ? ch.tvgId : null);
       if (result.how == IptvEpgMatch.tvgId) byId++;
       if (result.how == IptvEpgMatch.name) byName++;
       updates[ch.id] = id;
-    }
+    });
+    if (updates.isEmpty) return;
     await store.setChannelEpgIds(c.id, updates);
-    appLogger.i('[iptv] guide matching channels=${channels.length} by_id=$byId by_name=$byName');
+    appLogger.i('[iptv] guide matching channels=${updates.length} by_id=$byId by_name=$byName');
   }
 }

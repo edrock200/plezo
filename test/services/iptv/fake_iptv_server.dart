@@ -25,6 +25,13 @@ class FakeIptvServer {
   /// Answer every request with HTTP 500.
   bool failEverything = false;
 
+  /// Serve this many made-up movies from `get_vod_streams` (a huge catalogue).
+  int? syntheticMovies;
+
+  /// Cut the list answers (`get_*_streams`, `get_series`) off half way, as a
+  /// dropped connection would.
+  bool truncateLists = false;
+
   /// Give channels logo addresses (widget tests turn them off: image loading
   /// needs platform plugins there).
   bool logos = true;
@@ -153,6 +160,21 @@ class FakeIptvServer {
         return [
           {'category_id': '10', 'category_name': 'Action'},
           {'category_id': '11', 'category_name': 'Drama'},
+        ];
+      case 'get_vod_streams' when syntheticMovies != null:
+        return [
+          for (var i = 1; i <= syntheticMovies!; i++)
+            {
+              'num': i,
+              'name': 'Synthetic movie $i',
+              'stream_type': 'movie',
+              'stream_id': 100000 + i,
+              'stream_icon': '$base/poster/s$i.jpg',
+              'rating': '7',
+              'added': '${1700000000 + i}',
+              'category_id': i.isEven ? '10' : '11',
+              'container_extension': 'mp4',
+            },
         ];
       case 'get_vod_streams':
         return [
@@ -297,6 +319,11 @@ class FakeIptvServer {
     final q = uri.queryParameters;
     List<int> text(String s) => utf8.encode(s);
     if (path == '/player_api.php') {
+      final action = q['action'];
+      if (truncateLists && (action == 'get_live_streams' || action == 'get_vod_streams' || action == 'get_series')) {
+        final full = text(jsonEncode(_api(q)));
+        return (status: 200, body: full.sublist(0, full.length ~/ 2), type: 'application/json');
+      }
       return (
         status: 200,
         body: text(

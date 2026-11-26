@@ -366,7 +366,15 @@ const _schema = <String>[
     headers TEXT, xtream_id TEXT, epg_id TEXT, name_lower TEXT NOT NULL,
     PRIMARY KEY (source_id, id))''',
   'CREATE INDEX IF NOT EXISTS channels_sort ON channels (source_id, sort_index)',
+  // A playlist import writes here in batches; the commit swaps it in.
+  '''CREATE TABLE IF NOT EXISTS channels_staging (
+    source_id TEXT NOT NULL, id TEXT NOT NULL, name TEXT NOT NULL, number TEXT, sort_index INTEGER NOT NULL,
+    grp TEXT, logo TEXT, url TEXT NOT NULL, tvg_id TEXT, tvg_name TEXT, tvg_shift REAL,
+    catchup TEXT, catchup_days INTEGER, catchup_source TEXT, radio INTEGER NOT NULL DEFAULT 0,
+    headers TEXT, xtream_id TEXT, epg_id TEXT, name_lower TEXT NOT NULL,
+    PRIMARY KEY (source_id, id))''',
   'CREATE INDEX IF NOT EXISTS channels_epg ON channels (source_id, epg_id)',
+  'CREATE INDEX IF NOT EXISTS channels_grp ON channels (source_id, grp)',
   '''CREATE TABLE IF NOT EXISTS groups (
     source_id TEXT NOT NULL, kind TEXT NOT NULL, id TEXT NOT NULL, name TEXT NOT NULL, sort_index INTEGER NOT NULL,
     PRIMARY KEY (source_id, kind, id))''',
@@ -387,11 +395,18 @@ const _schema = <String>[
     source_id TEXT NOT NULL, id TEXT NOT NULL, display_name TEXT NOT NULL, name_norm TEXT NOT NULL, icon TEXT,
     PRIMARY KEY (source_id, id, name_norm))''',
   'CREATE INDEX IF NOT EXISTS epg_channels_norm ON epg_channels (source_id, name_norm)',
+  '''CREATE TABLE IF NOT EXISTS epg_channels_staging (
+    source_id TEXT NOT NULL, id TEXT NOT NULL, display_name TEXT NOT NULL, name_norm TEXT NOT NULL, icon TEXT,
+    PRIMARY KEY (source_id, id, name_norm))''',
   '''CREATE TABLE IF NOT EXISTS vod (
     source_id TEXT NOT NULL, kind TEXT NOT NULL, id TEXT NOT NULL, name TEXT NOT NULL, name_lower TEXT NOT NULL,
     category_id TEXT, poster TEXT, rating REAL, year INTEGER, added INTEGER, ext TEXT, plot TEXT, genre TEXT,
     sort_index INTEGER NOT NULL, url TEXT, headers TEXT, PRIMARY KEY (source_id, kind, id))''',
   'CREATE INDEX IF NOT EXISTS vod_category ON vod (source_id, kind, category_id, sort_index)',
+  '''CREATE TABLE IF NOT EXISTS vod_staging (
+    source_id TEXT NOT NULL, kind TEXT NOT NULL, id TEXT NOT NULL, name TEXT NOT NULL, name_lower TEXT NOT NULL,
+    category_id TEXT, poster TEXT, rating REAL, year INTEGER, added INTEGER, ext TEXT, plot TEXT, genre TEXT,
+    sort_index INTEGER NOT NULL, url TEXT, headers TEXT, PRIMARY KEY (source_id, kind, id))''',
   'CREATE INDEX IF NOT EXISTS vod_added ON vod (source_id, kind, added)',
   '''CREATE TABLE IF NOT EXISTS channel_overrides (
     source_id TEXT NOT NULL, channel_id TEXT NOT NULL, hidden INTEGER NOT NULL DEFAULT 0, name TEXT, number TEXT,
@@ -464,7 +479,7 @@ class IptvDatabase extends GeneratedDatabase {
   Iterable<TableInfo<Table, Object?>> get allTables => const [];
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -492,6 +507,7 @@ class IptvDatabase extends GeneratedDatabase {
           }
         }
       }
+      // From 3: staging tables for playlist and movie imports (created below).
       for (final statement in _schema) {
         await customStatement(statement);
       }
@@ -543,43 +559,73 @@ class IptvStore {
 
   // ---- channels ----------------------------------------------------------
 
-  /// Replace a source's channels and live groups with a fresh import.
+  static const _channelColumns =
+      'source_id, id, name, number, sort_index, grp, logo, url, tvg_id, tvg_name, '
+      'tvg_shift, catchup, catchup_days, catchup_source, radio, headers, xtream_id, epg_id, name_lower';
+
+  /// Replace a source's channels and live groups with a fresh import (small
+  /// lists; imports stage in batches: [beginChannelImport]).
   Future<void> replaceChannels(String sourceId, List<IptvChannel> channels, List<IptvGroup> groups) async {
+    await beginChannelImport(sourceId);
+    await stageChannels(sourceId, channels);
+    await commitChannelImport(sourceId, groups);
+  }
+
+  /// Start a playlist import: clears this source's staged channels.
+  Future<void> beginChannelImport(String sourceId) =>
+      db.customStatement('DELETE FROM channels_staging WHERE source_id = ?', [sourceId]);
+
+  Future<void> stageChannels(String sourceId, List<IptvChannel> channels) => _insertMany(
+    'INSERT OR REPLACE INTO channels_staging ($_channelColumns) '
+    'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    [
+      for (final c in channels)
+        [
+          sourceId,
+          c.id,
+          c.originalName ?? c.name,
+          c.playlistNumber,
+          c.sortIndex,
+          c.group,
+          c.logo,
+          c.url,
+          c.tvgId,
+          c.tvgName,
+          c.tvgShiftHours,
+          c.catchupMode.id,
+          c.catchupDays,
+          c.catchupSource,
+          c.radio ? 1 : 0,
+          c.headers.isEmpty ? null : jsonEncode(c.headers),
+          c.xtreamId,
+          c.epgChannelId,
+          (c.originalName ?? c.name).toLowerCase(),
+        ],
+    ],
+  );
+
+  /// Staged channels of [sourceId] so far.
+  Future<int> stagedChannelCount(String sourceId) async {
+    final row = await db
+        .customSelect('SELECT COUNT(*) AS n FROM channels_staging WHERE source_id = ?', variables: [Variable(sourceId)])
+        .getSingle();
+    return row.read<int>('n');
+  }
+
+  /// Swap the staged channels and [groups] in, in one transaction: a failed
+  /// import (never committed) leaves the previous channels.
+  Future<void> commitChannelImport(String sourceId, List<IptvGroup> groups) async {
     await db.transaction(() async {
       await db.customStatement('DELETE FROM channels WHERE source_id = ?', [sourceId]);
+      await db.customStatement(
+        'INSERT INTO channels ($_channelColumns) SELECT $_channelColumns FROM channels_staging WHERE source_id = ?',
+        [sourceId],
+      );
+      await db.customStatement('DELETE FROM channels_staging WHERE source_id = ?', [sourceId]);
       await db.customStatement('DELETE FROM groups WHERE source_id = ? AND kind = ?', [
         sourceId,
         IptvGroupKind.live.id,
       ]);
-      await _insertMany(
-        'INSERT OR REPLACE INTO channels (source_id, id, name, number, sort_index, grp, logo, url, tvg_id, tvg_name, '
-        'tvg_shift, catchup, catchup_days, catchup_source, radio, headers, xtream_id, epg_id, name_lower) '
-        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [
-          for (final c in channels)
-            [
-              sourceId,
-              c.id,
-              c.originalName ?? c.name,
-              c.playlistNumber,
-              c.sortIndex,
-              c.group,
-              c.logo,
-              c.url,
-              c.tvgId,
-              c.tvgName,
-              c.tvgShiftHours,
-              c.catchupMode.id,
-              c.catchupDays,
-              c.catchupSource,
-              c.radio ? 1 : 0,
-              c.headers.isEmpty ? null : jsonEncode(c.headers),
-              c.xtreamId,
-              c.epgChannelId,
-              (c.originalName ?? c.name).toLowerCase(),
-            ],
-        ],
-      );
       await _insertGroups(sourceId, groups);
     });
   }
@@ -657,6 +703,82 @@ class IptvStore {
         )
         .getSingleOrNull();
     return row == null ? null : _channelFromRow(row);
+  }
+
+  /// What guide matching needs of every channel, a page at a time (never
+  /// the full rows of tens of thousands of channels at once).
+  Future<void> forEachChannelGuideKey(
+    String sourceId,
+    void Function(
+      ({String id, String name, String? originalName, String? tvgId, String? tvgName, String? manualEpgId}) key,
+    )
+    onKey, {
+    int pageSize = 5000,
+  }) async {
+    var after = -1 << 62;
+    while (true) {
+      final rows = await db
+          .customSelect(
+            'SELECT c.id, c.name, c.tvg_id, c.tvg_name, c.sort_index, o.name AS o_name, o.epg_id AS o_epg '
+            'FROM channels c LEFT JOIN channel_overrides o ON o.source_id = c.source_id AND o.channel_id = c.id '
+            'WHERE c.source_id = ? AND c.sort_index > ? ORDER BY c.sort_index LIMIT ?',
+            variables: [Variable(sourceId), Variable(after), Variable(pageSize)],
+          )
+          .get();
+      for (final row in rows) {
+        final original = row.read<String>('name');
+        final override = row.readNullable<String>('o_name');
+        final manual = row.readNullable<String>('o_epg');
+        onKey((
+          id: row.read<String>('id'),
+          name: override == null || override.isEmpty ? original : override,
+          originalName: original,
+          tvgId: row.readNullable<String>('tvg_id'),
+          tvgName: row.readNullable<String>('tvg_name'),
+          manualEpgId: manual == null || manual.isEmpty ? null : manual,
+        ));
+      }
+      if (rows.length < pageSize) return;
+      after = rows.last.read<int>('sort_index');
+    }
+  }
+
+  /// The channels with [ids] (overrides applied), in playlist order.
+  Future<List<IptvChannel>> channelsByIds(String sourceId, List<String> ids) async {
+    if (ids.isEmpty) return const [];
+    final out = <IptvChannel>[];
+    for (var i = 0; i < ids.length; i += 500) {
+      final slice = ids.sublist(i, i + 500 > ids.length ? ids.length : i + 500);
+      final rows = await db
+          .customSelect(
+            '$_channelSelect WHERE c.source_id = ? AND c.id IN (${List.filled(slice.length, '?').join(', ')})',
+            variables: [Variable(sourceId), for (final id in slice) Variable(id)],
+          )
+          .get();
+      out.addAll(rows.map(_channelFromRow));
+    }
+    final order = {for (var i = 0; i < ids.length; i++) ids[i]: i};
+    out.sort((a, b) => (order[a.id] ?? 0).compareTo(order[b.id] ?? 0));
+    return out;
+  }
+
+  /// Ids of the channels matched to the guide channels [epgIds].
+  Future<List<String>> channelIdsByEpg(String sourceId, Set<String> epgIds) async {
+    if (epgIds.isEmpty) return const [];
+    final list = epgIds.toList();
+    final out = <String>[];
+    for (var i = 0; i < list.length; i += 500) {
+      final slice = list.sublist(i, i + 500 > list.length ? list.length : i + 500);
+      final rows = await db
+          .customSelect(
+            'SELECT id FROM channels WHERE source_id = ? AND epg_id IN (${List.filled(slice.length, '?').join(', ')}) '
+            'ORDER BY sort_index',
+            variables: [Variable(sourceId), for (final id in slice) Variable(id)],
+          )
+          .get();
+      out.addAll(rows.map((r) => r.read<String>('id')));
+    }
+    return out;
   }
 
   Future<int> channelCount(String sourceId) async {
@@ -737,15 +859,22 @@ class IptvStore {
 
   /// Groups of [kind] in display order (the user's order, then the source's),
   /// each with its item count.
-  Future<List<IptvGroup>> groups(String sourceId, IptvGroupKind kind) async {
-    final countSql = kind == IptvGroupKind.live
-        ? '(SELECT COUNT(*) FROM channels c WHERE c.source_id = g.source_id AND c.grp = g.id)'
-        : '(SELECT COUNT(*) FROM vod v WHERE v.source_id = g.source_id AND v.kind = g.kind AND v.category_id = g.id)';
+  Future<List<IptvGroup>> groups(String sourceId, IptvGroupKind kind, {bool withCounts = true}) async {
+    // One grouped count (a correlated count per group scanned the whole
+    // source once per group: minutes with 200k movies in 1000 categories).
+    final countJoin = !withCounts
+        ? ''
+        : kind == IptvGroupKind.live
+        ? 'LEFT JOIN (SELECT grp AS cid, COUNT(*) AS n FROM channels WHERE source_id = ?1 GROUP BY grp) cnt '
+              'ON cnt.cid = g.id '
+        : 'LEFT JOIN (SELECT category_id AS cid, COUNT(*) AS n FROM vod WHERE source_id = ?1 AND kind = ?2 '
+              'GROUP BY category_id) cnt ON cnt.cid = g.id ';
     final rows = await db
         .customSelect(
-          'SELECT g.*, o.hidden AS o_hidden, o.sort_index AS o_sort, $countSql AS n FROM groups g '
+          'SELECT g.*, o.hidden AS o_hidden, o.sort_index AS o_sort${withCounts ? ', cnt.n AS n' : ''} FROM groups g '
           'LEFT JOIN group_overrides o ON o.source_id = g.source_id AND o.kind = g.kind AND o.group_id = g.id '
-          'WHERE g.source_id = ? AND g.kind = ? ORDER BY COALESCE(o.sort_index, 1000000 + g.sort_index)',
+          '$countJoin'
+          'WHERE g.source_id = ?1 AND g.kind = ?2 ORDER BY COALESCE(o.sort_index, 1000000 + g.sort_index)',
           variables: [Variable(sourceId), Variable(kind.id)],
         )
         .get();
@@ -757,7 +886,7 @@ class IptvStore {
           name: row.read<String>('name'),
           sortIndex: row.readNullable<int>('o_sort') ?? 1000000 + row.read<int>('sort_index'),
           hidden: (row.readNullable<int>('o_hidden') ?? 0) == 1,
-          count: row.read<int>('n'),
+          count: withCounts ? row.readNullable<int>('n') ?? 0 : 0,
         ),
     ];
   }
@@ -838,14 +967,35 @@ class IptvStore {
     String sourceId,
     List<({String id, String displayName, String norm, String? icon})> rows,
   ) async {
+    await beginEpgChannelImport(sourceId);
+    await stageEpgChannels(sourceId, rows);
+    await commitEpgChannelImport(sourceId);
+  }
+
+  Future<void> beginEpgChannelImport(String sourceId) =>
+      db.customStatement('DELETE FROM epg_channels_staging WHERE source_id = ?', [sourceId]);
+
+  Future<void> stageEpgChannels(
+    String sourceId,
+    List<({String id, String displayName, String norm, String? icon})> rows,
+  ) => _insertMany(
+    'INSERT OR IGNORE INTO epg_channels_staging (source_id, id, display_name, name_norm, icon) VALUES (?, ?, ?, ?, ?)',
+    [
+      for (final r in rows) [sourceId, r.id, r.displayName, r.norm, r.icon],
+    ],
+  );
+
+  /// Swap the staged guide channels in (in the order they were staged).
+  Future<void> commitEpgChannelImport(String sourceId) async {
     await db.transaction(() async {
       await db.customStatement('DELETE FROM epg_channels WHERE source_id = ?', [sourceId]);
-      await _insertMany(
-        'INSERT OR IGNORE INTO epg_channels (source_id, id, display_name, name_norm, icon) VALUES (?, ?, ?, ?, ?)',
-        [
-          for (final r in rows) [sourceId, r.id, r.displayName, r.norm, r.icon],
-        ],
+      await db.customStatement(
+        'INSERT OR IGNORE INTO epg_channels (source_id, id, display_name, name_norm, icon) '
+        'SELECT source_id, id, display_name, name_norm, icon FROM epg_channels_staging WHERE source_id = ? '
+        'ORDER BY rowid',
+        [sourceId],
       );
+      await db.customStatement('DELETE FROM epg_channels_staging WHERE source_id = ?', [sourceId]);
     });
   }
 
@@ -956,35 +1106,56 @@ class IptvStore {
 
   // ---- VOD -----------------------------------------------------------------
 
+  static const _vodColumns =
+      'source_id, kind, id, name, name_lower, category_id, poster, rating, year, added, '
+      'ext, plot, genre, sort_index, url, headers';
+
+  /// Replace a source's movies or series with a fresh import (small lists;
+  /// imports stage in batches: [beginVodImport]).
   Future<void> replaceVod(String sourceId, IptvGroupKind kind, List<IptvVodRow> rows, List<IptvGroup> groups) async {
+    await beginVodImport(sourceId, kind);
+    await stageVod(sourceId, kind, rows);
+    await commitVodImport(sourceId, kind, groups);
+  }
+
+  Future<void> beginVodImport(String sourceId, IptvGroupKind kind) =>
+      db.customStatement('DELETE FROM vod_staging WHERE source_id = ? AND kind = ?', [sourceId, kind.id]);
+
+  Future<void> stageVod(String sourceId, IptvGroupKind kind, List<IptvVodRow> rows) => _insertMany(
+    'INSERT OR REPLACE INTO vod_staging ($_vodColumns) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    [
+      for (final r in rows)
+        [
+          sourceId,
+          kind.id,
+          r.id,
+          r.name,
+          r.name.toLowerCase(),
+          r.categoryId,
+          r.poster,
+          r.rating,
+          r.year,
+          r.added,
+          r.extension,
+          r.plot,
+          r.genre,
+          r.sortIndex,
+          r.url,
+          r.headers.isEmpty ? null : jsonEncode(r.headers),
+        ],
+    ],
+  );
+
+  /// Swap the staged rows of [kind] and its [groups] in, in one transaction.
+  Future<void> commitVodImport(String sourceId, IptvGroupKind kind, List<IptvGroup> groups) async {
     await db.transaction(() async {
       await db.customStatement('DELETE FROM vod WHERE source_id = ? AND kind = ?', [sourceId, kind.id]);
-      await db.customStatement('DELETE FROM groups WHERE source_id = ? AND kind = ?', [sourceId, kind.id]);
-      await _insertMany(
-        'INSERT OR REPLACE INTO vod (source_id, kind, id, name, name_lower, category_id, poster, rating, year, added, '
-        'ext, plot, genre, sort_index, url, headers) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [
-          for (final r in rows)
-            [
-              sourceId,
-              kind.id,
-              r.id,
-              r.name,
-              r.name.toLowerCase(),
-              r.categoryId,
-              r.poster,
-              r.rating,
-              r.year,
-              r.added,
-              r.extension,
-              r.plot,
-              r.genre,
-              r.sortIndex,
-              r.url,
-              r.headers.isEmpty ? null : jsonEncode(r.headers),
-            ],
-        ],
+      await db.customStatement(
+        'INSERT INTO vod ($_vodColumns) SELECT $_vodColumns FROM vod_staging WHERE source_id = ? AND kind = ?',
+        [sourceId, kind.id],
       );
+      await db.customStatement('DELETE FROM vod_staging WHERE source_id = ? AND kind = ?', [sourceId, kind.id]);
+      await db.customStatement('DELETE FROM groups WHERE source_id = ? AND kind = ?', [sourceId, kind.id]);
       await _insertGroups(sourceId, groups);
     });
   }
@@ -1011,7 +1182,8 @@ class IptvStore {
     final dir = descending ? 'DESC' : 'ASC';
     return switch (sort) {
       'title' => 'v.name_lower $dir',
-      'added' => 'COALESCE(v.added, 0) $dir, v.sort_index',
+      // Plain `added` (NULLs sort lowest, as 0 did) so `vod_added` serves it.
+      'added' => 'v.added $dir, v.sort_index',
       'year' => 'COALESCE(v.year, 0) $dir, v.name_lower',
       'rating' => 'COALESCE(v.rating, 0) $dir, v.name_lower',
       _ => 'v.sort_index ${descending ? 'DESC' : 'ASC'}',
@@ -1431,11 +1603,14 @@ class IptvStore {
     await db.transaction(() async {
       for (final table in const [
         'channels',
+        'channels_staging',
         'groups',
         'programmes',
         'programmes_staging',
         'epg_channels',
+        'epg_channels_staging',
         'vod',
+        'vod_staging',
         'channel_overrides',
         'group_overrides',
         'favorites',
