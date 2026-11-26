@@ -1,6 +1,6 @@
 # Plezilo (Plezy fork with Silo support) — project rules for Claude Code
 
-Plezilo is a Flutter client for Plex, Jellyfin, Emby and **Silo** on Android, Android TV, iOS, tvOS,
+Plezilo is a Flutter client for Plex, Jellyfin, Emby, **Silo**, Tofa and the user's own **IPTV** sources on Android, Android TV, iOS, tvOS,
 macOS, Windows and Linux. It is a fork of Plezy (upstream `edde746/plezy`) in `edrock200/plezo` that
 adds Silo as a fourth backend. Read `CONTRIBUTING.md` for the general workflow; this file adds what an
 agent needs. The code still says "Plezy" in internal names (Dart package `plezy`, Kotlin package
@@ -41,6 +41,10 @@ agent needs. The code still says "Plezy" in internal names (Dart package `plezy`
   caches, UI, tests). Use before touching `MediaBackend`, `Connection` or `MultiServerManager`.
 - `.claude/skills/tofa-backend/SKILL.md` — the Tofa API contract (device-flow sign-in, `/api/v1` browsing, playback
   negotiation, progress) for the fifth backend, and how to query Tofa's OpenAPI spec (never committed: proprietary).
+- `.claude/skills/iptv-backend/SKILL.md` — IPTV sources (M3U, Xtream, XMLTV) read and stored on the device: formats and
+  quirks, the separate IPTV database and background refresh, Live TV groups/catch-up/reminders, the IPTV player OSD,
+  Xtream movies and series, local recording, what is unverified or declined, and the local fake provider for tests.
+  Use for anything under `lib/services/iptv/` or IPTV-related.
 - `.claude/skills/android-preview-release/SKILL.md` — building, publishing and verifying the
   Android preview APKs.
 
@@ -60,25 +64,29 @@ agent needs. The code still says "Plezy" in internal names (Dart package `plezy`
 - Running `flutter` as root prints a "Woah!" warning; ignore it.
 
 ## Architecture in one screen
-- `MediaBackend` (`lib/media/media_backend.dart`): `plex`, `jellyfin`, `emby`, `silo`, `tofa`.
+- `MediaBackend` (`lib/media/media_backend.dart`): `plex`, `jellyfin`, `emby`, `silo`, `tofa`, `iptv`.
   `usesMediaBrowserApi` is true only for Jellyfin/Emby; **"not Plex" does not mean MediaBrowser**.
 - `MediaItem` (`lib/media/media_item.dart`) is a sealed freezed union: `PlexMediaItem`,
-  `JellyfinMediaItem` (Jellyfin + Emby via `dialect`), `SiloMediaItem`, `TofaMediaItem`.
+  `JellyfinMediaItem` (Jellyfin + Emby via `dialect`), `SiloMediaItem`, `TofaMediaItem`, `IptvMediaItem`.
 - `MediaServerClient` (`lib/media/media_server_client.dart`): the neutral client interface (~90
   members). Implementations: `PlexClient`, `JellyfinClient`, `SiloClient`
   (`lib/services/silo/silo_client.dart` + `silo_client_playback.dart` part), `TofaClient`
-  (`lib/services/tofa/tofa_client.dart`).
+  (`lib/services/tofa/tofa_client.dart`), `IptvClient` (`lib/services/iptv/iptv_client.dart`: no server, it reads the
+  IPTV database the refresh fills).
 - `Connection` (`lib/connection/connection.dart`) is sealed: `PlexAccountConnection`,
-  `JellyfinConnection`, `SiloConnection`, `TofaConnection`. Persisted by `ConnectionRegistry`; credentials are
+  `JellyfinConnection`, `SiloConnection`, `TofaConnection`, `IptvConnection` (one source = one server id). Persisted
+  by `ConnectionRegistry`; credentials are
   encrypted by `CredentialVault` — every token key of a new kind must be listed in
   `_tokenKeysForKind` or it is stored in plaintext.
-- `MultiServerManager` owns live clients. Jellyfin, Silo and Tofa clients are per-connection, tracked in
+- `MultiServerManager` owns live clients. Jellyfin, Silo, Tofa and IPTV clients are per-connection, tracked in
   `_jellyfinByCompoundId` (historic name) with one active client per server id.
 - `ActiveProfileBinder` binds a Plezy profile's connections to clients (`_bindMediaBrowser`,
-  `_bindSilo`, `_bindTofa`). Plezy profiles are local; a Silo or Tofa connection is one account acting
-  as one profile of that server.
+  `_bindSilo`, `_bindTofa`, `_bindIptv`). Plezy profiles are local; a Silo or Tofa connection is one account acting
+  as one profile of that server; a profile can hold several IPTV sources.
 - Offline/download metadata lives in per-backend `ApiCache`s (`PlexApiCache`, `JellyfinApiCache`,
-  `SiloApiCache`, `TofaApiCache`), registered in `main.dart`. `ApiCache.forBackend` silently falls back to Plex for an
+  `SiloApiCache`, `TofaApiCache`, `IptvApiCache`), registered in `main.dart`. IPTV channels, guides, movies, series,
+  favourites, progress and recordings live in their own drift database (`iptv.sqlite`, `IptvStore`), refreshed in a
+  background isolate by `IptvSyncService`. `ApiCache.forBackend` silently falls back to Plex for an
   unregistered backend.
 
 ## Rules
@@ -93,6 +101,10 @@ agent needs. The code still says "Plezy" in internal names (Dart package `plezy`
   Tofa artwork is `{base}/cache/{path}?st=<image token>` (never `/api/v1/artwork`), and every `/live/*` call sends
   `X-Tofa-Live-Capabilities: live_session`; both were read from Tofa's own web app (facts marked "observed in Tofa's
   web app", which rank between the spec and "unverified"). Never commit Tofa's web bundles.
+- IPTV: no sources, provider names, sample playlists or links ship with the app, and no wording suggests where to get
+  streams. Never log a stream or `player_api.php` address (Xtream logins are in them; `[iptv]` lines name decisions
+  only), never store an Xtream stream URL, and keep every login-bearing field in `_tokenKeysForKind('iptv')`. The
+  IPTV player OSD (zapping, number entry, mini guide) is for IPTV sessions only; other live backends are unchanged.
 - The app is one build for phone, tablet, desktop and TV. Every new screen must work with touch
   **and** D-pad: use `FocusableButton`, `FocusableTextFormField`, `FocusableWrapper` and give each
   focusable a `FocusNode` with explicit `onNavigateUp/Down` where the default order is wrong. TV

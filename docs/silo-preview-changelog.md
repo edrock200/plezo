@@ -4,6 +4,21 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **IPTV sources (new):** Plezilo can now play your own IPTV playlist or Xtream Codes login, next to your media servers. Plezilo brings no channels of its own: you add the source you have. *(please test with your provider)*
+  - **Adding one:** *Add an IPTV source* (first screen, or Settings › Profiles › a profile › Add connection). Enter an M3U playlist address, pick a playlist file (phone and desktop), or enter the server, username and password of an Xtream login. You can add guide (XMLTV) addresses too; the guide the source names itself is read as well. Plezilo reads the channel list before saving, so a wrong address or login is reported straight away. A profile can have several sources.
+  - **Live TV:** the source's channels appear in Live TV's guide with their logos, numbers and programmes. A new *Channels* tab lists every channel with what is on now and next and a search box, and a row of group chips (*All*, *Recent*, then each group) filters both. Favourite channels are kept on this device, per source.
+  - **Catch-up:** on channels that offer it, *Watch* plays a programme that has ended and *Watch from start* restarts the one on now. In the player you can skip back through the archive on the time bar.
+  - **Reminders:** *Remind me* on a programme that has not started; a minute before, while Plezilo is open, a message offers to tune the channel.
+  - **Watching:** Up/Down (or Channel +/− and Page Up/Down) change channel; type a number to jump to a channel; *Last* (or 0) goes back to the previous one; *Info* shows the channel banner (logo, number, now and next); OK opens a channel list over the picture to change channel without leaving. A stream that drops reconnects by itself.
+  - **Recording:** *Record* on a guide programme, or in the player's channel list for the programme on now, records it to this device while Plezilo is running. Recordings appear in Live TV's *Recordings* and play like any title.
+  - **Movies and series (Xtream):** a source's movies and series appear as *Movies* and *Series* libraries with their categories, details, trailers, seasons and episodes. Where you stopped and what you have watched is remembered on this device, and Continue Watching on Home shows it. Turn *Movies and series* off in the source's settings for Live TV only.
+  - **Home and search:** Home shows a row of your favourite channels with what is on, and search finds channels, programmes in the guide, movies and series.
+  - **Settings per source** (the source's menu in a profile's connection list): its account status and expiry (Xtream), when the playlist and guide were last read, *Refresh now*, the name, the stream format (MPEG-TS or HLS), refresh intervals, user-agent and referrer, guide addresses, guide time shift and how many days of guide to keep, channel numbers (from the playlist or 1, 2, 3…), groups (hide, reorder, lock behind the profile PIN) and channels (hide, rename, renumber, choose the guide channel by hand).
+
+## silo-preview-2.72.0
+
+Released November 26, 2026. Android and Windows.
+
 - **A switched-off or removed server leaves Continue Watching at once:** after you switched a connection off (or removed it), its titles could stay in Continue Watching and other Home rows until Home reloaded later. Home now drops that server's titles as soon as it leaves your profile, and reloads only once Plezilo has finished reconnecting your other servers. A server that is just temporarily offline keeps its titles, as before.
 
 ## silo-preview-2.71.0
