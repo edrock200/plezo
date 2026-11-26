@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:plezy/media/live_tv_support.dart';
 import 'package:plezy/media/media_server_client.dart';
@@ -83,7 +84,7 @@ void main() {
     );
     final future = programmes.firstWhere((p) => p.beginsAt! > server.now.millisecondsSinceEpoch ~/ 1000);
     final templates = await dvr.getSubscriptionTemplate(future.guid!);
-    final entry = templates.single.subscriptions.single;
+    final entry = templates.single.subscriptions.first;
     expect(entry.type, MediaSubscription.typeEpisode);
     await dvr.createRecordingRule(MediaSubscriptionCreateRequest.fromTemplate(entry));
     final scheduled = await dvr.fetchScheduledRecordings();
@@ -97,6 +98,152 @@ void main() {
     await dvr.cancelGrab(scheduled.single.id);
     expect(await dvr.fetchScheduledRecordings(), isEmpty);
     expect((await store.recordings()).single.state, IptvRecordingState.cancelled);
+  });
+
+  group('series rules', () {
+    /// "Nightly" airs on channel 5 at +2 h (episode 1, new), +3 h (episode 1
+    /// again: a repeat), +4 h (episode 2), and on channel 6 at +5 h
+    /// (episode 3, new) and +6 h (episode 2 again).
+    Future<void> loadSeriesGuide() async {
+      final base = DateTime.utc(server.now.year, server.now.month, server.now.day, server.now.hour);
+      String at(int h) => FakeIptvServer.xmltvTime(base.add(Duration(hours: h)));
+      String show(int ch, int h, int ep, {bool isNew = false}) =>
+          '<programme start="${at(h)}" stop="${at(h + 1)}" channel="ch$ch.fake"><title>Nightly</title>'
+          '<sub-title>Part $ep</sub-title><episode-num system="xmltv_ns">0.$ep.</episode-num>'
+          '${isNew ? '<new/>' : ''}</programme>\n';
+      server.hourlyGuideChannels = 4;
+      server.extraGuide = [
+        show(5, 2, 1, isNew: true),
+        show(5, 3, 1),
+        show(5, 4, 2),
+        show(6, 5, 3, isNew: true),
+        show(6, 6, 2),
+      ].join();
+      final worker = IptvSyncWorker(store: store, now: () => server.now);
+      await worker.importEpg(client.connection);
+      worker.close();
+    }
+
+    Future<MediaSubscription> seriesEntry({int hour = 2, int channel = 0}) async {
+      final programmes = await client.liveTv.fetchSchedule(
+        from: server.now.add(Duration(hours: hour)),
+        to: server.now.add(Duration(hours: hour + 1)),
+      );
+      final airing = programmes.firstWhere((p) => p.grandparentTitle == 'Nightly');
+      final templates = await client.liveTvDvr!.getSubscriptionTemplate(airing.guid!);
+      final entries = templates.single.subscriptions;
+      expect(entries.map((e) => e.type), [MediaSubscription.typeEpisode, MediaSubscription.typeSeries]);
+      return entries.last;
+    }
+
+    Future<List<IptvRecordingRow>> pending() async => [
+      for (final r in await store.recordings())
+        if (r.state == IptvRecordingState.scheduled) r,
+    ]..sort((a, b) => a.start.compareTo(b.start));
+
+    test('one channel: each episode once, a repeat skipped', () async {
+      await loadSeriesGuide();
+      final dvr = client.liveTvDvr!;
+      await dvr.createRecordingRule(MediaSubscriptionCreateRequest.fromTemplate(await seriesEntry()));
+      final rows = await pending();
+      expect(rows.map((r) => r.title), ['Nightly: Part 1', 'Nightly: Part 2']);
+      expect(rows.map((r) => r.episode), ['ep:s01e02', 'ep:s01e03']);
+      expect(rows.every((r) => r.ruleId != null), isTrue);
+
+      final rules = await dvr.fetchRecordingRules();
+      expect(rules.single.key, startsWith('iptvrule:'));
+      expect(rules.single.grabOperations, hasLength(2));
+
+      // Expanding again (a guide refresh) schedules nothing new.
+      expect(await client.expandRecordingRules(), 0);
+
+      // The guide tags the scheduled airings with the rule.
+      final tagged = (await client.liveTv.fetchSchedule(
+        from: server.now.add(const Duration(hours: 2)),
+        to: server.now.add(const Duration(hours: 5)),
+      )).where((p) => p.recordingRuleKey != null);
+      expect(tagged.map((p) => p.recordingRuleKey).toSet(), {rules.single.key});
+    });
+
+    test('any channel and new only', () async {
+      await loadSeriesGuide();
+      final dvr = client.liveTvDvr!;
+      final request = MediaSubscriptionCreateRequest.fromTemplate(await seriesEntry());
+      await dvr.createRecordingRule(
+        MediaSubscriptionCreateRequest(
+          type: request.type,
+          parameters: request.parameters,
+          prefs: {...request.prefs, 'any_channel': true},
+        ),
+      );
+      expect((await pending()).map((r) => r.episode), ['ep:s01e02', 'ep:s01e03', 'ep:s01e04']);
+
+      final rule = (await dvr.fetchRecordingRules()).single;
+      await dvr.updateRecordingRule(rule.key, {'new_only': true});
+      final rows = await pending();
+      expect(rows.map((r) => r.episode), ['ep:s01e02', 'ep:s01e04']);
+      expect(rows.map((r) => r.channelId).toSet(), hasLength(2));
+
+      await dvr.deleteRecordingRule(rule.key);
+      expect(await dvr.fetchRecordingRules(), isEmpty);
+      expect(await pending(), isEmpty);
+    });
+
+    test('keep latest N deletes older recordings of the rule', () async {
+      final rule = IptvRecordingRule(
+        id: 'r1',
+        sourceId: client.connection.id,
+        title: 'Nightly',
+        channelId: 'c',
+        keepLast: 2,
+        createdAt: 0,
+      );
+      await store.putRule(rule);
+      for (var i = 0; i < 4; i++) {
+        final file = File('${dir.path}/$i.ts')..writeAsBytesSync([1]);
+        await store.putRecording(
+          IptvRecordingRow(
+            id: 'rec$i',
+            sourceId: rule.sourceId,
+            channelId: 'c',
+            title: 'Nightly $i',
+            start: 1000 + i * 100,
+            stop: 1050 + i * 100,
+            state: IptvRecordingState.completed,
+            path: file.path,
+            bytes: 1,
+            ruleId: 'r1',
+          ),
+        );
+      }
+      expect(await recorder.enforceKeepLast(rule), 2);
+      final left = await store.recordings();
+      expect(left.map((r) => r.id).toSet(), {'rec2', 'rec3'});
+      expect(File('${dir.path}/0.ts').existsSync(), isFalse);
+      expect(await recorder.enforceKeepLast(rule.copyWith(keepLast: 0)), 0);
+    });
+  });
+
+  test('tells the Android service what records now and what is next', () async {
+    final channel = _FakeServiceChannel();
+    final calls = channel.calls;
+    final reporting = IptvRecorder(store: store, directory: () async => dir, backgroundChannel: channel)
+      ..resolver = (sourceId, channelId) => client.recordingTarget(channelId);
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    final row = await reporting.schedule(
+      sourceId: client.connection.id,
+      channelId: (await client.liveTv.fetchChannels()).first.key,
+      title: 'Later',
+      start: now + 3600,
+      stop: now + 7200,
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    expect(calls.last['active'], isEmpty);
+    expect(calls.last['nextAtMs'], (now + 3600) * 1000);
+    expect(calls.last['nextTitle'], 'Later');
+    await reporting.cancel(row.id);
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    expect(calls.last['nextAtMs'], isNull);
   });
 
   test('an ended programme cannot be recorded', () async {
@@ -138,4 +285,17 @@ void main() {
     expect(media.targetDuration, 4);
     expect(media.ended, isFalse);
   });
+}
+
+/// Records what the recorder sends the Android service, without a binding
+/// (a test binding would block the fake server's sockets).
+class _FakeServiceChannel extends MethodChannel {
+  _FakeServiceChannel() : super('test/iptv_recording');
+  final calls = <Map<Object?, Object?>>[];
+
+  @override
+  Future<T?> invokeMethod<T>(String method, [dynamic arguments]) async {
+    if (method == 'setState') calls.add(arguments as Map<Object?, Object?>);
+    return null;
+  }
 }

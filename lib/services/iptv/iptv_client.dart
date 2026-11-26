@@ -41,6 +41,7 @@ import '../../models/media_subscription.dart';
 import '../../models/transcode_quality_preset.dart';
 import '../../utils/app_logger.dart';
 import '../../utils/external_ids.dart';
+import '../../utils/json_utils.dart';
 import '../../utils/log_redaction_manager.dart';
 import '../../utils/media_server_http_client.dart' show AbortController;
 import '../api_cache.dart';

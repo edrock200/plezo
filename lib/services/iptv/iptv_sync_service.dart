@@ -109,6 +109,10 @@ class IptvSyncService {
   /// Live TV availability and libraries.
   void Function(String sourceId)? onSourceUpdated;
 
+  /// Called after every refresh of a source, whether or not the UI is up
+  /// (series recording rules are expanded against the new guide).
+  void Function(String sourceId)? onGuideRefreshed;
+
   ValueNotifier<IptvSourceSyncStatus> statusOf(String sourceId) =>
       _status.putIfAbsent(sourceId, () => ValueNotifier(const IptvSourceSyncStatus()));
 
@@ -243,6 +247,7 @@ class IptvSyncService {
     );
     appLogger.i('[iptv] refresh ${error == null ? 'finished' : 'failed: $error'}');
     IptvDataRevision.bump(c.id);
+    onGuideRefreshed?.call(c.id);
     onSourceUpdated?.call(c.id);
   }
 

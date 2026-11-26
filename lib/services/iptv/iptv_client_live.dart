@@ -142,7 +142,7 @@ extension IptvClientLive on IptvClient {
     return out;
   }
 
-  LiveTvProgram _liveProgram(IptvShownChannel channel, IptvProgramme p) {
+  LiveTvProgram _liveProgram(IptvShownChannel channel, IptvProgramme p, {IptvRecordingRow? recording}) {
     final isEpisode = p.subTitle != null || p.episode != null;
     return LiveTvProgram(
       key: '${channel.channel.id}@${p.start}',
@@ -162,6 +162,8 @@ extension IptvClientLive on IptvClient {
       channelCallSign: channel.channel.name,
       serverId: serverId.value,
       serverName: serverName,
+      subscriptionId: recording == null ? null : '${_IptvDvr.recordingPrefix}${recording.id}',
+      grandparentSubscriptionId: recording?.ruleId == null ? null : '${_IptvDvr.rulePrefix}${recording!.ruleId}',
     );
   }
 
@@ -406,7 +408,22 @@ class _IptvLiveTvSupport implements LiveTvSupport, LiveTvChannelGroups, LiveTvRe
   Future<List<LiveTvProgram>> fetchSchedule({DateTime? from, DateTime? to}) async {
     final start = from ?? DateTime.now();
     final end = to ?? start.add(const Duration(hours: 6));
-    return [for (final row in await _client.schedule(start, end)) _client._liveProgram(row.channel, row.programme)];
+    final rows = await _client.schedule(start, end);
+    // Airings set to record carry the recording (and series rule) key, so
+    // the guide marks them and the details sheet offers Manage, not Record.
+    final booked = <String, IptvRecordingRow>{
+      for (final r in await _client.store.recordings(sourceId: _client.connection.id))
+        if (r.state == IptvRecordingState.scheduled || r.state == IptvRecordingState.recording)
+          '${r.channelId}@${r.start}': r,
+    };
+    return [
+      for (final row in rows)
+        _client._liveProgram(
+          row.channel,
+          row.programme,
+          recording: booked['${row.channel.channel.id}@${row.programme.start}'],
+        ),
+    ];
   }
 
   @override

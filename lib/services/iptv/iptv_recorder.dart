@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -28,12 +29,44 @@ typedef IptvRecordingResolver = Future<IptvRecordingTarget?> Function(String sou
 /// it opens again (if the programme is still on), and one cut off by the app
 /// closing keeps what it recorded and is marked failed.
 class IptvRecorder {
-  IptvRecorder({required this.store, http.Client? client, Future<Directory> Function()? directory})
-    : _client = client ?? http.Client(),
-      _directory = directory ?? _defaultDirectory;
+  IptvRecorder({
+    required this.store,
+    http.Client? client,
+    Future<Directory> Function()? directory,
+    this.backgroundChannel,
+  }) : _client = client ?? http.Client(),
+       _directory = directory ?? _defaultDirectory;
+
+  /// Android: keeps the process alive in the background while recording
+  /// (`IptvRecordingService`). Null elsewhere and in tests.
+  final MethodChannel? backgroundChannel;
+
+  static IptvRecorder _create() => IptvRecorder(
+    store: IptvStore.instance,
+    backgroundChannel: !kIsWeb && Platform.isAndroid ? const MethodChannel('com.plezy/iptv_recording') : null,
+  );
+
+  /// What the Android service shows: what records now and what is next.
+  Future<void> _reportBackgroundState() async {
+    final channel = backgroundChannel;
+    if (channel == null) return;
+    try {
+      final now = _nowSeconds();
+      final next = (await store.recordings())
+          .where((r) => r.state == IptvRecordingState.scheduled && r.start > now)
+          .fold<IptvRecordingRow?>(null, (best, r) => best == null || r.start < best.start ? r : best);
+      await channel.invokeMethod<bool>('setState', {
+        'active': [for (final a in _active.values) a.title],
+        'nextAtMs': next == null ? null : next.start * 1000,
+        'nextTitle': next?.title,
+      });
+    } catch (e) {
+      appLogger.d('[iptv] recording service state not sent (${e.runtimeType})');
+    }
+  }
 
   static IptvRecorder? _instance;
-  static IptvRecorder get instance => _instance ??= IptvRecorder(store: IptvStore.instance);
+  static IptvRecorder get instance => _instance ??= _create();
   static set testInstance(IptvRecorder? recorder) => _instance = recorder;
 
   final IptvStore store;
@@ -90,6 +123,8 @@ class IptvRecorder {
     required String title,
     required int start,
     required int stop,
+    String? ruleId,
+    String? episode,
   }) async {
     final existing = (await store.recordings(sourceId: sourceId)).where(
       (r) =>
@@ -107,10 +142,13 @@ class IptvRecorder {
       start: start,
       stop: stop,
       state: IptvRecordingState.scheduled,
+      ruleId: ruleId,
+      episode: episode,
     );
     await store.putRecording(row);
     _arm(row);
     changes.value++;
+    unawaited(_reportBackgroundState());
     appLogger.i(
       '[iptv] recording scheduled in ${max(0, start - _nowSeconds()) ~/ 60} min for ${(stop - start) ~/ 60} min',
     );
@@ -166,6 +204,7 @@ class IptvRecorder {
     }
     await store.deleteRecording(recordingId);
     changes.value++;
+    unawaited(_reportBackgroundState());
   }
 
   /// Delete every recording of a removed source.
@@ -189,15 +228,19 @@ class IptvRecorder {
         path: path ?? r.path,
         bytes: bytes ?? r.bytes,
         error: error ?? r.error,
+        ruleId: r.ruleId,
+        episode: r.episode,
       ),
     );
     changes.value++;
+    unawaited(_reportBackgroundState());
   }
 
   Future<void> _record(IptvRecordingRow row) async {
     if (_active.containsKey(row.id)) return;
-    final active = _ActiveRecording();
+    final active = _ActiveRecording(row.title);
     _active[row.id] = active;
+    unawaited(_reportBackgroundState());
     final target = await resolver?.call(row.sourceId, row.channelId);
     if (target == null || active.stopped) {
       _active.remove(row.id);
@@ -235,6 +278,7 @@ class IptvRecorder {
     }
     if (_deleted.contains(row.id)) {
       if (!active.finished.isCompleted) active.finished.complete();
+      unawaited(_reportBackgroundState());
       return;
     }
     final ok = bytes > 0;
@@ -247,6 +291,28 @@ class IptvRecorder {
     );
     appLogger.i('[iptv] recording ${ok ? 'finished' : 'failed'} bytes=$bytes');
     if (!active.finished.isCompleted) active.finished.complete();
+    final ruleId = row.ruleId;
+    if (ok && ruleId != null) {
+      final rule = (await store.rules(sourceId: row.sourceId)).where((r) => r.id == ruleId).firstOrNull;
+      if (rule != null) await enforceKeepLast(rule);
+    }
+  }
+
+  /// Keep only the latest [IptvRecordingRule.keepLast] finished recordings
+  /// of a series rule (0 keeps every one); older ones and their files go.
+  Future<int> enforceKeepLast(IptvRecordingRule rule) async {
+    if (rule.keepLast <= 0) return 0;
+    final done = [
+      for (final r in await store.recordings(sourceId: rule.sourceId))
+        if (r.ruleId == rule.id && r.state == IptvRecordingState.completed) r,
+    ]..sort((a, b) => b.start.compareTo(a.start));
+    if (done.length <= rule.keepLast) return 0;
+    final old = done.sublist(rule.keepLast);
+    for (final r in old) {
+      await deleteRecording(r.id);
+    }
+    appLogger.i('[iptv] series rule kept ${rule.keepLast}; ${old.length} older recording(s) deleted');
+    return old.length;
   }
 
   /// A continuous stream (MPEG-TS): reconnects (with back-off) until [until]
@@ -366,6 +432,8 @@ class IptvRecordingExistsException implements Exception {
 }
 
 class _ActiveRecording {
+  _ActiveRecording(this.title);
+  final String title;
   bool stopped = false;
   final Completer<void> finished = Completer<void>();
   void Function()? onStop;

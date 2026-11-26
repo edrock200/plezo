@@ -45,7 +45,11 @@ class XmltvProgramme {
     this.episodeNumber,
     this.rating,
     this.year,
+    this.isNew = false,
   });
+
+  /// `<new/>`: the guide marks a first showing.
+  final bool isNew;
 }
 
 /// Streaming XMLTV reader.
@@ -135,6 +139,7 @@ class XmltvStreamParser {
   String? _pEpisodeSystem;
   String? _pRating;
   String? _pYear;
+  bool _pNew = false;
   bool _inRating = false;
 
   void _event(XmlEvent event) {
@@ -180,6 +185,7 @@ class XmltvStreamParser {
         _pTitle = _pSub = _pDesc = _pCategory = _pIcon = null;
         _pEpisodeOnscreen = _pEpisodeNs = _pEpisodeSystem = _pRating = _pYear = null;
         _inRating = false;
+        _pNew = false;
         final channel = _pChannel;
         final start = _pStart;
         _skipCurrent =
@@ -210,6 +216,8 @@ class XmltvStreamParser {
         _pIcon ??= _attr(attributes, 'src');
       case 'rating':
         _inRating = true;
+      case 'new':
+        _pNew = true;
       case 'value':
         if (_inRating) _beginField('rating-value');
     }
@@ -309,6 +317,7 @@ class XmltvStreamParser {
         episodeNumber: ns.episode,
         rating: _pRating,
         year: _pYear == null || _pYear!.length < 4 ? null : int.tryParse(_pYear!.substring(0, 4)),
+        isNew: _pNew,
       ),
     );
   }

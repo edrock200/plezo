@@ -64,6 +64,12 @@ class FakeIptvServer {
     return b.toString();
   }
 
+  /// More `<programme>` elements for the guide (series-rule tests).
+  String extraGuide = '';
+
+  /// Channels above this get no hourly programmes (only [extraGuide]'s).
+  int? hourlyGuideChannels;
+
   String xmltv() {
     final b = StringBuffer('<?xml version="1.0" encoding="UTF-8"?>\n<tv generator-info-name="fake">\n');
     for (var i = 1; i <= channelCount; i++) {
@@ -72,7 +78,7 @@ class FakeIptvServer {
       );
     }
     final start = DateTime.utc(now.year, now.month, now.day, now.hour).subtract(const Duration(hours: 6));
-    for (var i = 1; i <= channelCount; i++) {
+    for (var i = 1; i <= (hourlyGuideChannels ?? channelCount); i++) {
       for (var h = 0; h < 24; h++) {
         final s = start.add(Duration(hours: h));
         final e = s.add(const Duration(hours: 1));
@@ -83,7 +89,9 @@ class FakeIptvServer {
         );
       }
     }
-    b.writeln('</tv>');
+    b
+      ..write(extraGuide)
+      ..writeln('</tv>');
     return b.toString();
   }
 

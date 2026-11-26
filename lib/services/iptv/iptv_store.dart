@@ -131,6 +131,7 @@ class IptvProgramme {
     this.episodeNumber,
     this.rating,
     this.year,
+    this.isNew = false,
   });
 
   final String epgChannelId;
@@ -146,6 +147,9 @@ class IptvProgramme {
   final int? episodeNumber;
   final String? rating;
   final int? year;
+
+  /// The guide marks it a new episode (XMLTV `<new/>`).
+  final bool isNew;
 
   IptvProgramme shifted(int seconds) => seconds == 0
       ? this
@@ -163,6 +167,7 @@ class IptvProgramme {
           episodeNumber: episodeNumber,
           rating: rating,
           year: year,
+          isNew: isNew,
         );
 }
 
@@ -260,6 +265,48 @@ class IptvReminder {
 
 enum IptvRecordingState { scheduled, recording, completed, failed, cancelled }
 
+/// "Record series": every airing of a title on its channel (or any
+/// channel), new episodes only if asked, keeping the latest [keepLast]
+/// (0 = all).
+class IptvRecordingRule {
+  const IptvRecordingRule({
+    required this.id,
+    required this.sourceId,
+    required this.title,
+    required this.channelId,
+    required this.createdAt,
+    this.channelName,
+    this.anyChannel = false,
+    this.newOnly = false,
+    this.keepLast = 0,
+  });
+  final String id;
+  final String sourceId;
+  final String title;
+
+  /// The channel the rule was made on.
+  final String channelId;
+  final String? channelName;
+  final bool anyChannel;
+  final bool newOnly;
+  final int keepLast;
+
+  /// Epoch seconds.
+  final int createdAt;
+
+  IptvRecordingRule copyWith({bool? newOnly, int? keepLast, bool? anyChannel}) => IptvRecordingRule(
+    id: id,
+    sourceId: sourceId,
+    title: title,
+    channelId: channelId,
+    channelName: channelName,
+    createdAt: createdAt,
+    anyChannel: anyChannel ?? this.anyChannel,
+    newOnly: newOnly ?? this.newOnly,
+    keepLast: keepLast ?? this.keepLast,
+  );
+}
+
 class IptvRecordingRow {
   const IptvRecordingRow({
     required this.id,
@@ -273,11 +320,19 @@ class IptvRecordingRow {
     this.path,
     this.bytes = 0,
     this.error,
+    this.ruleId,
+    this.episode,
   });
   final String id;
   final String sourceId;
   final String channelId;
   final String? channelName;
+
+  /// The series rule that scheduled it, or null.
+  final String? ruleId;
+
+  /// The guide's episode number, for a rule's duplicate check.
+  final String? episode;
   final String title;
   final int start;
   final int stop;
@@ -311,13 +366,15 @@ const _schema = <String>[
   '''CREATE TABLE IF NOT EXISTS programmes (
     source_id TEXT NOT NULL, channel TEXT NOT NULL, start INTEGER NOT NULL, stop INTEGER NOT NULL,
     title TEXT NOT NULL, sub_title TEXT, descr TEXT, category TEXT, icon TEXT, episode TEXT,
-    season INTEGER, ep INTEGER, rating TEXT, year INTEGER, title_lower TEXT NOT NULL)''',
+    season INTEGER, ep INTEGER, rating TEXT, year INTEGER, title_lower TEXT NOT NULL,
+    is_new INTEGER NOT NULL DEFAULT 0)''',
   'CREATE INDEX IF NOT EXISTS programmes_channel_time ON programmes (source_id, channel, start)',
   'CREATE INDEX IF NOT EXISTS programmes_time ON programmes (source_id, stop, start)',
   '''CREATE TABLE IF NOT EXISTS programmes_staging (
     source_id TEXT NOT NULL, channel TEXT NOT NULL, start INTEGER NOT NULL, stop INTEGER NOT NULL,
     title TEXT NOT NULL, sub_title TEXT, descr TEXT, category TEXT, icon TEXT, episode TEXT,
-    season INTEGER, ep INTEGER, rating TEXT, year INTEGER, title_lower TEXT NOT NULL)''',
+    season INTEGER, ep INTEGER, rating TEXT, year INTEGER, title_lower TEXT NOT NULL,
+    is_new INTEGER NOT NULL DEFAULT 0)''',
   'CREATE INDEX IF NOT EXISTS programmes_staging_source ON programmes_staging (source_id)',
   '''CREATE TABLE IF NOT EXISTS epg_channels (
     source_id TEXT NOT NULL, id TEXT NOT NULL, display_name TEXT NOT NULL, name_norm TEXT NOT NULL, icon TEXT,
@@ -352,7 +409,12 @@ const _schema = <String>[
   '''CREATE TABLE IF NOT EXISTS recordings (
     id TEXT NOT NULL PRIMARY KEY, source_id TEXT NOT NULL, channel_id TEXT NOT NULL, channel_name TEXT,
     title TEXT NOT NULL, start INTEGER NOT NULL, stop INTEGER NOT NULL, state TEXT NOT NULL, path TEXT,
-    bytes INTEGER NOT NULL DEFAULT 0, error TEXT)''',
+    bytes INTEGER NOT NULL DEFAULT 0, error TEXT, rule_id TEXT, episode TEXT)''',
+  'CREATE INDEX IF NOT EXISTS recordings_rule ON recordings (rule_id)',
+  '''CREATE TABLE IF NOT EXISTS recording_rules (
+    id TEXT NOT NULL PRIMARY KEY, source_id TEXT NOT NULL, title TEXT NOT NULL, title_lower TEXT NOT NULL,
+    channel_id TEXT NOT NULL, channel_name TEXT, any_channel INTEGER NOT NULL DEFAULT 0,
+    new_only INTEGER NOT NULL DEFAULT 0, keep_last INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL)''',
   '''CREATE TABLE IF NOT EXISTS sync_state (
     source_id TEXT NOT NULL, kind TEXT NOT NULL, last_success INTEGER, last_attempt INTEGER, error TEXT,
     count INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (source_id, kind))''',
@@ -395,7 +457,7 @@ class IptvDatabase extends GeneratedDatabase {
   Iterable<TableInfo<Table, Object?>> get allTables => const [];
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -405,6 +467,21 @@ class IptvDatabase extends GeneratedDatabase {
       }
     },
     onUpgrade: (m, from, to) async {
+      if (from < 2) {
+        // Series recording rules: new-episode flags and rule links.
+        for (final statement in const [
+          'ALTER TABLE programmes ADD COLUMN is_new INTEGER NOT NULL DEFAULT 0',
+          'ALTER TABLE programmes_staging ADD COLUMN is_new INTEGER NOT NULL DEFAULT 0',
+          'ALTER TABLE recordings ADD COLUMN rule_id TEXT',
+          'ALTER TABLE recordings ADD COLUMN episode TEXT',
+        ]) {
+          try {
+            await customStatement(statement);
+          } catch (e) {
+            if (!'$e'.contains('duplicate column')) rethrow;
+          }
+        }
+      }
       for (final statement in _schema) {
         await customStatement(statement);
       }
@@ -704,7 +781,7 @@ class IptvStore {
 
   Future<void> stageProgrammes(String sourceId, List<IptvProgramme> programmes) => _insertMany(
     'INSERT INTO programmes_staging (source_id, channel, start, stop, title, sub_title, descr, category, icon, '
-    'episode, season, ep, rating, year, title_lower) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    'episode, season, ep, rating, year, title_lower, is_new) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     [
       for (final p in programmes)
         [
@@ -723,6 +800,7 @@ class IptvStore {
           p.rating,
           p.year,
           p.title.toLowerCase(),
+          p.isNew ? 1 : 0,
         ],
     ],
   );
@@ -732,9 +810,12 @@ class IptvStore {
   Future<int> commitProgrammeImport(String sourceId) async {
     await db.transaction(() async {
       await db.customStatement('DELETE FROM programmes WHERE source_id = ?', [sourceId]);
-      await db.customStatement('INSERT INTO programmes SELECT DISTINCT * FROM programmes_staging WHERE source_id = ?', [
-        sourceId,
-      ]);
+      await db.customStatement(
+        'INSERT INTO programmes (source_id, channel, start, stop, title, sub_title, descr, category, icon, episode, season, ep, rating, year, title_lower, is_new) '
+        'SELECT DISTINCT source_id, channel, start, stop, title, sub_title, descr, category, icon, episode, season, ep, rating, year, title_lower, is_new '
+        'FROM programmes_staging WHERE source_id = ?',
+        [sourceId],
+      );
       await db.customStatement('DELETE FROM programmes_staging WHERE source_id = ?', [sourceId]);
     });
     final row = await db
@@ -795,6 +876,7 @@ class IptvStore {
     episodeNumber: row.readNullable<int>('ep'),
     rating: row.readNullable<String>('rating'),
     year: row.readNullable<int>('year'),
+    isNew: (row.readNullable<int>('is_new') ?? 0) == 1,
   );
 
   /// Raw (unshifted) programmes overlapping `[from, to)` (epoch seconds),
@@ -1168,8 +1250,22 @@ class IptvStore {
 
   Future<void> putRecording(IptvRecordingRow r) => db.customStatement(
     'INSERT OR REPLACE INTO recordings (id, source_id, channel_id, channel_name, title, start, stop, state, path, '
-    'bytes, error) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-    [r.id, r.sourceId, r.channelId, r.channelName, r.title, r.start, r.stop, r.state.name, r.path, r.bytes, r.error],
+    'bytes, error, rule_id, episode) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    [
+      r.id,
+      r.sourceId,
+      r.channelId,
+      r.channelName,
+      r.title,
+      r.start,
+      r.stop,
+      r.state.name,
+      r.path,
+      r.bytes,
+      r.error,
+      r.ruleId,
+      r.episode,
+    ],
   );
 
   Future<List<IptvRecordingRow>> recordings({String? sourceId}) async {
@@ -1196,8 +1292,66 @@ class IptvStore {
           path: r.readNullable<String>('path'),
           bytes: r.read<int>('bytes'),
           error: r.readNullable<String>('error'),
+          ruleId: r.readNullable<String>('rule_id'),
+          episode: r.readNullable<String>('episode'),
         ),
     ];
+  }
+
+  // ---- series recording rules ---------------------------------------------
+
+  Future<void> putRule(IptvRecordingRule rule) => db.customStatement(
+    'INSERT OR REPLACE INTO recording_rules (id, source_id, title, title_lower, channel_id, channel_name, any_channel, '
+    'new_only, keep_last, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    [
+      rule.id,
+      rule.sourceId,
+      rule.title,
+      rule.title.toLowerCase(),
+      rule.channelId,
+      rule.channelName,
+      rule.anyChannel ? 1 : 0,
+      rule.newOnly ? 1 : 0,
+      rule.keepLast,
+      rule.createdAt,
+    ],
+  );
+
+  Future<List<IptvRecordingRule>> rules({String? sourceId}) async {
+    final rows = await db
+        .customSelect(
+          'SELECT * FROM recording_rules WHERE (? IS NULL OR source_id = ?) ORDER BY title_lower',
+          variables: [Variable(sourceId), Variable(sourceId)],
+        )
+        .get();
+    return [
+      for (final r in rows)
+        IptvRecordingRule(
+          id: r.read<String>('id'),
+          sourceId: r.read<String>('source_id'),
+          title: r.read<String>('title'),
+          channelId: r.read<String>('channel_id'),
+          channelName: r.readNullable<String>('channel_name'),
+          anyChannel: r.read<int>('any_channel') == 1,
+          newOnly: r.read<int>('new_only') == 1,
+          keepLast: r.read<int>('keep_last'),
+          createdAt: r.read<int>('created_at'),
+        ),
+    ];
+  }
+
+  Future<void> deleteRule(String id) => db.customStatement('DELETE FROM recording_rules WHERE id = ?', [id]);
+
+  /// Future programmes titled [titleLower] (raw times), optionally on some
+  /// guide channels only.
+  Future<List<IptvProgramme>> programmesTitled(String sourceId, String titleLower, {required int from}) async {
+    final rows = await db
+        .customSelect(
+          'SELECT * FROM programmes WHERE source_id = ? AND title_lower = ? AND stop > ? ORDER BY start',
+          variables: [Variable(sourceId), Variable(titleLower), Variable(from)],
+        )
+        .get();
+    return rows.map(_programmeFromRow).toList(growable: false);
   }
 
   Future<void> deleteRecording(String id) => db.customStatement('DELETE FROM recordings WHERE id = ?', [id]);
@@ -1275,6 +1429,7 @@ class IptvStore {
         'progress',
         'reminders',
         'recordings',
+        'recording_rules',
         'sync_state',
         'source_meta',
       ]) {

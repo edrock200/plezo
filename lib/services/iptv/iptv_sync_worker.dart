@@ -482,6 +482,7 @@ class IptvSyncWorker {
               episodeNumber: programme.episodeNumber,
               rating: programme.rating,
               year: programme.year,
+              isNew: programme.isNew,
             ),
           );
           if (buffer.length >= 5000) {
