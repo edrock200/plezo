@@ -41,6 +41,7 @@ import '../../utils/media_server_http_client.dart';
 import '../../utils/url_utils.dart';
 import '../../media/chapter_marker_classifier.dart';
 import '../../utils/global_key_utils.dart';
+import '../../utils/json_utils.dart';
 import '../api_cache.dart';
 import '../download_artwork_helpers.dart';
 import '../jellyfin_trickplay_service.dart';
@@ -58,6 +59,7 @@ import 'tofa_playback_caps.dart';
 
 part 'tofa_client_connect.dart';
 part 'tofa_client_downloads.dart';
+part 'tofa_client_collections.dart';
 part 'tofa_client_home.dart';
 part 'tofa_client_quickview.dart';
 
@@ -367,7 +369,8 @@ class TofaClient implements MediaServerClient, ScopedMediaServerClient, Graceful
     if (path == null || path.isEmpty) return '';
     if (path.startsWith('https://') || path.startsWith('http://')) return path;
     final art = TofaMappers.parseArtworkPath(path);
-    if (art == null) return '';
+    final serverRoute = art == null && path.startsWith('/api/');
+    if (art == null && !serverRoute) return '';
     final token = _imageToken?.token;
     if (token == null) {
       // Draw nothing rather than a URL the server would refuse; the token is
@@ -380,6 +383,12 @@ class TofaClient implements MediaServerClient, ScopedMediaServerClient, Graceful
       if (width != null && width > 0) 'w': '$width',
       if (height != null && height > 0) 'h': '$height',
     };
+    if (art == null) {
+      // A collection's server route (unverified form, see
+      // [TofaMappers.collectionArt]): signed like the artwork route.
+      final uri = Uri.parse(path);
+      return _api.resolveUrl(uri.replace(queryParameters: {...uri.queryParameters, ...query}).toString());
+    }
     return _api.resolveUrl('/api/v1/artwork/${_seg(art.mediaId)}/${art.kind}?${encodeQueryParameters(query)}');
   }
 
@@ -396,6 +405,12 @@ class TofaClient implements MediaServerClient, ScopedMediaServerClient, Graceful
   // ---------------------------------------------------------------------------
 
   final Map<String, String> _libraryTitles = {};
+
+  /// The collections list (both kinds), shared while it is read and kept
+  /// briefly so the Collections tab's pages slice one read.
+  ({DateTime at, Future<List<MediaItem>> items})? _collectionsCache;
+  final Map<String, MediaItem> _collectionItems = {};
+  final Map<String, List<MediaItem>> _collectionMembers = {};
 
   @override
   Future<List<MediaLibrary>> fetchLibraries() async {
@@ -669,6 +684,7 @@ class TofaClient implements MediaServerClient, ScopedMediaServerClient, Graceful
   Future<MediaItem?> fetchItem(String id) => _fetchItem(id, fresh: true);
 
   Future<MediaItem?> _fetchItem(String id, {bool fresh = false}) async {
+    if (TofaMappers.parseCollectionId(id) != null) return _collectionItem(id);
     final mediaId = TofaMappers.mediaIdOf(id);
     final isTitle = mediaId == id;
     final (d, _) = await (_detail(mediaId, fresh: fresh), isTitle ? _ensureWatchlistIds() : Future<void>.value()).wait;
@@ -756,6 +772,9 @@ class TofaClient implements MediaServerClient, ScopedMediaServerClient, Graceful
 
   @override
   Future<List<MediaItem>> fetchChildren(String parentId) async {
+    if (TofaMappers.parseCollectionId(parentId) != null) {
+      return (await _collectionDetail(parentId))?.members ?? const [];
+    }
     final mediaId = TofaMappers.mediaIdOf(parentId);
     final d = await _detail(mediaId);
     if (d == null) return const [];
@@ -789,6 +808,7 @@ class TofaClient implements MediaServerClient, ScopedMediaServerClient, Graceful
 
   @override
   Future<List<MediaItem>> fetchPlayableDescendants(String parentId) async {
+    if (TofaMappers.parseCollectionId(parentId) != null) return _collectionQueue(parentId);
     if (TofaMappers.parseSeasonId(parentId) != null) return fetchChildren(parentId);
     final d = await _detail(parentId);
     if (d == null) return const [];
@@ -1109,7 +1129,7 @@ class TofaClient implements MediaServerClient, ScopedMediaServerClient, Graceful
   Future<void> setFavorite(MediaItem item, bool isFavorite) => throw UnsupportedError('Tofa has no favorites.');
 
   // ---------------------------------------------------------------------------
-  // Playlists and collections (not in Plezilo's first Tofa version)
+  // Playlists (Tofa has none) and collections (read-only; tofa_client_collections.dart)
   // ---------------------------------------------------------------------------
 
   static Never _unsupported(String what) => throw UnsupportedError('Plezilo does not support $what on Tofa.');
@@ -1157,7 +1177,7 @@ class TofaClient implements MediaServerClient, ScopedMediaServerClient, Graceful
     int? start,
     int? size,
     AbortController? abort,
-  }) async => const LibraryPage(items: [], totalCount: 0);
+  }) => _collectionsPage(start, size, abort);
 
   @override
   Future<LibraryPage<MediaItem>> fetchCollectionPage(
@@ -1167,7 +1187,7 @@ class TofaClient implements MediaServerClient, ScopedMediaServerClient, Graceful
     AbortController? abort,
     String? libraryId,
     String? libraryTitle,
-  }) async => const LibraryPage(items: [], totalCount: 0);
+  }) => _collectionMembersPage(collectionId, start, size, abort);
 
   @override
   Future<List<CollectionMembership>> fetchCollectionMemberships(Set<String> itemIds, {AbortController? abort}) async =>

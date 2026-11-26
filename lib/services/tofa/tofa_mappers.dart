@@ -34,6 +34,9 @@ abstract final class TofaRaw {
   static const seasonNumber = 'tofa_season_number';
   static const episodeNumber = 'tofa_episode_number';
 
+  /// A collection's `kind` (`franchise`, `curated`; `custom` for custom ones).
+  static const collectionKind = 'tofa_collection_kind';
+
   /// The item's playable file ids (`MediaFile.id`), in the server's order.
   /// Order is presentation only: a file is picked by id.
   static const fileIds = 'tofa_file_ids';
@@ -723,6 +726,81 @@ abstract final class TofaMappers {
       'id': mediaId,
       'media_type': type == 'show' || type == 'series' ? 'tv' : type,
       'release_date': json['year'] == null ? null : '${json['year']}-01-01',
+    }, ctx);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Collections
+  // ---------------------------------------------------------------------------
+
+  /// Franchise and curated collections (`GET /collections`, `CollectionSummary`).
+  static const collectionPrefix = 'tofa-collection:';
+
+  /// Custom collections and lists (`GET /collections/custom`), a separate
+  /// id space with their own routes.
+  static const customCollectionPrefix = 'tofa-custom:';
+
+  static String collectionItemId(String id, {required bool custom}) =>
+      '${custom ? customCollectionPrefix : collectionPrefix}$id';
+
+  /// `(collectionId, custom)` of a collection item id, or null.
+  static ({String id, bool custom})? parseCollectionId(String itemId) {
+    for (final (prefix, custom) in [(collectionPrefix, false), (customCollectionPrefix, true)]) {
+      if (itemId.startsWith(prefix) && itemId.length > prefix.length) {
+        return (id: itemId.substring(prefix.length), custom: custom);
+      }
+    }
+    return null;
+  }
+
+  /// Collection artwork. The spec gives `poster_url` / `backdrop_url` /
+  /// `logo_url` (and custom collections' `poster_path` / `backdrop_path`) as
+  /// strings without saying their form. Unverified: an absolute URL is used
+  /// as it is and a server route (`/api/…`) is signed with the image token
+  /// ([TofaClient.thumbnailUrl]); a bare file path is not guessed at.
+  static String? collectionArt(Object? v) {
+    final s = _string(v);
+    if (s == null) return null;
+    if (s.startsWith('https://') || s.startsWith('http://') || s.startsWith('/api/')) return s;
+    return null;
+  }
+
+  /// One collection card: a `CollectionSummary`, `CollectionResponse`,
+  /// `CustomCollectionSummary` or `CustomCollectionResponse`.
+  static TofaMediaItem? collection(Map<String, dynamic> json, TofaMappingContext ctx, {required bool custom}) {
+    final id = _string(json['id']);
+    final name = _string(json['name']);
+    if (id == null || name == null) return null;
+    final count = flexibleInt(json['item_count']) ?? (json['items'] is List ? (json['items'] as List).length : null);
+    return TofaMediaItem(
+      id: collectionItemId(id, custom: custom),
+      kind: MediaKind.collection,
+      title: name,
+      summary: _string(json['overview']),
+      thumbPath: collectionArt(json['poster_url']) ?? collectionArt(json['poster_path']),
+      artPath: collectionArt(json['backdrop_url']) ?? collectionArt(json['backdrop_path']),
+      clearLogoPath: collectionArt(json['logo_url']),
+      childCount: count,
+      leafCount: count,
+      serverId: ctx.serverId,
+      serverName: ctx.serverName,
+      raw: {TofaRaw.collectionKind: ?_string(json['kind']) ?? (custom ? 'custom' : null)},
+    );
+  }
+
+  /// A franchise or curated collection's member (`AnnotatedDiscoveryItem`):
+  /// only titles in the library (`in_library` with `local_media_id`), as
+  /// their library title; the rest cannot be played here.
+  static TofaMediaItem? discoveryItem(Map<String, dynamic> json, TofaMappingContext ctx) {
+    final localId = _string(json['local_media_id']);
+    if (json['in_library'] != true || localId == null) return null;
+    final type = json['type'] ?? json['media_type'];
+    final year = flexibleInt(json['year']);
+    return summary({
+      ...json,
+      'id': localId,
+      'media_type': type == 'show' || type == 'series' ? 'tv' : type,
+      'release_date': json['release_date'] ?? (year == null ? null : '$year-01-01'),
     }, ctx);
   }
 

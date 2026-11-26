@@ -880,4 +880,170 @@ void main() {
       );
     });
   });
+
+  // ---------------------------------------------------------------------------
+  group('collections', () {
+    Map<String, dynamic> discovery(String? localId, {bool inLibrary = true, String type = 'movie'}) => {
+      'title': 'Member $localId',
+      'tmdb_id': 7,
+      'type': type,
+      'genres': <String>[],
+      'in_library': inLibrary,
+      'local_media_id': localId,
+      'poster_path': '/p.jpg',
+      'year': 2001,
+      'blocklisted': false,
+      'not_interested': false,
+      'seen': false,
+      'upcoming': false,
+    };
+
+    void serveCollections() {
+      fake.on(
+        'GET',
+        '/api/v1/collections',
+        (_) => jsonResponse({
+          'collections': [
+            {
+              'id': 'c-1',
+              'name': 'Space Saga',
+              'kind': 'franchise',
+              'item_count': 3,
+              'poster_url': '/api/v1/collections/c-1/poster',
+              'backdrop_url': 'https://img.example.com/b.jpg',
+            },
+          ],
+        }),
+      );
+      fake.on(
+        'GET',
+        '/api/v1/collections/custom',
+        (_) => jsonResponse({
+          'collections': [
+            {
+              'id': 'u-1',
+              'name': 'Rainy days',
+              'item_count': 1,
+              'can_edit': true,
+              'poster_path': 'not-a-route.jpg',
+              'backdrop_path': null,
+              'poster_paths': <String>[],
+              'overview': null,
+              'created_at': '',
+              'updated_at': '',
+              'created_by': null,
+              'created_by_name': null,
+            },
+          ],
+          'containing': <String>[],
+        }),
+      );
+      fake.on(
+        'GET',
+        '/api/v1/collections/c-1',
+        (_) => jsonResponse({
+          'id': 'c-1',
+          'name': 'Space Saga',
+          'kind': 'franchise',
+          'overview': 'Three films',
+          'poster_url': null,
+          'items': [discovery('m-1'), discovery(null, inLibrary: false), discovery('show-1', type: 'tv')],
+        }),
+      );
+      fake.on(
+        'GET',
+        '/api/v1/collections/custom/u-1',
+        (_) => jsonResponse({
+          'id': 'u-1',
+          'name': 'Rainy days',
+          'item_count': 1,
+          'can_edit': true,
+          'poster_path': null,
+          'backdrop_path': null,
+          'poster_paths': <String>[],
+          'overview': null,
+          'created_at': '',
+          'updated_at': '',
+          'created_by': null,
+          'created_by_name': null,
+          'items': [mediaSummary('m-1')],
+        }),
+      );
+      fake.on('GET', '/api/v1/media/m-1', (_) => jsonResponse(movieDetail()));
+      fake.on('GET', '/api/v1/media/show-1', (_) => jsonResponse(showDetail()));
+      fake.on('POST', '/api/v1/media/progress/batch', (_) => jsonResponse({'items': <Object>[]}));
+    }
+
+    test('both kinds are listed on a library Collections tab, with their artwork', () async {
+      serveCollections();
+      fake.on('GET', '/api/v1/auth/image-token', (_) => jsonResponse({'token': 'img', 'expires_in': 3600}));
+      final c = client();
+      await c.ensureImageTokenForTesting();
+      final page = await c.fetchCollectionsPage('lib-1');
+      final poster = Uri.parse(c.thumbnailUrl(page.items.first.thumbPath, width: 300));
+      expect(poster.path, '/api/v1/collections/c-1/poster');
+      expect(poster.queryParameters, {'st': 'img', 'w': '300'});
+      expect(page.items.map((i) => i.title), ['Space Saga', 'Rainy days']);
+      expect(page.items.every((i) => i.kind == MediaKind.collection), isTrue);
+      expect(page.items.first.childCount, 3);
+      expect(page.items.first.artPath, 'https://img.example.com/b.jpg');
+      expect(page.items.last.thumbPath, isNull, reason: 'a bare file path is not guessed at');
+      await c.fetchCollectionsPage('lib-1', start: 1, size: 1);
+      expect(fake.to('GET', '/api/v1/collections'), hasLength(1), reason: 'pages slice one read');
+    });
+
+    test('a failed list leaves the other one', () async {
+      serveCollections();
+      fake.on('GET', '/api/v1/collections/custom', (_) => tofaError(500, 'boom'));
+      final page = await client().fetchCollectionsPage('lib-1');
+      expect(page.items.single.title, 'Space Saga');
+    });
+
+    test('members are the titles in the library; custom collections read their own route', () async {
+      serveCollections();
+      final c = client();
+      final page = await c.fetchCollectionPage('tofa-collection:c-1');
+      expect(page.items.map((i) => i.id), ['m-1', 'show-1']);
+      expect(page.items.last.kind, MediaKind.show);
+      final custom = await c.fetchCollectionPage('tofa-custom:u-1');
+      expect(custom.items.single.id, 'm-1');
+      final item = await c.fetchItem('tofa-collection:c-1');
+      expect(item?.summary, 'Three films');
+      expect(item?.kind, MediaKind.collection);
+    });
+
+    test('playing uses the server queue, episodes found by number', () async {
+      serveCollections();
+      fake.on('GET', '/api/v1/collections/c-1/play', (r) {
+        expect(r.url.queryParameters['mode'], 'in_order');
+        return jsonResponse({
+          'collection_id': 'c-1',
+          'mode': 'in_order',
+          'sort_mode': 'release',
+          'entries': [
+            {'media_id': 'm-1', 'media_type': 'movie', 'media_file_id': 'f-1', 'title': 'A Movie', 'tmdb_id': 1},
+            {
+              'media_id': 'show-1',
+              'media_type': 'tv',
+              'media_file_id': 'f-e2',
+              'title': 'A Show',
+              'tmdb_id': 2,
+              'season_number': 1,
+              'episode_number': 2,
+            },
+            {'media_id': 'gone', 'media_type': 'movie', 'media_file_id': 'f-x', 'title': 'Gone', 'tmdb_id': 3},
+          ],
+        });
+      });
+      final queue = await client().fetchPlayableDescendants('tofa-collection:c-1');
+      expect(queue.map((i) => i.id), ['m-1', 'tofa-episode:show-1/e-2']);
+    });
+
+    test('a refused queue plays the members in order', () async {
+      serveCollections();
+      fake.on('GET', '/api/v1/collections/u-1/play', (_) => tofaError(404, 'not_found'));
+      final queue = await client().fetchPlayableDescendants('tofa-custom:u-1');
+      expect(queue.map((i) => i.id), ['m-1']);
+    });
+  });
 }

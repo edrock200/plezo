@@ -166,8 +166,9 @@ class _CollectionDetailScreenState extends BaseMediaListDetailScreen<CollectionD
         showDownload: true,
         onDownload: _downloadCollection,
       ),
-      // Silo's collections and box sets are read-only for clients.
-      if (widget.collection.backend != MediaBackend.silo)
+      // Silo's collections and box sets are read-only for clients, and
+      // Plezilo edits no Tofa collections.
+      if (widget.collection.backend != MediaBackend.silo && widget.collection.backend != MediaBackend.tofa)
         FocusableAction(
           icon: Symbols.delete_rounded,
           tooltip: t.common.delete,
