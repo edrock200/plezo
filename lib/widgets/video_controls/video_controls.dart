@@ -694,6 +694,10 @@ class PlexVideoControls extends StatefulWidget {
 
   final VoidCallback? onJumpToLive;
 
+  /// The live player's channel keys (IPTV zapping, number entry, mini
+  /// guide), offered each key before the controls act on it.
+  final KeyEventResult Function(KeyEvent event, {required bool controlsVisible})? liveKeyHandler;
+
   /// Whether ambient lighting is enabled (passed to settings sheet)
   final bool isAmbientLightingEnabled;
 
@@ -775,6 +779,7 @@ class PlexVideoControls extends StatefulWidget {
     this.onLiveSeek,
     this.onLiveSeekBy,
     this.onJumpToLive,
+    this.liveKeyHandler,
     this.isAmbientLightingEnabled = false,
     this.onToggleAmbientLighting,
   });

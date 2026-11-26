@@ -251,6 +251,14 @@ extension _PlexVideoControlsKeyEventMethods on _PlexVideoControlsState {
     }
     if (navigationKey != PlayerNavigationKey.none) return KeyEventResult.ignored;
 
+    // Live channel keys (IPTV): zapping, digits, the mini guide. They yield to
+    // a focused control inside the raised chrome.
+    final liveKeys = widget.liveKeyHandler;
+    if (liveKeys != null && !isMobile && (!_showControls || _focusNode.hasPrimaryFocus)) {
+      final result = liveKeys(event, controlsVisible: _showControls);
+      if (result != KeyEventResult.ignored) return result;
+    }
+
     // Releasing a key ends its seek burst, before the KeyUp is consumed below.
     // Two independent reasons to fire:
     //  - a released hidden-chrome arrow must reset the acceleration tier even

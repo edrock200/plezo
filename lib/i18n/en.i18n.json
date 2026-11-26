@@ -1908,7 +1908,12 @@
     "catchUpBadge": "Catch-up",
     "favoriteChannelsRow": "Live TV",
     "addFavorite": "Add to favourites",
-    "removeFavorite": "Remove from favourites"
+    "removeFavorite": "Remove from favourites",
+    "noProgramInfo": "No guide information",
+    "playerControls": "Player controls",
+    "recordingStarted": "Recording until the end of the programme",
+    "recordingFailedToStart": "Couldn't start recording",
+    "channelNotFound": "No channel ${number}"
   },
   "collections": {
     "title": "Collections",

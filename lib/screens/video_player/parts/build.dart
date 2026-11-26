@@ -346,6 +346,7 @@ extension _VideoPlayerBuildMethods on VideoPlayerScreenState {
                         onLiveSeek: _live.captureBuffer != null ? _seekLiveToEpoch : null,
                         onLiveSeekBy: _live.captureBuffer != null ? _liveSeek.seekBy : null,
                         onJumpToLive: _live.captureBuffer != null && !_live.atLiveEdge ? _jumpToLiveEdge : null,
+                        liveKeyHandler: _liveOsd == null ? null : _handleLiveOsdKey,
                         isAmbientLightingEnabled: _ambientLightingService?.isEnabled ?? false,
                         onToggleAmbientLighting: _ambientLightingService?.isSupported == true
                             ? _visualEffects.toggleAmbientLighting
@@ -356,6 +357,11 @@ extension _VideoPlayerBuildMethods on VideoPlayerScreenState {
                   },
                 ),
               ),
+              // IPTV live: info banner, number entry, mini guide.
+              if (_liveOsd != null)
+                Positioned.fill(
+                  child: LiveChannelOsd(controller: _liveOsd!, controlsVisible: _chromeController),
+                ),
               // Netflix-style auto-play overlay (hidden in PiP mode)
               VideoPlayerPlayNextOverlay(
                 visible: _episode.showPlayNextDialog,

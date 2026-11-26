@@ -319,10 +319,20 @@ extension _VideoPlayerLiveTvMethods on VideoPlayerScreenState {
     bool applyOptions = true,
     bool timeShifted = false,
     void Function()? onOpenStarted,
+    LiveTvPlaybackSession? headerSession,
   }) async {
     if (_shuttingDown || !_launchCurrent) return false;
     _live.streamGeneration++;
-    final media = Media(streamUrl, headers: const {'Accept-Language': 'en'});
+    // A session that needs headers on its stream (an IPTV channel's
+    // user-agent or referrer) sends them with every open of its URLs.
+    final source = headerSession ?? _live.session;
+    final media = Media(
+      streamUrl,
+      headers: {
+        'Accept-Language': 'en',
+        if (source is LiveTvStreamHeaders) ...(source as LiveTvStreamHeaders).streamHeaders,
+      },
+    );
     final playNow = play ?? automotivePlaybackAllowedNow();
     if (targetEpoch == null || player is! PlayerNative) {
       if (applyOptions) await _setLiveStreamOptions(player);
@@ -648,6 +658,7 @@ extension _VideoPlayerLiveTvMethods on VideoPlayerScreenState {
         currentPlayer,
         streamUrl,
         targetEpoch: targetEpoch,
+        headerSession: session,
         play: (frameRatePlan?.holdPlaybackStart ?? false) ? false : null,
         onOpenStarted: () {
           replacementOpenStarted = true;
@@ -684,6 +695,8 @@ extension _VideoPlayerLiveTvMethods on VideoPlayerScreenState {
         _live.channelName = channel.displayName;
         _currentMetadata = _liveChannelItem(channel);
       });
+      _liveZapper?.syncCurrent(newIndex);
+      _markIptvChannelWatched(channel);
 
       // The screen now describes a different channel: republish before the
       // heartbeats restart, or the OS controls, the client lookups and the

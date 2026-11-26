@@ -4558,6 +4558,21 @@ class Translations$liveTv$en {
 
 	/// en: 'Remove from favourites'
 	String get removeFavorite => 'Remove from favourites';
+
+	/// en: 'No guide information'
+	String get noProgramInfo => 'No guide information';
+
+	/// en: 'Player controls'
+	String get playerControls => 'Player controls';
+
+	/// en: 'Recording until the end of the programme'
+	String get recordingStarted => 'Recording until the end of the programme';
+
+	/// en: 'Couldn't start recording'
+	String get recordingFailedToStart => 'Couldn\'t start recording';
+
+	/// en: 'No channel ${number}'
+	String channelNotFound({required Object number}) => 'No channel ${number}';
 }
 
 // Path: collections
@@ -12037,6 +12052,11 @@ extension on Translations {
 			'liveTv.favoriteChannelsRow' => 'Live TV',
 			'liveTv.addFavorite' => 'Add to favourites',
 			'liveTv.removeFavorite' => 'Remove from favourites',
+			'liveTv.noProgramInfo' => 'No guide information',
+			'liveTv.playerControls' => 'Player controls',
+			'liveTv.recordingStarted' => 'Recording until the end of the programme',
+			'liveTv.recordingFailedToStart' => 'Couldn\'t start recording',
+			'liveTv.channelNotFound' => ({required Object number}) => 'No channel ${number}',
 			'collections.title' => 'Collections',
 			'collections.collection' => 'Collection',
 			'collections.empty' => 'Collection is empty',
@@ -12342,13 +12362,13 @@ extension on Translations {
 			'downloads.syncRuleListCreated' => 'Sync rule created',
 			'downloads.backgroundWarning.bannerBlocked' => 'Downloads will stop when you leave the app',
 			'downloads.backgroundWarning.bannerDegraded' => 'Background downloads may be limited',
+			_ => null,
+		} ?? switch (path) {
 			'downloads.backgroundWarning.bannerAction' => 'Details',
 			'downloads.backgroundWarning.sheetTitle' => 'Background downloads are blocked',
 			'downloads.backgroundWarning.sheetTitleDegraded' => 'Background downloads may be limited',
 			'downloads.backgroundWarning.sheetIntro' => 'Android is preventing Plezilo from downloading reliably in the background.',
 			'downloads.backgroundWarning.sheetIntroDegraded' => 'Your device is limiting when Plezilo can download in the background.',
-			_ => null,
-		} ?? switch (path) {
 			'downloads.backgroundWarning.reasonBackgroundRestricted' => 'Plezilo\'s background usage is restricted. Set its battery or background usage to "Unrestricted".',
 			'downloads.backgroundWarning.reasonStandbyRestricted' => 'Android has put Plezilo in a restricted standby state. Set its battery usage to "Unrestricted".',
 			'downloads.backgroundWarning.reasonDownloadChannelBlocked' => 'Download notifications are turned off, so progress and controls may be unavailable.',
@@ -12856,13 +12876,13 @@ extension on Translations {
 			'addServer.siloPasswordNotConfirmedTitle' => 'Password not confirmed',
 			'addServer.siloPasswordNotConfirmedLead' => 'Plezilo couldn\'t check whether your new password was saved. Try again in a moment.',
 			'addServer.siloCheckingPassword' => 'Checking…',
+			_ => null,
+		} ?? switch (path) {
 			'addServer.siloPasswordErrorEnterTemporary' => 'Enter the temporary password.',
 			'addServer.siloPasswordErrorEnterNew' => 'Enter a new password.',
 			'addServer.siloPasswordErrorMismatch' => 'The new passwords don\'t match.',
 			'addServer.siloPasswordErrorTooShort' => ({required Object count}) => 'Use at least ${count} characters.',
 			'addServer.siloPasswordErrorTooLong' => 'That password is too long. Use a shorter one.',
-			_ => null,
-		} ?? switch (path) {
 			'addServer.siloPasswordErrorWrongTemporary' => 'That temporary password is incorrect.',
 			'addServer.siloPasswordErrorRejected' => 'Choose a different password, then try again.',
 			'addServer.siloPasswordErrorRateLimited' => 'Too many attempts. Wait a moment, then try again.',

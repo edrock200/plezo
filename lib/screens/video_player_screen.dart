@@ -118,7 +118,12 @@ import 'video_player/playback_failure_action.dart';
 import 'video_player/playback_transition_gate.dart';
 import 'video_player/open_http_503_watchdog.dart';
 import 'video_player/open_failure_log.dart';
+import 'video_player/live_channel_zapper.dart';
 import 'video_player/live_tv_session_args.dart';
+import '../widgets/video_controls/iptv/live_channel_osd.dart';
+import '../services/iptv/iptv_client.dart';
+import '../services/iptv/iptv_recorder.dart';
+import '../services/iptv/iptv_store.dart' show IptvProgramme;
 import 'video_player/live_tv_session_state.dart';
 import 'video_player/tv_background_suspend_policy.dart';
 import 'video_player/tv_background_suspend_state.dart';
@@ -147,6 +152,7 @@ part 'video_player/parts/episode_queue.dart';
 part 'video_player/parts/errors.dart';
 part 'video_player/parts/lifecycle.dart';
 part 'video_player/parts/live_tv.dart';
+part 'video_player/parts/live_osd.dart';
 part 'video_player/parts/pip.dart';
 part 'video_player/parts/playback_open.dart';
 part 'video_player/parts/playback_prompts.dart';
@@ -881,6 +887,11 @@ class VideoPlayerScreenState extends State<VideoPlayerScreen>
   /// retry ladder) — inert for VOD screens. See [LiveTvSessionState].
   late final LiveTvSessionState _live = LiveTvSessionState(widget.live);
 
+  /// IPTV live: channel zapping and the player's own channel OSD (banner,
+  /// number entry, mini guide). Null for other playback.
+  LiveChannelZapper? _liveZapper;
+  LiveChannelOsdController? _liveOsd;
+
   /// Coalesces rapid relative live-TV skips into a single transcode re-open so
   /// mashing skip-forward can't compound into an overshoot to live (#1253).
   /// Lazily built; its closures read the current live state on each call.
@@ -1525,6 +1536,7 @@ class VideoPlayerScreenState extends State<VideoPlayerScreen>
   @override
   void initState() {
     super.initState();
+    _initLiveOsd();
     PlaybackCoordinator.instance.registerVideoSession(
       shutdown: _shutdownVideo,
       stopAndExit: _stopVideoAndExit,
@@ -2603,6 +2615,7 @@ class VideoPlayerScreenState extends State<VideoPlayerScreen>
       }(),
     );
     _retireLaunchObserver();
+    _disposeLiveOsd();
     _releaseSiloStreamAuth?.call();
     _releaseSiloStreamAuth = null;
     _playerInitializationGeneration++;
