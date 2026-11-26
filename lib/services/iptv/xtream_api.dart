@@ -243,9 +243,14 @@ String xtreamMaybeBase64(String? raw) {
 ///
 /// Never logs a URL: every request carries the login in its query string.
 class XtreamApi {
-  XtreamApi(this.credentials, {http.Client? client, this.userAgent, this.timeout = const Duration(seconds: 30)})
-    : _client = client ?? http.Client(),
-      _ownsClient = client == null;
+  XtreamApi(
+    this.credentials, {
+    http.Client? client,
+    this.userAgent,
+    this.timeout = const Duration(seconds: 30),
+    this.maxListBytes = defaultMaxListBytes,
+  }) : _client = client ?? http.Client(),
+       _ownsClient = client == null;
 
   final XtreamCredentials credentials;
   final http.Client _client;
@@ -321,8 +326,73 @@ class XtreamApi {
   Future<List<XtreamCategory>> vodCategories() => _categories('get_vod_categories');
   Future<List<XtreamCategory>> seriesCategories() => _categories('get_series_categories');
 
+  /// The most a list answer may hold. A provider with a very large catalogue
+  /// answers tens of megabytes; past this the refresh fails instead of
+  /// running the phone out of memory.
+  static const defaultMaxListBytes = 384 * 1024 * 1024;
+  final int maxListBytes;
+
+  /// A large list answer, decoded while it downloads: the body is never held
+  /// whole as bytes and again as text next to the decoded rows.
+  Future<Object?> _getList(Map<String, String> params, {required Duration timeout}) async {
+    final action = params['action'] ?? 'list';
+    final request = http.Request('GET', apiUri(params))..headers.addAll(_headers);
+    http.StreamedResponse response;
+    try {
+      response = await _client.send(request).timeout(timeout);
+    } on TimeoutException {
+      appLogger.w('[iptv] xtream $action timed out');
+      throw const XtreamRequestException('timeout');
+    } catch (e) {
+      appLogger.w('[iptv] xtream $action failed (${e.runtimeType})');
+      throw XtreamRequestException(e.runtimeType.toString());
+    }
+    if (response.statusCode >= 400) {
+      unawaited(response.stream.drain<void>().catchError((_) {}));
+      if (response.statusCode == 401 || response.statusCode == 403) {
+        appLogger.w('[iptv] xtream $action refused HTTP ${response.statusCode}');
+        throw XtreamAuthException('HTTP ${response.statusCode}');
+      }
+      appLogger.w('[iptv] xtream $action answered HTTP ${response.statusCode}');
+      throw XtreamRequestException('http', statusCode: response.statusCode);
+    }
+    final declared = response.contentLength;
+    if (declared != null && declared > maxListBytes) {
+      unawaited(response.stream.drain<void>().catchError((_) {}));
+      appLogger.w('[iptv] xtream $action too large (${declared ~/ (1024 * 1024)} MB)');
+      throw const XtreamRequestException('too large');
+    }
+    var received = 0;
+    var empty = true;
+    final bytes = response.stream.map((chunk) {
+      received += chunk.length;
+      if (received > maxListBytes) throw const XtreamRequestException('too large');
+      if (empty && chunk.any((b) => b > 0x20)) empty = false;
+      return chunk;
+    });
+    try {
+      final values = await const Utf8Decoder(
+        allowMalformed: true,
+      ).fuse(json.decoder).bind(bytes).toList().timeout(timeout);
+      return values.isEmpty ? null : values.first;
+    } on XtreamRequestException {
+      appLogger.w('[iptv] xtream $action too large (over ${maxListBytes ~/ (1024 * 1024)} MB)');
+      rethrow;
+    } on TimeoutException {
+      appLogger.w('[iptv] xtream $action timed out');
+      throw const XtreamRequestException('timeout');
+    } on FormatException {
+      if (empty) return null;
+      appLogger.w('[iptv] xtream $action answered something other than JSON');
+      throw const XtreamRequestException('not json');
+    } catch (e) {
+      appLogger.w('[iptv] xtream $action failed (${e.runtimeType})');
+      throw XtreamRequestException(e.runtimeType.toString());
+    }
+  }
+
   Future<List<Map<String, dynamic>>> _rows(String action, {String? categoryId}) async {
-    final data = await _get({'action': action, 'category_id': ?categoryId}, timeout: const Duration(minutes: 3));
+    final data = await _getList({'action': action, 'category_id': ?categoryId}, timeout: const Duration(minutes: 3));
     if (data is List) return [for (final row in data.whereType<Map>()) row.cast<String, dynamic>()];
     // Some servers answer an object keyed by index.
     if (data is Map) return [for (final row in data.values.whereType<Map>()) row.cast<String, dynamic>()];
