@@ -4,11 +4,17 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **Fixed: Plezilo freezing and closing with a very large IPTV source:** on TVs and Fire TV sticks, an Xtream source with tens of thousands of channels, movies and series could make Plezilo freeze and close a while after it was added, and then at every start. Plezilo now reads such lists a little at a time instead of all at once, and keeps the old lists if a refresh is cut off. Automatic refreshes now wait about a minute after start-up, until Home has loaded, and Home, search and Live TV's availability no longer read every channel. If Plezilo is closed in the middle of a refresh, the next start skips that source's refresh and its settings say *The last refresh did not finish; Plezilo stopped it. Refresh by hand to try again.*; *Refresh now* still works. If it happens twice in a row, Plezilo waits until the source's next refresh time. *(please test with your provider)*
+
+## silo-preview-2.74.0
+
+Released November 26, 2026. Android and Windows.
+
 - **IPTV: record a series:** on a guide programme, *Record* now also offers *Record series*: every airing with that title on the channel, or on any channel, is recorded, each episode once. You can record only the episodes the guide marks as new, and keep only the latest few recordings. Series rules are listed in Live TV › *Recordings*, where you can change or delete them, and they pick up new airings every time the guide is refreshed. *(please test with your provider)*
 - **IPTV reminders as notifications:** a programme reminder now appears as a notification on Android, iOS, macOS and Windows, even when Plezilo is closed, and on Linux while Plezilo is running. Selecting it tunes the channel. The first reminder asks for permission to send notifications; if you say no, and on TVs, the message inside Plezilo stays. *(please test on your device)*
 - **IPTV recordings keep going in the background on Android:** while a recording is running (or one is due in the next 12 hours) and you switch to another app, Plezilo shows a "Plezilo is recording" notification and keeps recording. Closing Plezilo (swiping it away) still stops it, and a recording due while Plezilo is closed does not start: the message after you schedule one now says so. *(please test on your device)*
 - **IPTV: movie files in a playlist as movies:** a new setting in an M3U source's settings, *Treat movie files as movies* (off unless you turn it on), moves entries that are video files (such as .mp4 or .mkv), or that sit in a Movies, VOD or Series group, out of the channel list into a *Movies* library.
-- **IPTV: very large Xtream catalogues:** the movie, series and channel lists are now read while they download, using less memory. A list too large to handle (over 384 MB) is reported as an error instead of closing Plezilo.
+- **IPTV: very large Xtream catalogues:** the movie, series and channel lists are now read while they download, using less memory.
 
 ## silo-preview-2.73.0
 

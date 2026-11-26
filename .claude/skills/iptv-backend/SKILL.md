@@ -56,9 +56,36 @@ opens the same file in its own isolate (`IptvDatabase.openSync`); WAL mode lets 
   15 min; a source is refreshed when its playlist or guide is older than its interval (or never read; a
   failure is retried after 30 min). `refresh()` shares a running refresh of the same source and runs sources
   one at a time.
+- **Automatic refreshes start late** (2.74.0 crash on a 10k-channel Fire TV): the app's service
+  (`_production()`) waits `startDelay` 60 s **and** `homeLoaded()` (called by `DiscoverScreen` once its first
+  load settles), at most `startDeadline` 3 min; asked refreshes (`refresh()`: add source, *Refresh now*, Live TV
+  retry) run at once. The add screen queues the new source's guide itself. Tests construct the service with
+  zero delays (the default), so `watch` checks at once.
+- **Crash-loop guard**: `_run` writes meta `refresh_running_since` before any refresh and clears it at the end
+  (success or a caught failure). The first `check` of a source per run (`_checkMarker`, shared by concurrent
+  checks) that finds it left behind means the app died mid-refresh: it counts `refresh_interrupted`, records the
+  playlist sync error `interrupted` (settings show `t.iptv.refreshInterrupted`), and skips that source's
+  automatic refresh for the rest of the run; from the second interruption in a row it also sets
+  `refresh_hold_until` = now + playlist interval. A refresh that finishes clears all three. Manual refresh is
+  never blocked. `[iptv] last refresh did not finish …` names the decision.
 - The work runs in `Isolate.run` (`_spawn(job)`: the closure holds only the job; `IptvConnection` is plain
-  data). Progress comes back over a `SendPort` into `statusOf(id)` (the settings page shows it).
-- Playlist: channels are replaced in one transaction. Ids are stable across refreshes — Xtream `x<stream_id>`,
+  data). Progress comes back over a `SendPort` into `statusOf(id)` (the settings page shows it). **The isolate
+  shares the isolate group's heap and GC with the UI** (so does drift's background database isolate): anything
+  the import holds at once freezes the UI and can get the app killed on a low-RAM TV. Never build a whole list.
+- **Lists stream into staging tables**: `channels_staging`, `vod_staging`, `epg_channels_staging` (schema 3),
+  written about 2000 rows at a time (`IptvSyncWorker.importBatch`) and swapped in by one transaction each
+  (`commitChannelImport`, `commitVodImport`, `commitEpgChannelImport`, like `commitProgrammeImport`). A failed or
+  cut-off import never commits, so the old data stays. M3U lines go straight to staged batches (the header's
+  catch-up defaults are known from the first line). Xtream `get_live_streams` / `get_vod_streams` / `get_series`
+  go through `XtreamApi.forEachRow`: `JsonArraySplitter` (`json_array_splitter.dart`) splits the byte stream into
+  top-level elements (strings, escapes and depth tracked; an object keyed by index yields its values; `null`,
+  `{}` and scalars yield nothing; HTML or an early end is a `FormatException` → `not json`) and each element is
+  `jsonDecode`d alone; network chunks are fed in 32 KB slices so a batch stays near 2000 rows. Only category
+  names and group order are kept while rows stream. `maxListRows` (5 million) only stops an endless answer.
+  `liveStreams()` etc. still return whole lists, for small lists and tests only.
+- Guide matching and the guide's wanted ids read channels with `forEachChannelGuideKey` (a few columns, 5000 a
+  page), never `store.channels`.
+- Playlist: channels are swapped in by one transaction. Ids are stable across refreshes — Xtream `x<stream_id>`,
   M3U `sha1(group, name, tvg-id)[:16]` (`~2` for duplicates) — because favourites, recents and the user's
   channel changes are keyed by them. Stream addresses often carry rotating tokens, so they are not part of
   the id.
@@ -80,6 +107,12 @@ opens the same file in its own isolate (`IptvDatabase.openSync`); WAL mode lets 
   parental groups left out, group order (user's, then source's), playlist order inside, numbered by
   `numberChannels` (user's number, then `tvg-chno`/Xtream `num` in playlist mode, the rest after the highest
   number; duplicates renumbered). Cached per parental/data revision.
+- **What must not build the full list** (per launch, on the UI isolate): `isAvailable` (a count unless the list
+  is warm), Home's favourites row and `nowNext` (`_shownByIds` / `_warmChannels`: one-row reads, number = the
+  channel's own until the list is built), search (`store.searchChannels` + `channelIdsByEpg`), Continue Watching
+  and the Home/library hubs (SQL `LIMIT`; `store.groups(..., withCounts: false)` for hidden categories, and one
+  grouped count instead of a correlated count per group; `added` sorts on `v.added` so `vod_added` serves it).
+  Live TV's guide/Channels tab and zapping still use `shownChannels()`.
 - `_IptvLiveTvSupport` implements `LiveTvSupport`, `LiveTvChannelGroups` (groups, recents) and
   `LiveTvRecordedItems`. Favourites are local (`favorites` table), `serverSlice` mode, store key
   `iptv:<id>`.
@@ -208,8 +241,9 @@ own AUMID/GUID; iOS sets the `UNUserNotificationCenter` delegate in `AppDelegate
   notification daemon), including the Windows/macOS desktop CI builds of the plugin.
 - Series-rule matching on real guides (exact title only; providers that put the episode in the title get one
   rule per episode).
-- Xtream lists near the 384 MB cap (`XtreamApi.defaultMaxListBytes`); decoding is streamed, the decoded rows
-  are still held in memory once.
+- Memory on a real low-RAM TV box with a 100k+ row provider: the import holds about one batch at a time (tested
+  with 200k synthetic movies, `iptv_large_source_test.dart`), but the first `shownChannels()` (Live TV, zapping)
+  still maps every channel once.
 - 100–300 MB guides on low-RAM TV boxes: designed for it (streaming, batches of 2000/5000 rows, a staging
   swap) but only tested with ~20 MB synthetic guides.
 
