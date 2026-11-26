@@ -25,7 +25,9 @@ class FakeIptvServer {
   /// Answer every request with HTTP 500.
   bool failEverything = false;
 
-  String get base => 'http://${_server!.address.host}:${_server!.port}';
+  /// The address it answers at: the socket once [start]ed, else a made-up
+  /// host for [respond] (an in-process `MockClient`).
+  String get base => _server == null ? 'http://iptv.test' : 'http://${_server!.address.host}:${_server!.port}';
 
   Future<FakeIptvServer> start({int port = 0}) async {
     _server = await HttpServer.bind(InternetAddress.loopbackIPv4, port);
@@ -96,8 +98,8 @@ class FakeIptvServer {
       'allowed_output_formats': ['m3u8', 'ts'],
     },
     'server_info': {
-      'url': _server!.address.host,
-      'port': '${_server!.port}',
+      'url': Uri.parse(base).host,
+      'port': '${Uri.parse(base).port}',
       'https_port': '443',
       'server_protocol': 'http',
       'timezone': 'Europe/London',
@@ -270,47 +272,49 @@ class FakeIptvServer {
     return <Object>[];
   }
 
-  Future<void> _handle(HttpRequest request) async {
-    requests.add(request.uri);
-    final res = request.response;
-    if (failEverything) {
-      res.statusCode = 500;
-      await res.close();
-      return;
-    }
-    final path = request.uri.path;
-    final q = request.uri.queryParameters;
+  /// The answer to [uri]: status, body and content type. Shared by the
+  /// socket server and in-process clients.
+  ({int status, List<int> body, String type}) respond(Uri uri) {
+    requests.add(uri);
+    if (failEverything) return (status: 500, body: const [], type: 'text/plain');
+    final path = uri.path;
+    final q = uri.queryParameters;
+    List<int> text(String s) => utf8.encode(s);
     if (path == '/player_api.php') {
-      res.headers.contentType = ContentType.json;
-      res.write(
-        jsonEncode(
-          _authorised(q)
-              ? _api(q)
-              : {
-                  'user_info': {'auth': 0},
-                },
+      return (
+        status: 200,
+        body: text(
+          jsonEncode(
+            _authorised(q)
+                ? _api(q)
+                : {
+                    'user_info': {'auth': 0},
+                  },
+          ),
         ),
+        type: 'application/json',
       );
-    } else if (path == '/xmltv.php') {
-      if (!_authorised(q)) {
-        res.statusCode = 401;
-      } else {
-        res.headers.contentType = ContentType('application', 'xml');
-        res.write(xmltv());
-      }
-    } else if (path == '/playlist.m3u') {
-      res.write(m3u());
-    } else if (path == '/epg.xml') {
-      res.write(xmltv());
-    } else if (path == '/epg.xml.gz') {
-      res.add(gzip.encode(utf8.encode(xmltv())));
-    } else if (path.startsWith('/stream/') || path.startsWith('/live/') || path.startsWith('/timeshift/')) {
-      // A few hundred bytes of MPEG-TS-shaped filler (sync bytes every 188).
-      res.headers.contentType = ContentType('video', 'mp2t');
-      res.add(List.generate(188 * 4, (i) => i % 188 == 0 ? 0x47 : 0));
-    } else {
-      res.statusCode = 404;
     }
+    if (path == '/xmltv.php') {
+      if (!_authorised(q)) return (status: 401, body: const [], type: 'text/plain');
+      return (status: 200, body: text(xmltv()), type: 'application/xml');
+    }
+    if (path == '/playlist.m3u') return (status: 200, body: text(m3u()), type: 'audio/x-mpegurl');
+    if (path == '/epg.xml') return (status: 200, body: text(xmltv()), type: 'application/xml');
+    if (path == '/epg.xml.gz') return (status: 200, body: gzip.encode(text(xmltv())), type: 'application/gzip');
+    if (path.startsWith('/stream/') || path.startsWith('/live/') || path.startsWith('/timeshift/')) {
+      // A few hundred bytes of MPEG-TS-shaped filler (sync bytes every 188).
+      return (status: 200, body: List.generate(188 * 4, (i) => i % 188 == 0 ? 0x47 : 0), type: 'video/mp2t');
+    }
+    return (status: 404, body: const [], type: 'text/plain');
+  }
+
+  Future<void> _handle(HttpRequest request) async {
+    final answer = respond(request.uri);
+    final res = request.response
+      ..statusCode = answer.status
+      ..headers.contentType = ContentType.parse(answer.type)
+      ..add(answer.body);
     await res.close();
   }
 }

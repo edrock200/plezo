@@ -32,6 +32,7 @@ import '../../utils/dialogs.dart';
 import '../settings/add_connection_screen.dart';
 import '../settings/add_silo_screen.dart';
 import '../settings/edit_jellyfin_connection_screen.dart';
+import '../settings/iptv_source_settings_screen.dart';
 import 'pin_entry_dialog.dart';
 import 'pin_status_row.dart';
 import 'profile_teardown.dart';
@@ -151,17 +152,19 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> with Controll
     await Navigator.of(context).push(MaterialPageRoute(builder: (_) => AddConnectionScreen(targetProfile: _profile)));
   }
 
-  Future<void> _removeConnection(ProfileConnection pc, Connection conn) async {
-    final confirmed = await showConfirmDialog(
-      context,
-      title: t.profiles.removeConnectionTitle,
-      message: t.profiles.removeConnectionMessage(
-        displayName: _profile.displayName,
-        connectionLabel: conn.displayLabel,
-      ),
-      confirmText: t.profiles.removeConnection,
-      isDestructive: true,
-    );
+  Future<void> _removeConnection(ProfileConnection pc, Connection conn, {bool confirmed = false}) async {
+    if (!confirmed) {
+      confirmed = await showConfirmDialog(
+        context,
+        title: t.profiles.removeConnectionTitle,
+        message: t.profiles.removeConnectionMessage(
+          displayName: _profile.displayName,
+          connectionLabel: conn.displayLabel,
+        ),
+        confirmText: t.profiles.removeConnection,
+        isDestructive: true,
+      );
+    }
     if (!confirmed || !mounted) return;
     final scope = SessionTeardownScope.of(context);
     final endedOwner = scope.active.activeId == _profile.id ? _profile.id : null;
@@ -270,6 +273,19 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> with Controll
           builder: (_) => AddSiloScreen(editConnection: conn, targetProfile: _profile, signInAgain: signInAgain),
         ),
       );
+      if (mounted) setState(() {});
+      return;
+    }
+    if (conn is IptvConnection) {
+      final result = await Navigator.of(
+        context,
+      ).push<IptvSourceSettingsResult>(MaterialPageRoute(builder: (_) => IptvSourceSettingsScreen(connection: conn)));
+      if (!mounted) return;
+      if (result == IptvSourceSettingsResult.remove) {
+        final pcs = await context.read<ProfileConnectionRegistry>().listForProfile(_profile.id);
+        final pc = pcs.where((row) => row.connectionId == conn.id).firstOrNull;
+        if (pc != null && mounted) await _removeConnection(pc, conn, confirmed: true);
+      }
       if (mounted) setState(() {});
       return;
     }
@@ -546,6 +562,7 @@ class _ConnectionsListState extends State<_ConnectionsList> {
                           menuItems: () => [
                             if (!pc.isDefault) AppMenuItem(value: 'default', label: t.profiles.makeDefault),
                             if (conn is JellyfinConnection) AppMenuItem(value: 'edit', label: t.common.edit),
+                            if (conn is IptvConnection) AppMenuItem(value: 'edit', label: t.iptv.sourceSettings),
                             if (conn is SiloConnection) ...[
                               AppMenuItem(value: 'sign_in_again', label: t.siloEditConnection.signInAgain),
                               AppMenuItem(value: 'edit', label: t.siloEditConnection.edit),

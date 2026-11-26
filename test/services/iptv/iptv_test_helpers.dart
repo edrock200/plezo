@@ -1,8 +1,12 @@
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:drift/native.dart';
 import 'package:plezy/connection/connection.dart';
 import 'package:plezy/database/app_database.dart';
 import 'package:plezy/services/iptv/iptv_api_cache.dart';
 import 'package:plezy/services/iptv/iptv_store.dart';
+
+import 'fake_iptv_server.dart';
 
 /// A fresh in-memory IPTV database, installed as the app's store.
 IptvStore memoryIptvStore() {
@@ -44,3 +48,10 @@ IptvConnection xtreamSource(
   includeVod: includeVod,
   createdAt: DateTime(2026),
 );
+
+/// An HTTP client answered by [server] in process (no socket), for widget
+/// tests, where real sockets are blocked.
+http.Client fakeIptvHttpClient(FakeIptvServer server) => MockClient.streaming((request, _) async {
+  final answer = server.respond(request.url);
+  return http.StreamedResponse(Stream.value(answer.body), answer.status, headers: {'content-type': answer.type});
+});

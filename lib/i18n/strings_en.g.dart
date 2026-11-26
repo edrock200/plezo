@@ -7703,6 +7703,390 @@ class Translations$iptv$en {
 
 	/// en: 'Trailer'
 	String get trailer => 'Trailer';
+
+	/// en: 'Account'
+	String get account => 'Account';
+
+	/// en: 'Connections: ${active} of ${max}'
+	String accountConnections({required Object active, required Object max}) => 'Connections: ${active} of ${max}';
+
+	/// en: 'Expires ${date}'
+	String accountExpires({required Object date}) => 'Expires ${date}';
+
+	/// en: 'No expiry date'
+	String get accountNoExpiry => 'No expiry date';
+
+	/// en: 'Status: ${status}'
+	String accountStatus({required Object status}) => 'Status: ${status}';
+
+	/// en: 'Trial'
+	String get accountTrial => 'Trial';
+
+	/// en: 'Add source'
+	String get addSource => 'Add source';
+
+	/// en: 'Add your own IPTV playlist (M3U) or Xtream Codes login. Plezilo reads the channels, the guide, and (for Xtream) the movies and series of that source.'
+	String get addSourceIntro => 'Add your own IPTV playlist (M3U) or Xtream Codes login. Plezilo reads the channels, the guide, and (for Xtream) the movies and series of that source.';
+
+	/// en: 'Add IPTV Source'
+	String get addSourceTitle => 'Add IPTV Source';
+
+	/// en: 'Enter the playlist address or choose a file.'
+	String get addressOrFileRequired => 'Enter the playlist address or choose a file.';
+
+	/// en: 'Match automatically'
+	String get automaticMatch => 'Match automatically';
+
+	/// en: 'By guide id, then by name'
+	String get automaticMatchHint => 'By guide id, then by name';
+
+	/// en: 'Channel name'
+	String get channelName => 'Channel name';
+
+	/// en: 'Channel number'
+	String get channelNumber => 'Channel number';
+
+	/// en: 'Guide time shift for this channel'
+	String get channelShift => 'Guide time shift for this channel';
+
+	/// en: 'Channels'
+	String get channels => 'Channels';
+
+	/// en: 'Channels and groups'
+	String get channelsAndGroups => 'Channels and groups';
+
+	/// en: 'Channels: ${count}'
+	String channelsCount({required Object count}) => 'Channels: ${count}';
+
+	/// en: 'Hide, rename, renumber or set the guide of a channel'
+	String get channelsHint => 'Hide, rename, renumber or set the guide of a channel';
+
+	/// en: 'Channels, movies and series'
+	String get channelsMoviesSeries => 'Channels, movies and series';
+
+	/// en: 'Choose a playlist file'
+	String get chooseFile => 'Choose a playlist file';
+
+	/// en: 'File: ${name}'
+	String chosenFile({required Object name}) => 'File: ${name}';
+
+	/// en: '${count} d'
+	String daysCount({required Object count}) => '${count} d';
+
+	/// en: 'IPTV'
+	String get defaultSourceName => 'IPTV';
+
+	/// en: 'Guide (XMLTV) addresses'
+	String get epgUrls => 'Guide (XMLTV) addresses';
+
+	/// en: 'Optional. One address per line; .gz guides work too. The guide the source names itself is read as well.'
+	String get epgUrlsHelp => 'Optional. One address per line; .gz guides work too. The guide the source names itself is read as well.';
+
+	/// en: 'https://…/guide.xml.gz'
+	String get epgUrlsHint => 'https://…/guide.xml.gz';
+
+	/// en: 'Every ${hours} h'
+	String everyHours({required Object hours}) => 'Every ${hours} h';
+
+	/// en: 'General'
+	String get general => 'General';
+
+	/// en: 'Groups'
+	String get groups => 'Groups';
+
+	/// en: 'Show, hide, lock or reorder groups'
+	String get groupsHint => 'Show, hide, lock or reorder groups';
+
+	/// en: 'Guide'
+	String get guide => 'Guide';
+
+	/// en: 'Addresses: ${count}'
+	String guideCount({required Object count}) => 'Addresses: ${count}';
+
+	/// en: 'Guide days ahead'
+	String get guideFutureDays => 'Guide days ahead';
+
+	/// en: 'Guide days kept (catch-up)'
+	String get guidePastDays => 'Guide days kept (catch-up)';
+
+	/// en: 'Guide refresh'
+	String get guideRefresh => 'Guide refresh';
+
+	/// en: 'Guide time shift'
+	String get guideShift => 'Guide time shift';
+
+	/// en: 'Hidden'
+	String get hidden => 'Hidden';
+
+	/// en: 'Hide channel'
+	String get hideChannel => 'Hide channel';
+
+	/// en: 'Hide group'
+	String get hideGroup => 'Hide group';
+
+	/// en: 'Hide locked groups again'
+	String get hideLockedGroups => 'Hide locked groups again';
+
+	/// en: 'Couldn't read this source (${reason}).'
+	String importFailed({required Object reason}) => 'Couldn\'t read this source (${reason}).';
+
+	/// en: 'Movies and series'
+	String get includeVod => 'Movies and series';
+
+	/// en: 'Off: Live TV only'
+	String get includeVodHint => 'Off: Live TV only';
+
+	/// en: 'Enter an http, https or file address.'
+	String get invalidAddress => 'Enter an http, https or file address.';
+
+	/// en: 'Items: ${count}'
+	String itemsCount({required Object count}) => 'Items: ${count}';
+
+	/// en: 'Last error: ${error}'
+	String lastError({required Object error}) => 'Last error: ${error}';
+
+	/// en: 'Live TV groups'
+	String get liveGroups => 'Live TV groups';
+
+	/// en: 'Lock (parental filter)'
+	String get lockGroup => 'Lock (parental filter)';
+
+	/// en: 'Locked'
+	String get locked => 'Locked';
+
+	/// en: 'Locked groups: ${count}'
+	String lockedGroupsCount({required Object count}) => 'Locked groups: ${count}';
+
+	/// en: 'Locked groups are shown until you switch profile or restart Plezilo.'
+	String get lockedGroupsShown => 'Locked groups are shown until you switch profile or restart Plezilo.';
+
+	/// en: 'The server refused this username and password.'
+	String get loginRefused => 'The server refused this username and password.';
+
+	/// en: 'Guide channel'
+	String get mapGuide => 'Guide channel';
+
+	/// en: 'Guide for ${name}'
+	String mapGuideFor({required Object name}) => 'Guide for ${name}';
+
+	/// en: 'Guide set by hand'
+	String get mappedByHand => 'Guide set by hand';
+
+	/// en: 'Move down'
+	String get moveDown => 'Move down';
+
+	/// en: 'Move to the top'
+	String get moveTop => 'Move to the top';
+
+	/// en: 'Move up'
+	String get moveUp => 'Move up';
+
+	/// en: 'Movie categories'
+	String get movieCategories => 'Movie categories';
+
+	/// en: 'Network'
+	String get network => 'Network';
+
+	/// en: 'Not read yet'
+	String get neverRefreshed => 'Not read yet';
+
+	/// en: 'No channels'
+	String get noChannelsFound => 'No channels';
+
+	/// en: 'This source has no groups.'
+	String get noGroups => 'This source has no groups.';
+
+	/// en: 'No guide'
+	String get noGuide => 'No guide';
+
+	/// en: 'None'
+	String get noShift => 'None';
+
+	/// en: 'Not set'
+	String get notSet => 'Not set';
+
+	/// en: 'Channel numbers'
+	String get numbering => 'Channel numbers';
+
+	/// en: 'Automatic (1, 2, 3…)'
+	String get numberingAuto => 'Automatic (1, 2, 3…)';
+
+	/// en: 'From the playlist where given'
+	String get numberingPlaylist => 'From the playlist where given';
+
+	/// en: 'Stream format'
+	String get outputFormat => 'Stream format';
+
+	/// en: 'HLS (m3u8)'
+	String get outputHls => 'HLS (m3u8)';
+
+	/// en: 'MPEG-TS'
+	String get outputTs => 'MPEG-TS';
+
+	/// en: 'Password'
+	String get password => 'Password';
+
+	/// en: 'Enter the password.'
+	String get passwordRequired => 'Enter the password.';
+
+	/// en: 'This playlist has no channels.'
+	String get playlistEmpty => 'This playlist has no channels.';
+
+	/// en: 'A file on this device'
+	String get playlistFromFile => 'A file on this device';
+
+	/// en: 'Playlist refresh'
+	String get playlistRefresh => 'Playlist refresh';
+
+	/// en: 'Playlist (M3U) address'
+	String get playlistUrl => 'Playlist (M3U) address';
+
+	/// en: 'Programmes: ${count}'
+	String programmesCount({required Object count}) => 'Programmes: ${count}';
+
+	/// en: 'Reading channels…'
+	String get progressChannels => 'Reading channels…';
+
+	/// en: 'Reading channels… ${count}'
+	String progressChannelsCount({required Object count}) => 'Reading channels… ${count}';
+
+	/// en: 'Done'
+	String get progressDone => 'Done';
+
+	/// en: 'Failed: ${reason}'
+	String progressFailed({required Object reason}) => 'Failed: ${reason}';
+
+	/// en: 'Reading the guide…'
+	String get progressGuide => 'Reading the guide…';
+
+	/// en: 'Reading the guide… ${count} programmes'
+	String progressGuideCount({required Object count}) => 'Reading the guide… ${count} programmes';
+
+	/// en: 'Matching channels to the guide…'
+	String get progressMatching => 'Matching channels to the guide…';
+
+	/// en: 'Reading movies…'
+	String get progressMovies => 'Reading movies…';
+
+	/// en: 'Reading series…'
+	String get progressSeries => 'Reading series…';
+
+	/// en: 'Starting…'
+	String get progressStarting => 'Starting…';
+
+	/// en: 'Referrer'
+	String get referrer => 'Referrer';
+
+	/// en: 'Refresh now'
+	String get refreshNow => 'Refresh now';
+
+	/// en: '${what} · read ${when}'
+	String refreshedAt({required Object what, required Object when}) => '${what} · read ${when}';
+
+	/// en: 'Remove this source'
+	String get removeSource => 'Remove this source';
+
+	/// en: 'Remove ${name}? Its channels, guide, favourites, channel changes, watch progress and recordings are deleted from this device.'
+	String removeSourceMessage({required Object name}) => 'Remove ${name}? Its channels, guide, favourites, channel changes, watch progress and recordings are deleted from this device.';
+
+	/// en: 'Rename'
+	String get renameChannel => 'Rename';
+
+	/// en: 'Change number'
+	String get renumberChannel => 'Change number';
+
+	/// en: 'Undo my changes'
+	String get resetChannel => 'Undo my changes';
+
+	/// en: 'Couldn't save the change.'
+	String get saveFailed => 'Couldn\'t save the change.';
+
+	/// en: 'Search channels'
+	String get searchChannels => 'Search channels';
+
+	/// en: 'Search guide channels'
+	String get searchGuideChannels => 'Search guide channels';
+
+	/// en: 'Series categories'
+	String get seriesCategories => 'Series categories';
+
+	/// en: 'Enter the server address.'
+	String get serverRequired => 'Enter the server address.';
+
+	/// en: 'Show'
+	String get show => 'Show';
+
+	/// en: 'Show channel'
+	String get showChannel => 'Show channel';
+
+	/// en: 'Show group'
+	String get showGroup => 'Show group';
+
+	/// en: 'Show locked groups'
+	String get showLockedGroups => 'Show locked groups';
+
+	/// en: 'This profile has no PIN, so anyone can show locked groups. Set a profile PIN to protect them.'
+	String get showLockedGroupsNoPin => 'This profile has no PIN, so anyone can show locked groups. Set a profile PIN to protect them.';
+
+	/// en: 'Name'
+	String get sourceName => 'Name';
+
+	/// en: 'Optional'
+	String get sourceNameHint => 'Optional';
+
+	/// en: 'Status'
+	String get status => 'Status';
+
+	/// en: '${channels} channels, ${programmes} guide entries on this device'
+	String storedCounts({required Object channels, required Object programmes}) => '${channels} channels, ${programmes} guide entries on this device';
+
+	/// en: 'M3U playlist'
+	String get typeM3u => 'M3U playlist';
+
+	/// en: 'Xtream login'
+	String get typeXtream => 'Xtream login';
+
+	/// en: 'Unlock'
+	String get unlockGroup => 'Unlock';
+
+	/// en: 'This is an Xtream address: use it as a login'
+	String get useAsXtream => 'This is an Xtream address: use it as a login';
+
+	/// en: 'Read the source's own guide'
+	String get useSourceEpg => 'Read the source\'s own guide';
+
+	/// en: 'The guide addresses the playlist names (url-tvg)'
+	String get useSourceEpgM3u => 'The guide addresses the playlist names (url-tvg)';
+
+	/// en: 'The provider's xmltv.php guide'
+	String get useSourceEpgXtream => 'The provider\'s xmltv.php guide';
+
+	/// en: 'User-agent'
+	String get userAgent => 'User-agent';
+
+	/// en: 'Username'
+	String get username => 'Username';
+
+	/// en: 'Enter the username.'
+	String get usernameRequired => 'Enter the username.';
+
+	/// en: 'Wrong PIN'
+	String get wrongPin => 'Wrong PIN';
+
+	/// en: 'Server address'
+	String get xtreamServer => 'Server address';
+
+	/// en: 'Add an IPTV source'
+	String get addSourceButton => 'Add an IPTV source';
+
+	/// en: 'Your own M3U playlist or Xtream Codes login, with its guide.'
+	String get addSourceCardSubtitle => 'Your own M3U playlist or Xtream Codes login, with its guide.';
+
+	/// en: 'Your own M3U playlist or Xtream Codes login. Binds to ${name}.'
+	String addSourceCardSubtitleScoped({required Object name}) => 'Your own M3U playlist or Xtream Codes login. Binds to ${name}.';
+
+	/// en: 'Source settings'
+	String get sourceSettings => 'Source settings';
 }
 
 // Path: appIcon.names
@@ -12708,6 +13092,134 @@ extension on Translations {
 			'iptv.recentlyAdded' => 'Recently Added',
 			'iptv.moreInCategory' => 'More in This Category',
 			'iptv.trailer' => 'Trailer',
+			'iptv.account' => 'Account',
+			'iptv.accountConnections' => ({required Object active, required Object max}) => 'Connections: ${active} of ${max}',
+			'iptv.accountExpires' => ({required Object date}) => 'Expires ${date}',
+			'iptv.accountNoExpiry' => 'No expiry date',
+			'iptv.accountStatus' => ({required Object status}) => 'Status: ${status}',
+			'iptv.accountTrial' => 'Trial',
+			'iptv.addSource' => 'Add source',
+			'iptv.addSourceIntro' => 'Add your own IPTV playlist (M3U) or Xtream Codes login. Plezilo reads the channels, the guide, and (for Xtream) the movies and series of that source.',
+			'iptv.addSourceTitle' => 'Add IPTV Source',
+			'iptv.addressOrFileRequired' => 'Enter the playlist address or choose a file.',
+			'iptv.automaticMatch' => 'Match automatically',
+			'iptv.automaticMatchHint' => 'By guide id, then by name',
+			'iptv.channelName' => 'Channel name',
+			'iptv.channelNumber' => 'Channel number',
+			'iptv.channelShift' => 'Guide time shift for this channel',
+			'iptv.channels' => 'Channels',
+			'iptv.channelsAndGroups' => 'Channels and groups',
+			'iptv.channelsCount' => ({required Object count}) => 'Channels: ${count}',
+			'iptv.channelsHint' => 'Hide, rename, renumber or set the guide of a channel',
+			'iptv.channelsMoviesSeries' => 'Channels, movies and series',
+			'iptv.chooseFile' => 'Choose a playlist file',
+			'iptv.chosenFile' => ({required Object name}) => 'File: ${name}',
+			'iptv.daysCount' => ({required Object count}) => '${count} d',
+			'iptv.defaultSourceName' => 'IPTV',
+			'iptv.epgUrls' => 'Guide (XMLTV) addresses',
+			'iptv.epgUrlsHelp' => 'Optional. One address per line; .gz guides work too. The guide the source names itself is read as well.',
+			'iptv.epgUrlsHint' => 'https://…/guide.xml.gz',
+			'iptv.everyHours' => ({required Object hours}) => 'Every ${hours} h',
+			'iptv.general' => 'General',
+			'iptv.groups' => 'Groups',
+			'iptv.groupsHint' => 'Show, hide, lock or reorder groups',
+			'iptv.guide' => 'Guide',
+			'iptv.guideCount' => ({required Object count}) => 'Addresses: ${count}',
+			'iptv.guideFutureDays' => 'Guide days ahead',
+			'iptv.guidePastDays' => 'Guide days kept (catch-up)',
+			'iptv.guideRefresh' => 'Guide refresh',
+			'iptv.guideShift' => 'Guide time shift',
+			'iptv.hidden' => 'Hidden',
+			'iptv.hideChannel' => 'Hide channel',
+			'iptv.hideGroup' => 'Hide group',
+			'iptv.hideLockedGroups' => 'Hide locked groups again',
+			'iptv.importFailed' => ({required Object reason}) => 'Couldn\'t read this source (${reason}).',
+			'iptv.includeVod' => 'Movies and series',
+			'iptv.includeVodHint' => 'Off: Live TV only',
+			'iptv.invalidAddress' => 'Enter an http, https or file address.',
+			'iptv.itemsCount' => ({required Object count}) => 'Items: ${count}',
+			'iptv.lastError' => ({required Object error}) => 'Last error: ${error}',
+			'iptv.liveGroups' => 'Live TV groups',
+			'iptv.lockGroup' => 'Lock (parental filter)',
+			'iptv.locked' => 'Locked',
+			'iptv.lockedGroupsCount' => ({required Object count}) => 'Locked groups: ${count}',
+			'iptv.lockedGroupsShown' => 'Locked groups are shown until you switch profile or restart Plezilo.',
+			'iptv.loginRefused' => 'The server refused this username and password.',
+			'iptv.mapGuide' => 'Guide channel',
+			'iptv.mapGuideFor' => ({required Object name}) => 'Guide for ${name}',
+			'iptv.mappedByHand' => 'Guide set by hand',
+			'iptv.moveDown' => 'Move down',
+			'iptv.moveTop' => 'Move to the top',
+			'iptv.moveUp' => 'Move up',
+			'iptv.movieCategories' => 'Movie categories',
+			'iptv.network' => 'Network',
+			'iptv.neverRefreshed' => 'Not read yet',
+			'iptv.noChannelsFound' => 'No channels',
+			'iptv.noGroups' => 'This source has no groups.',
+			'iptv.noGuide' => 'No guide',
+			'iptv.noShift' => 'None',
+			'iptv.notSet' => 'Not set',
+			'iptv.numbering' => 'Channel numbers',
+			'iptv.numberingAuto' => 'Automatic (1, 2, 3…)',
+			'iptv.numberingPlaylist' => 'From the playlist where given',
+			'iptv.outputFormat' => 'Stream format',
+			'iptv.outputHls' => 'HLS (m3u8)',
+			'iptv.outputTs' => 'MPEG-TS',
+			'iptv.password' => 'Password',
+			'iptv.passwordRequired' => 'Enter the password.',
+			'iptv.playlistEmpty' => 'This playlist has no channels.',
+			'iptv.playlistFromFile' => 'A file on this device',
+			'iptv.playlistRefresh' => 'Playlist refresh',
+			'iptv.playlistUrl' => 'Playlist (M3U) address',
+			'iptv.programmesCount' => ({required Object count}) => 'Programmes: ${count}',
+			'iptv.progressChannels' => 'Reading channels…',
+			'iptv.progressChannelsCount' => ({required Object count}) => 'Reading channels… ${count}',
+			'iptv.progressDone' => 'Done',
+			'iptv.progressFailed' => ({required Object reason}) => 'Failed: ${reason}',
+			'iptv.progressGuide' => 'Reading the guide…',
+			'iptv.progressGuideCount' => ({required Object count}) => 'Reading the guide… ${count} programmes',
+			'iptv.progressMatching' => 'Matching channels to the guide…',
+			'iptv.progressMovies' => 'Reading movies…',
+			'iptv.progressSeries' => 'Reading series…',
+			'iptv.progressStarting' => 'Starting…',
+			'iptv.referrer' => 'Referrer',
+			'iptv.refreshNow' => 'Refresh now',
+			'iptv.refreshedAt' => ({required Object what, required Object when}) => '${what} · read ${when}',
+			'iptv.removeSource' => 'Remove this source',
+			'iptv.removeSourceMessage' => ({required Object name}) => 'Remove ${name}? Its channels, guide, favourites, channel changes, watch progress and recordings are deleted from this device.',
+			'iptv.renameChannel' => 'Rename',
+			'iptv.renumberChannel' => 'Change number',
+			'iptv.resetChannel' => 'Undo my changes',
+			'iptv.saveFailed' => 'Couldn\'t save the change.',
+			'iptv.searchChannels' => 'Search channels',
+			'iptv.searchGuideChannels' => 'Search guide channels',
+			'iptv.seriesCategories' => 'Series categories',
+			'iptv.serverRequired' => 'Enter the server address.',
+			'iptv.show' => 'Show',
+			'iptv.showChannel' => 'Show channel',
+			'iptv.showGroup' => 'Show group',
+			'iptv.showLockedGroups' => 'Show locked groups',
+			'iptv.showLockedGroupsNoPin' => 'This profile has no PIN, so anyone can show locked groups. Set a profile PIN to protect them.',
+			'iptv.sourceName' => 'Name',
+			'iptv.sourceNameHint' => 'Optional',
+			'iptv.status' => 'Status',
+			'iptv.storedCounts' => ({required Object channels, required Object programmes}) => '${channels} channels, ${programmes} guide entries on this device',
+			'iptv.typeM3u' => 'M3U playlist',
+			'iptv.typeXtream' => 'Xtream login',
+			'iptv.unlockGroup' => 'Unlock',
+			'iptv.useAsXtream' => 'This is an Xtream address: use it as a login',
+			'iptv.useSourceEpg' => 'Read the source\'s own guide',
+			'iptv.useSourceEpgM3u' => 'The guide addresses the playlist names (url-tvg)',
+			'iptv.useSourceEpgXtream' => 'The provider\'s xmltv.php guide',
+			'iptv.userAgent' => 'User-agent',
+			'iptv.username' => 'Username',
+			'iptv.usernameRequired' => 'Enter the username.',
+			'iptv.wrongPin' => 'Wrong PIN',
+			'iptv.xtreamServer' => 'Server address',
+			'iptv.addSourceButton' => 'Add an IPTV source',
+			'iptv.addSourceCardSubtitle' => 'Your own M3U playlist or Xtream Codes login, with its guide.',
+			'iptv.addSourceCardSubtitleScoped' => ({required Object name}) => 'Your own M3U playlist or Xtream Codes login. Binds to ${name}.',
+			'iptv.sourceSettings' => 'Source settings',
 			_ => null,
 		};
 	}

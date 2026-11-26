@@ -7,6 +7,7 @@ import 'package:plezy/media/media_backend.dart';
 import 'package:plezy/media/media_browser_dialect.dart';
 import 'package:plezy/profiles/profile.dart';
 import 'package:plezy/screens/settings/add_connection_screen.dart';
+import 'package:plezy/screens/settings/add_iptv_screen.dart';
 import 'package:plezy/screens/settings/add_jellyfin_screen.dart';
 import 'package:plezy/screens/settings/add_plex_account_screen.dart';
 import 'package:plezy/screens/settings/add_silo_screen.dart';
@@ -25,7 +26,7 @@ void main() {
   Profile profile(String id) =>
       Profile.local(id: id, displayName: id, sortOrder: 0, createdAt: DateTime.fromMillisecondsSinceEpoch(0));
 
-  testWidgets('offers Plex, Jellyfin, Emby, Silo and Tofa, each with its own badge', (tester) async {
+  testWidgets('offers Plex, Jellyfin, Emby, Silo, Tofa and IPTV, each with its own badge', (tester) async {
     await tester.pumpWidget(app(const AddConnectionScreen()));
     await tester.pumpAndSettle();
 
@@ -34,6 +35,7 @@ void main() {
     expect(find.text('Connect to Emby'), findsOneWidget);
     expect(find.text('Connect to Silo'), findsOneWidget);
     expect(find.text('Connect to Tofa'), findsOneWidget);
+    expect(find.text('Add an IPTV source'), findsOneWidget);
 
     final badges = tester.widgetList<BackendBadge>(find.byType(BackendBadge)).map((b) => b.backend).toList();
     expect(
@@ -44,8 +46,22 @@ void main() {
         MediaBackend.emby,
         MediaBackend.silo,
         MediaBackend.tofa,
+        MediaBackend.iptv,
       ]),
     );
+  });
+
+  testWidgets('the IPTV card opens the add-source screen for the target profile', (tester) async {
+    final target = profile('p1');
+    await tester.pumpWidget(app(AddConnectionScreen(targetProfile: target)));
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('Add an IPTV source'));
+    await tester.tap(find.text('Add an IPTV source'));
+    await tester.pumpAndSettle();
+    final screen = tester.widget<AddIptvScreen>(find.byType(AddIptvScreen));
+    expect(screen.targetProfile?.id, 'p1');
+    expect(find.text('Add IPTV Source'), findsOneWidget);
   });
 
   testWidgets('the Tofa card opens the Tofa sign-in screen for the target profile', (tester) async {
@@ -128,7 +144,7 @@ void main() {
     expect(screen.targetProfile?.id, target.id);
   });
 
-  testWidgets('the D-pad steps through all five backend cards', (tester) async {
+  testWidgets('the D-pad steps through all six backend cards', (tester) async {
     await tester.pumpWidget(app(const AddConnectionScreen()));
     await tester.pumpAndSettle();
 
@@ -141,7 +157,7 @@ void main() {
       if (focused != null) visited.add(focused);
     }
 
-    expect(find.byType(FocusableWrapper), findsNWidgets(5));
-    expect(visited.length, greaterThanOrEqualTo(5), reason: 'D-pad did not reach every backend card');
+    expect(find.byType(FocusableWrapper), findsNWidgets(6));
+    expect(visited.length, greaterThanOrEqualTo(6), reason: 'D-pad did not reach every backend card');
   });
 }

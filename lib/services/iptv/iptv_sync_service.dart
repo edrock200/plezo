@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:isolate';
 
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 
 import '../../connection/connection.dart';
 import '../../utils/app_logger.dart';
@@ -79,7 +80,10 @@ Future<String?> _spawn(_SyncJob job) => Isolate.run(() => _runSyncJob(job));
 /// are connected and every 15 minutes after; a source is refreshed when its
 /// playlist or guide is older than its interval, or never loaded.
 class IptvSyncService {
-  IptvSyncService({this.storeOverride, this.useIsolate = true});
+  IptvSyncService({this.storeOverride, this.useIsolate = true, this.httpClientFactory});
+
+  /// The HTTP client of an in-process refresh (tests).
+  final http.Client Function()? httpClientFactory;
 
   static IptvSyncService? _instance;
   static IptvSyncService get instance => _instance ??= IptvSyncService();
@@ -114,6 +118,11 @@ class IptvSyncService {
     _timer ??= Timer.periodic(const Duration(minutes: 15), (_) => unawaited(checkAll()));
     unawaited(_loadStatus(connection.id));
     unawaited(check(connection.id));
+  }
+
+  /// Adopt edited settings of a watched source without refreshing it.
+  void update(IptvConnection connection) {
+    if (_sources.containsKey(connection.id)) _sources[connection.id] = connection;
   }
 
   /// Stop watching (the source was switched off or removed).
@@ -214,7 +223,7 @@ class IptvSyncService {
           port.close();
         }
       } else {
-        final worker = IptvSyncWorker(store: store, onProgress: onProgress);
+        final worker = IptvSyncWorker(store: store, onProgress: onProgress, client: httpClientFactory?.call());
         try {
           if (playlist) await worker.importPlaylist(c);
           if (epg) await worker.importEpg(c);

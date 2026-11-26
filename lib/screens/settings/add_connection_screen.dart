@@ -13,6 +13,7 @@ import '../../widgets/focused_scroll_scaffold.dart';
 import '../profile/borrow_connection_screen.dart';
 import 'add_jellyfin_screen.dart';
 import 'add_plex_account_screen.dart';
+import 'add_iptv_screen.dart';
 import 'add_silo_screen.dart';
 import 'add_tofa_screen.dart';
 
@@ -81,6 +82,14 @@ class AddConnectionScreen extends StatelessWidget {
             ? t.addServer.connectToTofaCardSubtitleScoped(name: targetProfile!.displayName)
             : t.addServer.connectToTofaCardSubtitle,
         builder: (_) => AddTofaScreen(targetProfile: targetProfile),
+      ),
+      _BackendOption(
+        backend: MediaBackend.iptv,
+        title: t.iptv.addSourceButton,
+        subtitle: scoped
+            ? t.iptv.addSourceCardSubtitleScoped(name: targetProfile!.displayName)
+            : t.iptv.addSourceCardSubtitle,
+        builder: (_) => AddIptvScreen(targetProfile: targetProfile),
       ),
       if (scoped)
         _BackendOption(

@@ -406,7 +406,7 @@ void main() {
       });
 
       for (final backend in MediaBackend.values.where(
-        (backend) => backend != MediaBackend.silo && backend != MediaBackend.tofa,
+        (backend) => backend != MediaBackend.silo && backend != MediaBackend.tofa && backend != MediaBackend.iptv,
       )) {
         test('Kimi no Na wa. finds only the ID-verified native-title copy on ${backend.name}', () async {
           handlers.add(
