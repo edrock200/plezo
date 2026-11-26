@@ -145,9 +145,16 @@ class IptvRecorder {
     }
   }
 
+  /// Recordings deleted while still running: their last state write is
+  /// skipped so the row does not come back.
+  final Set<String> _deleted = {};
+
   /// Delete a recording and its file.
   Future<void> deleteRecording(String recordingId) async {
+    _deleted.add(recordingId);
+    final active = _active[recordingId];
     await cancel(recordingId);
+    if (active != null) await active.finished.future.timeout(const Duration(seconds: 10), onTimeout: () {});
     final row = (await store.recordings()).where((r) => r.id == recordingId).firstOrNull;
     if (row?.path case final path?) {
       try {
@@ -189,17 +196,25 @@ class IptvRecorder {
 
   Future<void> _record(IptvRecordingRow row) async {
     if (_active.containsKey(row.id)) return;
+    final active = _ActiveRecording();
+    _active[row.id] = active;
     final target = await resolver?.call(row.sourceId, row.channelId);
-    if (target == null) {
-      appLogger.w('[iptv] recording could not start: channel unavailable');
-      await _update(row, state: IptvRecordingState.failed, error: 'channel unavailable');
+    if (target == null || active.stopped) {
+      _active.remove(row.id);
+      appLogger.w('[iptv] recording could not start: ${active.stopped ? 'cancelled' : 'channel unavailable'}');
+      if (!_deleted.contains(row.id)) {
+        await _update(
+          row,
+          state: active.stopped ? IptvRecordingState.cancelled : IptvRecordingState.failed,
+          error: active.stopped ? null : 'channel unavailable',
+        );
+      }
+      if (!active.finished.isCompleted) active.finished.complete();
       return;
     }
     final dir = await _directory();
     final isHls = Uri.tryParse(target.url)?.path.toLowerCase().endsWith('.m3u8') ?? false;
     final file = File(p.join(dir.path, '${row.id}.ts'));
-    final active = _ActiveRecording();
-    _active[row.id] = active;
     await _update(row, state: IptvRecordingState.recording, path: file.path);
     final until = DateTime.fromMillisecondsSinceEpoch(row.stop * 1000);
     final stopTimer = Timer(until.difference(DateTime.now()), active.stop);
@@ -218,6 +233,10 @@ class IptvRecorder {
       await sink.close();
       _active.remove(row.id);
     }
+    if (_deleted.contains(row.id)) {
+      if (!active.finished.isCompleted) active.finished.complete();
+      return;
+    }
     final ok = bytes > 0;
     await _update(
       row,
@@ -227,6 +246,7 @@ class IptvRecorder {
       error: ok ? null : error ?? 'nothing recorded',
     );
     appLogger.i('[iptv] recording ${ok ? 'finished' : 'failed'} bytes=$bytes');
+    if (!active.finished.isCompleted) active.finished.complete();
   }
 
   /// A continuous stream (MPEG-TS): reconnects (with back-off) until [until]
@@ -347,6 +367,7 @@ class IptvRecordingExistsException implements Exception {
 
 class _ActiveRecording {
   bool stopped = false;
+  final Completer<void> finished = Completer<void>();
   void Function()? onStop;
   void stop() {
     stopped = true;
