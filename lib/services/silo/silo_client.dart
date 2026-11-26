@@ -1884,8 +1884,45 @@ class SiloClient
         _continueWatchingRows(section, count, read),
     ]);
     final items = continueWatchingInServerOrder([for (final rows in perSection) ...SiloMappers.items(rows, _ctx)]);
-    final visible = items.where((item) => item.libraryId == null || !excludedLibraryIds.contains(item.libraryId));
-    return count == null ? visible.toList() : visible.take(count).toList();
+    // Silo's Continue Watching cards carry no library (`CatalogItem` has no
+    // `library_id`), so a hidden library's cards are found through that
+    // library's own Continue Watching section and left out by content id.
+    final hiddenIds = excludedLibraryIds.isEmpty ? const <String>{} : await _continueWatchingIdsIn(excludedLibraryIds);
+    final visible = items.where(
+      (item) =>
+          !hiddenIds.contains(item.id) && (item.libraryId == null || !excludedLibraryIds.contains(item.libraryId)),
+    );
+    final kept = visible.toList();
+    if (kept.length < items.length) {
+      appLogger.i('SiloClient: Continue Watching left out ${items.length - kept.length} card(s) from hidden libraries');
+    }
+    return count == null ? kept : kept.take(count).toList();
+  }
+
+  /// Content ids in the Continue Watching sections of [libraryIds]
+  /// (`GET /api/v2/catalog?source=section&scope=library&section_id=continue_watching`;
+  /// a library layout's built-in Continue Watching section has the id
+  /// `continue_watching`, contract fixture `get_library_layout_ok.json`),
+  /// read together. A library whose read fails adds nothing: its cards stay
+  /// rather than being dropped on a guess.
+  Future<Set<String>> _continueWatchingIdsIn(Set<String> libraryIds) async {
+    final pages = await Future.wait([
+      for (final libraryId in libraryIds)
+        () async {
+          final params = _hubCatalogParams('library:$libraryId:continue_watching');
+          if (params == null) return const <Map<String, dynamic>>[];
+          try {
+            return (await _pageAt('/api/v2/catalog', params, offset: 0, limit: continueWatchingFullListMax)).items;
+          } catch (e) {
+            appLogger.d('SiloClient: hidden library Continue Watching unavailable', error: e.runtimeType);
+            return const <Map<String, dynamic>>[];
+          }
+        }(),
+    ]);
+    return {
+      for (final rows in pages)
+        for (final item in SiloMappers.items(rows, _ctx)) item.id,
+    };
   }
 
   /// The most Continue Watching cards "View All" reads from one section.

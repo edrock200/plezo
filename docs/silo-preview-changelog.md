@@ -4,6 +4,12 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **Hidden libraries stay out of Continue Watching on Silo and Tofa:** a library you hid in Plezilo could still put its titles in Continue Watching when it was on a Silo or Tofa server, because those servers don't say which library a Continue Watching title comes from. Plezilo now finds out (on Silo from the hidden library's own Continue Watching list, on Tofa by looking the titles up) and leaves them out. Plex and Jellyfin already did this.
+
+## silo-preview-2.70.0
+
+Released November 26, 2026. Android and Windows.
+
 - **Removing a Tofa connection removes it fully:** after you had switched Tofa profiles, removing the Tofa connection left the previous profile's connection saved and still talking to the server. Remove now takes the whole sign-in away, and the server stays gone after a restart.
 - **Switch a connection off without removing it:** each connection in a profile's list (Settings › Profiles) now has an on/off switch, for every server type. A switched-off connection stays saved with its sign-in, but Plezilo doesn't connect to it: nothing from that server appears on Home, in libraries, search, Live TV or Continue Watching. Its row is dimmed and marked *Disabled*, and *Remove* is still in its menu. Switch it back on and it returns without signing in again. The switch applies to every profile that uses the connection.
 

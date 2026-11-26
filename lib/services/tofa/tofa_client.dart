@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:http/http.dart' as http;
@@ -1017,13 +1018,55 @@ class TofaClient
   Future<List<MediaItem>> fetchContinueWatching({int? count = 20, Set<String> excludedLibraryIds = const {}}) async {
     final data = await _api.getJson('/api/v1/users/me/continue');
     final rows = data is List ? data.whereType<Map<String, dynamic>>() : const <Map<String, dynamic>>[];
-    final items = continueWatchingInServerOrder([for (final row in rows) ?TofaMappers.continueWatching(row, _ctx)]);
-    // Rows carry no library id: hidden libraries cannot be left out here.
-    if (excludedLibraryIds.isNotEmpty) {
-      appLogger.d('[tofa] Continue Watching rows carry no library; hidden libraries are not filtered');
+    var items = continueWatchingInServerOrder([for (final row in rows) ?TofaMappers.continueWatching(row, _ctx)]);
+    // Rows carry no library id, so a hidden library's titles are found by
+    // looking their titles up (`POST /media/batch`, `MediaDetail.library_id`).
+    if (excludedLibraryIds.isNotEmpty && items.isNotEmpty) {
+      final libraries = await _librariesOfTitles({
+        for (final item in items)
+          if (item.raw?[TofaRaw.mediaId] case final String id when id.isNotEmpty) id,
+      });
+      final before = items.length;
+      items = [
+        for (final item in items)
+          if (!excludedLibraryIds.contains(libraries[item.raw?[TofaRaw.mediaId]])) item,
+      ];
+      if (items.length != before) {
+        appLogger.i('[tofa] Continue Watching: left out ${before - items.length} row(s) from hidden libraries');
+      }
     }
     return count == null ? items : items.take(count).toList();
   }
+
+  /// Library id of each title id in [mediaIds], cached for the client's life
+  /// (a title doesn't change library). Read with `POST /media/batch`, at most
+  /// 50 ids per request (the spec's limit). A failed read leaves those titles
+  /// out of the map, so they are shown rather than dropped on a guess.
+  Future<Map<String, String>> _librariesOfTitles(Set<String> mediaIds) async {
+    final missing = mediaIds.where((id) => !_titleLibraries.containsKey(id)).toList();
+    if (missing.isNotEmpty) {
+      final chunks = [for (var i = 0; i < missing.length; i += 50) missing.sublist(i, min(i + 50, missing.length))];
+      await Future.wait([
+        for (final chunk in chunks)
+          () async {
+            try {
+              final response = await _api.send('POST', '/api/v1/media/batch', body: {'ids': chunk});
+              final data = response.data;
+              if (data is! List) return;
+              for (final row in data.whereType<Map>()) {
+                final id = row['id'], library = row['library_id'];
+                if (id is String && library is String && library.isNotEmpty) _titleLibraries[id] = library;
+              }
+            } catch (e) {
+              appLogger.d('[tofa] title library lookup failed', error: e.runtimeType);
+            }
+          }(),
+      ]);
+    }
+    return {for (final id in mediaIds) id: ?_titleLibraries[id]};
+  }
+
+  final Map<String, String> _titleLibraries = {};
 
   /// Keeps the server's order in the shelf, which re-sorts by recency: each
   /// row's key is its own `updated_at`, kept a second below the row above.

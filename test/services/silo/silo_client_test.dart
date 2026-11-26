@@ -2383,6 +2383,41 @@ void main() {
       expect(await c.fetchContinueWatching(count: null), hasLength(30));
     });
 
+    test('cards of a hidden library are left out through that library\'s own section', () async {
+      final queries = <Map<String, String>>[];
+      final c = client((request) async {
+        final path = request.url.path;
+        if (path.endsWith('/home/capabilities')) return _json({}, 404);
+        if (path.endsWith('/home/sections')) {
+          return _json({
+            'sections': [
+              {
+                'id': 'cw',
+                'section_type': 'continue_watching',
+                'title': 'Continue Watching',
+                'total_count': 3,
+                'items': [cwCard(0), cwCard(1), cwCard(2)],
+              },
+            ],
+          });
+        }
+        if (path.endsWith('/api/v2/catalog')) {
+          queries.add(request.url.queryParameters);
+          return _json({
+            'items': [cwCard(1)],
+            'page': {'has_more': false},
+            'total': 1,
+          });
+        }
+        return _json({}, 404);
+      });
+      final items = await c.fetchContinueWatching(count: 21, excludedLibraryIds: {'lib-kids'});
+      expect(items.map((i) => i.id), ['movie:cw0', 'movie:cw2']);
+      expect(queries.single['library_id'], 'lib-kids');
+      expect(queries.single['section_id'], 'continue_watching');
+      expect(queries.single['scope'], 'library');
+    });
+
     test('a row that holds everything reads nothing more', () async {
       final queries = <Map<String, String>>[];
       final c = cwServer(rowCards: 5, total: 5, catalogQueries: queries);

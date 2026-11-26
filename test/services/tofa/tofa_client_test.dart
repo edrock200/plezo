@@ -311,6 +311,38 @@ void main() {
       expect(queue!.map((e) => e.id), ['tofa-episode:show-1/e-1', 'tofa-episode:show-1/e-2']);
     });
 
+    test('Continue Watching leaves out titles of hidden libraries, looked up once', () async {
+      Map<String, dynamic> row(String media, String file) => {
+        'kind': 'resume',
+        'media_id': media,
+        'media_file_id': file,
+        'title': media,
+        'position_ms': 1000,
+        'genres': <String>[],
+        'updated_at': '2026-11-20T10:00:00Z',
+      };
+      fake.on(
+        'GET',
+        '/api/v1/users/me/continue',
+        (_) => jsonResponse([row('m-1', 'f-1'), row('m-2', 'f-2'), row('m-3', 'f-3')]),
+      );
+      final asked = <List<Object?>>[];
+      fake.on('POST', '/api/v1/media/batch', (request) {
+        final ids = (jsonDecode(request.body) as Map)['ids'] as List;
+        asked.add(ids);
+        return jsonResponse([
+          for (final id in ids)
+            if (id != 'm-3') {'id': id, 'library_id': id == 'm-2' ? 'lib-hidden' : 'lib-movies'},
+        ]);
+      });
+      final c = client();
+      final items = await c.fetchContinueWatching(excludedLibraryIds: {'lib-hidden'});
+      expect(items.map((i) => i.id), ['m-1', 'm-3'], reason: 'm-3 has no known library, so it stays');
+      await c.fetchContinueWatching(excludedLibraryIds: {'lib-hidden'});
+      expect(asked.expand((ids) => ids).where((id) => id == 'm-1'), hasLength(1), reason: 'libraries are cached');
+      await c.fetchContinueWatching();
+    });
+
     test('Continue Watching keeps the server order and maps movies and episodes', () async {
       fake.on(
         'GET',
