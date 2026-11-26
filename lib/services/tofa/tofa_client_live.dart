@@ -13,8 +13,8 @@ part of 'tofa_client.dart';
 ///   message. The stream plays as a live stream (the player's live
 ///   handling, never the VOD `live_start_index=0` start).
 /// - `X-Tofa-Live-Capabilities` lists no values, so it is not sent.
-/// - Artwork URLs (`logo_image_url`, `image_url`) are used when absolute or
-///   a server route ([TofaMappers.collectionArt]).
+/// - Artwork (`logo_image_url`, `image_url`) goes through
+///   [TofaClient.thumbnailUrl] like every other Tofa image.
 /// - A one-off scheduled recording has no documented cancel route, so
 ///   Plezilo cannot cancel one (rules can be deleted).
 extension _TofaLive on TofaClient {
@@ -70,7 +70,7 @@ extension _TofaLive on TofaClient {
       key: id,
       identifier: id,
       title: name,
-      thumb: TofaMappers.collectionArt(json['logo_image_url']),
+      thumb: TofaMappers.art(json['logo_image_url']),
       number: number is Map && number['display'] is String ? number['display'] as String : null,
       serverId: serverId.value,
       serverName: serverName,
@@ -149,7 +149,7 @@ extension _TofaLive on TofaClient {
       endsAt: _epochSeconds(json['end_at']),
       index: flexibleInt(json['episode_number']),
       parentIndex: flexibleInt(json['season_number']),
-      thumb: TofaMappers.collectionArt(json['image_url']),
+      thumb: TofaMappers.art(json['image_url']),
       channelIdentifier: channelId,
       premiere: json['is_new'] == true,
       subscriptionId: recordingId == null ? null : '${_TofaLiveTvDvrSupport.recordingPrefix}$recordingId',

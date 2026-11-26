@@ -49,6 +49,9 @@ abstract final class TofaRaw {
   /// The later parts (part 2+) of the item's multi-part sets: watched writes
   /// cover them too.
   static const partFileIds = 'tofa_part_file_ids';
+
+  /// A series' `backdrop_thumb`, the still its episodes fall back to.
+  static const backdropThumb = 'tofa_backdrop_thumb';
 }
 
 /// Maps Tofa's `/api/v1` JSON onto Plezilo's neutral models.
@@ -70,6 +73,10 @@ abstract final class TofaRaw {
 abstract final class TofaMappers {
   static const seasonPrefix = 'tofa-season:';
   static const episodePrefix = 'tofa-episode:';
+
+  /// Artwork paths of versions before 2.69: `tofa-artwork:{media}/{kind}`,
+  /// for the `/artwork` route the server refuses with the image token. Read
+  /// only to draw nothing for them until the item is read again.
   static const artworkScheme = 'tofa-artwork:';
 
   static String seasonItemId(String mediaId, String seasonId) => '$seasonPrefix$mediaId/$seasonId';
@@ -92,8 +99,6 @@ abstract final class TofaMappers {
   /// The title id an item id belongs to (itself for a movie or series).
   static String mediaIdOf(String itemId) => parseSeasonId(itemId)?.mediaId ?? parseEpisodeId(itemId)?.mediaId ?? itemId;
 
-  static String artworkPath(String mediaId, String kind) => '$artworkScheme$mediaId/$kind';
-
   /// `(mediaId, kind)` of an [artworkPath], or null.
   static ({String mediaId, String kind})? parseArtworkPath(String path) {
     if (!path.startsWith(artworkScheme)) return null;
@@ -108,6 +113,12 @@ abstract final class TofaMappers {
   static String? _string(Object? v) => v is String && v.isNotEmpty ? v : (v is num ? v.toString() : null);
 
   static String? absoluteUrl(Object? v) => _absoluteUrl(v);
+
+  /// An artwork field as the item keeps it: the raw `*_path` (or `*_url`)
+  /// value. `TofaClient.thumbnailUrl` turns it into `{base}/cache/{path}?st=`
+  /// (observed in Tofa's web app, 2026-11-26: `resolveImageUrl`); absolute
+  /// URLs stay as they are.
+  static String? art(Object? v) => _string(v);
 
   static String? _absoluteUrl(Object? v) {
     final s = _string(v);
@@ -212,9 +223,9 @@ abstract final class TofaMappers {
       year: _year(json['release_date']),
       originallyAvailableAt: _string(json['release_date']),
       contentRating: _string(json['content_rating']),
-      thumbPath: json['poster_path'] != null ? artworkPath(id, 'poster') : null,
-      artPath: json['backdrop_path'] != null ? artworkPath(id, 'backdrop') : null,
-      clearLogoPath: json['logo_path'] != null ? artworkPath(id, 'logo') : null,
+      thumbPath: art(json['poster_path']),
+      artPath: art(json['backdrop_path']),
+      clearLogoPath: art(json['logo_path']),
       durationMs: durationMs,
       viewCount: watched ? 1 : 0,
       // A movie part-way through: Tofa gives the percentage only.
@@ -441,7 +452,7 @@ abstract final class TofaMappers {
             id: 'tofa-person:$name',
             tag: name,
             role: _string(member['role']),
-            thumbPath: _absoluteUrl(member['profile_url']),
+            thumbPath: art(member['profile_url']),
           ),
     ];
     return out.isEmpty ? null : out;
@@ -537,9 +548,9 @@ abstract final class TofaMappers {
       year: _year(json['release_date']),
       originallyAvailableAt: _string(json['release_date']),
       contentRating: _string(json['content_rating']),
-      thumbPath: json['poster_path'] != null ? artworkPath(id, 'poster') : null,
-      artPath: json['backdrop_path'] != null ? artworkPath(id, 'backdrop') : null,
-      clearLogoPath: json['logo_path'] != null ? artworkPath(id, 'logo') : null,
+      thumbPath: art(json['poster_path']),
+      artPath: art(json['backdrop_path']),
+      clearLogoPath: art(json['logo_path']),
       durationMs: durationMs,
       viewCount: kind == MediaKind.show
           ? (leafCount != null && leafCount > 0 && viewedLeafCount == leafCount ? 1 : 0)
@@ -575,6 +586,7 @@ abstract final class TofaMappers {
         TofaRaw.imdbId: ?(_string(json['imdb_id']) ?? _providerId(json['provider_ids'], 'imdb')),
         'tvdb_id': ?_providerId(json['provider_ids'], 'tvdb'),
         'youtube_trailer_id': ?_string(json['youtube_trailer_id']),
+        TofaRaw.backdropThumb: ?art(json['backdrop_thumb']),
       },
     );
   }
@@ -634,7 +646,7 @@ abstract final class TofaMappers {
       parentId: show.id,
       parentTitle: show.title,
       parentThumbPath: show.thumbPath,
-      thumbPath: _absoluteUrl(season['poster_path']) ?? show.thumbPath,
+      thumbPath: art(season['poster_path']) ?? show.thumbPath,
       artPath: show.artPath,
       leafCount: episodes.length,
       viewedLeafCount: viewed,
@@ -707,7 +719,7 @@ abstract final class TofaMappers {
       grandparentTitle: show.title,
       grandparentThumbPath: show.thumbPath,
       grandparentArtPath: show.artPath,
-      thumbPath: _absoluteUrl(json['still_path']) ?? artworkPath(show.id, 'backdrop_thumb'),
+      thumbPath: art(json['still_path']) ?? show.raw?[TofaRaw.backdropThumb] as String? ?? show.artPath,
       artPath: show.artPath,
       durationMs: _itemDurationMs(json['files']) ?? (runtime == null || runtime <= 0 ? null : runtime * 60000),
       viewCount: state.watched ? 1 : 0,
@@ -756,9 +768,9 @@ abstract final class TofaMappers {
         summary: _string(json['overview']),
         year: flexibleInt(json['year']),
         contentRating: _string(json['content_rating']),
-        thumbPath: json['poster_path'] != null ? artworkPath(mediaId, 'poster') : null,
-        artPath: json['backdrop_path'] != null ? artworkPath(mediaId, 'backdrop') : null,
-        clearLogoPath: json['logo_path'] != null ? artworkPath(mediaId, 'logo') : null,
+        thumbPath: art(json['poster_path']),
+        artPath: art(json['backdrop_path']),
+        clearLogoPath: art(json['logo_path']),
         durationMs: common.duration,
         viewOffsetMs: resume,
         viewCount: 0,
@@ -771,8 +783,8 @@ abstract final class TofaMappers {
     }
     final seasonId = _string(json['season_id']);
     final seasonNumber = flexibleInt(json['season_number']);
-    final showPoster = json['poster_path'] != null ? artworkPath(mediaId, 'poster') : null;
-    final showArt = json['backdrop_path'] != null ? artworkPath(mediaId, 'backdrop') : null;
+    final showPoster = art(json['poster_path']);
+    final showArt = art(json['backdrop_path']);
     return TofaMediaItem(
       id: episodeItemId(mediaId, episodeId),
       kind: MediaKind.episode,
@@ -786,7 +798,7 @@ abstract final class TofaMappers {
       grandparentTitle: title,
       grandparentThumbPath: showPoster,
       grandparentArtPath: showArt,
-      thumbPath: json['backdrop_thumb'] != null ? artworkPath(mediaId, 'backdrop_thumb') : showArt,
+      thumbPath: art(json['backdrop_thumb']) ?? showArt,
       artPath: showArt,
       durationMs: common.duration,
       viewOffsetMs: resume,
@@ -826,7 +838,7 @@ abstract final class TofaMappers {
       parentId: show.id,
       parentTitle: show.title,
       parentThumbPath: show.thumbPath,
-      thumbPath: _absoluteUrl(json['season_poster_path']) ?? show.thumbPath,
+      thumbPath: art(json['season_poster_path']) ?? show.thumbPath,
       artPath: show.artPath,
       leafCount: episodes,
       viewedLeafCount: episodes == null ? null : 0,
@@ -876,18 +888,6 @@ abstract final class TofaMappers {
     return null;
   }
 
-  /// Collection artwork. The spec gives `poster_url` / `backdrop_url` /
-  /// `logo_url` (and custom collections' `poster_path` / `backdrop_path`) as
-  /// strings without saying their form. Unverified: an absolute URL is used
-  /// as it is and a server route (`/api/…`) is signed with the image token
-  /// ([TofaClient.thumbnailUrl]); a bare file path is not guessed at.
-  static String? collectionArt(Object? v) {
-    final s = _string(v);
-    if (s == null) return null;
-    if (s.startsWith('https://') || s.startsWith('http://') || s.startsWith('/api/')) return s;
-    return null;
-  }
-
   /// One collection card: a `CollectionSummary`, `CollectionResponse`,
   /// `CustomCollectionSummary` or `CustomCollectionResponse`.
   static TofaMediaItem? collection(Map<String, dynamic> json, TofaMappingContext ctx, {required bool custom}) {
@@ -900,9 +900,10 @@ abstract final class TofaMappers {
       kind: MediaKind.collection,
       title: name,
       summary: _string(json['overview']),
-      thumbPath: collectionArt(json['poster_url']) ?? collectionArt(json['poster_path']),
-      artPath: collectionArt(json['backdrop_url']) ?? collectionArt(json['backdrop_path']),
-      clearLogoPath: collectionArt(json['logo_url']),
+      thumbPath:
+          art(json['poster_url']) ?? art(json['poster_path']) ?? art(_strings(json['poster_paths'])?.firstOrNull),
+      artPath: art(json['backdrop_url']) ?? art(json['backdrop_path']),
+      clearLogoPath: art(json['logo_url']),
       childCount: count,
       leafCount: count,
       serverId: ctx.serverId,

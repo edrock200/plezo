@@ -373,20 +373,37 @@ class TofaClient
   Future<String?> getMachineIdentifier() async => connection.serverId;
 
   // ---------------------------------------------------------------------------
-  // Artwork (`/api/v1/artwork/{media_id}/{kind}?st=`)
+  // Artwork (`{base}/cache/{path}?st=<image token>`)
   // ---------------------------------------------------------------------------
 
   ({String token, DateTime expiresAt})? _imageToken;
   Future<void>? _imageTokenInFlight;
   Timer? _imageTokenTimer;
 
-  /// The image token (`GET /api/v1/auth/image-token`), renewed once 80% of
-  /// its life is spent, one request in flight. Players and image views cannot
-  /// send headers, so artwork URLs carry it as `st`.
+  /// The image token (`GET /api/v1/auth/image-token`, with the bearer and
+  /// profile headers), one request in flight, renewed a minute before it
+  /// expires. Its lifetime is the JWT `exp` claim when the token has one,
+  /// else `expires_in`, else 5 minutes (observed in Tofa's web app,
+  /// 2026-11-26). Image views cannot send headers, so artwork URLs carry it
+  /// as `st`.
   Future<void> _ensureImageToken() {
     final current = _imageToken;
     if (current != null && DateTime.now().isBefore(current.expiresAt)) return Future.value();
     return _imageTokenInFlight ??= _fetchImageToken().whenComplete(() => _imageTokenInFlight = null);
+  }
+
+  /// The `exp` claim (epoch seconds) of a JWT, or null.
+  @visibleForTesting
+  static int? jwtExpiry(String token) {
+    final parts = token.split('.');
+    if (parts.length != 3) return null;
+    try {
+      final payload = jsonDecode(utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))));
+      final exp = payload is Map ? payload['exp'] : null;
+      return exp is num ? exp.toInt() : null;
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<void> _fetchImageToken() async {
@@ -396,11 +413,17 @@ class TofaClient
     final expiresIn = data is Map ? data['expires_in'] : null;
     if (token is! String || token.isEmpty) return;
     LogRedactionManager.registerRotatingToken(token);
-    final life = Duration(seconds: expiresIn is int && expiresIn > 0 ? expiresIn : 3600);
-    final renewAt = Duration(milliseconds: life.inMilliseconds * 4 ~/ 5);
-    _imageToken = (token: token, expiresAt: DateTime.now().add(renewAt));
+    final now = DateTime.now();
+    final exp = jwtExpiry(token);
+    final expiresAt = exp != null
+        ? DateTime.fromMillisecondsSinceEpoch(exp * 1000)
+        : now.add(Duration(seconds: expiresIn is num && expiresIn > 0 ? expiresIn.toInt() : 300));
+    var renewIn = expiresAt.difference(now) - const Duration(minutes: 1);
+    if (renewIn < const Duration(seconds: 15)) renewIn = expiresAt.difference(now) * 0.8;
+    if (renewIn.isNegative) renewIn = Duration.zero;
+    _imageToken = (token: token, expiresAt: now.add(renewIn));
     _imageTokenTimer?.cancel();
-    _imageTokenTimer = Timer(renewAt, () {
+    _imageTokenTimer = Timer(renewIn, () {
       if (!_closed) unawaited(_ensureImageToken().catchError((_) => null));
     });
   }
@@ -408,17 +431,21 @@ class TofaClient
   @visibleForTesting
   Future<void> ensureImageTokenForTesting() => _ensureImageToken();
 
-  /// Artwork URL for a mapped item's path: a `tofa-artwork:` path becomes
-  /// the artwork route with the image token; an absolute URL stays as is;
-  /// anything else (an undocumented raw path) is not guessed at and draws
-  /// nothing. Never carries the bearer.
+  /// The image route a Tofa artwork path is served at (`wd` in Tofa's web
+  /// app): a `/cache/...` path as it is, any other path under `/cache/`.
+  @visibleForTesting
+  static String cachePath(String path) =>
+      path.startsWith('/cache/') ? path : '/cache/${path.startsWith('/') ? path.substring(1) : path}';
+
+  /// Artwork URL for a mapped item's path: an absolute URL as it is, any
+  /// other path at `{base}/cache/{path}?st=<image token>` (no size
+  /// parameters: Tofa's web app sends none). Never carries the bearer. Paths
+  /// saved by earlier versions (`tofa-artwork:`) draw nothing until read again.
   @override
   String thumbnailUrl(String? path, {int? width, int? height, bool cover = true}) {
     if (path == null || path.isEmpty) return '';
     if (path.startsWith('https://') || path.startsWith('http://')) return path;
-    final art = TofaMappers.parseArtworkPath(path);
-    final serverRoute = art == null && path.startsWith('/api/');
-    if (art == null && !serverRoute) return '';
+    if (TofaMappers.parseArtworkPath(path) != null) return '';
     final token = _imageToken?.token;
     if (token == null) {
       // Draw nothing rather than a URL the server would refuse; the token is
@@ -426,18 +453,7 @@ class TofaClient
       unawaited(_ensureImageToken().catchError((_) => null));
       return '';
     }
-    final query = <String, String>{
-      'st': token,
-      if (width != null && width > 0) 'w': '$width',
-      if (height != null && height > 0) 'h': '$height',
-    };
-    if (art == null) {
-      // A collection's server route (unverified form, see
-      // [TofaMappers.collectionArt]): signed like the artwork route.
-      final uri = Uri.parse(path);
-      return _api.resolveUrl(uri.replace(queryParameters: {...uri.queryParameters, ...query}).toString());
-    }
-    return _api.resolveUrl('/api/v1/artwork/${_seg(art.mediaId)}/${art.kind}?${encodeQueryParameters(query)}');
+    return _api.resolveUrl('${cachePath(path)}?st=${Uri.encodeQueryComponent(token)}');
   }
 
   @override

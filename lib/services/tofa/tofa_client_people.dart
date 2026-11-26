@@ -33,7 +33,7 @@ extension _TofaPeople on TofaClient {
           MediaPerson(
             id: '$personPrefix${row['name']}',
             name: row['name'] as String,
-            thumbPath: TofaMappers.absoluteUrl(row['profile_url']),
+            thumbPath: TofaMappers.art(row['profile_url']),
             backend: MediaBackend.tofa,
             serverId: serverId,
             serverName: serverName,

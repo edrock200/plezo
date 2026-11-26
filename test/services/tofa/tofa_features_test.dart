@@ -910,7 +910,7 @@ void main() {
               'name': 'Space Saga',
               'kind': 'franchise',
               'item_count': 3,
-              'poster_url': '/api/v1/collections/c-1/poster',
+              'poster_url': '/collections/c-1.jpg',
               'backdrop_url': 'https://img.example.com/b.jpg',
             },
           ],
@@ -982,13 +982,13 @@ void main() {
       await c.ensureImageTokenForTesting();
       final page = await c.fetchCollectionsPage('lib-1');
       final poster = Uri.parse(c.thumbnailUrl(page.items.first.thumbPath, width: 300));
-      expect(poster.path, '/api/v1/collections/c-1/poster');
-      expect(poster.queryParameters, {'st': 'img', 'w': '300'});
+      expect(poster.path, '/cache/collections/c-1.jpg');
+      expect(poster.queryParameters, {'st': 'img'});
       expect(page.items.map((i) => i.title), ['Space Saga', 'Rainy days']);
       expect(page.items.every((i) => i.kind == MediaKind.collection), isTrue);
       expect(page.items.first.childCount, 3);
       expect(page.items.first.artPath, 'https://img.example.com/b.jpg');
-      expect(page.items.last.thumbPath, isNull, reason: 'a bare file path is not guessed at');
+      expect(page.items.last.thumbPath, 'not-a-route.jpg', reason: 'drawn at /cache/not-a-route.jpg');
       await c.fetchCollectionsPage('lib-1', start: 1, size: 1);
       expect(fake.to('GET', '/api/v1/collections'), hasLength(1), reason: 'pages slice one read');
     });

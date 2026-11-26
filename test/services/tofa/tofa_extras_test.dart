@@ -176,7 +176,9 @@ void main() {
       await c.setNotInterested(item, false);
       expect(fake.to('PUT', '/api/v1/users/me/seen/tv/7'), hasLength(1));
       expect(fake.to('DELETE', '/api/v1/users/me/not-interested/tv/7'), hasLength(1));
-      expect(c.discoverImageUrl(item), 'https://image.tmdb.org/t/p/w342/x.jpg');
+      fake.on('GET', '/api/v1/auth/image-token', (_) => jsonResponse({'token': 'img', 'expires_in': 3600}));
+      await c.ensureImageTokenForTesting();
+      expect(Uri.parse(c.discoverImageUrl(item)).path, endsWith('/cache/x.jpg'));
     });
   });
 

@@ -74,24 +74,10 @@ extension TofaClientExtras on TofaClient {
     return _fetchItem(id);
   }
 
-  /// A Discover item's poster or backdrop URL. A title in the library uses
-  /// its own artwork route; otherwise `poster_path` is used when absolute,
-  /// or (unverified, as for Silo's request posters) as a TMDB file path.
-  String discoverImageUrl(TofaDiscoverItem item, {bool backdrop = false}) {
-    final local = item.localMediaId;
-    if (local != null) {
-      return thumbnailUrl(
-        TofaMappers.artworkPath(local, backdrop ? 'backdrop' : 'poster'),
-        width: backdrop ? 780 : 342,
-      );
-    }
-    final path = backdrop ? item.backdropPath : item.posterPath;
-    if (path == null) return '';
-    if (path.startsWith('https://') || path.startsWith('http://')) return path;
-    if (path.startsWith('/api/')) return thumbnailUrl(path);
-    if (path.startsWith('/')) return 'https://image.tmdb.org/t/p/${backdrop ? 'w780' : 'w342'}$path';
-    return '';
-  }
+  /// A Discover item's poster or backdrop URL: its path through
+  /// [thumbnailUrl] (`/cache/{path}?st=`, as Tofa's web app draws Discover).
+  String discoverImageUrl(TofaDiscoverItem item, {bool backdrop = false}) =>
+      thumbnailUrl(backdrop ? item.backdropPath : item.posterPath);
 
   // --- Requests --------------------------------------------------------------
 
@@ -235,16 +221,10 @@ extension TofaClientExtras on TofaClient {
     );
   }
 
-  /// A profile avatar URL Plezilo can draw: an absolute URL as is, a server
-  /// route (`/api/...`, e.g. `/profiles/avatars/{file}`) signed with the image
-  /// token (unverified: which auth avatars need), else none.
-  String profileAvatarUrl(TofaProfile profile) {
-    final url = profile.avatarImageUrl;
-    if (url == null) return '';
-    if (url.startsWith('https://') || url.startsWith('http://')) return url;
-    if (url.startsWith('/api/')) return thumbnailUrl(url);
-    return '';
-  }
+  /// A profile avatar URL Plezilo can draw: `avatar_image_url` through
+  /// [thumbnailUrl] (absolute as it is, else `/cache/…?st=`; how Tofa's web
+  /// app resolves image paths, 2026-11-26).
+  String profileAvatarUrl(TofaProfile profile) => thumbnailUrl(profile.avatarImageUrl);
 
   // --- Subtitle search -------------------------------------------------------
 

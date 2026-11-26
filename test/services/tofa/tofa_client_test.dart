@@ -249,7 +249,7 @@ void main() {
       expect(item.isWatched, isFalse);
       expect(item.mediaVersions!.single.id, 'f-1');
       expect(TofaMappers.fileIdsOf(item), ['f-1']);
-      expect(item.thumbPath, 'tofa-artwork:m-1/poster');
+      expect(item.thumbPath, '/p.jpg');
       expect(item.raw?[TofaRaw.imdbId], 'tt0000001');
       final batch = fake.to('POST', '/api/v1/media/progress/batch').single;
       expect(jsonDecode(batch.body), {
@@ -424,18 +424,27 @@ void main() {
   });
 
   group('artwork', () {
-    test('artwork goes through the artwork route with the image token, never the bearer', () async {
+    test('artwork is the path under /cache/ with the image token, never the bearer', () async {
       fake.on('GET', '/api/v1/auth/image-token', (_) => jsonResponse({'token': 'img-tok', 'expires_in': 3600}));
       final c = client();
-      expect(c.thumbnailUrl('tofa-artwork:m-1/poster'), '', reason: 'no URL the server would refuse');
+      expect(c.thumbnailUrl('/posters/m-1.jpg'), '', reason: 'no URL the server would refuse');
       await c.ensureImageTokenForTesting();
-      final url = Uri.parse(c.thumbnailUrl('tofa-artwork:m-1/poster', width: 300, height: 450));
-      expect(url.toString(), startsWith('$tofaBase/api/v1/artwork/m-1/poster?'));
-      expect(url.queryParameters, {'st': 'img-tok', 'w': '300', 'h': '450'});
+      final url = Uri.parse(c.thumbnailUrl('/posters/m-1.jpg', width: 300, height: 450));
+      expect(url.toString(), startsWith('$tofaBase/cache/posters/m-1.jpg?'));
+      expect(url.queryParameters, {'st': 'img-tok'}, reason: "Tofa's web app sends no size");
+      expect(Uri.parse(c.thumbnailUrl('/cache/a/b.jpg')).path, endsWith('/cache/a/b.jpg'));
+      expect(Uri.parse(c.thumbnailUrl('tmdb/x.jpg')).path, endsWith('/cache/tmdb/x.jpg'));
       expect(c.streamHeaders, isEmpty);
-      // An undocumented raw path is not guessed at.
-      expect(c.thumbnailUrl('/posters/m-1.jpg'), '');
+      expect(c.thumbnailUrl('tofa-artwork:m-1/poster'), '', reason: 'a path from an earlier version');
       expect(c.thumbnailUrl('https://images.example.com/a.jpg'), 'https://images.example.com/a.jpg');
+    });
+
+    test('the image token lives until its JWT exp, else expires_in', () {
+      String jwt(Map<String, Object> claims) =>
+          'h.${base64Url.encode(utf8.encode(jsonEncode(claims))).replaceAll('=', '')}.s';
+      expect(TofaClient.jwtExpiry(jwt({'exp': 1800000000})), 1800000000);
+      expect(TofaClient.jwtExpiry('opaque'), isNull);
+      expect(TofaClient.cachePath('/x.jpg'), '/cache/x.jpg');
     });
   });
 

@@ -39,9 +39,8 @@ void main() {
       expect(TofaMappers.parseEpisodeId('tofa-episode:broken'), isNull);
     });
 
-    test('artwork paths name the title and one of the documented kinds', () {
+    test('paths saved by earlier versions are still recognised', () {
       expect(TofaMappers.parseArtworkPath('tofa-artwork:m-1/backdrop_thumb'), (mediaId: 'm-1', kind: 'backdrop_thumb'));
-      expect(TofaMappers.parseArtworkPath('tofa-artwork:m-1/still'), isNull);
       expect(TofaMappers.parseArtworkPath('/posters/m-1.jpg'), isNull);
     });
   });
@@ -54,8 +53,8 @@ void main() {
       expect(item.year, 2021);
       expect(item.durationMs, 100 * 60000);
       expect(item.isWatched, isTrue);
-      expect(item.thumbPath, 'tofa-artwork:m-1/poster');
-      expect(item.artPath, 'tofa-artwork:m-1/backdrop');
+      expect(item.thumbPath, '/posters/m-1.jpg', reason: 'the raw path, drawn through /cache/');
+      expect(item.artPath, '/backdrops/m-1.jpg');
       expect(item.clearLogoPath, isNull);
       expect(item.libraryId, 'lib-1');
       expect(item.raw?[TofaRaw.tmdbId], 42);
@@ -136,8 +135,8 @@ void main() {
       final show = TofaMappers.detail(showDetail(), _ctx)!;
       final season = (showDetail()['seasons'] as List)[1] as Map<String, dynamic>;
       final episodes = TofaMappers.episodes(season, show, _ctx);
-      expect(episodes.first.thumbPath, 'tofa-artwork:show-1/backdrop_thumb');
-      expect(episodes.first.grandparentThumbPath, 'tofa-artwork:show-1/poster');
+      expect(episodes.first.thumbPath, '/sb.jpg', reason: 'no still, no backdrop_thumb: the series backdrop');
+      expect(episodes.first.grandparentThumbPath, '/sp.jpg');
     });
 
     test('mapped items survive a JSON round trip as Tofa items', () {
