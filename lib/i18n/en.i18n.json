@@ -1788,6 +1788,8 @@
     "alreadyScheduled": "This program is already scheduled",
     "dvrAdminRequired": "DVR settings require an admin account",
     "recordingFailed": "Couldn't schedule recording",
+    "finishedRecordings": "Recorded",
+    "recordingUnavailable": "This recording is no longer on the server.",
     "cancelRecordingUnsupported": "This server doesn't let apps cancel a single scheduled recording.",
     "recordingTargetMissing": "Couldn't determine recording library",
     "recordNotAvailable": "Recording not available for this program",

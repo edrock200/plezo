@@ -229,7 +229,7 @@ extension _TofaLive on TofaClient {
   }
 }
 
-class _TofaLiveTvSupport implements LiveTvSupport {
+class _TofaLiveTvSupport implements LiveTvSupport, LiveTvRecordedItems {
   _TofaLiveTvSupport(this._client);
 
   final TofaClient _client;
@@ -242,6 +242,31 @@ class _TofaLiveTvSupport implements LiveTvSupport {
 
   @override
   Future<List<LiveTvChannel>> fetchChannels({String? lineup}) => _client._liveChannels();
+
+  /// Finished recordings: `GET /live/recordings` (newest first) rows that
+  /// ended (`actual_end`), without an `error`, with the `media_id` they play
+  /// as ("A finished recording plays like any other title").
+  @override
+  Future<List<LiveTvRecording>> fetchRecordings() async {
+    final data = await _client._api.getJson('/api/v1/live/recordings');
+    final rows = data is Map && data['recordings'] is List ? data['recordings'] as List : const [];
+    return [
+      for (final row in rows.whereType<Map<String, dynamic>>())
+        if (row['actual_end'] != null && row['error'] == null && row['media_id'] is String && row['title'] is String)
+          LiveTvRecording(
+            id: row['media_id'] as String,
+            title: row['title'] as String,
+            subtitle: row['episode_title'] is String && (row['episode_title'] as String).isNotEmpty
+                ? row['episode_title'] as String
+                : null,
+            channelName: row['channel_name'] is String ? row['channel_name'] as String : null,
+            recordedAt: row['actual_start'] is String ? DateTime.tryParse(row['actual_start'] as String) : null,
+          ),
+    ];
+  }
+
+  @override
+  Future<MediaItem?> recordingItem(LiveTvRecording recording) => _client._fetchItem(recording.id);
 
   @override
   Future<List<LiveTvProgram>> fetchSchedule({DateTime? from, DateTime? to}) => _client._liveGuide(from, to);

@@ -7,6 +7,8 @@ import 'package:provider/provider.dart';
 import '../../../exceptions/media_server_exceptions.dart';
 import '../../../focus/focusable_wrapper.dart';
 import '../../../i18n/strings.g.dart';
+import '../../../media/live_tv_support.dart';
+import '../../../media/media_item.dart';
 import '../../../media/media_server_client.dart';
 import '../../../models/livetv_program.dart';
 import '../../../models/media_grab_operation.dart';
@@ -16,6 +18,8 @@ import '../../../theme/mono_tokens.dart';
 import '../../../utils/app_logger.dart';
 import '../../../utils/dialogs.dart';
 import '../../../utils/formatters.dart';
+import '../../../utils/media_navigation_helper.dart';
+import '../../../utils/snackbar_helper.dart';
 import '../../../widgets/app_icon.dart';
 import '../../../widgets/settings_section.dart';
 import '../live_tv_refresh_mixin.dart';
@@ -38,8 +42,22 @@ class _ServerRecordings {
   final MediaServerClient client;
   final List<MediaGrabOperation> grabs;
   final List<MediaSubscription> rules;
+  final List<LiveTvRecording> recorded;
 
-  const _ServerRecordings({required this.serverId, required this.client, required this.grabs, required this.rules});
+  const _ServerRecordings({
+    required this.serverId,
+    required this.client,
+    required this.grabs,
+    required this.rules,
+    this.recorded = const [],
+  });
+}
+
+class _RecordedEntry {
+  final _ServerRecordings server;
+  final LiveTvRecording recording;
+
+  const _RecordedEntry(this.server, this.recording);
 }
 
 class _GrabEntry {
@@ -156,7 +174,25 @@ class RecordingsTabState extends State<RecordingsTab> with WidgetsBindingObserve
         if (!_isCurrentLoad(loadGeneration)) return;
         final rules = await dvr.fetchRecordingRules();
         if (!_isCurrentLoad(loadGeneration)) return;
-        results.add(_ServerRecordings(serverId: serverInfo.serverId, client: client, grabs: grabs, rules: rules));
+        var recorded = const <LiveTvRecording>[];
+        if (client.liveTv case final LiveTvRecordedItems source) {
+          try {
+            recorded = await source.fetchRecordings();
+          } catch (e) {
+            // Finished recordings are extra: a failed read keeps the rest.
+            appLogger.d('Finished recordings unavailable for ${serverInfo.serverId}', error: e);
+          }
+          if (!_isCurrentLoad(loadGeneration)) return;
+        }
+        results.add(
+          _ServerRecordings(
+            serverId: serverInfo.serverId,
+            client: client,
+            grabs: grabs,
+            rules: rules,
+            recorded: recorded,
+          ),
+        );
       },
       onError: (client, serverInfo, error, stackTrace) {
         if (!_isCurrentLoad(loadGeneration)) return;
@@ -212,6 +248,28 @@ class RecordingsTabState extends State<RecordingsTab> with WidgetsBindingObserve
     return entries;
   }
 
+  List<_RecordedEntry> get _allRecorded => [
+    for (final server in _serverRecordings)
+      for (final recording in server.recorded) _RecordedEntry(server, recording),
+  ];
+
+  Future<void> _onOpenRecorded(_RecordedEntry entry) async {
+    final source = entry.server.client.liveTv;
+    if (source is! LiveTvRecordedItems) return;
+    MediaItem? item;
+    try {
+      item = await (source as LiveTvRecordedItems).recordingItem(entry.recording);
+    } catch (e) {
+      appLogger.d('Opening a finished recording failed', error: e);
+    }
+    if (!mounted) return;
+    if (item == null) {
+      showErrorSnackBar(context, t.liveTv.recordingUnavailable);
+      return;
+    }
+    await navigateToMediaItemDetails(context, item);
+  }
+
   Future<void> _onCancelGrab(_GrabEntry entry) async {
     final cancelled = await confirmCancelGrab(context, entry.server.client, entry.op);
     if (cancelled) await _load();
@@ -253,8 +311,9 @@ class RecordingsTabState extends State<RecordingsTab> with WidgetsBindingObserve
 
     final grabs = _allGrabs;
     final rules = _allRules;
+    final recorded = _allRecorded;
 
-    if (grabs.isEmpty && rules.isEmpty) {
+    if (grabs.isEmpty && rules.isEmpty && recorded.isEmpty) {
       return Center(child: _EmptyMessage(text: t.liveTv.noScheduledRecordings));
     }
 
@@ -287,6 +346,21 @@ class RecordingsTabState extends State<RecordingsTab> with WidgetsBindingObserve
                   focusNode: grabs.isEmpty && i == 0 ? _firstTileFocusNode : null,
                   onTap: () => _onRuleTap(rules[i]),
                   onNavigateUp: grabs.isEmpty && i == 0 ? widget.onNavigateUp : null,
+                  onBack: widget.onBack,
+                ),
+            ],
+          ),
+        if (recorded.isNotEmpty)
+          SettingsGroup(
+            title: t.liveTv.finishedRecordings,
+            children: [
+              for (var i = 0; i < recorded.length; i++)
+                _RecordedTile(
+                  entry: recorded[i],
+                  autofocus: grabs.isEmpty && rules.isEmpty && i == 0,
+                  focusNode: grabs.isEmpty && rules.isEmpty && i == 0 ? _firstTileFocusNode : null,
+                  onTap: () => _onOpenRecorded(recorded[i]),
+                  onNavigateUp: grabs.isEmpty && rules.isEmpty && i == 0 ? widget.onNavigateUp : null,
                   onBack: widget.onBack,
                 ),
             ],
@@ -409,6 +483,73 @@ class _GrabTile extends StatelessWidget {
     final dayLabel = formatRelativeDayLabel(start);
     final duration = end != null ? formatDurationTextual(end.difference(start).inMilliseconds) : '';
     return [dayLabel, clock, if (duration.isNotEmpty) duration].join(' · ');
+  }
+}
+
+class _RecordedTile extends StatelessWidget {
+  final _RecordedEntry entry;
+  final bool autofocus;
+  final FocusNode? focusNode;
+  final VoidCallback onTap;
+  final VoidCallback? onNavigateUp;
+  final VoidCallback? onBack;
+
+  const _RecordedTile({
+    required this.entry,
+    required this.autofocus,
+    this.focusNode,
+    required this.onTap,
+    this.onNavigateUp,
+    this.onBack,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final r = entry.recording;
+    final at = r.recordedAt;
+    final subtitle = [
+      ?r.subtitle,
+      if (at != null) formatRelativeDayLabel(at.toLocal()),
+      if (r.channelName != null && r.channelName!.isNotEmpty) r.channelName!,
+    ].join(' · ');
+    return FocusableWrapper(
+      autofocus: autofocus,
+      focusNode: focusNode,
+      autoScroll: true,
+      useBackgroundFocus: true,
+      disableScale: true,
+      onSelect: onTap,
+      onNavigateUp: onNavigateUp,
+      onBack: onBack,
+      child: InkWell(
+        canRequestFocus: false,
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Column(
+            crossAxisAlignment: .start,
+            children: [
+              Text(
+                r.title,
+                style: theme.textTheme.bodyLarge?.copyWith(fontWeight: .w500),
+                maxLines: 1,
+                overflow: .ellipsis,
+              ),
+              if (subtitle.isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: theme.textTheme.bodySmall?.copyWith(color: tokens(context).textMuted),
+                  maxLines: 1,
+                  overflow: .ellipsis,
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

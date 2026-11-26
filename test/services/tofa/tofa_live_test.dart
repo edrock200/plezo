@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:plezy/exceptions/media_server_exceptions.dart';
+import 'package:plezy/media/live_tv_support.dart';
 import 'package:plezy/media/media_server_client.dart';
 import 'package:plezy/media/server_capabilities.dart';
 import 'package:plezy/models/livetv_channel.dart';
@@ -370,5 +371,38 @@ void main() {
       await expectLater(dvr.cancelGrab('rec:r-1'), throwsA(isA<UnsupportedError>()));
       await expectLater(dvr.deleteRecordingRule('rec:r-1'), throwsA(isA<UnsupportedError>()));
     });
+  });
+
+  test('finished recordings are listed and open as their title', () async {
+    fake.on('GET', '/api/v1/live/recordings', (r) {
+      expect(r.url.queryParameters.containsKey('include'), isFalse);
+      Map<String, dynamic> rec(String id, {String? end, String? error, String? media}) => {
+        'id': id,
+        'title': 'The News',
+        'episode_title': 'Late',
+        'channel_name': 'One',
+        'actual_start': '2026-11-25T10:00:00Z',
+        'actual_end': end,
+        'error': error,
+        'media_id': media,
+      };
+      return jsonResponse({
+        'recordings': [
+          rec('r-1', end: '2026-11-25T11:00:00Z', media: 'm-1'),
+          rec('r-2'),
+          rec('r-3', end: '2026-11-25T11:00:00Z', error: 'disk_full', media: 'm-3'),
+          rec('r-4', end: '2026-11-25T11:00:00Z'),
+        ],
+      });
+    });
+    fake.on('GET', '/api/v1/media/m-1', (_) => jsonResponse(movieDetail()));
+    fake.on('POST', '/api/v1/media/progress/batch', (_) => jsonResponse({'items': <Object>[]}));
+    final source = client().liveTv as LiveTvRecordedItems;
+    final recordings = await source.fetchRecordings();
+    expect(recordings.single.id, 'm-1');
+    expect(recordings.single.subtitle, 'Late');
+    expect(recordings.single.channelName, 'One');
+    final item = await source.recordingItem(recordings.single);
+    expect(item?.id, 'm-1');
   });
 }

@@ -1,3 +1,4 @@
+import 'media_item.dart';
 import 'media_source_info.dart';
 import '../models/livetv_capture_buffer.dart';
 import '../models/livetv_channel.dart';
@@ -264,4 +265,26 @@ abstract class LiveTvDvrSupport {
     required List<String> ratingKeys,
     bool includeStorage = true,
   });
+}
+
+/// A finished recording that is a title of its own on the server (Tofa:
+/// `GET /live/recordings` rows with a `media_id`).
+class LiveTvRecording {
+  final String id;
+  final String title;
+  final String? subtitle;
+  final String? channelName;
+  final DateTime? recordedAt;
+
+  const LiveTvRecording({required this.id, required this.title, this.subtitle, this.channelName, this.recordedAt});
+}
+
+/// Optional capability of a [LiveTvSupport]: finished recordings to list in
+/// the Recordings tab and open like any other title. Plex and MediaBrowser
+/// recordings land in libraries instead, so they do not implement it.
+abstract interface class LiveTvRecordedItems {
+  Future<List<LiveTvRecording>> fetchRecordings();
+
+  /// The title [recording] plays as, or null when the server no longer has it.
+  Future<MediaItem?> recordingItem(LiveTvRecording recording);
 }

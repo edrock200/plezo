@@ -4228,6 +4228,12 @@ class Translations$liveTv$en {
 	/// en: 'Couldn't schedule recording'
 	String get recordingFailed => 'Couldn\'t schedule recording';
 
+	/// en: 'Recorded'
+	String get finishedRecordings => 'Recorded';
+
+	/// en: 'This recording is no longer on the server.'
+	String get recordingUnavailable => 'This recording is no longer on the server.';
+
 	/// en: 'This server doesn't let apps cancel a single scheduled recording.'
 	String get cancelRecordingUnsupported => 'This server doesn\'t let apps cancel a single scheduled recording.';
 
@@ -11222,6 +11228,8 @@ extension on Translations {
 			'liveTv.alreadyScheduled' => 'This program is already scheduled',
 			'liveTv.dvrAdminRequired' => 'DVR settings require an admin account',
 			'liveTv.recordingFailed' => 'Couldn\'t schedule recording',
+			'liveTv.finishedRecordings' => 'Recorded',
+			'liveTv.recordingUnavailable' => 'This recording is no longer on the server.',
 			'liveTv.cancelRecordingUnsupported' => 'This server doesn\'t let apps cancel a single scheduled recording.',
 			'liveTv.recordingTargetMissing' => 'Couldn\'t determine recording library',
 			'liveTv.recordNotAvailable' => 'Recording not available for this program',
@@ -11647,10 +11655,10 @@ extension on Translations {
 			'companionRemote.pairing.validationHostRequired' => 'Please enter host address',
 			'companionRemote.pairing.validationHostFormat' => 'Format must be IP:port (e.g., 192.168.1.100:48632)',
 			'companionRemote.pairing.connectionTimedOut' => 'Connection timed out. Use the same network on both devices.',
-			'companionRemote.pairing.sessionNotFound' => 'Device not found. Make sure Plezilo is running on the host.',
-			'companionRemote.pairing.authFailed' => 'Authentication failed. Both devices need the same Plex account.',
 			_ => null,
 		} ?? switch (path) {
+			'companionRemote.pairing.sessionNotFound' => 'Device not found. Make sure Plezilo is running on the host.',
+			'companionRemote.pairing.authFailed' => 'Authentication failed. Both devices need the same Plex account.',
 			'companionRemote.pairing.failedToConnect' => ({required Object error}) => 'Failed to connect: ${error}',
 			'companionRemote.remote.disconnectConfirm' => 'Do you want to disconnect from the remote session?',
 			'companionRemote.remote.reconnecting' => 'Reconnecting...',
@@ -12161,10 +12169,10 @@ extension on Translations {
 			'siloPairing.continueHere' => 'Continue',
 			'siloPairing.completedTitle' => 'You\'re all set',
 			'siloPairing.savingAccounts' => 'Setting up the accounts from your phone or tablet…',
-			'siloPairing.skipAccount' => 'Skip this account',
-			'siloPairing.summaryTitle' => ({required num n}) => (_root.$meta.cardinalResolver ?? PluralResolvers.cardinal('en'))(n, one: '${n} account added', other: '${n} accounts added', ), 
 			_ => null,
 		} ?? switch (path) {
+			'siloPairing.skipAccount' => 'Skip this account',
+			'siloPairing.summaryTitle' => ({required num n}) => (_root.$meta.cardinalResolver ?? PluralResolvers.cardinal('en'))(n, one: '${n} account added', other: '${n} accounts added', ), 
 			'siloPairing.summaryNoneTitle' => 'No accounts were added',
 			'siloPairing.summaryAdded' => ({required Object account, required Object server, required Object profile}) => '${account} on ${server}, in the profile ${profile}',
 			'siloPairing.summaryAddedNewProfile' => ({required Object account, required Object server, required Object profile}) => '${account} on ${server}, in a new profile, ${profile}',
