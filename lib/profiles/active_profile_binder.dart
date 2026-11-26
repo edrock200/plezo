@@ -1,3 +1,4 @@
+import '../services/iptv/iptv_parental.dart';
 import 'dart:async';
 import '../media/ids.dart';
 
@@ -302,7 +303,15 @@ class ActiveProfileBinder {
     }
   }
 
+  /// The profile the IPTV parental gate was last reset for.
+  String? _iptvGateProfileId;
+
   Future<bool> _runRebindOnce() async {
+    // A profile switch locks every IPTV source's parental groups again.
+    if (_iptvGateProfileId != activeProfile.activeId) {
+      IptvParentalGate.lockAll();
+      _iptvGateProfileId = activeProfile.activeId;
+    }
     _bindingProfileId = activeProfile.activeId;
     final generation = ++_bindGeneration;
     _plexBindTokens.clear();
@@ -442,7 +451,10 @@ class ActiveProfileBinder {
       final jellyfinConnectionIds = <String>{
         for (final pc in joinRows)
           if (connectionsById[pc.connectionId]
-              case JellyfinConnection(:final id) || SiloConnection(:final id) || TofaConnection(:final id))
+              case JellyfinConnection(:final id) ||
+                  SiloConnection(:final id) ||
+                  TofaConnection(:final id) ||
+                  IptvConnection(:final id))
             if (!shadowedSilo.contains(id)) id,
       };
       for (final serverId in serverManager.registeredServerIds) {
@@ -534,6 +546,8 @@ class ActiveProfileBinder {
         case SiloConnection(:final serverId):
           expected.add(serverId);
         case TofaConnection(:final serverId):
+          expected.add(serverId);
+        case IptvConnection(:final serverId):
           expected.add(serverId);
         case null:
           break;
@@ -704,6 +718,9 @@ class ActiveProfileBinder {
         case TofaConnection():
           expected.add(conn.serverId);
           futures.add(_bindTofa(conn, profileId: profile.id, generation: generation));
+        case IptvConnection():
+          expected.add(conn.serverId);
+          futures.add(_bindIptv(conn, profileId: profile.id, generation: generation));
       }
     }
     final results = await Future.wait(futures);
@@ -1283,6 +1300,24 @@ class ActiveProfileBinder {
       return _ProfileBindResult(visibleServerIds: const {}, expectedServerIds: {conn.serverId});
     }
     // As for Silo: a refused server stays visible so its banner shows.
+    if (ok || serverManager.refusedServerIds.contains(conn.serverId)) {
+      return _ProfileBindResult.visible({conn.serverId});
+    }
+    return _ProfileBindResult(visibleServerIds: const {}, expectedServerIds: {conn.serverId});
+  }
+
+  /// An IPTV source: its data is on the device, so a source whose provider is
+  /// unreachable stays visible as long as it has something stored (the
+  /// client then reports it online).
+  Future<_ProfileBindResult> _bindIptv(
+    IptvConnection conn, {
+    required String profileId,
+    required int generation,
+  }) async {
+    final ok = await serverManager.addIptvConnection(conn);
+    if (!_isCurrentBind(profileId, generation)) {
+      return _ProfileBindResult(visibleServerIds: const {}, expectedServerIds: {conn.serverId});
+    }
     if (ok || serverManager.refusedServerIds.contains(conn.serverId)) {
       return _ProfileBindResult.visible({conn.serverId});
     }

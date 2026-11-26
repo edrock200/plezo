@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import '../media/media_backend.dart';
 import '../media/media_browser_dialect.dart';
 import '../models/plex/plex_home_user.dart';
@@ -52,6 +54,7 @@ sealed class Connection {
     final JellyfinConnection c => c.copyWith(enabled: enabled),
     final SiloConnection c => c.copyWith(enabled: enabled),
     final TofaConnection c => c.copyWith(enabled: enabled),
+    final IptvConnection c => c.copyWith(enabled: enabled),
   };
 }
 
@@ -821,6 +824,279 @@ class TofaConnection extends Connection {
       profileToken: profileToken == null || profileToken.isEmpty ? null : profileToken,
       profileTokenExpiresAt: millis(json['profileTokenExpiresAt']),
       profileIsLocked: json['profileIsLocked'] as bool? ?? false,
+      createdAt: createdAt,
+      lastAuthenticatedAt: lastAuthenticatedAt,
+      enabled: Connection.enabledFromConfig(json),
+    );
+  }
+}
+
+/// Where an IPTV source's channels come from.
+enum IptvSourceType {
+  /// An M3U / M3U8 playlist, by address or from a file.
+  m3u,
+
+  /// An Xtream Codes compatible login (server, username, password).
+  xtream;
+
+  static IptvSourceType parse(Object? raw) => raw == 'xtream' ? xtream : m3u;
+}
+
+/// How an IPTV source numbers its channels.
+enum IptvChannelNumbering {
+  /// `tvg-chno` (Xtream `num`) where the playlist has one, else the position.
+  playlist,
+
+  /// Always 1, 2, 3… in the shown order.
+  automatic;
+
+  static IptvChannelNumbering parse(Object? raw) => raw == 'automatic' ? automatic : playlist;
+}
+
+/// An IPTV source the user added: an M3U playlist or an Xtream login, with
+/// its guide addresses and settings.
+///
+/// One source is one "server" to the rest of the app: [id] is also its server
+/// id. Several sources can be bound to one Plezilo profile. The playlist
+/// address, the Xtream login and the guide addresses can all carry
+/// credentials, so they are encrypted at rest (`CredentialVault`).
+class IptvConnection extends Connection {
+  @override
+  final String id;
+
+  @override
+  final DateTime createdAt;
+
+  @override
+  final DateTime? lastAuthenticatedAt;
+
+  @override
+  final bool enabled;
+
+  final IptvSourceType sourceType;
+
+  /// The name shown for this source.
+  final String name;
+
+  /// M3U address (http, https or file).
+  final String m3uUrl;
+
+  /// A copy of a picked playlist file, read on every refresh.
+  final String? m3uFilePath;
+
+  final String xtreamServer;
+  final String xtreamUsername;
+  final String xtreamPassword;
+
+  /// `ts` or `m3u8` for Xtream live streams.
+  final String xtreamOutput;
+
+  /// Guide addresses the user added (XMLTV, `.gz` allowed).
+  final List<String> epgUrls;
+
+  /// Also read the guide the source names itself (the playlist's `url-tvg`,
+  /// Xtream's `xmltv.php`).
+  final bool useSourceEpg;
+
+  final String? userAgent;
+  final String? referrer;
+
+  final int playlistRefreshHours;
+  final int epgRefreshHours;
+
+  /// Minutes added to every guide time of this source.
+  final int epgShiftMinutes;
+
+  /// Guide days kept before now (for catch-up) and after.
+  final int epgPastDays;
+  final int epgFutureDays;
+
+  final IptvChannelNumbering numbering;
+
+  /// Xtream: also show the movie and series libraries.
+  final bool includeVod;
+
+  /// Groups shown only after the profile PIN (or always hidden for a profile
+  /// without one) — the parental filter.
+  final List<String> lockedGroups;
+
+  IptvConnection({
+    required this.id,
+    required this.sourceType,
+    required this.name,
+    this.m3uUrl = '',
+    this.m3uFilePath,
+    this.xtreamServer = '',
+    this.xtreamUsername = '',
+    this.xtreamPassword = '',
+    this.xtreamOutput = 'ts',
+    this.epgUrls = const [],
+    this.useSourceEpg = true,
+    this.userAgent,
+    this.referrer,
+    this.playlistRefreshHours = 24,
+    this.epgRefreshHours = 12,
+    this.epgShiftMinutes = 0,
+    this.epgPastDays = 2,
+    this.epgFutureDays = 3,
+    this.numbering = IptvChannelNumbering.playlist,
+    this.includeVod = true,
+    this.lockedGroups = const [],
+    required this.createdAt,
+    this.lastAuthenticatedAt,
+    this.enabled = true,
+  });
+
+  /// A fresh source id. No `:` (server ids are the left half of global keys).
+  static String newId() {
+    final now = DateTime.now().microsecondsSinceEpoch.toRadixString(36);
+    final random = Random.secure();
+    final salt = List.generate(6, (_) => random.nextInt(36).toRadixString(36)).join();
+    return 'iptv-$now$salt';
+  }
+
+  /// The server id this source registers under.
+  String get serverId => id;
+
+  bool get isXtream => sourceType == IptvSourceType.xtream;
+
+  @override
+  MediaBackend get kind => MediaBackend.iptv;
+
+  @override
+  String get displayName => name;
+
+  @override
+  String get displayLabel => name;
+
+  @override
+  String? get displaySubtitle {
+    if (isXtream) {
+      final host = Uri.tryParse(xtreamServer)?.host ?? '';
+      return host.isEmpty ? 'Xtream' : 'Xtream · $host';
+    }
+    if (m3uFilePath != null) return 'M3U · ${m3uFilePath!.split(RegExp(r'[/\\]')).last}';
+    final host = Uri.tryParse(m3uUrl)?.host ?? '';
+    return host.isEmpty ? 'M3U' : 'M3U · $host';
+  }
+
+  IptvConnection copyWith({
+    String? name,
+    String? m3uUrl,
+    String? m3uFilePath,
+    String? xtreamServer,
+    String? xtreamUsername,
+    String? xtreamPassword,
+    String? xtreamOutput,
+    List<String>? epgUrls,
+    bool? useSourceEpg,
+    String? userAgent,
+    bool clearUserAgent = false,
+    String? referrer,
+    bool clearReferrer = false,
+    int? playlistRefreshHours,
+    int? epgRefreshHours,
+    int? epgShiftMinutes,
+    int? epgPastDays,
+    int? epgFutureDays,
+    IptvChannelNumbering? numbering,
+    bool? includeVod,
+    List<String>? lockedGroups,
+    DateTime? lastAuthenticatedAt,
+    bool? enabled,
+  }) {
+    return IptvConnection(
+      id: id,
+      sourceType: sourceType,
+      name: name ?? this.name,
+      m3uUrl: m3uUrl ?? this.m3uUrl,
+      m3uFilePath: m3uFilePath ?? this.m3uFilePath,
+      xtreamServer: xtreamServer ?? this.xtreamServer,
+      xtreamUsername: xtreamUsername ?? this.xtreamUsername,
+      xtreamPassword: xtreamPassword ?? this.xtreamPassword,
+      xtreamOutput: xtreamOutput ?? this.xtreamOutput,
+      epgUrls: epgUrls ?? this.epgUrls,
+      useSourceEpg: useSourceEpg ?? this.useSourceEpg,
+      userAgent: clearUserAgent ? null : (userAgent ?? this.userAgent),
+      referrer: clearReferrer ? null : (referrer ?? this.referrer),
+      playlistRefreshHours: playlistRefreshHours ?? this.playlistRefreshHours,
+      epgRefreshHours: epgRefreshHours ?? this.epgRefreshHours,
+      epgShiftMinutes: epgShiftMinutes ?? this.epgShiftMinutes,
+      epgPastDays: epgPastDays ?? this.epgPastDays,
+      epgFutureDays: epgFutureDays ?? this.epgFutureDays,
+      numbering: numbering ?? this.numbering,
+      includeVod: includeVod ?? this.includeVod,
+      lockedGroups: lockedGroups ?? this.lockedGroups,
+      createdAt: createdAt,
+      lastAuthenticatedAt: lastAuthenticatedAt ?? this.lastAuthenticatedAt,
+      enabled: enabled ?? this.enabled,
+    );
+  }
+
+  /// Guide addresses are stored as one newline-separated string so the
+  /// credential vault can encrypt them like any other secret.
+  @override
+  Map<String, Object?> toConfigJson() => {
+    if (!enabled) Connection.enabledKey: false,
+    'sourceType': sourceType.name,
+    'name': name,
+    'm3uUrl': m3uUrl,
+    'm3uFilePath': m3uFilePath,
+    'xtreamServer': xtreamServer,
+    'xtreamUsername': xtreamUsername,
+    'xtreamPassword': xtreamPassword,
+    'xtreamOutput': xtreamOutput,
+    'epgUrls': epgUrls.join('\n'),
+    'useSourceEpg': useSourceEpg,
+    'userAgent': userAgent,
+    'referrer': referrer,
+    'playlistRefreshHours': playlistRefreshHours,
+    'epgRefreshHours': epgRefreshHours,
+    'epgShiftMinutes': epgShiftMinutes,
+    'epgPastDays': epgPastDays,
+    'epgFutureDays': epgFutureDays,
+    'numbering': numbering.name,
+    'includeVod': includeVod,
+    'lockedGroups': lockedGroups,
+  };
+
+  factory IptvConnection.fromConfigJson({
+    required String id,
+    required Map<String, Object?> json,
+    required DateTime createdAt,
+    DateTime? lastAuthenticatedAt,
+  }) {
+    String? optional(Object? raw) => raw is String && raw.trim().isNotEmpty ? raw : null;
+    int number(Object? raw, int fallback) => flexibleInt(raw) ?? fallback;
+    final epg = json['epgUrls'];
+    final epgUrls = epg is String
+        ? epg.split('\n').map((s) => s.trim()).where((s) => s.isNotEmpty).toList()
+        : epg is List
+        ? epg.whereType<String>().toList()
+        : const <String>[];
+    final locked = json['lockedGroups'];
+    return IptvConnection(
+      id: id,
+      sourceType: IptvSourceType.parse(json['sourceType']),
+      name: json['name'] as String? ?? 'IPTV',
+      m3uUrl: json['m3uUrl'] as String? ?? '',
+      m3uFilePath: optional(json['m3uFilePath']),
+      xtreamServer: json['xtreamServer'] as String? ?? '',
+      xtreamUsername: json['xtreamUsername'] as String? ?? '',
+      xtreamPassword: json['xtreamPassword'] as String? ?? '',
+      xtreamOutput: json['xtreamOutput'] == 'm3u8' ? 'm3u8' : 'ts',
+      epgUrls: epgUrls,
+      useSourceEpg: json['useSourceEpg'] as bool? ?? true,
+      userAgent: optional(json['userAgent']),
+      referrer: optional(json['referrer']),
+      playlistRefreshHours: number(json['playlistRefreshHours'], 24),
+      epgRefreshHours: number(json['epgRefreshHours'], 12),
+      epgShiftMinutes: number(json['epgShiftMinutes'], 0),
+      epgPastDays: number(json['epgPastDays'], 2),
+      epgFutureDays: number(json['epgFutureDays'], 3),
+      numbering: IptvChannelNumbering.parse(json['numbering']),
+      includeVod: json['includeVod'] as bool? ?? true,
+      lockedGroups: locked is List ? locked.whereType<String>().toList() : const [],
       createdAt: createdAt,
       lastAuthenticatedAt: lastAuthenticatedAt,
       enabled: Connection.enabledFromConfig(json),

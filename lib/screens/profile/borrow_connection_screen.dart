@@ -266,6 +266,8 @@ class _BorrowConnectionScreenState extends State<BorrowConnectionScreen> {
           await _borrowSilo(cand);
         case TofaConnection():
           await _borrowTofa(cand);
+        case IptvConnection():
+          await _borrowIptv(cand);
       }
     } catch (e, st) {
       // Without this, a throw from the verify/borrow steps (network, DB)
@@ -399,6 +401,21 @@ class _BorrowConnectionScreenState extends State<BorrowConnectionScreen> {
         connectionId: tofa.id,
         userToken: null,
         userIdentifier: cand.pc.userIdentifier.isNotEmpty ? cand.pc.userIdentifier : tofa.userId,
+        tokenAcquiredAt: DateTime.now(),
+      ),
+    );
+    _finishBorrow();
+  }
+
+  /// An IPTV source is shared as is: the join row holds no credentials.
+  Future<void> _borrowIptv(_BorrowCandidate cand) async {
+    final iptv = cand.connection as IptvConnection;
+    await context.read<ProfileConnectionRegistry>().upsert(
+      ProfileConnection(
+        profileId: widget.targetProfile.id,
+        connectionId: iptv.id,
+        userToken: null,
+        userIdentifier: cand.pc.userIdentifier.isNotEmpty ? cand.pc.userIdentifier : iptv.id,
         tokenAcquiredAt: DateTime.now(),
       ),
     );

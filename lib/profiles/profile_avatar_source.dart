@@ -99,6 +99,7 @@ String? connectionAvatarUrl({
     // Unverified whether Tofa's `avatar_image_url` needs the bearer (an image
     // view cannot send it): no picture rather than a refused one.
     TofaConnection() => null,
+    IptvConnection() => null,
   };
 }
 

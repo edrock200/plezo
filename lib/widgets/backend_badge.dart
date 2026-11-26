@@ -17,6 +17,8 @@ import '../media/media_backend.dart';
 /// Tofa's logo is not licensed to Plezilo, so Tofa gets a neutral badge of
 /// Plezilo's own: a rounded outline holding the letter "T" (spoken "Tofa"),
 /// in the inherited foreground colour like the SVG marks.
+///
+/// IPTV sources get a neutral TV icon: no provider's logo is ever shown.
 class BackendBadge extends StatelessWidget {
   final MediaBackend backend;
   final double size;
@@ -30,15 +32,19 @@ class BackendBadge extends StatelessWidget {
   /// Tofa's name, not localized (a product name).
   static const tofaLabel = 'Tofa';
 
+  /// The IPTV badge's spoken label (a technical term, not localized).
+  static const iptvLabel = 'IPTV';
+
   @override
   Widget build(BuildContext context) {
     final asset = switch (backend) {
       MediaBackend.plex => 'assets/plex_chevron.svg',
       MediaBackend.jellyfin => 'assets/jellyfin_icon.svg',
       MediaBackend.emby => 'assets/emby_icon.svg',
-      MediaBackend.silo || MediaBackend.tofa => null,
+      MediaBackend.silo || MediaBackend.tofa || MediaBackend.iptv => null,
     };
     if (backend == MediaBackend.tofa) return _tofaBadge(context);
+    if (backend == MediaBackend.iptv) return _iptvBadge(context);
     if (asset == null) {
       return Image.asset(
         siloIconAsset,
@@ -59,6 +65,25 @@ class BackendBadge extends StatelessWidget {
       width: size,
       height: size,
       theme: SvgTheme(currentColor: tint),
+    );
+  }
+
+  /// IPTV sources have no brand: a neutral TV-set icon in the inherited
+  /// foreground colour.
+  Widget _iptvBadge(BuildContext context) {
+    final tint =
+        color ??
+        DefaultTextStyle.of(context).style.color ??
+        IconTheme.of(context).color ??
+        Theme.of(context).colorScheme.onSurface;
+    return Semantics(
+      label: iptvLabel,
+      excludeSemantics: true,
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: Icon(Icons.live_tv_rounded, size: size, color: tint),
+      ),
     );
   }
 

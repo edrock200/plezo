@@ -15,7 +15,11 @@ enum MediaBackend {
   silo,
 
   /// Tofa (tofa.tv), spoken over its own `/api/v1` REST contract.
-  tofa;
+  tofa,
+
+  /// An IPTV source the user added (M3U playlist or Xtream login), read and
+  /// kept on the device: there is no media server behind it.
+  iptv;
 
   String get id => switch (this) {
     MediaBackend.plex => 'plex',
@@ -23,6 +27,7 @@ enum MediaBackend {
     MediaBackend.emby => 'emby',
     MediaBackend.silo => 'silo',
     MediaBackend.tofa => 'tofa',
+    MediaBackend.iptv => 'iptv',
   };
 
   static MediaBackend fromId(String id) => switch (id) {
@@ -31,6 +36,7 @@ enum MediaBackend {
     'emby' => MediaBackend.emby,
     'silo' => MediaBackend.silo,
     'tofa' => MediaBackend.tofa,
+    'iptv' => MediaBackend.iptv,
     _ => throw ArgumentError('Unknown MediaBackend id: $id'),
   };
 
@@ -41,7 +47,13 @@ enum MediaBackend {
   ///   surfaces corrupted cache rows or schema drift instead of silently
   ///   misclassifying Jellyfin items as Plex.
   static MediaBackend fromString(String? id) {
-    if (id != null && id != 'plex' && id != 'jellyfin' && id != 'emby' && id != 'silo' && id != 'tofa') {
+    if (id != null &&
+        id != 'plex' &&
+        id != 'jellyfin' &&
+        id != 'emby' &&
+        id != 'silo' &&
+        id != 'tofa' &&
+        id != 'iptv') {
       appLogger.w('Unknown MediaBackend id "$id"; defaulting to plex');
     }
     return switch (id) {
@@ -49,6 +61,7 @@ enum MediaBackend {
       'emby' => MediaBackend.emby,
       'silo' => MediaBackend.silo,
       'tofa' => MediaBackend.tofa,
+      'iptv' => MediaBackend.iptv,
       _ => MediaBackend.plex,
     };
   }
@@ -59,9 +72,9 @@ enum MediaBackend {
   /// of comparing against [MediaBackend.jellyfin].
   bool get usesMediaBrowserApi => dialect != null;
 
-  /// The MediaBrowser dialect this backend speaks, or `null` for Plex, Silo and Tofa.
+  /// The MediaBrowser dialect this backend speaks, or `null` for Plex, Silo, Tofa and IPTV.
   MediaBrowserDialect? get dialect => switch (this) {
-    MediaBackend.plex || MediaBackend.silo || MediaBackend.tofa => null,
+    MediaBackend.plex || MediaBackend.silo || MediaBackend.tofa || MediaBackend.iptv => null,
     MediaBackend.jellyfin => MediaBrowserDialect.jellyfin,
     MediaBackend.emby => MediaBrowserDialect.emby,
   };

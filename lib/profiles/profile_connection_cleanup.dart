@@ -1,3 +1,4 @@
+import '../services/iptv/iptv_source_cleanup.dart';
 import '../connection/connection.dart';
 import '../connection/connection_registry.dart';
 import '../media/ids.dart';
@@ -175,7 +176,7 @@ class ProfileConnectionCleanup {
     await _removeJellyfinConnection(connection);
   }
 
-  /// Removes a per-connection (MediaBrowser, Silo or Tofa) connection, its
+  /// Removes a per-connection (MediaBrowser, Silo, Tofa or IPTV) connection, its
   /// client and its browsing cache.
   Future<void> _removeJellyfinConnection(Connection connection) async {
     await connections.remove(connection.id);
@@ -191,6 +192,10 @@ class ProfileConnectionCleanup {
         serverManager?.removeTofaConnection(connection);
         rawServerId = connection.serverId;
         await _removeUnreferencedTofaSiblings(connection);
+      case IptvConnection():
+        serverManager?.removeIptvConnection(connection);
+        rawServerId = connection.serverId;
+        await IptvSourceCleanup.remove(connection);
       case PlexAccountConnection():
         return;
     }
@@ -294,5 +299,6 @@ Set<ServerId> _serverIdsForConnection(Connection connection) {
     JellyfinConnection(:final serverMachineId) => {?ServerId.tryParse(serverMachineId)},
     SiloConnection(:final serverId) => {?ServerId.tryParse(serverId)},
     TofaConnection(:final serverId) => {?ServerId.tryParse(serverId)},
+    IptvConnection(:final serverId) => {?ServerId.tryParse(serverId)},
   };
 }

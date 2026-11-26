@@ -84,7 +84,9 @@ abstract class LibraryAlphaBarStrategy {
       MediaBackend.jellyfin ||
       MediaBackend.emby ||
       MediaBackend.silo ||
-      MediaBackend.tofa => const MediaBrowserAlphaBarStrategy(),
+      MediaBackend.tofa ||
+      // IPTV: a name prefix on the stored titles.
+      MediaBackend.iptv => const MediaBrowserAlphaBarStrategy(),
     };
   }
 }

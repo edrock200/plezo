@@ -788,6 +788,8 @@ class DownloadProvider extends ChangeNotifier with DisposableChangeNotifierMixin
         MediaBackend.silo => <String, dynamic>{'content_id': showRatingKey, 'type': 'series'},
         // Not reached in practice: Plezilo has no Tofa downloads.
         MediaBackend.tofa => <String, dynamic>{'tofa_media_id': showRatingKey},
+        // Not reached: IPTV titles are not downloaded.
+        MediaBackend.iptv => <String, dynamic>{'iptv_id': showRatingKey},
       };
       return MediaItem(
         id: showRatingKey,

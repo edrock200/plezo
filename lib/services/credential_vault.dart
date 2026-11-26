@@ -136,6 +136,8 @@ class CredentialVault {
     'jellyfin' || 'emby' => const ['accessToken'],
     'silo' => const ['accessToken', 'refreshToken', 'profileToken'],
     'tofa' => const ['accessToken', 'refreshToken', 'profileToken'],
+    // The playlist address and guide addresses can embed a login too.
+    'iptv' => const ['m3uUrl', 'xtreamServer', 'xtreamUsername', 'xtreamPassword', 'epgUrls'],
     _ => const [],
   };
 

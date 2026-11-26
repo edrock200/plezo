@@ -189,6 +189,18 @@ class ServerCapabilities {
     scrubThumbnails: true,
   );
 
+  /// IPTV (an M3U playlist or Xtream login read on the device): channels,
+  /// guide and catch-up, local recording, and Xtream movies and series. No
+  /// server transcoding (streams play as the provider sends them), and watch
+  /// state is kept on the device, so Continue Watching entries can be removed.
+  static const ServerCapabilities iptv = ServerCapabilities(
+    liveTv: true,
+    liveTvDvr: true,
+    videoTranscoding: false,
+    richHubs: true,
+    continueWatchingRemoval: true,
+  );
+
   ServerCapabilities copyWith({bool? videoTranscoding}) {
     return ServerCapabilities(
       liveTv: liveTv,

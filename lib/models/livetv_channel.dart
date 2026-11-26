@@ -80,6 +80,18 @@ class LiveTvChannel {
   @JsonKey(includeFromJson: false, includeToJson: false)
   final String? favoriteStoreKey;
 
+  /// The channel's group (IPTV `group-title` / Xtream category), or null.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  final String? group;
+
+  /// Days of catch-up (archive) the channel offers; 0 for none.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  final int catchupDays;
+
+  /// A radio station rather than a TV channel.
+  @JsonKey(includeFromJson: false, includeToJson: false)
+  final bool radio;
+
   LiveTvChannel({
     required this.key,
     this.identifier,
@@ -98,6 +110,9 @@ class LiveTvChannel {
     this.liveTvSourceTitle,
     this.favoriteSource,
     this.favoriteStoreKey,
+    this.group,
+    this.catchupDays = 0,
+    this.radio = false,
   });
 
   factory LiveTvChannel.fromJson(Map<String, dynamic> json) => _$LiveTvChannelFromJson(json);
@@ -128,6 +143,9 @@ class LiveTvChannel {
       liveTvSourceTitle: liveTvSourceTitle ?? this.liveTvSourceTitle,
       favoriteSource: favoriteSource ?? this.favoriteSource,
       favoriteStoreKey: favoriteStoreKey ?? this.favoriteStoreKey,
+      group: group,
+      catchupDays: catchupDays,
+      radio: radio,
     );
   }
 

@@ -123,6 +123,28 @@ abstract class LiveTvPlaybackSession {
   Future<LiveTvPlaybackSession?> recover({required bool directStream, required bool directStreamAudio});
 }
 
+/// Optional capability of a [LiveTvPlaybackSession]: HTTP headers the stream
+/// needs (an IPTV channel's user-agent or referrer). The player sends them
+/// with every open of the session's URLs.
+abstract interface class LiveTvStreamHeaders {
+  Map<String, String> get streamHeaders;
+}
+
+/// Optional capability of a [LiveTvSupport]: what the Live TV screens need
+/// beyond the neutral surface for sources that bring their own channel list
+/// (IPTV): groups to filter by, recently watched channels, and per-channel
+/// catch-up.
+abstract interface class LiveTvChannelGroups {
+  /// Group names in display order (hidden and locked ones left out).
+  Future<List<String>> fetchGroups();
+
+  /// Channel keys watched most recently, newest first.
+  Future<List<String>> fetchRecentChannelKeys();
+
+  /// Remember that [channelKey] was tuned.
+  Future<void> markChannelWatched(String channelKey);
+}
+
 enum LiveTvBackgroundPolicy {
   /// Keep the tuned session alive so its capture buffer can be resumed.
   retainSession,

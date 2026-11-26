@@ -3113,5 +3113,19 @@
     "addToFavoritesFailed": "Couldn't add to Favorites. ${reason}",
     "removeFromFavoritesFailed": "Couldn't remove from Favorites. ${reason}",
     "tryAgain": "Try again."
+  },
+  "iptv": {
+    "moviesLibrary": "Movies",
+    "seriesLibrary": "Series",
+    "category": "Category",
+    "sortProviderOrder": "Provider order",
+    "seasonNumber": "Season ${number}",
+    "episodeNumber": "Episode ${number}",
+    "continueWatching": "Continue Watching",
+    "recentlyAddedMovies": "Recently Added Movies on ${source}",
+    "recentlyAddedSeries": "Recently Added Series on ${source}",
+    "recentlyAdded": "Recently Added",
+    "moreInCategory": "More in This Category",
+    "trailer": "Trailer"
   }
 }

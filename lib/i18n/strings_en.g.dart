@@ -107,6 +107,7 @@ class Translations with BaseTranslations<AppLocale, Translations> {
 	late final Translations$siloForYou$en siloForYou = Translations$siloForYou$en.internal(_root);
 	late final Translations$siloCollections$en siloCollections = Translations$siloCollections$en.internal(_root);
 	late final Translations$siloMemberships$en siloMemberships = Translations$siloMemberships$en.internal(_root);
+	late final Translations$iptv$en iptv = Translations$iptv$en.internal(_root);
 }
 
 // Path: app
@@ -7659,6 +7660,51 @@ class Translations$siloMemberships$en {
 	String get tryAgain => 'Try again.';
 }
 
+// Path: iptv
+class Translations$iptv$en {
+	Translations$iptv$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Movies'
+	String get moviesLibrary => 'Movies';
+
+	/// en: 'Series'
+	String get seriesLibrary => 'Series';
+
+	/// en: 'Category'
+	String get category => 'Category';
+
+	/// en: 'Provider order'
+	String get sortProviderOrder => 'Provider order';
+
+	/// en: 'Season ${number}'
+	String seasonNumber({required Object number}) => 'Season ${number}';
+
+	/// en: 'Episode ${number}'
+	String episodeNumber({required Object number}) => 'Episode ${number}';
+
+	/// en: 'Continue Watching'
+	String get continueWatching => 'Continue Watching';
+
+	/// en: 'Recently Added Movies on ${source}'
+	String recentlyAddedMovies({required Object source}) => 'Recently Added Movies on ${source}';
+
+	/// en: 'Recently Added Series on ${source}'
+	String recentlyAddedSeries({required Object source}) => 'Recently Added Series on ${source}';
+
+	/// en: 'Recently Added'
+	String get recentlyAdded => 'Recently Added';
+
+	/// en: 'More in This Category'
+	String get moreInCategory => 'More in This Category';
+
+	/// en: 'Trailer'
+	String get trailer => 'Trailer';
+}
+
 // Path: appIcon.names
 class Translations$appIcon$names$en {
 	Translations$appIcon$names$en.internal(this._root);
@@ -12650,6 +12696,18 @@ extension on Translations {
 			'siloMemberships.addToFavoritesFailed' => ({required Object reason}) => 'Couldn\'t add to Favorites. ${reason}',
 			'siloMemberships.removeFromFavoritesFailed' => ({required Object reason}) => 'Couldn\'t remove from Favorites. ${reason}',
 			'siloMemberships.tryAgain' => 'Try again.',
+			'iptv.moviesLibrary' => 'Movies',
+			'iptv.seriesLibrary' => 'Series',
+			'iptv.category' => 'Category',
+			'iptv.sortProviderOrder' => 'Provider order',
+			'iptv.seasonNumber' => ({required Object number}) => 'Season ${number}',
+			'iptv.episodeNumber' => ({required Object number}) => 'Episode ${number}',
+			'iptv.continueWatching' => 'Continue Watching',
+			'iptv.recentlyAddedMovies' => ({required Object source}) => 'Recently Added Movies on ${source}',
+			'iptv.recentlyAddedSeries' => ({required Object source}) => 'Recently Added Series on ${source}',
+			'iptv.recentlyAdded' => 'Recently Added',
+			'iptv.moreInCategory' => 'More in This Category',
+			'iptv.trailer' => 'Trailer',
 			_ => null,
 		};
 	}

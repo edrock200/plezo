@@ -17,6 +17,8 @@ import 'jellyfin_endpoint_discovery.dart';
 import 'silo/silo_card_overlay_store.dart';
 import 'silo/silo_client.dart';
 import 'tofa/tofa_client.dart';
+import 'iptv/iptv_client.dart';
+import 'iptv/iptv_sync_service.dart';
 import 'plex_client.dart';
 import '../models/plex/plex_config.dart';
 import '../utils/app_logger.dart';
@@ -66,6 +68,7 @@ class MultiServerManager {
     Duration connectivityDebounceDuration = const Duration(seconds: 2),
     Future<SiloClient> Function(SiloConnection connection) siloClientFactory = SiloClient.create,
     Future<TofaClient> Function(TofaConnection connection) tofaClientFactory = TofaClient.create,
+    Future<IptvClient> Function(IptvConnection connection) iptvClientFactory = IptvClient.create,
     List<Duration>? offlineRetryDelays,
   }) : this._(
          plexClientFactory,
@@ -73,6 +76,7 @@ class MultiServerManager {
          connectivityDebounceDuration,
          siloClientFactory,
          tofaClientFactory,
+         iptvClientFactory,
          offlineRetryDelays ?? _defaultOfflineRetryDelays,
        );
 
@@ -82,6 +86,7 @@ class MultiServerManager {
     this._connectivityDebounceDuration,
     this._siloClientFactory,
     this._tofaClientFactory,
+    this._iptvClientFactory,
     this._offlineRetryDelays,
   );
 
@@ -90,6 +95,7 @@ class MultiServerManager {
   final PlexClientFactory _plexClientFactory;
   final Future<SiloClient> Function(SiloConnection connection) _siloClientFactory;
   final Future<TofaClient> Function(TofaConnection connection) _tofaClientFactory;
+  final Future<IptvClient> Function(IptvConnection connection) _iptvClientFactory;
   final Stream<List<ConnectivityResult>> Function() _connectivityChanges;
   final Duration _connectivityDebounceDuration;
   final List<Duration> _offlineRetryDelays;
@@ -223,6 +229,7 @@ class MultiServerManager {
     JellyfinClient(:final connection) => connection.id,
     SiloClient(:final connection) => connection.id,
     TofaClient(:final connection) => connection.id,
+    IptvClient(:final connection) => connection.id,
     _ => null,
   };
 
@@ -1351,6 +1358,59 @@ class MultiServerManager {
     }
   }
 
+  /// Add an IPTV source. One client per source; the source id is its server
+  /// id. The playlist and guide are refreshed in the background
+  /// ([IptvSyncService]); the client reads what the device has stored.
+  Future<bool> addIptvConnection(IptvConnection connection) async {
+    try {
+      final id = connection.id;
+      final existing = _jellyfinByCompoundId[id];
+      if (existing is IptvClient) {
+        existing.updateConnection(connection);
+        IptvSyncService.instance.watch(connection);
+        return await _reuseConnectionClient(existing, connectionId: id, machineId: id);
+      }
+      final client = await _iptvClientFactory(connection);
+      if (existing != null) unawaited(_closeClientGracefully(existing));
+      _jellyfinByCompoundId[id] = client;
+      _clients[id] = client;
+      _activeJellyfinMachine[id] = id;
+      IptvSyncService.instance.watch(connection);
+      final health = await client.checkHealth();
+      _jellyfinHealthByCompoundId[id] = health;
+      if (!_isActiveJellyfin(id, id)) return health == HealthStatus.online;
+      _applyHealth(ServerId(id), health);
+      final healthy = health == HealthStatus.online;
+      appLogger.i('[iptv] added source${healthy ? '' : ' (unhealthy: ${health.name})'}');
+      return healthy;
+    } catch (e, stackTrace) {
+      appLogger.e('[iptv] failed to add source', error: e, stackTrace: stackTrace);
+      return false;
+    }
+  }
+
+  /// Tear down an IPTV source's client and stop refreshing it. Its stored
+  /// data is removed by the connection cleanup.
+  void removeIptvConnection(IptvConnection connection) {
+    IptvSyncService.instance.forget(connection.id);
+    final client = _jellyfinByCompoundId.remove(connection.id);
+    _jellyfinHealthByCompoundId.remove(connection.id);
+    if (client != null) unawaited(_closeClientGracefully(client));
+    if (_isActiveJellyfin(connection.id, connection.id)) {
+      _forgetServer(connection.id);
+      _emitStatus();
+    }
+  }
+
+  /// The live IPTV client of [sourceId], if connected.
+  IptvClient? iptvClient(String sourceId) {
+    final client = _jellyfinByCompoundId[sourceId];
+    return client is IptvClient ? client : null;
+  }
+
+  /// Every connected IPTV client.
+  List<IptvClient> get iptvClients => _jellyfinByCompoundId.values.whereType<IptvClient>().toList(growable: false);
+
   /// Stop everything live for [connection] because the user switched it off:
   /// its client is closed (sockets, timers, in-flight requests drained) and
   /// its server slot cleared, without signing out — the saved sign-in stays
@@ -1368,7 +1428,9 @@ class MultiServerManager {
         }
       case JellyfinConnection(:final id, serverMachineId: final serverId) ||
           SiloConnection(:final id, :final serverId) ||
-          TofaConnection(:final id, :final serverId):
+          TofaConnection(:final id, :final serverId) ||
+          IptvConnection(:final id, :final serverId):
+        if (connection is IptvConnection) IptvSyncService.instance.unwatch(connection.id);
         final client = _jellyfinByCompoundId.remove(id);
         _jellyfinHealthByCompoundId.remove(id);
         if (client != null) unawaited(_closeClientGracefully(client));

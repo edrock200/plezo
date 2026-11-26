@@ -178,6 +178,10 @@ class _SyncRuleTileState extends State<_SyncRuleTile> {
           if (serverId == rule.serverId && serverName.isNotEmpty) {
             return _RuleServerInfo(label: serverName, isKnown: true);
           }
+        case IptvConnection(:final serverId, :final name):
+          if (serverId == rule.serverId && name.isNotEmpty) {
+            return _RuleServerInfo(label: name, isKnown: true);
+          }
       }
     }
 

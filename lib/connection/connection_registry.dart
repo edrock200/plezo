@@ -265,6 +265,12 @@ class ConnectionRegistry {
           createdAt: createdAt,
           lastAuthenticatedAt: lastAuth,
         ),
+        MediaBackend.iptv => IptvConnection.fromConfigJson(
+          id: row.id,
+          json: revealed.config,
+          createdAt: createdAt,
+          lastAuthenticatedAt: lastAuth,
+        ),
       };
       _decryptedConfigs[connection] = revealed.config;
       if (revealed.migrated) {

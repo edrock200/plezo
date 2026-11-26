@@ -290,6 +290,7 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> with Controll
       JellyfinConnection(:final serverMachineId) => {serverMachineId},
       SiloConnection(:final serverId) => {serverId},
       TofaConnection(:final serverId) => {serverId},
+      IptvConnection(:final serverId) => {serverId},
     };
   }
 

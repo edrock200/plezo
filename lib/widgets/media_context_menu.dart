@@ -224,6 +224,8 @@ bool isMediaDeletionAllowed({
   MediaBackend.plex => isAdminActionAllowed && resolvedItemPermission == true,
   // This client does not delete media on Silo or Tofa.
   MediaBackend.silo || MediaBackend.tofa => false,
+  // IPTV deletes only local recordings, which the Recordings tab handles.
+  MediaBackend.iptv => false,
 };
 
 /// A reusable wrapper widget that adds a context menu (long press / right click)

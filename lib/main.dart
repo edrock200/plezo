@@ -84,6 +84,12 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'services/jellyfin_api_cache.dart';
 import 'services/silo/silo_api_cache.dart';
 import 'services/tofa/tofa_api_cache.dart';
+import 'services/iptv/iptv_api_cache.dart';
+import 'services/iptv/iptv_client.dart';
+import 'services/iptv/iptv_recorder.dart';
+import 'services/iptv/iptv_reminders.dart';
+import 'services/iptv/iptv_store.dart';
+import 'services/iptv/iptv_sync_service.dart';
 import 'services/silo/silo_catalog_strings.dart';
 import 'services/silo/silo_managed_downloads.dart';
 import 'services/plex_api_cache.dart';
@@ -283,6 +289,18 @@ Future<void> _optionalGatePhase(
     await work.timeout(timeout);
   } on TimeoutException {
     appLogger.w('Optional startup phase "${phase.id}" did not finish in ${timeout.inSeconds}s; continuing without it');
+  }
+}
+
+/// Open the IPTV database (its own file). IPTV sources stay unavailable if it
+/// cannot be opened; nothing else depends on it.
+Future<void> _openIptvStore() async {
+  try {
+    final file = await IptvDatabase.defaultFile();
+    await IptvStore.initialize(database: await IptvDatabase.open(file: file));
+    IptvSyncService.instance.databasePath = file.path;
+  } catch (e, st) {
+    appLogger.e('[iptv] database could not be opened; IPTV sources are unavailable', error: e, stackTrace: st);
   }
 }
 
@@ -1006,6 +1024,7 @@ Future<_StartupDependencies> _initializeStartup(SettingsService settings) async 
     );
     openedDatabase = databaseBootstrap.database;
     AndroidExitDiagnostics.markStartupPhase(AndroidStartupPhase.databaseReady);
+    await _openIptvStore();
     markStartupPhase('database-recovery');
 
     await _optionalGatePhase(StartupPhase.imageCache, () async => DevicePerformance.applyImageCacheBudget());
@@ -1423,6 +1442,31 @@ class MainApp extends StatefulWidget {
 }
 
 class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
+  /// Recording and reminders reach a source through its live client.
+  void _wireIptv() {
+    if (!IptvStore.isInitialized) return;
+    Future<IptvClient?> clientFor(String sourceId) async {
+      // A recording due at start-up waits for its source to connect.
+      for (var i = 0; i < 30; i++) {
+        final client = _serverManager.iptvClient(sourceId);
+        if (client != null) return client;
+        await Future<void>.delayed(const Duration(seconds: 1));
+      }
+      return null;
+    }
+
+    IptvRecorder.instance.resolver = (sourceId, channelId) async {
+      final client = await clientFor(sourceId);
+      return client?.recordingTarget(channelId);
+    };
+    unawaited(
+      IptvRecorder.instance.restore().catchError((Object e) => appLogger.w('[iptv] recordings not restored', error: e)),
+    );
+    unawaited(
+      IptvReminders.instance.start().catchError((Object e) => appLogger.w('[iptv] reminders not started', error: e)),
+    );
+  }
+
   late final MultiServerManager _serverManager;
   late final DataAggregationService _aggregationService;
   late final LibraryEventService _libraryEventService;
@@ -1479,6 +1523,8 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
     JellyfinApiCache.initialize(_appDatabase);
     SiloApiCache.initialize(_appDatabase);
     TofaApiCache.initialize(_appDatabase);
+    IptvApiCache.initialize(_appDatabase);
+    _wireIptv();
 
     _downloadManager = DownloadManagerService(
       database: _appDatabase,
@@ -2401,6 +2447,8 @@ class _SetupScreenState extends State<SetupScreen> with MountedSetStateMixin {
             _serverStatus[conn.serverId] = (conn.serverName, null);
           } else if (conn is TofaConnection) {
             _serverStatus[conn.serverId] = (conn.serverName, null);
+          } else if (conn is IptvConnection) {
+            _serverStatus[conn.serverId] = (conn.name, null);
           }
         }
       });
@@ -2410,11 +2458,12 @@ class _SetupScreenState extends State<SetupScreen> with MountedSetStateMixin {
     final mediaBrowserCount = allConnections.whereType<JellyfinConnection>().length;
     final siloCount = allConnections.whereType<SiloConnection>().length;
     final tofaCount = allConnections.whereType<TofaConnection>().length;
+    final iptvCount = allConnections.whereType<IptvConnection>().length;
     unawaited(
       Sentry.addBreadcrumb(
         Breadcrumb(
           message:
-              'Handing off to MainScreen with $plexCount Plex + $mediaBrowserCount MediaBrowser + $siloCount Silo + $tofaCount Tofa server(s)',
+              'Handing off to MainScreen with $plexCount Plex + $mediaBrowserCount MediaBrowser + $siloCount Silo + $tofaCount Tofa server(s) + $iptvCount IPTV source(s)',
           category: 'setup',
         ),
       ),

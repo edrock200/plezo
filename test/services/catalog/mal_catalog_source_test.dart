@@ -114,6 +114,7 @@ Future<void> _expectNativeLibraryMatch(
     MediaBackend.emby => testEmbyClient(handler: respond),
     MediaBackend.silo => fail('No Silo fixture for native-title matching'),
     MediaBackend.tofa => fail('No Tofa fixture for native-title matching'),
+    MediaBackend.iptv => fail('No IPTV fixture for native-title matching'),
   };
   final manager = MultiServerManager()..debugRegisterClientForTesting(client);
   final multiServer = MultiServerProvider(manager, DataAggregationService(manager));

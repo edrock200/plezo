@@ -73,7 +73,7 @@ AccountPreferenceResolution resolveAccountPreferenceAccounts({
         connection: connection,
       ),
       // Silo and Tofa keep their preferences in server-side settings, not mapped here.
-      SiloConnection() || TofaConnection() || null => null,
+      SiloConnection() || TofaConnection() || IptvConnection() || null => null,
     };
     if (account == null) continue;
     accounts.add(account);

@@ -443,6 +443,7 @@ class AccountPreferencesController extends ChangeNotifier with DisposableChangeN
         return PlexAccountPreferencesSource(authToken: token, serviceFactory: _plexServiceFactory);
       case MediaBackend.silo:
       case MediaBackend.tofa:
+      case MediaBackend.iptv:
         // Silo's and Tofa's server-side settings are not mapped to account preferences.
         return null;
     }
