@@ -85,6 +85,12 @@ class AppearanceSettingsScreen extends StatelessWidget {
               title: t.settings.showWatchedIndicators,
               subtitle: t.settings.showWatchedIndicatorsDescription,
             ),
+            SettingSwitchTile(
+              pref: SettingsService.expandOnFocus,
+              icon: Symbols.width_wide_rounded,
+              title: t.settings.expandOnFocus,
+              subtitle: t.settings.expandOnFocusDescription,
+            ),
             if (PlatformDetector.isTV())
               SettingSwitchTile(
                 pref: SettingsService.tvFullCardLayout,

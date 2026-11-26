@@ -5,6 +5,7 @@ What changed in each preview (Android, and Windows and macOS where the release h
 ## Next preview
 
 - **Signing in to Tofa with your account finds a way to your server:** after you sign in with the code and pick your server from the list, Plezilo used to try only the address Tofa's cloud gives for it, and gave up with "Couldn't finish signing in" when that address doesn't answer from your device (common when the server is reached through its own domain, or its port isn't open to the internet). It now tries every address Tofa lists for the server, at home, over the internet (including the server's custom address) and through Tofa's relay, and uses the first that answers. If none does, it says it can't reach the server instead of a vague error. Playing through the relay works now too: Plezilo's address check didn't send your sign-in to the relay, so it never picked it.
+- **New "Expand on Focus" option:** in Settings › Appearance (Library & Cards). When it's on and you move to a poster in a row (Home, a library's Recommended page, More Like This and other rows on a detail page), the poster smoothly widens into a wide card showing the title's background art, with its name or logo on top; the cards beside it slide aside and it shrinks back when you move on. It works with a TV remote and the keyboard. Titles without background art stay as posters, and library and search grids keep their usual size. It's off unless you turn it on.
 
 ## silo-preview-2.65.0
 

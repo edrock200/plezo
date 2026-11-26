@@ -248,6 +248,8 @@
     "tvFullCardLayoutDescription": "Use image-only TV cards with actor names overlaid",
     "focusGlow": "Focus Glow",
     "focusGlowDescription": "Draw a soft glow around the focused card",
+    "expandOnFocus": "Expand on Focus",
+    "expandOnFocusDescription": "A focused poster in a row widens to show its artwork. Grids keep their size",
     "visualEffects": "Visual Effects",
     "visualEffectsAuto": "Auto",
     "visualEffectsAutoDescription": "Reduce effects automatically on low-power devices",

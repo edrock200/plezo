@@ -703,6 +703,12 @@ class Translations$settings$en {
 	/// en: 'Draw a soft glow around the focused card'
 	String get focusGlowDescription => 'Draw a soft glow around the focused card';
 
+	/// en: 'Expand on Focus'
+	String get expandOnFocus => 'Expand on Focus';
+
+	/// en: 'A focused poster in a row widens to show its artwork. Grids keep their size'
+	String get expandOnFocusDescription => 'A focused poster in a row widens to show its artwork. Grids keep their size';
+
 	/// en: 'Visual Effects'
 	String get visualEffects => 'Visual Effects';
 
@@ -9812,6 +9818,8 @@ extension on Translations {
 			'settings.tvFullCardLayoutDescription' => 'Use image-only TV cards with actor names overlaid',
 			'settings.focusGlow' => 'Focus Glow',
 			'settings.focusGlowDescription' => 'Draw a soft glow around the focused card',
+			'settings.expandOnFocus' => 'Expand on Focus',
+			'settings.expandOnFocusDescription' => 'A focused poster in a row widens to show its artwork. Grids keep their size',
 			'settings.visualEffects' => 'Visual Effects',
 			'settings.visualEffectsAuto' => 'Auto',
 			'settings.visualEffectsAutoDescription' => 'Reduce effects automatically on low-power devices',
@@ -10096,10 +10104,10 @@ extension on Translations {
 			'themeEditor.custom' => 'Custom',
 			'themeEditor.customEmpty' => 'Not created yet',
 			'themeEditor.editCustom' => 'Edit custom theme',
-			'themeEditor.editCustomDescription' => 'Choose every color yourself',
-			'themeEditor.locked' => 'Unlock with the Theme & Icon Pack',
 			_ => null,
 		} ?? switch (path) {
+			'themeEditor.editCustomDescription' => 'Choose every color yourself',
+			'themeEditor.locked' => 'Unlock with the Theme & Icon Pack',
 			'themeEditor.savedLocked' => 'Saved — unlocks with the Theme & Icon Pack',
 			'themeEditor.title' => 'Custom Theme',
 			'themeEditor.startFrom' => 'Start from',
@@ -10610,10 +10618,10 @@ extension on Translations {
 			'profiles.deleteThisProfileTitle' => 'Delete this profile?',
 			'profiles.deleteThisProfileMessage' => ({required Object displayName}) => 'Remove ${displayName}. Connections aren\'t affected.',
 			'profiles.active' => 'Active',
-			'profiles.manage' => 'Manage',
-			'profiles.delete' => 'Delete',
 			_ => null,
 		} ?? switch (path) {
+			'profiles.manage' => 'Manage',
+			'profiles.delete' => 'Delete',
 			'profiles.signOut' => 'Sign out',
 			'profiles.signOutPlexTitle' => 'Sign out of Plex?',
 			'profiles.signOutPlexMessage' => ({required Object displayName}) => 'Remove ${displayName} and all Plex Home users? Sign back in anytime.',
@@ -11124,10 +11132,10 @@ extension on Translations {
 			'explore.detail.ended' => 'Ended',
 			'explore.detail.addedOn' => ({required Object date}) => 'Added ${date}',
 			'explore.detail.yourRating' => 'Your rating',
-			'explore.detail.budget' => 'Budget',
-			'explore.detail.revenue' => 'Box office',
 			_ => null,
 		} ?? switch (path) {
+			'explore.detail.budget' => 'Budget',
+			'explore.detail.revenue' => 'Box office',
 			'explore.detail.contentAdvisory' => 'Age guidance',
 			'explore.detail.tags' => 'Tags',
 			'explore.detail.revealSpoilerTags' => 'Show spoiler tags',
@@ -11638,10 +11646,10 @@ extension on Translations {
 			'companionRemote.pairing.sessionNotFound' => 'Device not found. Make sure Plezilo is running on the host.',
 			'companionRemote.pairing.authFailed' => 'Authentication failed. Both devices need the same Plex account.',
 			'companionRemote.pairing.failedToConnect' => ({required Object error}) => 'Failed to connect: ${error}',
-			'companionRemote.remote.disconnectConfirm' => 'Do you want to disconnect from the remote session?',
-			'companionRemote.remote.reconnecting' => 'Reconnecting...',
 			_ => null,
 		} ?? switch (path) {
+			'companionRemote.remote.disconnectConfirm' => 'Do you want to disconnect from the remote session?',
+			'companionRemote.remote.reconnecting' => 'Reconnecting...',
 			'companionRemote.remote.attemptOf' => ({required Object current}) => 'Attempt ${current} of 5',
 			'companionRemote.remote.retryNow' => 'Retry Now',
 			'companionRemote.remote.tabRemote' => 'Remote',
@@ -12152,10 +12160,10 @@ extension on Translations {
 			'siloPairing.skipAccount' => 'Skip this account',
 			'siloPairing.summaryTitle' => ({required num n}) => (_root.$meta.cardinalResolver ?? PluralResolvers.cardinal('en'))(n, one: '${n} account added', other: '${n} accounts added', ), 
 			'siloPairing.summaryNoneTitle' => 'No accounts were added',
-			'siloPairing.summaryAdded' => ({required Object account, required Object server, required Object profile}) => '${account} on ${server}, in the profile ${profile}',
-			'siloPairing.summaryAddedNewProfile' => ({required Object account, required Object server, required Object profile}) => '${account} on ${server}, in a new profile, ${profile}',
 			_ => null,
 		} ?? switch (path) {
+			'siloPairing.summaryAdded' => ({required Object account, required Object server, required Object profile}) => '${account} on ${server}, in the profile ${profile}',
+			'siloPairing.summaryAddedNewProfile' => ({required Object account, required Object server, required Object profile}) => '${account} on ${server}, in a new profile, ${profile}',
 			'siloPairing.summaryNotAdded' => ({required Object account, required Object server}) => '${account} on ${server} was not added',
 			'siloPairing.summarySwitchHint' => 'Switch profiles to use an account that is in another profile.',
 			'siloPairing.done' => 'Done',

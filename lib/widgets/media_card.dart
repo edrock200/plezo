@@ -42,6 +42,7 @@ import '../i18n/strings.g.dart';
 import 'media_context_menu.dart';
 import 'media_card_list_layout.dart';
 import 'backend_badge.dart';
+import 'expand_on_focus.dart';
 import 'optimized_media_image.dart';
 
 const _failedPosterUrlCacheLimit = 512;
@@ -252,6 +253,13 @@ class MediaCard extends StatefulWidget {
   /// surface supplies this for music libraries.
   final CardShape? cardShapeOverride;
 
+  /// A horizontal row's card under the "Expand on focus" setting: while the
+  /// enclosing [CardFocusScope] shows focus, a portrait poster with wide
+  /// artwork widens to 16:9 at the same height and cross-fades to that
+  /// artwork ([ExpandOnFocus]). Needs a fixed [width] and [height]; grids
+  /// leave it off.
+  final bool expandOnFocus;
+
   const MediaCard({
     super.key,
     required this.item,
@@ -276,6 +284,7 @@ class MediaCard extends StatefulWidget {
     this.showTitleImplied = false,
     this.artworkDim,
     this.cardShapeOverride,
+    this.expandOnFocus = false,
   }) : usesContinueWatchingAction = usesContinueWatchingAction ?? isInContinueWatching;
 
   /// Inset between a captioned grid card's cell and its artwork.
@@ -327,6 +336,10 @@ class MediaCardState extends State<MediaCard> with ContextMenuTapMixin<MediaCard
 
   CatalogItem? _cachedCatalogItem;
   Color? _catalogAccent;
+
+  /// The expansion [FocusExpansion] drives; dismissed for cards that never
+  /// expand.
+  final ProxyAnimation _expansion = ProxyAnimation(kAlwaysDismissedAnimation);
   String? _cachedSemanticLabel;
   AppLocale? _cachedSemanticLocale;
   bool? _cachedSemanticIsWatched;
@@ -559,7 +572,9 @@ class MediaCardState extends State<MediaCard> with ContextMenuTapMixin<MediaCard
     final catalogItem = _catalogItem;
     final now = catalogItem?.nextEpisode == null ? null : DateTime.now();
     final badgeLabels = _buildCatalogBadgeLabels(catalogItem, now);
-    final Widget card;
+    final expandedWidth = _expandedWidthFor(item);
+    final expandable = expandedWidth != null;
+    Widget card;
     if (widget.fullBleedImage) {
       card = LayoutBuilder(
         builder: (context, constraints) {
@@ -575,14 +590,91 @@ class MediaCardState extends State<MediaCard> with ContextMenuTapMixin<MediaCard
             width: cardWidth,
             height: cardHeight,
             badgeLabels: badgeLabels,
+            expandable: expandable,
           );
         },
       );
     } else {
-      card = _buildStandardGridCard(context, item, localPosterPath, badgeLabels: badgeLabels);
+      card = _buildStandardGridCard(context, item, localPosterPath, badgeLabels: badgeLabels, expandable: expandable);
+    }
+    if (expandedWidth != null) {
+      card = FocusExpansion(
+        expansion: _expansion,
+        collapsedWidth: widget.width!,
+        expandedWidth: expandedWidth,
+        child: card,
+      );
     }
 
     return preserveDetailSemantics ? card : MergeSemantics(child: card);
+  }
+
+  /// The card's expanded width when it widens on focus, else null.
+  double? _expandedWidthFor(Object item) {
+    final width = widget.width;
+    final height = widget.height;
+    if (!widget.expandOnFocus || width == null || height == null || !width.isFinite || !height.isFinite) return null;
+    final canExpand = ExpandOnFocus.canExpand(
+      item,
+      episodePosterMode:
+          widget.episodePosterModeOverride ?? SettingsService.instance.read(SettingsService.episodePosterMode),
+      mixedHubContext: widget.mixedHubContext,
+      cardShapeOverride: widget.cardShapeOverride,
+      isOffline: widget.isOffline,
+    );
+    if (!canExpand) return null;
+    final expanded = ExpandOnFocus.expandedCardWidth(
+      artworkHeight: height,
+      horizontalInset: widget.fullBleedImage ? 0 : MediaCard.gridCardPadding.horizontal,
+    );
+    return expanded > width ? expanded : null;
+  }
+
+  /// Wide artwork of an expanding card, laid over its poster.
+  Widget _buildExpandedArtLayer(BuildContext context, MediaItem item, {required double height}) {
+    final width = height * ExpandOnFocus.wideAspectRatio;
+    final catalogItem = _catalogItem;
+    final Widget image;
+    if (catalogItem != null) {
+      // Absolute provider URLs, loaded directly like the catalog poster.
+      image = OptimizedMediaImage(
+        imagePath: catalogItem.backdropFor(
+          MediaImageHelper.artworkTargetPx(context, width, imageType: ImageType.thumb),
+        ),
+        width: width,
+        height: height,
+        imageType: ImageType.thumb,
+        placeholder: (context, _) => const SizedBox.shrink(),
+        errorWidget: (context, _, _) => const SizedBox.shrink(),
+      );
+    } else {
+      image = OptimizedMediaImage(
+        client: context.tryGetMediaClientWithFallback(serverIdOrNull(item.serverId)),
+        imagePath: ExpandOnFocus.wideArtPath(
+          item,
+          hideSpoilers: SettingsService.instance.read(SettingsService.hideSpoilers),
+        ),
+        width: width,
+        height: height,
+        imageType: ImageType.thumb,
+        // Transparent until loaded: the poster underneath stays visible, so a
+        // slow backdrop never flashes an empty tile.
+        placeholder: (context, _) => const SizedBox.shrink(),
+        errorWidget: (context, _, _) => const SizedBox.shrink(),
+        artworkDim: widget.artworkDim,
+      );
+    }
+    return ExpandedArtLayer(
+      expansion: _expansion,
+      width: width,
+      height: height,
+      image: image,
+      title: item.displayTitle,
+      logo: catalogItem != null
+          ? null
+          : (context, title) =>
+                expandedCardLogo(context, item: item, cardWidth: width, cardHeight: height, fallback: title),
+    );
   }
 
   Widget _buildFullBleedGridCard(
@@ -592,9 +684,11 @@ class MediaCardState extends State<MediaCard> with ContextMenuTapMixin<MediaCard
     required double? width,
     required double height,
     required List<String> badgeLabels,
+    bool expandable = false,
   }) {
     return SizedBox(
-      width: width,
+      // An expanding card takes its width from [FocusExpansion].
+      width: expandable ? null : width,
       height: height,
       child: _buildTapRegion(
         context,
@@ -607,6 +701,7 @@ class MediaCardState extends State<MediaCard> with ContextMenuTapMixin<MediaCard
           knownWidth: width,
           knownHeight: height,
           fullBleed: true,
+          expandable: expandable,
         ),
       ),
     );
@@ -635,8 +730,9 @@ class MediaCardState extends State<MediaCard> with ContextMenuTapMixin<MediaCard
     required double? knownWidth,
     required double? knownHeight,
     required bool fullBleed,
+    bool expandable = false,
   }) {
-    final image = _buildPosterImage(
+    var image = _buildPosterImage(
       context,
       item,
       isOffline: widget.isOffline,
@@ -649,6 +745,25 @@ class MediaCardState extends State<MediaCard> with ContextMenuTapMixin<MediaCard
       knownHeight: knownHeight,
       artworkDim: widget.artworkDim,
     );
+    final expandedHeight = knownHeight;
+    final expandedArt = expandable && item is MediaItem && expandedHeight != null
+        ? _buildExpandedArtLayer(context, item, height: expandedHeight)
+        : null;
+    if (expandedArt != null) {
+      // The poster keeps its size at the card's leading edge while the card
+      // widens; the backdrop fades in over it and the strip beside it.
+      image = Stack(
+        fit: StackFit.expand,
+        children: [
+          ColoredBox(color: Theme.of(context).colorScheme.surfaceContainerHighest),
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: SizedBox(width: knownWidth, height: knownHeight, child: image),
+          ),
+          expandedArt,
+        ],
+      );
+    }
     final overlays = <Widget>[
       if (item is MediaItem && _showsWatchedIndicator(item))
         CardArtworkOverlays(item: item, shape: _overlayShape(item)),
@@ -685,6 +800,7 @@ class MediaCardState extends State<MediaCard> with ContextMenuTapMixin<MediaCard
     Object item,
     String? localPosterPath, {
     required List<String> badgeLabels,
+    bool expandable = false,
   }) {
     // Compute actual poster dimensions from card dimensions
     final posterWidth = widget.width != null ? widget.width! - 6 : null;
@@ -700,10 +816,12 @@ class MediaCardState extends State<MediaCard> with ContextMenuTapMixin<MediaCard
       knownWidth: _catalogItem != null ? posterWidth : (posterHeight != null ? posterWidth : null),
       knownHeight: posterHeight,
       fullBleed: false,
+      expandable: expandable,
     );
 
     return SizedBox(
-      width: widget.width,
+      // An expanding card takes its width from [FocusExpansion].
+      width: expandable ? null : widget.width,
       child: _buildTapRegion(
         context,
         item,

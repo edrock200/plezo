@@ -914,6 +914,11 @@ class SettingsService extends BaseSharedPreferencesService {
   /// and unwatched counts are unaffected.
   static const showWatchedIndicators = BoolPref('show_watched_indicators', defaultValue: true);
   static const showEpisodeNumberOnCards = BoolPref('show_episode_number_on_cards', defaultValue: true);
+
+  /// "Expand on focus": a focused portrait poster in a horizontal row widens
+  /// to a 16:9 card showing the item's wide artwork (see `ExpandOnFocus`).
+  /// Grids keep fixed cells. Device-local, off by default.
+  static const expandOnFocus = BoolPref('expand_on_focus');
   static const showSeasonPostersOnTabs = BoolPref('show_season_posters_on_tabs');
   static const hideSpoilers = BoolPref('hide_spoilers');
   static const showNavBarLabels = BoolPref('show_nav_bar_labels', defaultValue: true);
@@ -1577,6 +1582,7 @@ class SettingsService extends BaseSharedPreferencesService {
     showUnwatchedCount,
     showWatchedIndicators,
     showEpisodeNumberOnCards,
+    expandOnFocus,
     showSeasonPostersOnTabs,
     hideSpoilers,
     showNavBarLabels,

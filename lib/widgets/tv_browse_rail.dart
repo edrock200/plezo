@@ -30,6 +30,7 @@ import 'animated_dim_scrim.dart';
 import 'app_icon.dart';
 import 'card_inflation_budget.dart';
 import 'clickable_cursor.dart';
+import 'expand_on_focus.dart';
 import 'focus_builders.dart';
 import 'horizontal_scroll_with_arrows.dart';
 import 'listenable_selector.dart';
@@ -288,6 +289,11 @@ class TvBrowseRailLayout {
     required double viewportWidth,
     required double maxScrollExtent,
     bool? hasTrailing,
+
+    /// How much wider the card at [index] is than [metrics.cardWidth] once
+    /// it has expanded on focus ([ExpandOnFocus]); every card before it keeps
+    /// its collapsed extent, so only the target's own centre moves.
+    double focusedExtraWidth = 0,
   }) {
     final showTrailing = hasTrailing ?? hub.more;
     final leadingCount = metrics.hasLeading ? 1 : 0;
@@ -297,7 +303,8 @@ class TvBrowseRailLayout {
     final clampedIndex = index.clamp(0, totalCount - 1).toInt();
     if (metrics.hasLeading && clampedIndex == 0) return minScrollExtentFor(metrics);
     final itemExtent = metrics.cardWidth + metrics.itemGap;
-    final targetCenter = metrics.railEdgePadding + ((clampedIndex - leadingCount + 0.5) * itemExtent);
+    final targetCenter =
+        metrics.railEdgePadding + ((clampedIndex - leadingCount + 0.5) * itemExtent) + focusedExtraWidth / 2;
     return (targetCenter - (viewportWidth / 2)).clamp(0.0, maxScrollExtent).toDouble();
   }
 
@@ -465,6 +472,15 @@ class TvBrowseRailState extends State<TvBrowseRail> with TickerProviderStateMixi
   // update — hands every unchanged card its identical widget, so only cards
   // whose item actually changed rebuild. Keyed by [_hubKey].
   final Map<String, SliverChildMemo<MediaItem>> _cardMemos = {};
+
+  // "Expand on focus" and the card layout, from the last build.
+  bool _expandOnFocus = false;
+  bool _fullCardLayout = false;
+
+  /// Re-targets the row once the focused card has finished widening: the
+  /// first glide is clamped to the scroll extent from before it grew. Each
+  /// focus step replaces the pending timer, so nothing queues.
+  Timer? _expansionSettleTimer;
 
   int _hubIndex = 0;
   int _itemIndex = 0;
@@ -694,6 +710,7 @@ class TvBrowseRailState extends State<TvBrowseRail> with TickerProviderStateMixi
 
   @override
   void dispose() {
+    _expansionSettleTimer?.cancel();
     _selectLongPress.dispose();
     _focusNode.removeListener(_handleFocusChange);
     _focusNode.dispose();
@@ -890,6 +907,43 @@ class TvBrowseRailState extends State<TvBrowseRail> with TickerProviderStateMixi
     _rememberFocus(hub);
     _notifyFocusedItem();
     _scrollToItem();
+    _prefetchExpansionAhead(hub, delta);
+  }
+
+  EpisodePosterMode _episodePosterModeFor(MediaHub hub) =>
+      widget.episodePosterModeForHub?.call(hub) ?? SettingsService.instance.read(SettingsService.episodePosterMode);
+
+  /// How much wider the media card at [slot] is once it has expanded on
+  /// focus, or 0 (setting off, person hub, leading/trailing slot, no art).
+  double _expansionExtraFor(MediaHub hub, int slot, TvBrowseRailLayoutMetrics metrics) {
+    if (!_expandOnFocus || metrics.isPersonHub) return 0;
+    final item = _itemAtSlot(hub, slot);
+    if (item == null) return 0;
+    return ExpandOnFocus.extraWidthFor(
+      item,
+      collapsedWidth: metrics.cardWidth,
+      artworkHeight: metrics.posterHeight,
+      horizontalInset: _fullCardLayout ? 0 : MediaCard.gridCardPadding.horizontal,
+      episodePosterMode: _episodePosterModeFor(hub),
+      mixedHubContext: metrics.isMixedHub,
+    );
+  }
+
+  /// Warms the wide artwork of the card the next step in [direction] lands
+  /// on, so its cross-fade does not wait for the network.
+  void _prefetchExpansionAhead(MediaHub hub, int direction) {
+    if (!_expandOnFocus || direction == 0) return;
+    final metrics = _metricsByHub[_hubKey(hub)];
+    if (metrics == null || metrics.isPersonHub) return;
+    final item = _itemAtSlot(hub, _itemIndex + direction.sign);
+    if (item == null) return;
+    ExpandOnFocus.prefetch(
+      context,
+      item,
+      artworkHeight: metrics.posterHeight,
+      episodePosterMode: _episodePosterModeFor(hub),
+      mixedHubContext: metrics.isMixedHub,
+    );
   }
 
   void _moveHub(int delta) {
@@ -1069,6 +1123,7 @@ class TvBrowseRailState extends State<TvBrowseRail> with TickerProviderStateMixi
     final viewportWidth = position.viewportDimension;
     final maxScrollExtent = position.maxScrollExtent;
     if (!viewportWidth.isFinite || !maxScrollExtent.isFinite) return;
+    final expansionExtra = _expansionExtraFor(hub, _itemIndex, metrics);
     final target = TvBrowseRailLayout.scrollOffsetForIndex(
       hub: hub,
       index: _itemIndex,
@@ -1076,7 +1131,20 @@ class TvBrowseRailState extends State<TvBrowseRail> with TickerProviderStateMixi
       viewportWidth: viewportWidth,
       maxScrollExtent: maxScrollExtent,
       hasTrailing: _hasTrailingFor(hub),
+      focusedExtraWidth: expansionExtra,
     );
+    _expansionSettleTimer?.cancel();
+    _expansionSettleTimer = null;
+    if (expansionExtra > 0) {
+      final hubKey = _hubKey(hub);
+      final itemIndex = _itemIndex;
+      _expansionSettleTimer = Timer(ExpandOnFocus.duration + const Duration(milliseconds: 20), () {
+        _expansionSettleTimer = null;
+        final active = _activeHub;
+        if (!mounted || active == null || _hubKey(active) != hubKey || _itemIndex != itemIndex) return;
+        _scrollToItem();
+      });
+    }
 
     final distance = (position.pixels - target).abs();
     if (distance < 0.5) return;
@@ -1238,6 +1306,7 @@ class TvBrowseRailState extends State<TvBrowseRail> with TickerProviderStateMixi
         SettingsService.episodePosterMode,
         SettingsService.tvFullCardLayout,
         SettingsService.gridSpacing,
+        SettingsService.expandOnFocus,
       ],
       builder: (context) => LayoutBuilder(
         builder: (context, constraints) {
@@ -1255,6 +1324,8 @@ class TvBrowseRailState extends State<TvBrowseRail> with TickerProviderStateMixi
           final episodePosterMode = svc.read(SettingsService.episodePosterMode);
           final fullCardLayout = svc.read(SettingsService.tvFullCardLayout);
           final gridSpacing = svc.read(SettingsService.gridSpacing);
+          _expandOnFocus = svc.read(SettingsService.expandOnFocus);
+          _fullCardLayout = fullCardLayout;
           final modes = [for (final hub in widget.hubs) widget.episodePosterModeForHub?.call(hub) ?? episodePosterMode];
           final wideScales = [
             for (final hub in widget.hubs) widget.widePosterScaleForHub?.call(hub) ?? widget.widePosterScale,
@@ -1678,6 +1749,7 @@ class TvBrowseRailState extends State<TvBrowseRail> with TickerProviderStateMixi
       widget.showTitleImpliedForHub?.call(hub) ?? false,
       widget.onRefresh != null,
       widget.onRemoveFromContinueWatching != null,
+      _expandOnFocus,
     );
     const centerSliverKey = ValueKey('tv_browse_rail_row_center');
     return HorizontalScrollWithArrows(
@@ -1710,8 +1782,7 @@ class TvBrowseRailState extends State<TvBrowseRail> with TickerProviderStateMixi
           SliverPadding(
             key: centerSliverKey,
             padding: .fromLTRB(metrics.railEdgePadding, 2 * scale, metrics.railEdgePadding, 18 * scale),
-            sliver: SliverFixedExtentList(
-              // A fixed extent keeps all sliver offset and child-index math O(1).
+            sliver: _railItemsSliver(
               itemExtent: TvBrowseRailLayout.itemExtentForIndex(index: 0, metrics: metrics),
               delegate: SliverChildBuilderDelegate(
                 addAutomaticKeepAlives: false,
@@ -1760,6 +1831,9 @@ class TvBrowseRailState extends State<TvBrowseRail> with TickerProviderStateMixi
                     // move on low-end TV boxes.
                     build: () => BudgetedCard(
                       urgent: () => _isHubRowNeeded(hubIndex),
+                      // Holds the card's slot while it waits: under "Expand on
+                      // focus" the row sizes each child itself.
+                      placeholder: SizedBox(width: metrics.cardWidth + metrics.itemGap),
                       builder: (context) => _buildRailCard(
                         context,
                         hub: hub,
@@ -1782,6 +1856,14 @@ class TvBrowseRailState extends State<TvBrowseRail> with TickerProviderStateMixi
     );
   }
 
+  /// The row's media sliver. A fixed extent keeps all sliver offset and
+  /// child-index math O(1); under "Expand on focus" the focused card is wider
+  /// than the rest, so the row sizes each child instead (neighbours slide
+  /// aside as the focused card grows).
+  Widget _railItemsSliver({required double itemExtent, required SliverChildDelegate delegate}) => _expandOnFocus
+      ? SliverList(delegate: delegate)
+      : SliverFixedExtentList(itemExtent: itemExtent, delegate: delegate);
+
   Widget _buildRailCard(
     BuildContext context, {
     required MediaHub hub,
@@ -1794,6 +1876,13 @@ class TvBrowseRailState extends State<TvBrowseRail> with TickerProviderStateMixi
     required bool fullCardLayout,
   }) {
     bool isItemFocused() => _focusModel.railHasFocus && _focusModel.position == (hubIndex, itemIndex);
+    // The overlay glow is sized once for the collapsed card and would lag a
+    // card widening on focus; such cards keep only the focus border.
+    final expands =
+        _expandOnFocus &&
+        !metrics.isPersonHub &&
+        ExpandOnFocus.canExpand(item, episodePosterMode: episodePosterMode, mixedHubContext: metrics.isMixedHub);
+    final useFocusGlow = fullCardLayout && !expands;
 
     // Record: (focused, glow shown). The glow is additionally gated on
     // the vertical scroll being idle — it paints in the root overlay,
@@ -1812,12 +1901,12 @@ class TvBrowseRailState extends State<TvBrowseRail> with TickerProviderStateMixi
         isFocused: focus.$1,
         borderRadius: tokens(context).radiusSm,
         focusScale: fullCardLayout ? TvBrowseRailLayout.fullCardFocusScale : FocusTheme.focusScale,
-        useFocusGlow: fullCardLayout,
+        useFocusGlow: useFocusGlow,
         showGlow: focus.$2,
         // The card draws the border itself (poster rect for
         // standard cards, whole card when full-bleed).
         delegateFocusBorder: true,
-        glowSize: fullCardLayout ? Size(metrics.cardWidth, metrics.posterHeight) : null,
+        glowSize: useFocusGlow ? Size(metrics.cardWidth, metrics.posterHeight) : null,
         onTap: () {
           _selectHubItem(_liveHub(hub, hubIndex), hubIndex, itemIndex);
           unawaited(_activateCurrentItem());
@@ -1898,6 +1987,7 @@ class TvBrowseRailState extends State<TvBrowseRail> with TickerProviderStateMixi
             mixedHubContext: metrics.isMixedHub,
             episodePosterModeOverride: episodePosterMode,
             showTitleImplied: widget.showTitleImpliedForHub?.call(hub) ?? false,
+            expandOnFocus: _expandOnFocus,
           );
   }
 

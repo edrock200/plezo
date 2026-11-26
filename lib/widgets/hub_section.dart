@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -22,6 +23,7 @@ import '../mixins/mounted_set_state_mixin.dart';
 import '../screens/hub_detail_screen.dart';
 import '../utils/media_navigation_helper.dart';
 import 'card_inflation_budget.dart';
+import 'expand_on_focus.dart';
 import 'focus_builders.dart';
 import 'media_card.dart';
 import 'media_grid_delegate.dart';
@@ -145,6 +147,19 @@ class HubSectionState extends State<HubSection> with MountedSetStateMixin, Skele
   final SliverChildMemo<MediaItem> _cardMemo = SliverChildMemo<MediaItem>();
 
   double _itemExtent = 0;
+
+  // Card geometry from the last build, for the "Expand on focus" scroll
+  // target and neighbour prefetch (see [_expansionExtra]).
+  bool _expandOnFocus = false;
+  double _cardWidth = 0;
+  double _posterHeight = 0;
+  EpisodePosterMode _episodePosterMode = EpisodePosterMode.seriesPoster;
+  bool _isMixedHub = false;
+
+  /// Re-centres the focused card once its expansion has settled (the first
+  /// glide is clamped to the extent before the card widened). One pending
+  /// timer at most: every focus step replaces it.
+  Timer? _expansionSettleTimer;
   double _leadingPaddingFor(bool isTv) => widget.inset
       ? 0.0
       : isTv
@@ -224,6 +239,7 @@ class HubSectionState extends State<HubSection> with MountedSetStateMixin, Skele
 
   @override
   void dispose() {
+    _expansionSettleTimer?.cancel();
     _selectLongPress.dispose();
     _hubFocusNode.removeListener(_onFocusChange);
     _hubFocusNode.dispose();
@@ -288,11 +304,14 @@ class HubSectionState extends State<HubSection> with MountedSetStateMixin, Skele
 
   /// Scroll to center the item at the given index
   void _scrollToIndex(int index, {bool animate = true}) {
+    final extra = _expansionExtra(index);
     scrollListToIndex(
       _scrollController,
       index,
       itemExtent: _itemExtent,
-      leadingPadding: _leadingPadding,
+      // Only the focused card is expanded once the motion settles, so every
+      // card before it keeps its collapsed extent; centre the wide card.
+      leadingPadding: _leadingPadding + extra / 2,
       animate: animate,
       duration: _navigationScrollDuration,
       curve: Curves.easeOutCubic,
@@ -307,6 +326,49 @@ class HubSectionState extends State<HubSection> with MountedSetStateMixin, Skele
         curve: Curves.easeOutCubic,
       );
     }
+    _expansionSettleTimer?.cancel();
+    _expansionSettleTimer = null;
+    if (extra > 0) {
+      _expansionSettleTimer = Timer(ExpandOnFocus.duration + const Duration(milliseconds: 20), () {
+        _expansionSettleTimer = null;
+        if (!mounted || _focusedIndex != index || !_hubFocusNode.hasFocus) return;
+        scrollKeyedChildToHorizontalCenter(
+          _scrollController,
+          _itemKeyFor(index),
+          isCurrent: () => _focusedIndex == index && index < _totalItemCount,
+          duration: _navigationScrollDuration,
+          curve: Curves.easeOutCubic,
+        );
+      });
+    }
+  }
+
+  /// How much wider the card at [index] is once expanded, or 0.
+  double _expansionExtra(int index) {
+    if (!_expandOnFocus || index < 0 || index >= widget.hub.items.length) return 0;
+    return ExpandOnFocus.extraWidthFor(
+      widget.hub.items[index],
+      collapsedWidth: _cardWidth,
+      artworkHeight: _posterHeight,
+      horizontalInset: MediaCard.gridCardPadding.horizontal,
+      episodePosterMode: _episodePosterMode,
+      mixedHubContext: _isMixedHub,
+    );
+  }
+
+  /// Warms the wide artwork of the card the next step in [direction] lands
+  /// on, so its cross-fade does not wait for the network.
+  void _prefetchExpansionAhead(int direction) {
+    if (!_expandOnFocus) return;
+    final index = _focusedIndex + direction;
+    if (index < 0 || index >= widget.hub.items.length) return;
+    ExpandOnFocus.prefetch(
+      context,
+      widget.hub.items[index],
+      artworkHeight: _posterHeight,
+      episodePosterMode: _episodePosterMode,
+      mixedHubContext: _isMixedHub,
+    );
   }
 
   /// Handle ALL key events at the hub level
@@ -345,6 +407,7 @@ class HubSectionState extends State<HubSection> with MountedSetStateMixin, Skele
         widget.focusMemory.setForHub(_focusMemoryKey, _focusedIndex);
         _notifyFocusedItemChanged();
         _scrollToIndex(_focusedIndex);
+        _prefetchExpansionAhead(-1);
       } else if (widget.onNavigateToSidebar != null) {
         // At leftmost item: navigate to sidebar
         widget.onNavigateToSidebar!();
@@ -363,6 +426,7 @@ class HubSectionState extends State<HubSection> with MountedSetStateMixin, Skele
         widget.focusMemory.setForHub(_focusMemoryKey, _focusedIndex);
         _notifyFocusedItemChanged();
         _scrollToIndex(_focusedIndex);
+        _prefetchExpansionAhead(1);
       }
       return KeyEventResult.handled;
     }
@@ -579,6 +643,7 @@ class HubSectionState extends State<HubSection> with MountedSetStateMixin, Skele
                   SettingsService.libraryDensity,
                   SettingsService.episodePosterMode,
                   SettingsService.gridSpacing,
+                  SettingsService.expandOnFocus,
                 ],
                 builder: (context) => LayoutBuilder(
                   builder: (context, constraints) {
@@ -646,6 +711,12 @@ class HubSectionState extends State<HubSection> with MountedSetStateMixin, Skele
                     final focusBorderWidth = FocusTheme.focusBorderWidth;
                     final focusExtra = focusBorderWidth * 2; // border on both sides
                     _itemExtent = cardWidth + focusExtra + cardGap;
+                    final expandOnFocus = svc.read(SettingsService.expandOnFocus);
+                    _expandOnFocus = expandOnFocus;
+                    _cardWidth = cardWidth;
+                    _posterHeight = posterHeight;
+                    _episodePosterMode = episodePosterMode;
+                    _isMixedHub = isMixedHub;
 
                     // Everything the card closures capture; a change flushes
                     // the memo so cached cards can't carry stale geometry.
@@ -660,6 +731,7 @@ class HubSectionState extends State<HubSection> with MountedSetStateMixin, Skele
                       widget.inset,
                       widget.isInContinueWatching,
                       widget.usesContinueWatchingAction,
+                      expandOnFocus,
                     );
 
                     return SizedBox(
@@ -790,6 +862,7 @@ class HubSectionState extends State<HubSection> with MountedSetStateMixin, Skele
                                     usesContinueWatchingAction: widget.usesContinueWatchingAction,
                                     mixedHubContext: isMixedHub,
                                     episodePosterModeOverride: episodePosterMode,
+                                    expandOnFocus: expandOnFocus,
                                   ),
                                 ),
                               ),
