@@ -12,7 +12,14 @@ What changed in each preview (Android, and Windows and macOS where the release h
 - **Cast, people search and trailers on Tofa:** picking someone in a Tofa title's cast opens the titles you have with them and their biography, search finds people, and a title's trailer plays from its page.
 - **Tofa Home stays up to date:** when you watch or mark something on another device, Plezilo's Home reads your Tofa rows again; on servers that don't send these updates it checks every two minutes while Home is open.
 - **Explore finds titles on your Tofa server:** titles from Explore and other catalogs are now matched to your Tofa library, so you can play them from there.
-- Not there yet for Tofa, on purpose for now: requests and Tofa's Discover pages, subtitle search, the later parts of movies split over several files, Watch Together and Tofa's remote control. All of this was built from Tofa's published API; please report what doesn't work.
+- **Tofa Discover and requests:** the profile menu now has *Discover* for each Tofa server: its featured titles, shelves, themes you can follow and *Coming soon*. A title's page shows whether you have it (*Open*), plays its trailer, lists its cast with their own pages, and lets you mark it *Seen it* or *Not interested*. Where your server takes requests, *Requests* lets you search for a movie or series and request it (in 4K too, where you may), shows how many requests you have left and follows the ones you made.
+- **Tofa watch history:** *History* in the profile menu lists what this Tofa profile played, newest first. Remove one entry, or clear it all after confirming.
+- **Switch Tofa profile without signing in again:** *Switch Tofa profile* in the profile menu lists the account's other Tofa profiles (with their pictures where the server provides them); pick one, enter its PIN if it has one, and Plezilo uses it from then on.
+- **Subtitle search on Tofa:** while a Tofa title plays, the subtitle menu offers *Search subtitles*: pick a language, pick a result, and your server fetches it; the player switches to it once it arrives. A downloaded subtitle can be removed from the same place.
+- **Movies split over several files:** a Tofa title stored as parts (cd1, cd2) now plays as one, with one seek bar across all parts, moving to the next part on its own and resuming in the part you were in. Finishing the last part marks the title watched.
+- **Tofa's own scores:** Tofa titles show the server's critic and audience scores in words ("Tofa critics 85") next to IMDb, Rotten Tomatoes and Metacritic.
+- **Finished Tofa recordings:** Live TV's *Recordings* tab now lists what was recorded under *Recorded*; pick one to watch it.
+- Still not there for Tofa: cancelling one scheduled recording (Tofa's API has no way to do it; recording rules can be deleted), Watch Together and Tofa's remote control. Playing a Live channel follows the API as far as it is documented, so please report whether it works. All of this was built from Tofa's published API; please report what doesn't work.
 
 ## silo-preview-2.66.0
 

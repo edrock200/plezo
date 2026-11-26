@@ -327,27 +327,53 @@ to the address the user typed (LAN or custom URL); relay support is a follow-up.
   15 s). On the relay, playback shows a bandwidth notice (`PlaybackInitializationResult.playbackNotice`).
 - **Account-first sign-in**: device flow without `server_id` (cloud token) → `GET /servers` → pick → `POST
   /servers/{id}/server-session`; the connection's address is the server's `connect_url`, else its relay.
-- Declined after the full audit (2026-11-26), with the reason:
-  - Playlists: the spec has none. External players: not offered for Tofa. Sign-out revoke: no public route.
-  - Multi-part files beyond part 1: Tofa keeps progress per file and the spec does not say how a stacked title's
-    progress and watched state work; Plezilo's stacked-part player would need that mapping.
-  - Requests and Discovery (pages, lanes, shelves, radar, `/discovery/detail`, seen/not-interested, `/requests`):
-    Plezilo's request screens are built on Silo's API types (`SiloRequestsApi`); Tofa needs its own request UI.
-  - Subtitle search/download (`/subtitles/fetch/...`): the player's search sheet is Plex's OpenSubtitles flow and
-    Silo's own tools; a Tofa path needs its own integration.
-  - In-session audio/subtitle/quality/seek routes: Plezilo renegotiates `/stream/{id}/info` for a track or quality
-    change, which the spec supports; bitmap subtitles of a remux/transcode are not offered (no burn-in request).
-  - Watch history (`/watch/history`): Plezilo has no history screen. Problem reports: no report UI (Plezy's
-    services are off).
-  - Profile switching without signing in again, profile create/edit, avatars: a Tofa connection is one profile, as
-    for Silo; the picker shows initials (avatar URLs' auth unverified).
-  - Tofa's own scores (`tofa_*_rating`): Plezilo's rating badges have fixed sources; a Tofa badge would need a mark
-    of ours (Tofa's logo is not licensed). IMDb, Rotten Tomatoes and Metacritic are shown.
-  - Watch Together (`wt_` frames on `/api/v1/ws`) and remote control (`/remote/*`): Plezilo's own Watch Together and
-    companion remote use their own protocols; bridging Tofa's is a project of its own.
+- **Second round (2026-11-26, "build the screens")**:
+  - **Discover and requests** (`tofa_client_extras.dart`, models in `tofa_extras.dart`, screens in
+    `lib/screens/tofa/`): profile-menu rows per online Tofa server (`tofa_feature_entries.dart`, next to Silo's in
+    `discover_screen.dart`): Discover shows when `GET /system/info`'s `discover_enabled` is not false, Requests when
+    `requests_available` is true. Discover = `/discovery/page` (heroes, shelves → `/discovery/shelf/{key}?cursor=`,
+    lanes → `/discovery/lanes/{slug}` + follow `PUT`/`DELETE …/follow`), the radar (`/discovery/radar`), a title page
+    (`/discovery/detail/{type}/{tmdb}`: library state, `request_rights`, `youtube_trailer_id`; its descriptive fields
+    are `additionalProperties`, read when present, unverified; a `cast` list with `person_id` opens
+    `/discovery/people/{id}`), seen/not-interested (`PUT`/`DELETE /users/me/{seen|not-interested}/{type}/{tmdb}`).
+    Requests: search = `GET /search` `discover` hits; `GET /requests/rights` (`RequestAccess` off/ask/auto per type and
+    4K, quota `remaining`); `GET /requests`; `POST /requests {media_type, tmdb_id, title, is4k?}` (no `seasons`: its
+    form is unspecified, so a series request is the whole show, unverified). No cancel route exists (`can_cancel` is a
+    flag only). The request widgets (`SiloRequestRow`, `SiloRequestStatusPill`) are reused with a Tofa status mapping
+    (`tofaRequestDisplay`); Silo's screens are untouched. Discover posters: the library artwork route for in-library
+    items, else absolute URLs, else (unverified, like Silo's request posters) TMDB file paths on image.tmdb.org.
+  - **Watch history**: `GET /watch/history` (`before` + `before_id` of the last row, `has_more`), `DELETE
+    /watch/history/{id}`, `DELETE /watch/history` behind a confirm. An entry opens its episode
+    (`tofa-episode:{media}/{episode}`) or title.
+  - **Profile switching**: `GET /profiles` and `POST /profiles/{id}/verify-pin` (with `X-Profile-Id`) with the saved
+    tokens; the new profile is a connection of its own (`server/user/profile`, same tokens) bound to the active
+    Plezilo profile in place of the old one (its default flag kept), then rebound. Avatars: absolute URLs, or `/api/…`
+    routes signed with the image token (unverified which auth `/profiles/avatars/{file}` wants); initials otherwise.
+  - **Subtitle search** (`lib/widgets/video_controls/tofa/`, `TofaSubtitleTools`): `GET
+    /subtitles/fetch/files/{file}/candidates?language=` (639-1 codes, unverified), rejected candidates hidden;
+    `POST …/candidate {candidate_id, language}` → 202, then `GET /stream/{file}/subtitles` every 2 s (30 s) until a new
+    index appears, then the player reloads with source subtitle id index + 1. `DELETE …/subtitles/{language}` removes
+    a fetched one. `fetch-now` and `/subtitles/fetch/status` are admin-only: not used.
+  - **Multi-part** (`TofaMappers.partSet`): `part_number`/`part_count` sets of the same edition (and episode) are one
+    `MediaVersion` with a `MediaPart` per file; a set with a gap is part 1 alone. Playback opens the part holding the
+    start (`MediaPartTimeline`; the player joins and advances parts), sends `resume_ticks` relative to that part and
+    reports progress per file (item time minus the part's start); a part's session ends when the next opens. When the
+    last part ends, every file of the set is marked watched (`/media/watched/batch`). Unverified: how Tofa rolls a
+    set up to the title; Plezilo counts a set watched when its last part is completed and resumes in the furthest
+    part with progress. Downloads of a set still take part 1 only (follow-up).
+  - **Ratings**: `tofa_critics_rating`, `tofa_audience_rating`, `tofa_rating` (integers, no scale in the spec; read as
+    out of 100, unverified) shown as words (`ratingTextLabel`: "Tofa critics 85"), no mark; IMDb, RT and Metacritic
+    were already shown.
+  - **Recordings**: finished ones (`GET /live/recordings` rows with `actual_end`, no `error`, a `media_id`) in the
+    Recordings tab's "Recorded" group (`LiveTvRecordedItems`). Re-checked: still no route cancels one scheduled
+    recording, and no documented live playback route (only the `live_*` parameters on `/stream/{id}/info`).
+- Declined, with the reason:
+  - Watch Together (`wt_` frames) and remote control (`/remote/*`): Plezilo's own features use their own protocols.
+  - Cancelling a single scheduled recording: no route in the spec.
+  - Playlists: none in the spec. Sign-out revoke: no public route. External players: not offered for Tofa.
+  - Admin-only routes (libraries, scans, users, settings, lifecycle, webhooks, problem-report resolution,
+    `subtitles/fetch-now`, `subtitles/fetch/status`, approving requests) are out of scope.
   - Music/audiobooks: `MediaType` is `movie`/`tv`/`other` only.
-  - Admin-only routes (libraries, scans, users, settings, lifecycle, webhooks, problem-report resolution) are out of
-    scope.
 - Unverified on a real server (all fail closed and are marked in code): codec-list format; `max_bitrate` unit;
   `force_method` values; that the facets' `watched` field names are `/media?watched=` values; `segment_type` names;
   that `auth.token` is the download route's `st` and `quality` takes the option's tag; that `request_id` of the
