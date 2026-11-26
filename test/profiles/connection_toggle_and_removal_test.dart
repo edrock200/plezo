@@ -13,6 +13,7 @@ import 'package:plezy/profiles/profile_connection_cleanup.dart';
 import 'package:plezy/profiles/profile_connection_registry.dart';
 import 'package:plezy/profiles/profile_registry.dart';
 import 'package:plezy/providers/multi_server_provider.dart';
+import 'package:plezy/services/api_cache.dart';
 import 'package:plezy/services/multi_server_manager.dart';
 import 'package:plezy/services/storage_service.dart';
 import 'package:plezy/services/tofa/tofa_api_cache.dart';
@@ -23,8 +24,8 @@ import '../test_helpers/multi_server_fixtures.dart';
 import '../test_helpers/prefs.dart';
 
 /// Removing a Tofa connection (also after a Tofa profile switch left a
-/// sibling connection of the same sign-in behind), against the real
-/// registries, binder and server manager.
+/// sibling connection of the same sign-in behind), and switching connections
+/// off and on again, against the real registries, binder and server manager.
 
 TofaConnection _tofaProfile(String profileId) => TofaConnection(
   id: TofaConnection.compoundId(serverId: 'srv-1', userId: 'u-1', profileId: profileId),
@@ -279,6 +280,90 @@ void main() {
       await cleanup().removeProfileConnection(profileId: 'owner', connection: silo);
       expect(await ConnectionRegistry(db).list(), isEmpty);
       expect(await joins.listAll(), isEmpty);
+    });
+  });
+
+  group('switching a connection off and on', () {
+    Future<void> switchTo(Connection connection, bool enabled) async {
+      final updated = await connections.setEnabled(connection.id, enabled);
+      if (!enabled) manager.disconnectConnection(updated!);
+      await binder.rebindActive();
+    }
+
+    test('off: the link and sign-in stay saved, no client and no calls; on: back without signing in', () async {
+      final tofa = _tofaProfile('p-1');
+      await link('owner', tofa);
+      await binder.rebindActive();
+      expect(servers.onlineServerIds, ['srv-1']);
+      await settle();
+
+      await switchTo(tofa, false);
+      expect(active.lastBindingSucceeded, isTrue, reason: 'nothing switched on is a settled bind');
+      expect(manager.getClient(ServerId('srv-1')), isNull);
+      expect(manager.getClientByScope(tofa.id), isNull);
+      expect(servers.onlineServerIds, isEmpty);
+      expect(servers.expectedServerIds, isEmpty);
+      expect(await joins.listForProfile('owner'), hasLength(1), reason: 'the link stays');
+      final saved = (await connections.get(tofa.id))! as TofaConnection;
+      expect(saved.refreshToken, 'ref-1', reason: 'the sign-in stays');
+      await settle();
+
+      final calls = fake.requests.length;
+      await binder.rebindActive();
+      await manager.checkServerHealth();
+      await settle();
+      expect(fake.requests.length, calls, reason: 'a switched-off connection is never contacted');
+      expect(built, hasLength(1));
+
+      await switchTo(tofa, true);
+      expect(built, hasLength(2));
+      expect(built.last.connection.refreshToken, 'ref-1', reason: 'the saved sign-in is used again');
+      expect(servers.onlineServerIds, ['srv-1']);
+      expect(fake.requests.length, greaterThan(calls));
+    });
+
+    test('a switched-off connection stays off after a restart, and is not pruned', () async {
+      final tofa = _tofaProfile('p-1');
+      await link('owner', tofa);
+      await connections.setEnabled(tofa.id, false);
+
+      expect(await cleanup().pruneUnreferencedJellyfinConnections(), 0);
+      final restarted = ConnectionRegistry(db);
+      expect((await restarted.get(tofa.id))!.enabled, isFalse);
+      await binder.rebindActive();
+      expect(built, isEmpty);
+      expect(fake.requests, isEmpty);
+    });
+
+    test('only the switched-off connection is left out; the others still bind', () async {
+      final jellyfin = _jellyfin();
+      final silo = _silo();
+      await link('owner', jellyfin);
+      await link('owner', silo);
+      await binder.rebindActive();
+      expect(servers.onlineServerIds.toSet(), {'jf', 'silo'});
+
+      await switchTo(jellyfin, false);
+      expect(servers.onlineServerIds, ['silo']);
+      expect(manager.getClient(ServerId('jf')), isNull);
+      manager.addedJellyfin.clear();
+      await binder.rebindActive();
+      expect(manager.addedJellyfin, isEmpty);
+
+      await switchTo(jellyfin, true);
+      expect(manager.addedJellyfin, [jellyfin.id]);
+      expect(servers.onlineServerIds.toSet(), {'jf', 'silo'});
+    });
+
+    test('disconnecting closes the client without signing out', () async {
+      final tofa = _tofaProfile('p-1');
+      await link('owner', tofa);
+      await binder.rebindActive();
+      manager.disconnectConnection(tofa);
+      expect(manager.getClientByScope(tofa.id), isNull);
+      expect(manager.getClient(ServerId('srv-1')), isNull);
+      expect(await connections.get(tofa.id), isNotNull);
+      expect(ApiCache.forBackend(tofa.kind), isA<TofaApiCache>());
     });
   });
 }

@@ -19,6 +19,7 @@ import '../../profiles/profile_connection_registry.dart';
 import '../../profiles/profile_merge.dart';
 import '../../profiles/profile_registry.dart';
 import '../../profiles/silo_accounts.dart';
+import '../../utils/app_logger.dart';
 import '../../utils/snackbar_helper.dart';
 import '../../focus/focusable_button.dart';
 import '../../widgets/app_icon.dart';
@@ -191,6 +192,42 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> with Controll
     });
   }
 
+  /// Switch [conn] on or off for every profile that uses it. Off: the saved
+  /// row, credentials and profile links stay, but its client is closed and
+  /// the active profile rebinds without it, so nothing from it is shown and
+  /// no request goes to it. On: the rebind connects it again with the saved
+  /// sign-in.
+  Future<void> _setConnectionEnabled(Connection conn, bool enabled) async {
+    final scope = SessionTeardownScope.of(context);
+    // The TV home-screen rows (system shelf) are republished for the active
+    // profile, as after a removal, so a switched-off server leaves them too.
+    final shelfOwner = scope.active.activeId;
+    try {
+      await withEndedProfileSession(scope, shelfOwner, () async {
+        final updated = await scope.connections.setEnabled(conn.id, enabled);
+        if (updated != null) {
+          if (!enabled) scope.serverManager.disconnectConnection(conn);
+          await scope.binder.rebindActive();
+          await scope.hiddenLibraries?.refresh();
+        }
+        if (shelfOwner != null && scope.active.activeId == shelfOwner) {
+          scope.shelf.beginProfileSession(shelfOwner);
+          if (updated != null && scope.multiServer.hasConnectedServers) await scope.discover?.load();
+        }
+      });
+      if (!mounted) return;
+      showSuccessSnackBar(
+        context,
+        enabled
+            ? t.profiles.connectionSwitchedOn(connectionLabel: conn.displayLabel)
+            : t.profiles.connectionSwitchedOff(connectionLabel: conn.displayLabel),
+      );
+    } catch (e, st) {
+      appLogger.w('ProfileDetail: switching a connection failed', error: e, stackTrace: st);
+      if (mounted) showErrorSnackBar(context, t.profiles.connectionSwitchFailed(connectionLabel: conn.displayLabel));
+    }
+  }
+
   /// Server ids the profile keeps after removing [excludingConnectionId]:
   /// its other join rows plus, for Plex Home profiles, the implicit parent
   /// account. Raw ids, matching the download keys this is differenced
@@ -361,6 +398,7 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> with Controll
                 onRemove: _removeConnection,
                 onEdit: _editConnection,
                 onSignOutParent: _signOutParentAccount,
+                onSetEnabled: _setConnectionEnabled,
               ),
               const SizedBox(height: 24),
               if (isLocal)
@@ -387,12 +425,14 @@ class _ConnectionsList extends StatefulWidget {
   final Future<void> Function(ProfileConnection pc, Connection conn) onRemove;
   final Future<void> Function(Connection conn, {bool signInAgain}) onEdit;
   final Future<void> Function(Connection conn) onSignOutParent;
+  final Future<void> Function(Connection conn, bool enabled) onSetEnabled;
 
   const _ConnectionsList({
     required this.profile,
     required this.onRemove,
     required this.onEdit,
     required this.onSignOutParent,
+    required this.onSetEnabled,
   });
 
   @override
@@ -466,51 +506,45 @@ class _ConnectionsListState extends State<_ConnectionsList> {
                   margin: EdgeInsets.zero,
                   children: [
                     if (parentConn != null)
-                      ListTile(
-                        leading: BackendBadge(backend: parentConn.backend, size: 24),
-                        title: Text(parentConn.displayLabel),
+                      ConnectionListRow(
+                        key: ValueKey('connection-row:${parentConn.id}'),
+                        connection: parentConn,
                         subtitle: Text(t.profiles.plexHomeAccount),
-                        trailing: FocusablePopupMenuButton<String>(
-                          icon: const AppIcon(Symbols.more_vert_rounded, fill: 1),
-                          tooltip: t.profiles.manage,
-                          onSelected: (value) {
-                            if (value == 'sign_out') {
-                              unawaited(widget.onSignOutParent(parentConn));
-                            }
-                          },
-                          itemBuilder: (_) => [AppMenuItem(value: 'sign_out', label: t.profiles.signOut)],
-                        ),
+                        onEnabledChanged: (enabled) => widget.onSetEnabled(parentConn, enabled),
+                        onMenuSelected: (value) {
+                          if (value == 'sign_out') {
+                            unawaited(widget.onSignOutParent(parentConn));
+                          }
+                        },
+                        menuItems: () => [AppMenuItem(value: 'sign_out', label: t.profiles.signOut)],
                       ),
                     for (final pc in visiblePcs)
                       if (byId[pc.connectionId] case final conn?)
-                        ListTile(
-                          leading: BackendBadge(backend: conn.backend, size: 24),
-                          title: Text(conn.displayLabel),
+                        ConnectionListRow(
+                          key: ValueKey('connection-row:${conn.id}'),
+                          connection: conn,
                           subtitle: _ConnectionSubtitle.build(conn: conn, pc: pc, homeCache: homeCache, theme: theme),
-                          trailing: FocusablePopupMenuButton<String>(
-                            icon: const AppIcon(Symbols.more_vert_rounded, fill: 1),
-                            tooltip: t.profiles.manage,
-                            onSelected: (value) {
-                              if (value == 'default') {
-                                unawaited(pcRegistry.setDefault(profile.id, pc.connectionId));
-                              } else if (value == 'edit') {
-                                unawaited(widget.onEdit(conn));
-                              } else if (value == 'sign_in_again') {
-                                unawaited(widget.onEdit(conn, signInAgain: true));
-                              } else if (value == 'remove') {
-                                unawaited(widget.onRemove(pc, conn));
-                              }
-                            },
-                            itemBuilder: (_) => [
-                              if (!pc.isDefault) AppMenuItem(value: 'default', label: t.profiles.makeDefault),
-                              if (conn is JellyfinConnection) AppMenuItem(value: 'edit', label: t.common.edit),
-                              if (conn is SiloConnection) ...[
-                                AppMenuItem(value: 'sign_in_again', label: t.siloEditConnection.signInAgain),
-                                AppMenuItem(value: 'edit', label: t.siloEditConnection.edit),
-                              ],
-                              AppMenuItem(value: 'remove', label: t.profiles.removeConnection),
+                          onEnabledChanged: (enabled) => widget.onSetEnabled(conn, enabled),
+                          onMenuSelected: (value) {
+                            if (value == 'default') {
+                              unawaited(pcRegistry.setDefault(profile.id, pc.connectionId));
+                            } else if (value == 'edit') {
+                              unawaited(widget.onEdit(conn));
+                            } else if (value == 'sign_in_again') {
+                              unawaited(widget.onEdit(conn, signInAgain: true));
+                            } else if (value == 'remove') {
+                              unawaited(widget.onRemove(pc, conn));
+                            }
+                          },
+                          menuItems: () => [
+                            if (!pc.isDefault) AppMenuItem(value: 'default', label: t.profiles.makeDefault),
+                            if (conn is JellyfinConnection) AppMenuItem(value: 'edit', label: t.common.edit),
+                            if (conn is SiloConnection) ...[
+                              AppMenuItem(value: 'sign_in_again', label: t.siloEditConnection.signInAgain),
+                              AppMenuItem(value: 'edit', label: t.siloEditConnection.edit),
                             ],
-                          ),
+                            AppMenuItem(value: 'remove', label: t.profiles.removeConnection),
+                          ],
                         ),
                   ],
                 );
@@ -519,6 +553,108 @@ class _ConnectionsListState extends State<_ConnectionsList> {
           },
         );
       },
+    );
+  }
+}
+
+/// One connection in the profile's list: badge, labels, an on/off switch and
+/// the manage menu. A switched-off connection is dimmed and labelled
+/// "Disabled"; its menu (Remove included) stays available. The switch and the
+/// menu are one row for the D-pad: Right from the switch reaches the menu,
+/// Left from the menu returns to the switch.
+@visibleForTesting
+class ConnectionListRow extends StatefulWidget {
+  const ConnectionListRow({
+    super.key,
+    required this.connection,
+    required this.subtitle,
+    required this.onEnabledChanged,
+    required this.onMenuSelected,
+    required this.menuItems,
+  });
+
+  final Connection connection;
+  final Widget? subtitle;
+  final Future<void> Function(bool enabled) onEnabledChanged;
+  final void Function(String value) onMenuSelected;
+  final List<AppMenuEntry<String>> Function() menuItems;
+
+  @override
+  State<ConnectionListRow> createState() => _ConnectionListRowState();
+}
+
+class _ConnectionListRowState extends State<ConnectionListRow> {
+  final _switchFocusNode = FocusNode(debugLabel: 'ProfileDetail:ConnectionSwitch');
+  final _menuFocusNode = FocusNode(debugLabel: 'ProfileDetail:ConnectionMenu');
+  bool _busy = false;
+
+  @override
+  void dispose() {
+    _switchFocusNode.dispose();
+    _menuFocusNode.dispose();
+    super.dispose();
+  }
+
+  Future<void> _toggle() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      await widget.onEnabledChanged(!widget.connection.enabled);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final conn = widget.connection;
+    final enabled = conn.enabled;
+    final subtitle = widget.subtitle;
+    Widget dim(Widget child) => enabled ? child : Opacity(opacity: 0.5, child: child);
+    return ListTile(
+      leading: dim(BackendBadge(backend: conn.backend, size: 24)),
+      title: dim(Text(conn.displayLabel)),
+      subtitle: enabled
+          ? subtitle
+          : Row(
+              children: [
+                Text(
+                  t.profiles.connectionDisabled,
+                  style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.error),
+                ),
+                if (subtitle != null) ...[const Text(' · '), Flexible(child: dim(subtitle))],
+              ],
+            ),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Semantics(
+            toggled: enabled,
+            label: t.profiles.connectionSwitchLabel(connectionLabel: conn.displayLabel),
+            child: FocusableButton(
+              key: ValueKey('connection-switch:${conn.id}'),
+              focusNode: _switchFocusNode,
+              useBackgroundFocus: true,
+              onPressed: _busy ? null : _toggle,
+              onNavigateRight: _menuFocusNode.requestFocus,
+              // Touch reaches the Switch itself; the D-pad selects the
+              // FocusableButton around it (the Switch takes no focus).
+              child: ExcludeFocus(
+                child: Switch(value: enabled, onChanged: _busy ? null : (_) => unawaited(_toggle())),
+              ),
+            ),
+          ),
+          FocusablePopupMenuButton<String>(
+            focusNode: _menuFocusNode,
+            onNavigateLeft: _switchFocusNode.requestFocus,
+            icon: const AppIcon(Symbols.more_vert_rounded, fill: 1),
+            tooltip: t.profiles.manage,
+            onSelected: widget.onMenuSelected,
+            itemBuilder: (_) => widget.menuItems(),
+          ),
+        ],
+      ),
     );
   }
 }

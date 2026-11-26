@@ -386,7 +386,11 @@ class AccountPreferencesController extends ChangeNotifier with DisposableChangeN
       return resolveAccountPreferenceAccounts(
         profile: profile,
         profileConnections: profileRows,
-        connections: connectionRows,
+        // Switched-off connections are hidden like every other surface.
+        connections: [
+          for (final c in connectionRows)
+            if (c.enabled) c,
+        ],
       );
     } catch (error, stackTrace) {
       appLogger.w('AccountPreferencesController: failed to resolve accounts', error: error, stackTrace: stackTrace);

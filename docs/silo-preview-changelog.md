@@ -22,6 +22,7 @@ Released November 26, 2026. Android and Windows.
 - **Finished Tofa recordings:** Live TV's *Recordings* tab now lists what was recorded under *Recorded*; pick one to watch it.
 - Still not there for Tofa: cancelling one scheduled recording (Tofa's API has no way to do it; recording rules can be deleted), Watch Together and Tofa's remote control. Playing a Live channel follows the API as far as it is documented, so please report whether it works. All of this was built from Tofa's published API; please report what doesn't work.
 - **Removing a Tofa connection works again:** after you had switched Tofa profiles, removing the Tofa connection left the previous profile's connection saved and still talking to the server. Remove now takes the whole sign-in away, and the server stays gone after a restart.
+- **Switch a connection off without removing it:** each connection in a profile's list (Settings › Profiles) now has an on/off switch, for every server type. A switched-off connection stays saved with its sign-in, but Plezilo doesn't connect to it: nothing from that server appears on Home, in libraries, search, Live TV or Continue Watching. Its row is dimmed and marked *Disabled*, and *Remove* is still in its menu. Switch it back on and it returns without signing in again. The switch applies to every profile that uses the connection.
 
 ## silo-preview-2.67.0
 

@@ -2390,6 +2390,7 @@ class _SetupScreenState extends State<SetupScreen> with MountedSetStateMixin {
     if (mounted) {
       setState(() {
         for (final conn in allConnections) {
+          if (!conn.enabled) continue;
           if (conn is PlexAccountConnection) {
             for (final s in conn.servers) {
               _serverStatus[s.clientIdentifier] = (s.name, null);

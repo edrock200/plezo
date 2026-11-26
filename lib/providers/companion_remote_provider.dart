@@ -324,6 +324,8 @@ class CompanionRemoteProvider with ChangeNotifier, DisposableChangeNotifierMixin
     }
 
     Future<void> addConnection(Connection connection, {String? userUuid}) async {
+      // A switched-off connection is not connected, here either.
+      if (!connection.enabled) return;
       switch (connection) {
         case PlexAccountConnection():
           addContext(

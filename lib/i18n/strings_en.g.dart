@@ -3144,6 +3144,21 @@ class Translations$profiles$en {
 	/// en: 'Default'
 	String get connectionDefault => 'Default';
 
+	/// en: 'Disabled'
+	String get connectionDisabled => 'Disabled';
+
+	/// en: 'Use ${connectionLabel}'
+	String connectionSwitchLabel({required Object connectionLabel}) => 'Use ${connectionLabel}';
+
+	/// en: '${connectionLabel} is switched off. Plezilo won't connect to it until you switch it back on; it stays saved.'
+	String connectionSwitchedOff({required Object connectionLabel}) => '${connectionLabel} is switched off. Plezilo won\'t connect to it until you switch it back on; it stays saved.';
+
+	/// en: '${connectionLabel} is switched on again.'
+	String connectionSwitchedOn({required Object connectionLabel}) => '${connectionLabel} is switched on again.';
+
+	/// en: 'Couldn't change ${connectionLabel}. Try again.'
+	String connectionSwitchFailed({required Object connectionLabel}) => 'Couldn\'t change ${connectionLabel}. Try again.';
+
 	/// en: 'as ${displayName}'
 	String connectionAs({required Object displayName}) => 'as ${displayName}';
 
@@ -10858,6 +10873,11 @@ extension on Translations {
 			'profiles.plexAccountChip' => ({required Object account}) => 'Plex account: ${account}',
 			'profiles.plexAccountUserChip' => ({required Object user, required Object account}) => '${user} via ${account}',
 			'profiles.connectionDefault' => 'Default',
+			'profiles.connectionDisabled' => 'Disabled',
+			'profiles.connectionSwitchLabel' => ({required Object connectionLabel}) => 'Use ${connectionLabel}',
+			'profiles.connectionSwitchedOff' => ({required Object connectionLabel}) => '${connectionLabel} is switched off. Plezilo won\'t connect to it until you switch it back on; it stays saved.',
+			'profiles.connectionSwitchedOn' => ({required Object connectionLabel}) => '${connectionLabel} is switched on again.',
+			'profiles.connectionSwitchFailed' => ({required Object connectionLabel}) => 'Couldn\'t change ${connectionLabel}. Try again.',
 			'profiles.connectionAs' => ({required Object displayName}) => 'as ${displayName}',
 			'profiles.makeDefault' => 'Make default',
 			'profiles.removeConnection' => 'Remove',
@@ -11320,13 +11340,13 @@ extension on Translations {
 			'explore.relation.alternativeVersion' => 'Alternative version',
 			'explore.relation.summary' => 'Summary',
 			'explore.relation.parentStory' => 'Parent story',
+			_ => null,
+		} ?? switch (path) {
 			'explore.relation.adaptation' => 'Adaptation',
 			'explore.relation.other' => 'Related',
 			'explore.broadcast' => ({required Object day, required Object time}) => 'Airs ${day} at ${time}',
 			'explore.broadcastWithZone' => ({required Object day, required Object time, required Object timezone}) => 'Airs ${day} at ${time} ${timezone}',
 			'explore.detail.originalTitle' => 'Original title',
-			_ => null,
-		} ?? switch (path) {
 			'explore.detail.alsoKnownAs' => 'Also known as',
 			'explore.detail.studios' => 'Studios',
 			'explore.detail.country' => 'Country',
@@ -11834,13 +11854,13 @@ extension on Translations {
 			'downloads.backgroundWarning.linkUnavailable' => 'Couldn\'t open dontkillmyapp.com on this device',
 			'downloads.options' => 'Downloads options',
 			'downloads.groupings.library' => 'Library',
+			_ => null,
+		} ?? switch (path) {
 			'downloads.groupings.collections' => 'Collections',
 			'downloads.unknownLibrary' => 'Unknown library',
 			'downloads.unknownShow' => 'Unknown Show',
 			'downloads.unknownSeason' => 'Unknown Season',
 			'downloads.unknownAlbum' => 'Unknown Album',
-			_ => null,
-		} ?? switch (path) {
 			'downloads.completedOfTotal' => ({required Object completed, required Object total}) => '${completed}/${total} completed',
 			'downloads.errorFileNotFound' => 'File not found (404)',
 			'downloads.errorDownloadNotAllowed' => 'Download not allowed by the server (403)',
@@ -12348,13 +12368,13 @@ extension on Translations {
 			'addServer.tofaDeviceDenied' => 'Sign-in was declined or cancelled.',
 			'addServer.tofaDeviceFailed' => 'Couldn\'t get a sign-in code.',
 			'addServer.tofaDeviceSigningIn' => 'Signing in…',
+			_ => null,
+		} ?? switch (path) {
 			'addServer.tofaShowNewCode' => 'Show a new code',
 			'addServer.tofaChangeServer' => 'Change server',
 			'addServer.tofaCodeSemantics' => ({required Object code}) => 'Sign-in code: ${code}',
 			'addServer.tofaQrSemantics' => ({required Object url, required Object code}) => 'Sign-in QR code. Or go to ${url} and enter ${code}.',
 			'addServer.tofaChooseProfile' => 'Who\'s watching?',
-			_ => null,
-		} ?? switch (path) {
 			'addServer.tofaChooseProfileSubtitle' => 'Pick the Tofa profile to use on this device.',
 			'addServer.tofaNoProfiles' => 'This account has no Tofa profiles.',
 			'addServer.tofaProfileLocked' => 'PIN protected',

@@ -149,6 +149,24 @@ class ConnectionRegistry {
     return written;
   }
 
+  /// Switch the stored connection [id] on or off, keeping every other field
+  /// (tokens, addresses, creation order). Returns the stored connection after
+  /// the change, or null when no row has that id.
+  Future<Connection?> setEnabled(String id, bool enabled) async {
+    final result = await _db.runIdentityMutation(() async {
+      final existing = await (_db.select(_db.connections)..where((t) => t.id.equals(id))).getSingleOrNull();
+      if (existing == null) return null;
+      final current = await _rowToConnection(existing);
+      if (current == null) return null;
+      if (current.enabled == enabled) return current;
+      final next = current.withEnabled(enabled);
+      await _writeRow(next, createdAt: existing.createdAt);
+      appLogger.i('ConnectionRegistry: connection $id ${enabled ? 'switched on' : 'switched off'}');
+      return next;
+    });
+    return result;
+  }
+
   Future<void> _writeRow(Connection connection, {required int createdAt, void Function()? checkCurrent}) async {
     final protectedConfig = await CredentialVault.protectConnectionConfig(
       connection.kind.id,

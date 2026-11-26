@@ -338,9 +338,28 @@ class ActiveProfileBinder {
       // One snapshot of the join rows + connections per pass — every
       // downstream helper reads from these instead of re-querying (each
       // registry read pays per-row CredentialVault reveals).
-      final joinRows = await profileConnections.listForProfile(profile.id);
-      final connectionsById = {for (final c in await connections.list()) c.id: c};
+      // A connection the user switched off is left out of the pass entirely:
+      // no client, no probe, not expected. Its join row stays saved, so
+      // switching it back on and rebinding restores it.
+      final allJoinRows = await profileConnections.listForProfile(profile.id);
+      final allConnections = await connections.list();
       if (!_isCurrentBind(profile.id, generation)) return false;
+      final disabledIds = {
+        for (final c in allConnections)
+          if (!c.enabled) c.id,
+      };
+      final connectionsById = {
+        for (final c in allConnections)
+          if (c.enabled) c.id: c,
+      };
+      final joinRows = [
+        for (final row in allJoinRows)
+          if (!disabledIds.contains(row.connectionId)) row,
+      ];
+      if (disabledIds.isNotEmpty) {
+        appLogger.i('ActiveProfileBinder: ${disabledIds.length} connection(s) switched off; not connecting them');
+      }
+      final parentDisabled = profile.isPlexHome && disabledIds.contains(profile.parentConnectionId);
 
       // PIN prompts may only surface from a user-initiated bind or the
       // session's initial bind (cold-start resume). Passive rebinds — an
@@ -361,7 +380,7 @@ class ActiveProfileBinder {
       // parallel. A slow/offline Plex parent should not add its timeout budget
       // on top of an otherwise reachable MediaBrowser or borrowed-server bind.
       final results = await Future.wait([
-        if (profile.isPlexHome)
+        if (profile.isPlexHome && !parentDisabled)
           _bindPlexHome(
             profile,
             joinRows: joinRows,
@@ -443,7 +462,10 @@ class ActiveProfileBinder {
       // A server the pass could not reach may answer seconds later — one that
       // sleeps to save power can be woken by these very probes (#3075).
       serverManager.scheduleOfflineReconnectRetries();
-      success = (profile.isLocal && !localProfileHasJoinRows) || visibleServerIds.isNotEmpty;
+      // A profile whose connections are all switched off has nothing to
+      // reach: that is a settled (empty) bind, not a failure.
+      final nothingEnabled = parentDisabled && joinRows.isEmpty;
+      success = (profile.isLocal && !localProfileHasJoinRows) || nothingEnabled || visibleServerIds.isNotEmpty;
       if (!success) {
         // A failed pass that expected servers, reached none (`!success`
         // implies `visibleServerIds.isEmpty` here), and saw no refusal is
@@ -1133,7 +1155,7 @@ class ActiveProfileBinder {
     final bound = _plexBindTokens[accountId];
     if (bound == null || !_isCurrentBind(bound.profileId, bound.generation)) return;
     final account = await connections.getPlexAccount(accountId);
-    if (account == null || !_isCurrentBind(bound.profileId, bound.generation)) return;
+    if (account == null || !account.enabled || !_isCurrentBind(bound.profileId, bound.generation)) return;
     appLogger.i('ActiveProfileBinder: re-fetching Plex servers for ${bound.profileLabel} after a failed reconnect');
     final auth = await _ensureAuth();
     final settled = await _settleServerFetch(_fetchServersTimed(auth, bound.token, bound.profileLabel));

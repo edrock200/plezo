@@ -1351,6 +1351,35 @@ class MultiServerManager {
     }
   }
 
+  /// Stop everything live for [connection] because the user switched it off:
+  /// its client is closed (sockets, timers, in-flight requests drained) and
+  /// its server slot cleared, without signing out — the saved sign-in stays
+  /// valid so switching it back on needs no new sign-in. For a Plex account,
+  /// every server bound through that account is removed.
+  void disconnectConnection(Connection connection) {
+    switch (connection) {
+      case PlexAccountConnection(:final id):
+        final serverIds = [
+          for (final entry in _plexAccountByServer.entries)
+            if (entry.value.id == id) entry.key,
+        ];
+        for (final serverId in serverIds) {
+          removeServer(ServerId(serverId));
+        }
+      case JellyfinConnection(:final id, serverMachineId: final serverId) ||
+          SiloConnection(:final id, :final serverId) ||
+          TofaConnection(:final id, :final serverId):
+        final client = _jellyfinByCompoundId.remove(id);
+        _jellyfinHealthByCompoundId.remove(id);
+        if (client != null) unawaited(_closeClientGracefully(client));
+        if (_isActiveJellyfin(serverId, id)) {
+          _forgetServer(serverId);
+          _emitStatus();
+        }
+    }
+    appLogger.i('Disconnected switched-off connection ${connection.kind.id}');
+  }
+
   /// Tear down a specific Jellyfin user's client. If it was the active one
   /// for its machine, the machine slot is cleared.
   void removeJellyfinConnection(JellyfinConnection connection) {

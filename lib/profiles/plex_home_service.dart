@@ -244,6 +244,8 @@ class PlexHomeService {
   Future<bool> refresh(PlexAccountConnection conn) => _startRefresh(conn);
 
   Future<bool> _scheduleBackgroundRefresh(PlexAccountConnection conn) {
+    // A switched-off account is not contacted; its cached Home users stay.
+    if (!conn.enabled) return Future.value(false);
     final active = _activeRefreshes[conn.id];
     return active ?? _startRefresh(conn);
   }

@@ -30,9 +30,29 @@ sealed class Connection {
   /// no useful subtitle exists.
   String? get displaySubtitle;
 
+  /// Whether the user has this connection switched on. A disabled
+  /// connection stays saved (credentials and profile links included) but is
+  /// never connected: no client, no network calls, nothing shown from it.
+  bool get enabled;
+
   /// Backend-specific config payload, persisted as JSON. Each subclass
-  /// defines the schema.
+  /// defines the schema; [enabledKey] is written only while disabled, so a
+  /// row saved before the switch existed (or an enabled one) reads as on.
   Map<String, Object?> toConfigJson();
+
+  /// Config key holding the enable switch (absent = enabled).
+  static const String enabledKey = 'enabled';
+
+  /// Reads [enabledKey] from a stored config: anything but `false` is on.
+  static bool enabledFromConfig(Map<String, Object?> json) => json[enabledKey] != false;
+
+  /// This connection with its switch set to [enabled].
+  Connection withEnabled(bool enabled) => switch (this) {
+    final PlexAccountConnection c => c.copyWith(enabled: enabled),
+    final JellyfinConnection c => c.copyWith(enabled: enabled),
+    final SiloConnection c => c.copyWith(enabled: enabled),
+    final TofaConnection c => c.copyWith(enabled: enabled),
+  };
 }
 
 /// A Plex account connection.
@@ -50,6 +70,9 @@ class PlexAccountConnection extends Connection {
 
   @override
   final DateTime? lastAuthenticatedAt;
+
+  @override
+  final bool enabled;
 
   /// plex.tv account access token.
   final String accountToken;
@@ -77,6 +100,7 @@ class PlexAccountConnection extends Connection {
     this.servers = const [],
     required this.createdAt,
     this.lastAuthenticatedAt,
+    this.enabled = true,
   });
 
   @override
@@ -103,6 +127,7 @@ class PlexAccountConnection extends Connection {
     List<PlexServer>? servers,
     DateTime? createdAt,
     DateTime? lastAuthenticatedAt,
+    bool? enabled,
   }) {
     return PlexAccountConnection(
       id: id ?? this.id,
@@ -113,12 +138,14 @@ class PlexAccountConnection extends Connection {
       servers: servers ?? this.servers,
       createdAt: createdAt ?? this.createdAt,
       lastAuthenticatedAt: lastAuthenticatedAt ?? this.lastAuthenticatedAt,
+      enabled: enabled ?? this.enabled,
     );
   }
 
   @override
   Map<String, Object?> toConfigJson() {
     return {
+      if (!enabled) Connection.enabledKey: false,
       'accountToken': accountToken,
       'clientIdentifier': clientIdentifier,
       'accountLabel': accountLabel,
@@ -148,6 +175,7 @@ class PlexAccountConnection extends Connection {
       servers: servers,
       createdAt: createdAt,
       lastAuthenticatedAt: lastAuthenticatedAt,
+      enabled: Connection.enabledFromConfig(json),
     );
   }
 }
@@ -164,6 +192,9 @@ class JellyfinConnection extends Connection {
 
   @override
   final DateTime? lastAuthenticatedAt;
+
+  @override
+  final bool enabled;
 
   /// Which MediaBrowser dialect this server speaks. Drives [kind], [backend]
   /// and every route/capability delta in [JellyfinClient].
@@ -221,6 +252,7 @@ class JellyfinConnection extends Connection {
     this.primaryImageTag,
     required this.createdAt,
     this.lastAuthenticatedAt,
+    this.enabled = true,
   }) : baseUrl = canonicalizeBaseUrl(baseUrl),
        baseUrls = _normalizeBaseUrls(baseUrl, baseUrls);
 
@@ -282,6 +314,7 @@ class JellyfinConnection extends Connection {
     bool clearPrimaryImageTag = false,
     DateTime? createdAt,
     DateTime? lastAuthenticatedAt,
+    bool? enabled,
   }) {
     final nextBaseUrl = baseUrl ?? this.baseUrl;
     return JellyfinConnection(
@@ -299,6 +332,7 @@ class JellyfinConnection extends Connection {
       primaryImageTag: clearPrimaryImageTag ? null : (primaryImageTag ?? this.primaryImageTag),
       createdAt: createdAt ?? this.createdAt,
       lastAuthenticatedAt: lastAuthenticatedAt ?? this.lastAuthenticatedAt,
+      enabled: enabled ?? this.enabled,
     );
   }
 
@@ -308,6 +342,7 @@ class JellyfinConnection extends Connection {
   @override
   Map<String, Object?> toConfigJson() {
     return {
+      if (!enabled) Connection.enabledKey: false,
       'baseUrl': baseUrl,
       'baseUrls': baseUrls,
       'serverName': serverName,
@@ -349,6 +384,7 @@ class JellyfinConnection extends Connection {
       primaryImageTag: normalizePrimaryImageTag(json['primaryImageTag']),
       createdAt: createdAt,
       lastAuthenticatedAt: lastAuthenticatedAt,
+      enabled: Connection.enabledFromConfig(json),
     );
   }
 
@@ -385,6 +421,9 @@ class SiloConnection extends Connection {
 
   @override
   final DateTime? lastAuthenticatedAt;
+
+  @override
+  final bool enabled;
 
   /// Server base URL as the user entered it after normalisation, no trailing
   /// slash. May carry a reverse-proxy path prefix; API paths are appended.
@@ -453,6 +492,7 @@ class SiloConnection extends Connection {
     this.profileHasPin = false,
     required this.createdAt,
     this.lastAuthenticatedAt,
+    this.enabled = true,
   }) : baseUrl = canonicalizeBaseUrl(baseUrl);
 
   /// Compound connection id: one account's profile on one server.
@@ -490,6 +530,7 @@ class SiloConnection extends Connection {
     bool clearProfileToken = false,
     bool? profileHasPin,
     DateTime? lastAuthenticatedAt,
+    bool? enabled,
   }) {
     return SiloConnection(
       id: id,
@@ -511,12 +552,14 @@ class SiloConnection extends Connection {
       profileHasPin: profileHasPin ?? this.profileHasPin,
       createdAt: createdAt,
       lastAuthenticatedAt: lastAuthenticatedAt ?? this.lastAuthenticatedAt,
+      enabled: enabled ?? this.enabled,
     );
   }
 
   @override
   Map<String, Object?> toConfigJson() {
     return {
+      if (!enabled) Connection.enabledKey: false,
       'baseUrl': baseUrl,
       'serverName': serverName,
       'serverId': serverId,
@@ -564,6 +607,7 @@ class SiloConnection extends Connection {
       profileHasPin: json['profileHasPin'] as bool? ?? false,
       createdAt: createdAt,
       lastAuthenticatedAt: lastAuthenticatedAt,
+      enabled: Connection.enabledFromConfig(json),
     );
   }
 }
@@ -589,6 +633,9 @@ class TofaConnection extends Connection {
 
   @override
   final DateTime? lastAuthenticatedAt;
+
+  @override
+  final bool enabled;
 
   /// Server base URL as the user entered it after normalisation, no trailing
   /// slash. API paths (`/api/v1/...`) are appended.
@@ -655,6 +702,7 @@ class TofaConnection extends Connection {
     this.profileIsLocked = false,
     required this.createdAt,
     this.lastAuthenticatedAt,
+    this.enabled = true,
   }) : baseUrl = canonicalizeBaseUrl(baseUrl),
        connectUrl = canonicalizeBaseUrl(connectUrl);
 
@@ -694,6 +742,7 @@ class TofaConnection extends Connection {
     bool clearProfileToken = false,
     bool? profileIsLocked,
     DateTime? lastAuthenticatedAt,
+    bool? enabled,
   }) {
     return TofaConnection(
       id: id,
@@ -715,12 +764,14 @@ class TofaConnection extends Connection {
       profileIsLocked: profileIsLocked ?? this.profileIsLocked,
       createdAt: createdAt,
       lastAuthenticatedAt: lastAuthenticatedAt ?? this.lastAuthenticatedAt,
+      enabled: enabled ?? this.enabled,
     );
   }
 
   @override
   Map<String, Object?> toConfigJson() {
     return {
+      if (!enabled) Connection.enabledKey: false,
       'baseUrl': baseUrl,
       'serverName': serverName,
       'serverId': serverId,
@@ -772,6 +823,7 @@ class TofaConnection extends Connection {
       profileIsLocked: json['profileIsLocked'] as bool? ?? false,
       createdAt: createdAt,
       lastAuthenticatedAt: lastAuthenticatedAt,
+      enabled: Connection.enabledFromConfig(json),
     );
   }
 }
