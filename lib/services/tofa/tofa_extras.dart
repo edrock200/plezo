@@ -467,3 +467,71 @@ class TofaHistoryPage {
   final List<TofaHistoryEntry> items;
   final bool hasMore;
 }
+
+/// One subtitle a provider offers for a file (`SubtitleCandidate`).
+class TofaSubtitleCandidate {
+  const TofaSubtitleCandidate({
+    required this.id,
+    required this.language,
+    required this.provider,
+    required this.release,
+    this.score,
+    this.hearingImpaired = false,
+    this.forced = false,
+    this.hashMatch = false,
+    this.trusted = false,
+    this.rejected = false,
+  });
+
+  final String id;
+  final String language;
+  final String provider;
+  final String release;
+  final int? score;
+  final bool hearingImpaired;
+  final bool forced;
+  final bool hashMatch;
+  final bool trusted;
+  final bool rejected;
+
+  static TofaSubtitleCandidate? fromJson(Object? data) {
+    if (data is! Map) return null;
+    final id = _str(data['id']);
+    if (id == null) return null;
+    return TofaSubtitleCandidate(
+      id: id,
+      language: _str(data['language']) ?? '',
+      provider: _str(data['provider']) ?? '',
+      release: _str(data['release']) ?? '',
+      score: flexibleInt(data['score']),
+      hearingImpaired: data['hearing_impaired'] == true,
+      forced: data['forced'] == true,
+      hashMatch: data['hash_match'] == true,
+      trusted: data['trusted'] == true,
+      rejected: data['rejected'] == true,
+    );
+  }
+}
+
+/// `GET /subtitles/fetch/files/{file}/candidates` (`SubtitleCandidatesResponse`).
+class TofaSubtitleCandidates {
+  const TofaSubtitleCandidates({this.candidates = const [], this.canFetch = false, this.selectedCandidate});
+
+  final List<TofaSubtitleCandidate> candidates;
+
+  /// Whether the server can fetch a subtitle for this file now.
+  final bool canFetch;
+  final String? selectedCandidate;
+
+  static TofaSubtitleCandidates fromJson(Object? data) {
+    if (data is! Map) return const TofaSubtitleCandidates();
+    return TofaSubtitleCandidates(
+      candidates: [
+        if (data['candidates'] is List)
+          for (final c in data['candidates'] as List) ?TofaSubtitleCandidate.fromJson(c),
+      ],
+      canFetch: data['can_fetch'] == true,
+      selectedCandidate: _str(data['selected_candidate']),
+    );
+  }
+}

@@ -222,6 +222,29 @@ extension _PlexVideoControlsTrackMethods on _PlexVideoControlsState {
       // this metadata's serverId.
       subtitleSearchSupported: _isPlexBackedMetadata(),
       siloSubtitles: _siloSubtitleTools(),
+      tofaSubtitles: _tofaSubtitleTools(),
+    );
+  }
+
+  /// Tofa's subtitle search for an online Tofa item.
+  TofaSubtitleTools? _tofaSubtitleTools() {
+    final metadata = widget.metadata;
+    final serverId = metadata.serverId;
+    if (metadata.backend != MediaBackend.tofa || serverId == null || widget.isOfflinePlayback || widget.isLive) {
+      return null;
+    }
+    final MediaServerClient? client;
+    try {
+      client = context.read<MultiServerProvider>().serverManager.getClient(ServerId(serverId));
+    } catch (_) {
+      return null;
+    }
+    if (client is! TofaClient) return null;
+    final itemKey = metadata.globalKey;
+    return TofaSubtitleTools(
+      client: client,
+      itemId: metadata.id,
+      applyTrack: (index) => _applyTofaFetchedSubtitle(index, itemKey),
     );
   }
 

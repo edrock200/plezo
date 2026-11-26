@@ -10,6 +10,7 @@ import '../../../services/playback_subtitle_resolver.dart';
 import '../../../services/shader_service.dart';
 import '../helpers/track_filter_helper.dart';
 import 'silo_subtitle_tools.dart';
+import 'tofa_subtitle_tools.dart';
 
 enum SubtitleDownloadApplyOutcome { applied, timedOut, busy, superseded, unavailable, failed }
 
@@ -89,6 +90,9 @@ class TrackControlsState {
   /// item; null otherwise.
   final SiloSubtitleTools? siloSubtitles;
 
+  /// Tofa's subtitle search for an online Tofa item; null otherwise.
+  final TofaSubtitleTools? tofaSubtitles;
+
   const TrackControlsState({
     this.availableVersions = const [],
     this.selectedMediaIndex = 0,
@@ -144,6 +148,7 @@ class TrackControlsState {
     this.onSubtitleDownloaded,
     this.subtitleSearchSupported = true,
     this.siloSubtitles,
+    this.tofaSubtitles,
   });
 
   /// Transcoded subtitle choices must be negotiated with the server and
@@ -193,6 +198,7 @@ class TrackControlsState {
         directPlaySourceSidecars.isNotEmpty ||
         TrackFilterHelper.hasTracks<SubtitleTrack>(playerSubtitles) ||
         canSearchSubtitles ||
-        siloSubtitles != null;
+        siloSubtitles != null ||
+        tofaSubtitles != null;
   }
 }

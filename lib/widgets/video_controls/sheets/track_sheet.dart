@@ -18,6 +18,7 @@ import '../models/track_controls_state.dart';
 import '../helpers/track_filter_helper.dart';
 import '../helpers/track_selection_helper.dart';
 import '../silo/silo_subtitle_footer.dart';
+import '../tofa/tofa_subtitle_search_sheet.dart';
 
 /// Combined bottom sheet for selecting audio and subtitle tracks side-by-side.
 class TrackSheet extends StatelessWidget {
@@ -496,6 +497,17 @@ List<Widget> _buildSubtitleSearchFooter(BuildContext context, TrackControlsState
   if (silo != null) {
     // The Silo rows draw their own divider: both can be hidden.
     return [SiloSubtitleFooterTiles(tools: silo)];
+  }
+  final tofa = state.tofaSubtitles;
+  if (tofa != null) {
+    return [
+      Divider(height: 1, color: Theme.of(context).dividerColor),
+      FocusableListTile(
+        leading: const AppIcon(Symbols.search_rounded),
+        title: Text(t.videoControls.searchSubtitles),
+        onTap: () => OverlaySheetController.of(context).push(builder: (_) => TofaSubtitleSearchSheet(tools: tofa)),
+      ),
+    ];
   }
   if (!state.canSearchSubtitles) return const [];
 

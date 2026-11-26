@@ -2551,6 +2551,24 @@ class Translations$videoControls$en {
 	/// en: 'No audio devices available'
 	String get noAudioDevicesAvailable => 'No audio devices available';
 
+	/// en: 'Your Tofa server is still fetching that subtitle. Open the subtitles again in a moment.'
+	String get tofaSubtitleStillFetching => 'Your Tofa server is still fetching that subtitle. Open the subtitles again in a moment.';
+
+	/// en: 'Downloaded subtitle removed.'
+	String get tofaSubtitleRemoved => 'Downloaded subtitle removed.';
+
+	/// en: 'Remove the downloaded subtitle in this language'
+	String get tofaRemoveFetchedSubtitle => 'Remove the downloaded subtitle in this language';
+
+	/// en: 'Your Tofa server can't fetch subtitles for this file right now.'
+	String get tofaSubtitleCannotFetch => 'Your Tofa server can\'t fetch subtitles for this file right now.';
+
+	/// en: 'Exact match'
+	String get tofaSubtitleExactMatch => 'Exact match';
+
+	/// en: 'In use'
+	String get tofaSubtitleInUse => 'In use';
+
 	/// en: 'Search Subtitles'
 	String get searchSubtitles => 'Search Subtitles';
 
@@ -10618,6 +10636,12 @@ extension on Translations {
 			'videoControls.queue' => 'Queue',
 			'videoControls.noQueueItems' => 'No items in queue',
 			'videoControls.noAudioDevicesAvailable' => 'No audio devices available',
+			'videoControls.tofaSubtitleStillFetching' => 'Your Tofa server is still fetching that subtitle. Open the subtitles again in a moment.',
+			'videoControls.tofaSubtitleRemoved' => 'Downloaded subtitle removed.',
+			'videoControls.tofaRemoveFetchedSubtitle' => 'Remove the downloaded subtitle in this language',
+			'videoControls.tofaSubtitleCannotFetch' => 'Your Tofa server can\'t fetch subtitles for this file right now.',
+			'videoControls.tofaSubtitleExactMatch' => 'Exact match',
+			'videoControls.tofaSubtitleInUse' => 'In use',
 			'videoControls.searchSubtitles' => 'Search Subtitles',
 			'videoControls.language' => 'Language',
 			'videoControls.noSubtitlesFound' => 'No subtitles found',
@@ -10781,14 +10805,14 @@ extension on Translations {
 			'mpvConfig.confirmDeletePreset' => 'Are you sure you want to delete this preset?',
 			'mpvConfig.configPlaceholder' => 'gpu-api=vulkan\nhwdec=auto\n# comment',
 			'mpvConfig.lineHint' => 'option=value',
+			_ => null,
+		} ?? switch (path) {
 			'mpvConfig.addLine' => 'Add line',
 			'mpvConfig.removeLine' => 'Remove line',
 			'mpvConfig.embeddedVoHint' => 'vo, gpu-context and gpu-api are ignored on Linux: embedded video always renders through vo=libmpv on the video plane, and gpu-next (which compute shaders like ArtCNN need) cannot run embedded.',
 			'dialog.confirmAction' => 'Confirm Action',
 			'profiles.addPlezyProfile' => 'Add Plezilo profile',
 			'profiles.switchingProfile' => 'Switching profile…',
-			_ => null,
-		} ?? switch (path) {
 			'profiles.deleteThisProfileTitle' => 'Delete this profile?',
 			'profiles.deleteThisProfileMessage' => ({required Object displayName}) => 'Remove ${displayName}. Connections aren\'t affected.',
 			'profiles.active' => 'Active',
@@ -11295,14 +11319,14 @@ extension on Translations {
 			'explore.broadcast' => ({required Object day, required Object time}) => 'Airs ${day} at ${time}',
 			'explore.broadcastWithZone' => ({required Object day, required Object time, required Object timezone}) => 'Airs ${day} at ${time} ${timezone}',
 			'explore.detail.originalTitle' => 'Original title',
+			_ => null,
+		} ?? switch (path) {
 			'explore.detail.alsoKnownAs' => 'Also known as',
 			'explore.detail.studios' => 'Studios',
 			'explore.detail.country' => 'Country',
 			'explore.detail.language' => 'Language',
 			'explore.detail.released' => 'Released',
 			'explore.detail.physicalRelease' => 'On disc',
-			_ => null,
-		} ?? switch (path) {
 			'explore.detail.ended' => 'Ended',
 			'explore.detail.addedOn' => ({required Object date}) => 'Added ${date}',
 			'explore.detail.yourRating' => 'Your rating',
@@ -11809,14 +11833,14 @@ extension on Translations {
 			'downloads.unknownAlbum' => 'Unknown Album',
 			'downloads.completedOfTotal' => ({required Object completed, required Object total}) => '${completed}/${total} completed',
 			'downloads.errorFileNotFound' => 'File not found (404)',
+			_ => null,
+		} ?? switch (path) {
 			'downloads.errorDownloadNotAllowed' => 'Download not allowed by the server (403)',
 			'downloads.errorDownloadFailed' => 'Download failed',
 			'downloads.errorDownloadFailedWithReason' => ({required Object reason}) => 'Download failed: ${reason}',
 			'downloads.errorHttpStatus' => ({required Object status}) => 'Download failed (HTTP ${status})',
 			'downloads.errorPostProcessing' => ({required Object reason}) => 'Post-processing failed: ${reason}',
 			'downloads.reasonFileNotSaved' => 'the file could not be saved on this device',
-			_ => null,
-		} ?? switch (path) {
 			'downloads.reasonCannotResume' => 'the partial download could not be resumed',
 			'downloads.reasonDeviceStorageFull' => 'this device is out of storage',
 			'downloads.notificationDownloading' => 'Downloading...',
@@ -12323,14 +12347,14 @@ extension on Translations {
 			'addServer.tofaChooseProfile' => 'Who\'s watching?',
 			'addServer.tofaChooseProfileSubtitle' => 'Pick the Tofa profile to use on this device.',
 			'addServer.tofaNoProfiles' => 'This account has no Tofa profiles.',
+			_ => null,
+		} ?? switch (path) {
 			'addServer.tofaProfileLocked' => 'PIN protected',
 			'addServer.tofaProfileKids' => 'Kids profile',
 			'addServer.tofaWrongPin' => 'Wrong PIN. Try again.',
 			'addServer.tofaTooManyPinAttempts' => 'Too many PIN attempts. Wait a moment and try again.',
 			'addServer.tofaPinNetworkError' => 'Couldn\'t check the PIN. Check your connection and try again.',
 			'addServer.tofaSignInFailed' => 'Couldn\'t finish signing in. Try again.',
-			_ => null,
-		} ?? switch (path) {
 			'addServer.tofaServerUnreachable' => 'Couldn\'t reach this Tofa server from this device, at home, over the internet or through Tofa\'s relay. Check that the server is online, then try again.',
 			'addServer.tofaAccountLead' => 'Away from home, or don\'t know the address? Sign in with your Tofa account and pick your server.',
 			'addServer.tofaSignInWithAccount' => 'Sign in with your Tofa account',

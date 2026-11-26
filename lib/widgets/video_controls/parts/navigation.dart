@@ -162,6 +162,21 @@ extension _PlexVideoControlsNavigationMethods on _PlexVideoControlsState {
     }
   }
 
+  /// Reload so the session lists the subtitle Tofa just fetched (track
+  /// [index] of the file; Plezilo's source id is the index + 1) and select it.
+  Future<SubtitleDownloadApplyOutcome> _applyTofaFetchedSubtitle(int index, String itemKey) async {
+    if (!mounted || widget.metadata.globalKey != itemKey) return SubtitleDownloadApplyOutcome.superseded;
+    final switchSource = widget.onPlaybackSourceChanged;
+    if (switchSource == null) return SubtitleDownloadApplyOutcome.unavailable;
+    try {
+      final outcome = await switchSource(newSubtitleChoice: PlaybackSourceSubtitleChoice.source(index + 1));
+      return subtitleDownloadApplyOutcomeFor(outcome);
+    } catch (e) {
+      appLogger.w('Failed to load the fetched Tofa subtitle', error: e);
+      return SubtitleDownloadApplyOutcome.failed;
+    }
+  }
+
   /// Request a version, quality preset, audio stream, or source subtitle reload.
   /// The owning player screen decides how to apply it so controls do not own
   /// player lifecycle/navigation policy.

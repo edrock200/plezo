@@ -245,4 +245,82 @@ extension TofaClientExtras on TofaClient {
     if (url.startsWith('/api/')) return thumbnailUrl(url);
     return '';
   }
+
+  // --- Subtitle search -------------------------------------------------------
+
+  /// The file playing for [itemId] now (a multi-part set: the open part).
+  String? playingFileId(String itemId) {
+    for (final session in _sessions.values.toList().reversed) {
+      if (session.itemId == itemId && !session.stopped) return session.fileId;
+    }
+    return _playingFileIds[itemId];
+  }
+
+  /// `GET /subtitles/fetch/files/{file}/candidates?language=` (ISO 639-1
+  /// codes, as Plezilo's language picker gives them; unverified that the
+  /// server takes those rather than 639-2).
+  Future<TofaSubtitleCandidates> subtitleCandidates(String fileId, String language) async =>
+      TofaSubtitleCandidates.fromJson(
+        await _api.getJson(
+          '/api/v1/subtitles/fetch/files/${TofaClient._seg(fileId)}/candidates',
+          query: {'language': language},
+        ),
+      );
+
+  /// `POST …/candidate`: the server fetches the pick in the background
+  /// (202). Watch [fileSubtitleTracks] for it to appear.
+  Future<void> selectSubtitleCandidate(String fileId, String candidateId, String language) async {
+    await _api.send(
+      'POST',
+      '/api/v1/subtitles/fetch/files/${TofaClient._seg(fileId)}/candidate',
+      body: {'candidate_id': candidateId, 'language': language},
+    );
+    appLogger.i('[tofa] subtitle candidate picked; waiting for the server to fetch it');
+  }
+
+  /// `DELETE …/subtitles/{language}`: removes the fetched subtitle.
+  Future<void> removeFetchedSubtitle(String fileId, String language) => _api.send(
+    'DELETE',
+    '/api/v1/subtitles/fetch/files/${TofaClient._seg(fileId)}/subtitles/${TofaClient._seg(language)}',
+  );
+
+  /// The file's subtitle tracks (`GET /stream/{file}/subtitles`): indexes
+  /// with their language, to spot a newly fetched one.
+  Future<List<({int index, String? language, bool external})>> fileSubtitleTracks(String fileId) async {
+    final data = await _api.getJson('/api/v1/stream/${TofaClient._seg(fileId)}/subtitles');
+    return [
+      if (data is List)
+        for (final row in data.whereType<Map>())
+          if (flexibleInt(row['index']) case final index?)
+            (
+              index: index,
+              language: row['language'] is String ? row['language'] as String : null,
+              external: row['external'] == true,
+            ),
+    ];
+  }
+
+  /// Waits for a subtitle track that is not in [before] to appear on
+  /// [fileId] (the fetched pick), every [interval] up to [timeout]. Its
+  /// index, or null when none came.
+  Future<int?> waitForNewSubtitle(
+    String fileId,
+    Set<int> before, {
+    Duration interval = const Duration(seconds: 2),
+    Duration timeout = const Duration(seconds: 30),
+    Future<void> Function(Duration)? wait,
+  }) async {
+    final deadline = DateTime.now().add(timeout);
+    while (DateTime.now().isBefore(deadline)) {
+      await (wait ?? Future<void>.delayed)(interval);
+      try {
+        final tracks = await fileSubtitleTracks(fileId);
+        final fresh = tracks.where((t) => !before.contains(t.index)).firstOrNull;
+        if (fresh != null) return fresh.index;
+      } catch (e) {
+        appLogger.d('[tofa] subtitle list read failed', error: e.runtimeType);
+      }
+    }
+    return null;
+  }
 }
