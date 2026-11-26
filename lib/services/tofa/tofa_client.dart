@@ -25,6 +25,7 @@ import '../../media/media_item.dart';
 import '../../media/media_kind.dart';
 import '../../media/media_library.dart';
 import '../../media/media_person.dart';
+import '../../media/remote_trailer.dart';
 import '../../media/media_playlist.dart';
 import '../../media/media_server_client.dart';
 import '../../media/media_sort.dart';
@@ -68,6 +69,7 @@ part 'tofa_client_downloads.dart';
 part 'tofa_client_collections.dart';
 part 'tofa_client_home.dart';
 part 'tofa_client_live.dart';
+part 'tofa_client_people.dart';
 part 'tofa_client_quickview.dart';
 
 /// One live Tofa stream session (`/stream/{file}/info`'s `session_id`).
@@ -95,7 +97,13 @@ class _TofaStreamSession {
 /// out (playlists, collections, people, live TV, downloads, sort and filter
 /// lists whose values the spec does not enumerate), answers empty or throws
 /// [UnsupportedError] as the other clients do.
-class TofaClient implements MediaServerClient, ScopedMediaServerClient, GracefullyCloseable, MembershipListsClient {
+class TofaClient
+    implements
+        MediaServerClient,
+        ScopedMediaServerClient,
+        GracefullyCloseable,
+        MembershipListsClient,
+        RemoteTrailerClient {
   TofaClient._({required this._connection, required this._api});
 
   /// Build a client for [connection]. Network I/O stays lazy.
@@ -900,26 +908,35 @@ class TofaClient implements MediaServerClient, ScopedMediaServerClient, Graceful
     if (q.isEmpty) return const [];
     final data = await _api.getJson(
       '/api/v1/search',
-      query: {'q': q, 'limit': '$limit', 'movie_limit': '$limit', 'actor_limit': '0', 'discover_limit': '0'},
+      query: {
+        'q': q,
+        'limit': '$limit',
+        'movie_limit': '$limit',
+        'actor_limit': '0',
+        'discover_limit': '0',
+        'collection_limit': '20',
+      },
       abort: abort,
     );
     final rows = data is Map && data['movies'] is List ? data['movies'] as List : const [];
+    final collections = data is Map && data['collections'] is List ? data['collections'] as List : const [];
     return [
       for (final row in rows.whereType<Map<String, dynamic>>())
         ?TofaMappers.summary(row, _ctx, libraryTitle: _libraryTitles[row['library_id']]),
+      // `SearchCollection`: `kind` `custom` is a custom collection's id.
+      for (final row in collections.whereType<Map<String, dynamic>>())
+        ?TofaMappers.collection(row, _ctx, custom: row['kind'] == 'custom'),
     ];
   }
 
-  /// People search is not offered: Plezilo cannot list a person's titles
-  /// on Tofa yet ([fetchPersonMediaPage]), and every person returned must
-  /// open a non-empty page.
+  /// `GET /api/v1/search`'s `actors` (see `tofa_client_people.dart`).
   @override
   Future<List<MediaPerson>> searchPeople(
     String query, {
     int limit = defaultPeopleSearchLimit,
     AbortController? abort,
     Set<String> excludedLibraryIds = const {},
-  }) async => const [];
+  }) => _searchPeople(query, limit, abort);
 
   /// `GET /api/v1/users/me/continue`, in the server's order.
   @override
@@ -1011,11 +1028,14 @@ class TofaClient implements MediaServerClient, ScopedMediaServerClient, Graceful
     int? start,
     int? size,
     AbortController? abort,
-  }) async => const LibraryPage(items: [], totalCount: 0);
+  }) => _personMedia(personId, start, size, abort);
 
   @override
-  Future<MediaPersonDetails> fetchPersonDetails(String personId, {AbortController? abort}) async =>
-      MediaPersonDetails.empty;
+  Future<MediaPersonDetails> fetchPersonDetails(String personId, {AbortController? abort}) =>
+      _personDetails(personId, abort);
+
+  @override
+  Future<List<RemoteTrailer>> fetchRemoteTrailers(String id) => _remoteTrailers(id);
 
   @override
   Future<List<MediaItem>> fetchMoreHubItems(String hubId, {int? limit}) async =>

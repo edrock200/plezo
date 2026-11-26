@@ -1046,4 +1046,84 @@ void main() {
       expect(queue.map((i) => i.id), ['m-1']);
     });
   });
+
+  // ---------------------------------------------------------------------------
+  group('people and trailers', () {
+    test('a cast member opens their titles in the library and their biography', () async {
+      fake.on('GET', '/api/v1/media/m-1', (_) => jsonResponse(movieDetail()..['youtube_trailer_id'] = 'yt123'));
+      fake.on('POST', '/api/v1/media/progress/batch', (_) => jsonResponse({'items': <Object>[]}));
+      fake.on('GET', '/api/v1/media', (r) {
+        expect(r.url.queryParameters['cast'], 'Actor One');
+        return jsonResponse(_page([mediaSummary('m-2')]));
+      });
+      fake.on('GET', '/api/v1/discovery/people/by-name', (r) {
+        expect(r.url.queryParameters['name'], 'Actor One');
+        return jsonResponse({
+          'person_id': 5,
+          'name': 'Jane Doe',
+          'biography': ' An actor. ',
+          'birthday': '1980-02-03',
+          'deathday': null,
+          'place_of_birth': 'Reykjavik',
+          'also_known_as': <String>[],
+          'credits': <Object>[],
+          'credits_truncated': false,
+          'details_pending': false,
+          'imdb_id': null,
+          'known_for_department': 'Acting',
+          'profile_url': null,
+        });
+      });
+      final c = client();
+      final item = await c.fetchItem('m-1');
+      final role = item!.roles!.single;
+      expect(role.tag, 'Actor One');
+      expect(role.id, 'tofa-person:Actor One');
+      final page = await c.fetchPersonMediaPage(role.id!);
+      expect(page.items.single.id, 'm-2');
+      final details = await c.fetchPersonDetails(role.id!);
+      expect(details.biography, 'An actor.');
+      expect(details.birthDate, DateTime.utc(1980, 2, 3));
+      expect(details.birthPlace, 'Reykjavik');
+      final trailers = await c.fetchRemoteTrailers('m-1');
+      expect(trailers.single.key, 'yt123');
+      expect(trailers.single.isYoutube, isTrue);
+    });
+
+    test('people search lists actors with titles; title search adds collections', () async {
+      fake.on('GET', '/api/v1/search', (r) {
+        final q = r.url.queryParameters;
+        return jsonResponse({
+          'movies': q['movie_limit'] == '0' ? <Object>[] : [mediaSummary('m-1')],
+          'actors': [
+            {
+              'name': 'Jane Doe',
+              'media_count': 2,
+              'profile_url': 'https://img.example.com/j.jpg',
+              'sample_poster_path': null,
+            },
+            {'name': 'Nobody', 'media_count': 0, 'profile_url': null, 'sample_poster_path': null},
+          ],
+          'discover': <Object>[],
+          'collections': [
+            {
+              'id': 'u-1',
+              'kind': 'custom',
+              'name': 'Rainy days',
+              'item_count': 2,
+              'poster_path': null,
+              'backdrop_path': null,
+              'poster_paths': <String>[],
+            },
+          ],
+        });
+      });
+      final c = client();
+      final people = await c.searchPeople('jane');
+      expect(people.single.id, 'tofa-person:Jane Doe');
+      expect(people.single.thumbPath, 'https://img.example.com/j.jpg');
+      final items = await c.searchItems('rain');
+      expect(items.map((i) => i.id), ['m-1', 'tofa-custom:u-1']);
+    });
+  });
 }

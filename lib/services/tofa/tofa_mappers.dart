@@ -103,6 +103,8 @@ abstract final class TofaMappers {
 
   static String? _string(Object? v) => v is String && v.isNotEmpty ? v : (v is num ? v.toString() : null);
 
+  static String? absoluteUrl(Object? v) => _absoluteUrl(v);
+
   static String? _absoluteUrl(Object? v) {
     final s = _string(v);
     return s != null && (s.startsWith('https://') || s.startsWith('http://')) ? s : null;
@@ -324,7 +326,13 @@ abstract final class TofaMappers {
     final out = [
       for (final member in cast.whereType<Map>())
         if (_string(member['name']) case final name?)
-          MediaRole(tag: name, role: _string(member['role']), thumbPath: _absoluteUrl(member['profile_url'])),
+          MediaRole(
+            // Plezilo's person id: the name (`/media?cast=`, see tofa_client_people.dart).
+            id: 'tofa-person:$name',
+            tag: name,
+            role: _string(member['role']),
+            thumbPath: _absoluteUrl(member['profile_url']),
+          ),
     ];
     return out.isEmpty ? null : out;
   }

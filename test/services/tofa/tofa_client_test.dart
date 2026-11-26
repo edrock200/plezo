@@ -644,7 +644,6 @@ void main() {
   test('unsupported members answer empty or throw UnsupportedError', () async {
     final c = client();
     expect(await c.fetchPlaylistsPage(), isA<LibraryPage<Object>>().having((p) => p.items, 'items', isEmpty));
-    expect(await c.searchPeople('x'), isEmpty);
     expect(await c.fetchSortOptions('lib-1'), isEmpty, reason: 'no facets answer, no sorts');
     expect(
       await c.resolveExternalPlayback(MediaItem(id: 'm-1', backend: MediaBackend.tofa, kind: MediaKind.movie)),
