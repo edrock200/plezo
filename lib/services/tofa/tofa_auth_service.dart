@@ -420,6 +420,103 @@ class TofaAuthService {
     return tokens;
   }
 
+  /// The address of a server picked from the account's list that answers
+  /// from this device. `connect_url` alone is the server's direct internet
+  /// address, which many servers (no port forward, a seedbox behind its own
+  /// domain) never answer on, so the sign-in hung on it and failed. Like the
+  /// client, race what `GET {cloud}/servers/{id}/connection-info` lists
+  /// (lan-direct, wan-direct including custom access URLs, relay; the guide's
+  /// order and staggers), then `connect_url`, then the documented relay base.
+  /// Null when nothing answers.
+  Future<TofaServerInfo?> resolveServerAddress(String cloudUrl, TofaCloudServer server, TofaTokens tokens) async {
+    TofaConnectionInfo? info;
+    try {
+      final response = await _http.get(
+        '$cloudUrl/servers/${Uri.encodeComponent(server.id)}/connection-info',
+        headers: {'Authorization': 'Bearer ${tokens.accessToken}'},
+        timeout: const Duration(seconds: 10),
+      );
+      if (response.statusCode == 200) {
+        info = TofaConnectionInfo.fromJson(response.data);
+      } else {
+        appLogger.d('[tofa] connection-info answered ${response.statusCode} at sign-in');
+      }
+    } catch (e) {
+      appLogger.d('[tofa] connection-info unavailable at sign-in', error: e.runtimeType);
+    }
+    final candidates = signInCandidates(cloudUrl, server, info);
+    appLogger.i('[tofa] sign-in address race: ${candidates.map((c) => c.kind.name).join(',')}');
+    final winner = await raceTofaEndpoints(candidates, (c) => probeAddress(c.url, server.id, tokens));
+    if (winner == null) {
+      appLogger.w('[tofa] no address of the picked server answered');
+      return null;
+    }
+    appLogger.i('[tofa] sign-in reaches the server via ${winner.kind.name}');
+    return TofaServerInfo(
+      baseUrl: canonicalizeBaseUrl(winner.url),
+      serverName: server.name,
+      claimed: true,
+      claimPending: false,
+      serverId: server.id,
+      connectUrl: cloudUrl,
+    );
+  }
+
+  /// The race order for [resolveServerAddress]: the cloud's candidates as
+  /// given, then `connect_url` (a wan-direct path), then the relay base
+  /// when the cloud listed none. Duplicates are dropped by the race.
+  @visibleForTesting
+  static List<TofaEndpointCandidate> signInCandidates(
+    String cloudUrl,
+    TofaCloudServer server,
+    TofaConnectionInfo? info,
+  ) {
+    final cloud = info?.candidates ?? const <TofaEndpointCandidate>[];
+    final last = cloud.isEmpty ? Duration.zero : cloud.last.stagger;
+    final direct = server.connectUrl;
+    return [
+      ...cloud,
+      if (direct != null)
+        TofaEndpointCandidate(
+          url: canonicalizeBaseUrl(direct),
+          kind: TofaEndpointKind.wanDirect,
+          stagger: last + const Duration(milliseconds: 100),
+        ),
+      if (!cloud.any((c) => c.kind == TofaEndpointKind.relay))
+        TofaEndpointCandidate(
+          url: tofaRelayUrl(cloudUrl, server.id),
+          kind: TofaEndpointKind.relay,
+          stagger: last + const Duration(milliseconds: 300),
+        ),
+    ];
+  }
+
+  /// Whether the Tofa server [serverId] answers at [baseUrl]
+  /// (`GET /api/v1/auth/status`). Asked without credentials first; when that
+  /// is refused (unverified: the relay may want the bearer on every route),
+  /// asked again with the server token, which only goes to addresses Tofa's
+  /// cloud listed for this server.
+  @visibleForTesting
+  Future<bool> probeAddress(String baseUrl, String serverId, TofaTokens tokens) async {
+    for (final withBearer in const [false, true]) {
+      try {
+        final response = await _http.get(
+          '$baseUrl/api/v1/auth/status',
+          headers: withBearer ? {'Authorization': 'Bearer ${tokens.accessToken}'} : const {},
+          timeout: const Duration(seconds: 6),
+        );
+        if (response.statusCode == 200 && response.data is Map) {
+          final id = (response.data as Map)['server_id'];
+          return id == null || id == serverId;
+        }
+        if (response.statusCode != 401 && response.statusCode != 403) return false;
+      } catch (_) {
+        return false;
+      }
+    }
+    return false;
+  }
+
   Map<String, String> _bearer(TofaTokens tokens) => {
     ..._headers.toHeaders(),
     'Authorization': 'Bearer ${tokens.accessToken}',

@@ -57,6 +57,17 @@ sign-in and remote access. Plezilo talks to it as `MediaBackend.tofa`, its fifth
 - API keys (`tofa_…`) are admin-made and work only on direct connections. Don't offer them as sign-in.
 - Sign-out: there is no device-token revoke in the public spec. Forget the tokens locally.
 
+### Pitfall: a server's `connect_url` is not an address that answers (device-tested 2026-11-26)
+
+- `ServerListEntry.connect_url` is `https://<id>.direct.tofa.tv:33333`, the WAN-direct path. On a server without an
+  open port (a seedbox behind its own domain) it never answers, and the account sign-in hung on it (about 30 s, then
+  "Couldn't finish signing in").
+- After `server-session`, `TofaAuthService.resolveServerAddress` races `GET {cloud}/servers/{id}/connection-info`
+  candidates (custom access URLs are extra `wan-direct` entries), then `connect_url`, then the relay. The client keeps
+  racing at runtime.
+- The relay answers `auth/status` with **401 without a bearer**. Both probes ask again with the server token on
+  401/403. Only addresses the cloud listed, or the user typed, get it.
+
 ### Profiles
 
 - `GET /api/v1/profiles` returns `[ProfileResponse]`: `id`, `name`, `is_kids`, `is_locked`, `is_primary`,

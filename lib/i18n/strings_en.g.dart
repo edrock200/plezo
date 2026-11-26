@@ -6529,6 +6529,9 @@ class Translations$addServer$en {
 	/// en: 'Couldn't finish signing in. Try again.'
 	String get tofaSignInFailed => 'Couldn\'t finish signing in. Try again.';
 
+	/// en: 'Couldn't reach this Tofa server from this device, at home, over the internet or through Tofa's relay. Check that the server is online, then try again.'
+	String get tofaServerUnreachable => 'Couldn\'t reach this Tofa server from this device, at home, over the internet or through Tofa\'s relay. Check that the server is online, then try again.';
+
 	/// en: 'Away from home, or don't know the address? Sign in with your Tofa account and pick your server.'
 	String get tofaAccountLead => 'Away from home, or don\'t know the address? Sign in with your Tofa account and pick your server.';
 
@@ -12084,6 +12087,7 @@ extension on Translations {
 			'addServer.tofaTooManyPinAttempts' => 'Too many PIN attempts. Wait a moment and try again.',
 			'addServer.tofaPinNetworkError' => 'Couldn\'t check the PIN. Check your connection and try again.',
 			'addServer.tofaSignInFailed' => 'Couldn\'t finish signing in. Try again.',
+			'addServer.tofaServerUnreachable' => 'Couldn\'t reach this Tofa server from this device, at home, over the internet or through Tofa\'s relay. Check that the server is online, then try again.',
 			'addServer.tofaAccountLead' => 'Away from home, or don\'t know the address? Sign in with your Tofa account and pick your server.',
 			'addServer.tofaSignInWithAccount' => 'Sign in with your Tofa account',
 			'addServer.tofaChooseServer' => 'Choose a server',
@@ -12141,9 +12145,9 @@ extension on Translations {
 			'siloPairing.summaryNotAdded' => ({required Object account, required Object server}) => '${account} on ${server} was not added',
 			'siloPairing.summarySwitchHint' => 'Switch profiles to use an account that is in another profile.',
 			'siloPairing.done' => 'Done',
-			'siloPairing.unreachableTitle' => ({required Object server}) => 'Can\'t reach ${server}',
 			_ => null,
 		} ?? switch (path) {
+			'siloPairing.unreachableTitle' => ({required Object server}) => 'Can\'t reach ${server}',
 			'siloPairing.unreachableProvider' => ({required Object server, required Object provider}) => 'This device can\'t reach ${server} through ${provider}. Install or open the ${provider} app on this device and make sure it can reach the server\'s network, then try again.',
 			'siloPairing.unreachablePublic' => ({required Object server, required Object url}) => 'This device can\'t reach ${server} at ${url}. Check its network connection and try again.',
 			'siloPairing.useAlternate' => ({required Object url}) => 'Use ${url}',

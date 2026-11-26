@@ -4,6 +4,12 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **Signing in to Tofa with your account finds a way to your server:** after you sign in with the code and pick your server from the list, Plezilo used to try only the address Tofa's cloud gives for it, and gave up with "Couldn't finish signing in" when that address doesn't answer from your device (common when the server is reached through its own domain, or its port isn't open to the internet). It now tries every address Tofa lists for the server, at home, over the internet (including the server's custom address) and through Tofa's relay, and uses the first that answers. If none does, it says it can't reach the server instead of a vague error. Playing through the relay works now too: Plezilo's address check didn't send your sign-in to the relay, so it never picked it.
+
+## silo-preview-2.65.0
+
+Released November 25, 2026. Android and Windows.
+
 - **Tofa servers can now be downloaded for offline viewing:** on a Tofa movie or episode, *Download* works as it does for Silo. When the server offers smaller versions, Plezilo asks which quality you want (Original, or a smaller copy with its size; the server prepares a smaller copy first, and the download waits until it is ready). Downloads keep their audio tracks, text subtitles and intro/credits skip buttons, and play without a connection. Where you stop while offline, and what you mark watched, goes to your Tofa server the next time Plezilo is online. Deleting a download tells the server too.
 - **Sorting and filters in Tofa libraries:** the library's Sort menu now lists the sorts your Tofa server offers (title, date added and so on), and Filters offers genre, watch status (unwatched, in progress, watched), quality, year and "Available only". The A–Z bar jumps by the letters the server lists, and the Genres tab lists the library's genres.
 - **More Home rows for Tofa:** Home now shows Recently Added (also per library), Suggested for You, Ready to Binge (complete seasons you have not started), your Watchlist and the collections your server pins to Home, next to Continue Watching.

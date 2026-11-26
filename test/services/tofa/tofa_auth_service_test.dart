@@ -351,4 +351,73 @@ void main() {
       expect(tokens.refreshToken, 'ref-1');
     });
   });
+
+  group('picked server address', () {
+    const cloud = TofaTokens(accessToken: 'srv-acc', refreshToken: 'srv-ref');
+    const picked = TofaCloudServer(
+      id: 'srv-1',
+      name: 'Box',
+      online: true,
+      connectUrl: 'https://srv-1.direct.example.com:33333',
+    );
+    final cloudHost = Uri.parse(tofaCloud).host;
+    Map<String, dynamic> status() => {
+      'claimed': true,
+      'claim_pending': false,
+      'server_id': 'srv-1',
+      'connect_url': tofaCloud,
+    };
+
+    test('races connection-info candidates: a custom address answers when the direct one does not', () async {
+      fake.downHosts.addAll(['lan.example.com', 'srv-1.direct.example.com']);
+      fake.on('GET', '/servers/srv-1/connection-info', (request) {
+        expect(request.headers['Authorization'], 'Bearer srv-acc');
+        return jsonResponse({
+          'connection_type': 'direct',
+          'online': true,
+          'connect_url': 'https://srv-1.direct.example.com:33333',
+          'proxy_url': null,
+          'proxy_available': false,
+          'bandwidth_limit': null,
+          'candidates': [
+            {'type': 'lan-direct', 'url': 'https://lan.example.com:33333', 'stagger_ms': 0},
+            {'type': 'wan-direct', 'url': 'https://srv-1.direct.example.com:33333', 'stagger_ms': 100},
+            {'type': 'wan-direct', 'url': 'https://tofa.box.example.com', 'stagger_ms': 100},
+            {'type': 'relay', 'url': '$tofaCloud/servers/srv-1/relay', 'stagger_ms': 200, 'available': true},
+          ],
+        });
+      });
+      fake.onHost('tofa.box.example.com', 'GET', '/api/v1/auth/status', (_) => jsonResponse(status()));
+      fake.onHost(cloudHost, 'GET', '/servers/srv-1/relay/api/v1/auth/status', (_) => jsonResponse(status()));
+      final info = await auth.resolveServerAddress(tofaCloud, picked, cloud);
+      expect(info?.baseUrl, isIn(['https://tofa.box.example.com', '$tofaCloud/servers/srv-1/relay']));
+      expect(info?.serverId, 'srv-1');
+      expect(info?.connectUrl, tofaCloud);
+    });
+
+    test('the relay is used when it answers only with the server token', () async {
+      fake.downHosts.add('srv-1.direct.example.com');
+      fake.on('GET', '/servers/srv-1/connection-info', (_) => jsonResponse({'error': 'x', 'message': 'x'}, 503));
+      fake.onHost(cloudHost, 'GET', '/servers/srv-1/relay/api/v1/auth/status', (request) {
+        if (request.headers['Authorization'] != 'Bearer srv-acc') {
+          return jsonResponse({'error': 'unauthorized', 'message': 'no'}, 401);
+        }
+        return jsonResponse(status());
+      });
+      final info = await auth.resolveServerAddress(tofaCloud, picked, cloud);
+      expect(info?.baseUrl, '$tofaCloud/servers/srv-1/relay');
+    });
+
+    test('another server answering at an address does not count, and nothing reachable is null', () async {
+      fake.downHosts.add('srv-1.direct.example.com');
+      fake.on('GET', '/servers/srv-1/connection-info', (_) => jsonResponse({'error': 'x', 'message': 'x'}, 500));
+      fake.onHost(
+        cloudHost,
+        'GET',
+        '/servers/srv-1/relay/api/v1/auth/status',
+        (_) => jsonResponse({...status(), 'server_id': 'other'}),
+      );
+      expect(await auth.resolveServerAddress(tofaCloud, picked, cloud), isNull);
+    });
+  });
 }

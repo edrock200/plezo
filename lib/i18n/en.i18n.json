@@ -2743,6 +2743,7 @@
     "tofaTooManyPinAttempts": "Too many PIN attempts. Wait a moment and try again.",
     "tofaPinNetworkError": "Couldn't check the PIN. Check your connection and try again.",
     "tofaSignInFailed": "Couldn't finish signing in. Try again.",
+    "tofaServerUnreachable": "Couldn't reach this Tofa server from this device, at home, over the internet or through Tofa's relay. Check that the server is online, then try again.",
     "tofaAccountLead": "Away from home, or don't know the address? Sign in with your Tofa account and pick your server.",
     "tofaSignInWithAccount": "Sign in with your Tofa account",
     "tofaChooseServer": "Choose a server",

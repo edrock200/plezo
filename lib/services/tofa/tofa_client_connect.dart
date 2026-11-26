@@ -60,19 +60,27 @@ extension _TofaConnect on TofaClient {
     ];
   }
 
+  /// Asked without credentials first; a refusal is asked again with the
+  /// bearer (unverified: the relay may want it on every route). Candidates
+  /// are the typed address or ones Tofa's cloud listed for this server.
   Future<bool> _probe(TofaEndpointCandidate candidate) async {
-    try {
-      final response = await _api.getAbsolute(
-        '${candidate.url}/api/v1/auth/status',
-        bearer: false,
-        timeout: _probeTimeout,
-      );
-      if (response.statusCode != 200 || response.data is! Map) return false;
-      final id = (response.data as Map)['server_id'];
-      return id == null || id == connection.serverId;
-    } catch (_) {
-      return false;
+    for (final bearer in const [false, true]) {
+      try {
+        final response = await _api.getAbsolute(
+          '${candidate.url}/api/v1/auth/status',
+          bearer: bearer,
+          timeout: _probeTimeout,
+        );
+        if (response.statusCode == 200 && response.data is Map) {
+          final id = (response.data as Map)['server_id'];
+          return id == null || id == connection.serverId;
+        }
+        if (response.statusCode != 401 && response.statusCode != 403) return false;
+      } catch (_) {
+        return false;
+      }
     }
+    return false;
   }
 
   /// Run the race once (one race in flight); keeps the current address when

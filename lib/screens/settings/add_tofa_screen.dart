@@ -234,12 +234,22 @@ class _AddTofaScreenState extends State<AddTofaScreen> with AsyncFormStateMixin,
   Future<void> _pickServer(TofaCloudServer picked) async {
     final cloudTokens = _cloudTokens;
     if (busy || cloudTokens == null) return;
-    final info = picked.toServerInfo(widget.cloudUrl);
     final tokens = await runAsync(
       () async => (await _authService()).serverSession(widget.cloudUrl, cloudTokens, picked),
       errorMapper: (_) => t.addServer.tofaSignInFailed,
     );
     if (tokens == null || !mounted) return;
+    // Find an address of this server that answers from here (home network,
+    // internet, custom URL or relay) before reading its profiles.
+    final info = await runAsync(
+      () async => (await _authService()).resolveServerAddress(widget.cloudUrl, picked, tokens),
+      errorMapper: (_) => t.addServer.tofaServerUnreachable,
+    );
+    if (!mounted) return;
+    if (info == null) {
+      setErrorText(t.addServer.tofaServerUnreachable);
+      return;
+    }
     _server = info;
     setState(() => _completing = true);
     await _readProfiles(null, info, tokens);
