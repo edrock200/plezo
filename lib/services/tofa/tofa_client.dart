@@ -1288,7 +1288,35 @@ class TofaClient
     int? year,
     String? plexGuid,
     ExternalSeasonRef? season,
-  }) async => null;
+  }) async {
+    // `GET /media/by-tmdb/{tmdb_id}` resolves a TMDB id to the library's
+    // title; without one (or for another kind) the lookup cannot run here.
+    final tmdb = ids.tmdb;
+    final type = switch (kind) {
+      MediaKind.movie => 'movie',
+      MediaKind.show => 'tv',
+      _ => null,
+    };
+    if (tmdb == null || type == null) return null;
+    final String mediaId;
+    try {
+      final data = await _api.getJson('/api/v1/media/by-tmdb/$tmdb', query: {'media_type': type});
+      final id = data is Map ? data['media_id'] : null;
+      if (id is! String || id.isEmpty) return const [];
+      mediaId = id;
+    } on MediaServerHttpException catch (e) {
+      if (e.statusCode == 404) return const [];
+      rethrow;
+    }
+    final item = await _fetchItem(mediaId);
+    if (item == null || item.kind != kind) return const [];
+    final wanted = season?.agreedSeason;
+    if (kind == MediaKind.show && wanted != null && wanted > 1) {
+      final seasons = await fetchChildren(mediaId);
+      if (!seasons.any((s) => s.index == wanted)) return const [];
+    }
+    return [item];
+  }
 
   // ---------------------------------------------------------------------------
   // Playback

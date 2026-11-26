@@ -25,6 +25,7 @@ import 'package:plezy/services/tofa/tofa_client.dart';
 import 'package:plezy/services/tofa/tofa_downloads.dart';
 import 'package:plezy/services/tofa/tofa_endpoints.dart';
 import 'package:plezy/services/tofa/tofa_library_options.dart';
+import 'package:plezy/utils/external_ids.dart';
 
 import 'tofa_fixtures.dart';
 
@@ -1125,5 +1126,27 @@ void main() {
       final items = await c.searchItems('rain');
       expect(items.map((i) => i.id), ['m-1', 'tofa-custom:u-1']);
     });
+  });
+
+  // ---------------------------------------------------------------------------
+  test('a catalog title is found in the library by its TMDB id', () async {
+    fake.on('GET', '/api/v1/media/by-tmdb/42', (r) {
+      expect(r.url.queryParameters['media_type'], 'tv');
+      return jsonResponse({'media_id': 'show-1', 'files': <Object>[]});
+    });
+    fake.on('GET', '/api/v1/media/by-tmdb/7', (_) => tofaError(404, 'not_found'));
+    fake.on('GET', '/api/v1/media/show-1', (_) => jsonResponse(showDetail()));
+    fake.on('POST', '/api/v1/media/progress/batch', (_) => jsonResponse({'items': <Object>[]}));
+    final c = client();
+    final found = await c.findByExternalIds(const ExternalIds(tmdb: 42), kind: MediaKind.show);
+    expect(found!.single.id, 'show-1');
+    final season3 = await c.findByExternalIds(
+      const ExternalIds(tmdb: 42),
+      kind: MediaKind.show,
+      season: const ExternalSeasonRef(tvdb: 3, tmdb: 3),
+    );
+    expect(season3, isEmpty, reason: 'the library has no season 3');
+    expect(await c.findByExternalIds(const ExternalIds(tmdb: 7), kind: MediaKind.movie), isEmpty);
+    expect(await c.findByExternalIds(const ExternalIds(imdb: 'tt1'), kind: MediaKind.movie), isNull);
   });
 }
