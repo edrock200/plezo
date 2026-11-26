@@ -4,6 +4,16 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **IPTV: record a series:** on a guide programme, *Record* now also offers *Record series*: every airing with that title on the channel, or on any channel, is recorded, each episode once. You can record only the episodes the guide marks as new, and keep only the latest few recordings. Series rules are listed in Live TV › *Recordings*, where you can change or delete them, and they pick up new airings every time the guide is refreshed. *(please test with your provider)*
+- **IPTV reminders as notifications:** a programme reminder now appears as a notification on Android, iOS, macOS and Windows, even when Plezilo is closed, and on Linux while Plezilo is running. Selecting it tunes the channel. The first reminder asks for permission to send notifications; if you say no, and on TVs, the message inside Plezilo stays. *(please test on your device)*
+- **IPTV recordings keep going in the background on Android:** while a recording is running (or one is due in the next 12 hours) and you switch to another app, Plezilo shows a "Plezilo is recording" notification and keeps recording. Closing Plezilo (swiping it away) still stops it, and a recording due while Plezilo is closed does not start: the message after you schedule one now says so. *(please test on your device)*
+- **IPTV: movie files in a playlist as movies:** a new setting in an M3U source's settings, *Treat movie files as movies* (off unless you turn it on), moves entries that are video files (such as .mp4 or .mkv), or that sit in a Movies, VOD or Series group, out of the channel list into a *Movies* library.
+- **IPTV: very large Xtream catalogues:** the movie, series and channel lists are now read while they download, using less memory. A list too large to handle (over 384 MB) is reported as an error instead of closing Plezilo.
+
+## silo-preview-2.73.0
+
+Released November 26, 2026. Android and Windows.
+
 - **IPTV sources (new):** Plezilo can now play your own IPTV playlist or Xtream Codes login, next to your media servers. Plezilo brings no channels of its own: you add the source you have. *(please test with your provider)*
   - **Adding one:** *Add an IPTV source* (first screen, or Settings › Profiles › a profile › Add connection). Enter an M3U playlist address, pick a playlist file (phone and desktop), or enter the server, username and password of an Xtream login. You can add guide (XMLTV) addresses too; the guide the source names itself is read as well. Plezilo reads the channel list before saving, so a wrong address or login is reported straight away. A profile can have several sources.
   - **Live TV:** the source's channels appear in Live TV's guide with their logos, numbers and programmes. A new *Channels* tab lists every channel with what is on now and next and a search box, and a row of group chips (*All*, *Recent*, then each group) filters both. Favourite channels are kept on this device, per source.

@@ -42,7 +42,8 @@ agent needs. The code still says "Plezy" in internal names (Dart package `plezy`
 - `.claude/skills/tofa-backend/SKILL.md` — the Tofa API contract (device-flow sign-in, `/api/v1` browsing, playback
   negotiation, progress) for the fifth backend, and how to query Tofa's OpenAPI spec (never committed: proprietary).
 - `.claude/skills/iptv-backend/SKILL.md` — IPTV sources (M3U, Xtream, XMLTV) read and stored on the device: formats and
-  quirks, the separate IPTV database and background refresh, Live TV groups/catch-up/reminders, the IPTV player OSD,
+  quirks, the separate IPTV database and background refresh, Live TV groups/catch-up, reminders as system notifications,
+  series recording rules and Android background recording, M3U movie files as movies, the IPTV player OSD,
   Xtream movies and series, local recording, what is unverified or declined, and the local fake provider for tests.
   Use for anything under `lib/services/iptv/` or IPTV-related.
 - `.claude/skills/android-preview-release/SKILL.md` — building, publishing and verifying the

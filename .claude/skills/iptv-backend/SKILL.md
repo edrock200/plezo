@@ -41,7 +41,7 @@ app wiring; this skill holds the formats, the architecture and the pitfalls.
 | Refresh | `iptv_sync_worker.dart` (the import), `iptv_sync_service.dart` (scheduling, background isolate, status) |
 | Client | `iptv_client.dart` (+ parts `iptv_client_live.dart`, `iptv_client_dvr.dart`) |
 | Cache | `IptvApiCache` (detail items only), registered in `main.dart` |
-| Recording, reminders, parental gate | `iptv_recorder.dart`, `iptv_reminders.dart`, `iptv_parental.dart` |
+| Recording, reminders, parental gate | `iptv_recorder.dart`, `iptv_client_dvr.dart` (DVR adapter, series rules), `iptv_reminders.dart`, `iptv_os_notifications.dart`, `iptv_parental.dart`; Android `kotlin/.../iptv/IptvRecordingService.kt` |
 | Removal | `iptv_source_cleanup.dart` (called by `ProfileConnectionCleanup`) |
 | Screens | `lib/screens/settings/add_iptv_screen.dart`, `iptv_source_settings_screen.dart`, `iptv_group_editor_screen.dart`, `iptv_channel_editor_screen.dart`; Live TV: `tabs/channels_tab.dart`, `live_tv_group_bar.dart`, `iptv_live_actions.dart`; player: `video_player/live_channel_zapper.dart`, `video_player/parts/live_osd.dart`, `widgets/video_controls/iptv/live_channel_osd.dart` |
 
@@ -115,13 +115,66 @@ or offline provider). Progress and watched state are local (`progress` table); p
 Continue Watching rows are built from the stored `meta`. `marksWatchedOnPlaybackStopped` is false, so the
 player's explicit mark is what stores "watched". Downloads are off (`MediaBackend.supportsDownloads`).
 
+**M3U movie files** (opt-in `IptvConnection.m3uMoviesAsVod`, off by default, "Treat movie files as movies"):
+`IptvSyncWorker.looksLikeMovie` routes an entry to the `vod` table (kind movie, id `m<sha1>`, category = its
+group) when its address ends in a video-file extension (`mp4 mkv avi mov m4v wmv flv webm mpg mpeg divx ogv
+3gp`), or its group matches `\b(movies?|vod|films?|series|cinema)\b` and the address is not `.ts`/`.m3u8`/
+`/live/`; an entry with catch-up stays a channel. Such rows keep `url` and `headers` (vod columns added in
+schema 2; Xtream rows never store an address). `streamUrlFor` plays `row.url`, and `streamHeaders` adds the
+entry's headers (`_itemHeaders`, set by the last `streamUrlFor`; the resolver reads `streamHeaders` right
+after `getPlaybackInitialization`). Turning the setting off empties the library on the next refresh.
+
+**Stream headers reach both players** (checked in code, round 2): VOD uses `PlaybackContext.streamHeaders`
+(= `client.streamHeaders`) → `Media.headers`; live uses `LiveTvStreamHeaders.streamHeaders` (source + channel
+headers). ExoPlayer: `ExoPlayerCore.open` → `httpDataSourceFactory.setDefaultRequestProperties(headers)`; the
+DefaultHttp and Cronet factories set no `userAgent` of their own (Media3 1.11 overrides `User-Agent` only when
+the factory has one), so the source's `User-Agent` and `Referer` are sent. mpv (desktop and the Android
+fallback): file-local `http-header-fields` on `loadfile`; FFmpeg's http protocol skips its own `User-Agent`
+when the header list has one. A new factory `.setUserAgent(...)` would silently override IPTV user-agents.
+
 ### Recording
 
-`IptvRecorder` (foreground only): TS copied byte for byte with reconnects; HLS by polling the best variant and
-appending segments. Files in `<app support>/iptv_recordings/<id>.ts`. `restore()` at start-up marks cut-off
-recordings `failed/interrupted`, missed ones `failed/missed`, re-arms scheduled ones. The DVR adapter offers
-single airings only (template "Record episode"); `cancelGrab` cancels; finished recordings list through
-`LiveTvRecordedItems` and play from `file://`.
+`IptvRecorder` (runs in the app process): TS copied byte for byte with reconnects; HLS by polling the best
+variant and appending segments. Files in `<app support>/iptv_recordings/<id>.ts`. `restore()` at start-up marks
+cut-off recordings `failed/interrupted`, missed ones `failed/missed`, re-arms scheduled ones. Finished
+recordings list through `LiveTvRecordedItems` and play from `file://`.
+
+DVR adapter (`_IptvDvr`): the template offers "Record episode" (typeEpisode) and "Record series" (typeSeries,
+settings `new_only` bool, `any_channel` bool, `keep_last` int ≥ 0, labelled with the shared
+`liveTv.recordSettings.*` strings). Keys: a recording `iptvrec:<id>`, a rule `iptvrule:<id>`;
+`fetchSchedule` tags airings set to record (`subscriptionID` / `grandparentSubscriptionID`) so the guide and
+details sheet show them. **Series rules** (`recording_rules` table, `IptvRecordingRule`): match the stored
+guide by exact lower-cased title (`programmesTitled`), on the rule's channel or any shown channel with the same
+guide id, `newOnly` uses XMLTV `<new/>` (`programmes.is_new`; Xtream's short guide has no such flag).
+`IptvClientRules.expandRecordingRules()` schedules each matching future airing once: an episode key
+`ep:<episode-num>` else `sub:<sub-title>` else `at:<start>` (per rule; failed ones may be retried; cancelled
+ones are not), and never a channel+start already booked. It runs when a rule is made or edited (edit cancels the
+rule's scheduled airings first), after every refresh (`IptvSyncService.onGuideRefreshed`, wired in `main.dart`,
+independent of the UI) and at start-up after `restore()`. `keep_last` is enforced after each successful
+recording of the rule and on edit (`IptvRecorder.enforceKeepLast`, oldest completed recordings and files go).
+Deleting a rule cancels its scheduled airings and keeps finished recordings.
+
+**Android background** (`IptvRecordingService`, `com.plezy/iptv_recording`): the recorder sends `setState`
+(active titles, next scheduled start) on every change. While a recording runs or one is due within 12 h,
+`PlezyActivity.onPause` starts a `dataSync` foreground service with an ongoing notification ("Plezilo is
+recording" / "has a recording due"); `onResume` stops it, and it stops when nothing is armed. It must start
+from `onPause` (Android 12+ refuses a foreground-service start from the background). It keeps the process
+alive while the app is in the background; swiping Plezilo away still ends it, and a recording due while the
+app is closed does not start (the scheduled message says so: `liveTv.iptvRecordingScheduled`). iOS/desktop:
+no change (iOS suspends a backgrounded app; desktop apps keep running).
+
+### Reminders
+
+`IptvReminders` (stored in `reminders`) with an `IptvReminderNotifier`: `IptvOsNotifications`
+(flutter_local_notifications 22.x, BSD-3; v23 needs compileSdk 37) on Android, iOS, macOS, Windows and Linux,
+never on TV (`platformSupported`; the tvOS build wires plugins by hand and has none). Android, iOS, macOS and
+Windows schedule with `zonedSchedule` (UTC `TZDateTime`, `inexactAllowWhileIdle`: no exact-alarm permission),
+so the notification shows while Plezilo is closed; Linux has no scheduling, so `tick()` calls `showNow` when
+due. Permission is asked on the first reminder; refused (or failing) falls back to the in-app dialog
+(`onDue`). The payload is a small JSON of the reminder; selecting it (also when it launched the app) calls
+`onOpen` → `tuneIptvReminder`. Android: core library desugaring is on (the plugin needs it), receivers
+`ScheduledNotificationReceiver` / `ScheduledNotificationBootReceiver` are in the manifest; Windows uses its
+own AUMID/GUID; iOS sets the `UNUserNotificationCenter` delegate in `AppDelegate`.
 
 ## Formats and quirks the parsers accept
 
@@ -146,21 +199,29 @@ single airings only (template "Record episode"); `cancelGrab` cancels; finished 
   whether a given Xtream server wants the path or `timeshift.php` route — the latter is a source setting).
 - Xtream servers whose `xmltv.php` is huge or broken: the short guide (`get_short_epg`) only backs the
   banner and mini guide, not the grid.
-- mpv/ExoPlayer honouring `User-Agent`/`Referer` sent as stream headers on every provider.
-- HLS recording of providers with encrypted segments (not supported: segments are copied as fetched) and
-  recordings while the app is in the background on Android/iOS (the OS may suspend it).
+- Providers that check `User-Agent`/`Referer` on every request (the code path is verified, see above; a
+  provider rejecting ExoPlayer's other default headers is not).
+- HLS recording of providers with encrypted segments (not supported: segments are copied as fetched).
+- Android background recording on aggressive OEM battery savers (the foreground service should hold; not
+  tried on a device), and iOS (a backgrounded app is suspended: recordings stop).
+- System notifications on each platform (Windows toasts need the installed app's AUMID; Linux needs a
+  notification daemon), including the Windows/macOS desktop CI builds of the plugin.
+- Series-rule matching on real guides (exact title only; providers that put the episode in the title get one
+  rule per episode).
+- Xtream lists near the 384 MB cap (`XtreamApi.defaultMaxListBytes`); decoding is streamed, the decoded rows
+  are still held in memory once.
 - 100–300 MB guides on low-RAM TV boxes: designed for it (streaming, batches of 2000/5000 rows, a staging
   swap) but only tested with ~20 MB synthetic guides.
 
 ## Declined, and why
 
-- **System notifications for reminders**: needs a notification plugin with per-platform setup (Android
-  receivers and exact-alarm permission, iOS/macOS authorisation, Windows/Linux toasts) and a scheduler that
-  survives the app being closed; Plezilo has none. Reminders fire inside the app while it is open.
-- **Background/server-side recording**: Plezilo has no service that runs while closed; recordings run while
-  the app runs and are marked failed when cut off.
-- **Series recording rules**: would need a guide match by title on every refresh; single airings only.
-- **M3U VOD entries as libraries**: M3U has no reliable movie/series typing; every M3U entry is a channel.
+- **Recordings that start while Plezilo is closed**: would need a scheduled background job per platform
+  (Android alarms + a service started from them, which Android 12+ restricts; nothing comparable on iOS);
+  recordings run while the app runs (Android: also in the background) and are marked missed otherwise.
+- **System notifications on TV**: Android TV has no notification shade, and the tvOS build has no plugin;
+  TV keeps the in-app dialog.
+- **M3U series libraries**: entries in a Series group become movies (one per entry); grouping episodes
+  into shows would need title parsing M3U does not support reliably.
 - **Encrypted streams / DRM (`#KODIPROP` licence keys)**: recorded for diagnostics only, not used.
 - **Server-side favourites or progress**: Xtream has none; both are per device.
 
