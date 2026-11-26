@@ -279,6 +279,7 @@ class TofaApi {
     bool profile = true,
     Duration? timeout,
     AbortController? abort,
+    Map<String, String>? headers,
   }) async {
     final response = await request(
       method,
@@ -288,14 +289,21 @@ class TofaApi {
       profile: profile,
       timeout: timeout,
       abort: abort,
+      headers: headers,
     );
     throwIfTofaError(response);
     return response;
   }
 
   /// GET returning the decoded JSON body (an object or a list), or throwing.
-  Future<Object> getJson(String path, {Map<String, dynamic>? query, AbortController? abort, Duration? timeout}) async {
-    final response = await send('GET', path, query: query, abort: abort, timeout: timeout);
+  Future<Object> getJson(
+    String path, {
+    Map<String, dynamic>? query,
+    AbortController? abort,
+    Duration? timeout,
+    Map<String, String>? headers,
+  }) async {
+    final response = await send('GET', path, query: query, abort: abort, timeout: timeout, headers: headers);
     final data = response.data;
     if (data is Map<String, dynamic> || data is List) return data as Object;
     throw MediaServerHttpException(

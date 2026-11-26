@@ -1847,6 +1847,8 @@
     "dvrAdminRequired": "DVR settings require an admin account",
     "recordingFailed": "Couldn't schedule recording",
     "finishedRecordings": "Recorded",
+    "tofaChannelUnavailable": "This channel can't be played right now.",
+    "tofaChannelOffAir": "Nothing is on this channel right now.",
     "recordingUnavailable": "This recording is no longer on the server.",
     "cancelRecordingUnsupported": "This server doesn't let apps cancel a single scheduled recording.",
     "recordingTargetMissing": "Couldn't determine recording library",

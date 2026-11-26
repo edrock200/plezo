@@ -52,7 +52,6 @@ import '../../utils/url_utils.dart';
 import '../../media/chapter_marker_classifier.dart';
 import '../../utils/global_key_utils.dart';
 import '../../utils/json_utils.dart';
-import '../favorite_channels_repository.dart';
 import 'tofa_auth_service.dart';
 import 'tofa_events.dart';
 import 'tofa_extras.dart';
@@ -470,8 +469,8 @@ class TofaClient
 
   final Map<String, String> _libraryTitles = {};
 
-  // Live TV (see `tofa_client_live.dart`): each channel's last `revision`,
-  // this device's viewer id, and where favourite channels are kept.
+  // Live TV (see `tofa_client_live.dart`): each channel's last `revision`
+  // and the viewer id the last tune answered.
   final Map<String, int> _liveRevisions = {};
 
   /// Home's watch-state events (`tofa_events.dart`).
@@ -480,8 +479,6 @@ class TofaClient
   TofaEventsConnector eventsConnector = (url, headers) => connectTofaEventsSocket(url, headers);
   Future<bool?>? _watchStateOffered;
   String? _liveViewer;
-  @visibleForTesting
-  FavoriteChannelsRepository favoritesRepository = const SharedPreferencesFavoriteChannelsRepository();
 
   /// The collections list (both kinds), shared while it is read and kept
   /// briefly so the Collections tab's pages slice one read.

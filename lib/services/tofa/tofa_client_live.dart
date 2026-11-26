@@ -5,38 +5,76 @@ part of 'tofa_client.dart';
 /// (`GET /live/recordings`, `POST /live/recordings/scheduled`, the
 /// `/live/recording-rules` routes).
 ///
-/// Facts the spec does not give, marked where used:
-/// - Playing a channel. `/stream/{id}/info` takes `live_viewer_id`,
-///   `live_revision` and `live_playout_id`, but the spec names no live
-///   route. Unverified: the channel id is the `{id}`, with this device's
-///   viewer id and the channel's `revision`. A refusal shows the server's
-///   message. The stream plays as a live stream (the player's live
-///   handling, never the VOD `live_start_index=0` start).
-/// - `X-Tofa-Live-Capabilities` lists no values, so it is not sent.
-/// - Artwork (`logo_image_url`, `image_url`) goes through
-///   [TofaClient.thumbnailUrl] like every other Tofa image.
-/// - A one-off scheduled recording has no documented cancel route, so
-///   Plezilo cannot cancel one (rules can be deleted).
+/// Facts observed in Tofa's web app (2026-11-26), which the spec lacks:
+/// - Every `/live/*` call carries `X-Tofa-Live-Capabilities: live_session`;
+///   without it the server lists no channels for this client. The Live tab
+///   needs the `live_tv` capability in `GET /system/info` and a channel.
+/// - Playing a channel: `GET /live/channels/{id}/tune` (`viewer_id` to reuse
+///   one) answers `viewer_id`, `tune_generation`, `mode` and `current`.
+///   `mode: live_session` (provider and tuner channels): `POST
+///   /live/viewers/{viewer}/session` with the playback profile, polled each
+///   second until `live_edge_at` (15 s, 90 s while `ingest.state` is
+///   connecting or buffering), then its `playlist_url`. Otherwise (library
+///   channels) `current` is the row on air (`kind: media`, `media_file_id`,
+///   `playout_id`, `in_ms`, `out_ms`, `start_at`, `end_at`): played through
+///   `/stream/{file}/info` with `live_viewer_id`, `live_playout_id`,
+///   `live_revision` and the resume point the row gives. `POST
+///   /live/viewers/{viewer}/renew {current_session_id, current_playout_id}`
+///   every `max(5, renew_after_seconds)` s; `DELETE
+///   /live/viewers/{viewer}?tune_generation=&grace=skip` when it stops.
+/// - `DELETE /live/recordings/{id}` cancels a recording; `PUT`/`DELETE
+///   /live/favorites/{channel}` and the builtin tab of `GET /live/tabs`
+///   (`GET /live/channels?tab_id=`) are the server-side favourites.
+/// - The stream plays on the player's live path, never with the VOD
+///   `live_start_index=0` start.
 extension _TofaLive on TofaClient {
   /// Channels read per page and the most pages followed.
-  static const channelPageSize = 200;
+  static const channelPageSize = 100;
+
+  /// What every `/live/*` call sends (Tofa's web app's `Ks`).
+  static const liveHeaders = {'X-Tofa-Live-Capabilities': 'live_session'};
   static const maxChannelPages = 40;
 
   /// The guide's limits per call: 24 hours.
   static const guideWindow = Duration(hours: 24);
   static const maxGuidePages = 40;
 
+  Future<Object> _liveGet(String path, {Map<String, dynamic>? query}) =>
+      _api.getJson(path, query: query, headers: liveHeaders);
+
+  Future<MediaServerResponse> _liveRequest(
+    String method,
+    String path, {
+    Map<String, dynamic>? query,
+    Object? body,
+    Duration? timeout,
+  }) => _api.request(method, path, query: query, body: body, headers: liveHeaders, timeout: timeout);
+
+  Future<MediaServerResponse> _liveSend(String method, String path, {Map<String, dynamic>? query, Object? body}) =>
+      _api.send(method, path, query: query, body: body, headers: liveHeaders);
+
+  /// The Live TV check, logged at info level (no tokens): `live_tv` in
+  /// `GET /system/info`'s capabilities (when it lists any), then a channel.
   Future<bool> _liveAvailable() async {
     try {
-      final data = await _api.getJson('/api/v1/live/channels', query: {'limit': '1'});
+      final info = await _api.getJson('/api/v1/system/info');
+      final caps = info is Map ? info['capabilities'] : null;
+      if (caps is List && !caps.contains('live_tv')) {
+        appLogger.i('[tofa] live tv: the server does not offer it (no live_tv capability)');
+        return false;
+      }
+    } catch (e) {
+      appLogger.i('[tofa] live tv: system info unreadable (${e.runtimeType}); checking channels');
+    }
+    try {
+      final data = await _liveGet('/api/v1/live/channels', query: {'limit': '1'});
       final rows = data is Map && data['channels'] is List ? data['channels'] as List : const [];
+      appLogger.i('[tofa] live tv: ${rows.isEmpty ? 'no channel for this profile' : 'available'}');
       return rows.isNotEmpty;
     } on MediaServerHttpException catch (e) {
       // No Live access (403) or a server without Live (404): no Live TV.
-      if (e.statusCode == 403 || e.statusCode == 404) {
-        appLogger.d('[tofa] live tv unavailable (HTTP ${e.statusCode})');
-        return false;
-      }
+      appLogger.i('[tofa] live tv check answered HTTP ${e.statusCode}');
+      if (e.statusCode == 403 || e.statusCode == 404) return false;
       rethrow;
     }
   }
@@ -45,7 +83,7 @@ extension _TofaLive on TofaClient {
     final out = <LiveTvChannel>[];
     String? cursor;
     for (var page = 0; page < maxChannelPages; page++) {
-      final data = await _api.getJson('/api/v1/live/channels', query: {'limit': '$channelPageSize', 'cursor': ?cursor});
+      final data = await _liveGet('/api/v1/live/channels', query: {'limit': '$channelPageSize', 'cursor': ?cursor});
       if (data is! Map) break;
       for (final row in (data['channels'] is List ? data['channels'] as List : const []).whereType<Map>()) {
         final channel = _channel(row.cast<String, dynamic>());
@@ -85,7 +123,7 @@ extension _TofaLive on TofaClient {
       final windowEnd = windowStart.add(guideWindow).isBefore(end) ? windowStart.add(guideWindow) : end;
       String? cursor;
       for (var page = 0; page < maxGuidePages; page++) {
-        final data = await _api.getJson(
+        final data = await _liveGet(
           '/api/v1/live/guide',
           query: {
             'from': '${windowStart.millisecondsSinceEpoch}',
@@ -161,35 +199,147 @@ extension _TofaLive on TofaClient {
     );
   }
 
-  /// This device's Live viewer id (`live_viewer_id`, a uuid), one per client.
-  String get _liveViewerId => _liveViewer ??= const Uuid().v4();
+  /// The viewer id the last tune answered, reused on the next tune.
+  String? get _lastViewerId => _liveViewer;
 
-  Future<LiveTvPlaybackSession?> _startLive(String channelKey, TranscodeQualityPreset quality) async {
-    final revision = _liveRevisions[channelKey];
+  static Never _liveRefused(MediaServerResponse response) {
+    final message = tofaErrorMessage(response.data);
+    appLogger.w('[tofa] live channel refused HTTP ${response.statusCode} error=${tofaErrorCode(response.data) ?? '-'}');
+    throw PlaybackException(
+      message ?? t.messages.playbackFailed,
+      reason: response.statusCode == 503
+          ? PlaybackFailureReason.serverUnavailable
+          : response.statusCode == 403
+          ? PlaybackFailureReason.playbackNotAllowed
+          : PlaybackFailureReason.invalidPlaybackData,
+    );
+  }
+
+  /// Tune [channelKey] and open its stream (see the file comment).
+  Future<LiveTvPlaybackSession?> _startLive(
+    String channelKey,
+    TranscodeQualityPreset quality, {
+    Future<void> Function(Duration)? wait,
+  }) async {
+    final tune = await _liveRequest(
+      'GET',
+      '/api/v1/live/channels/${TofaClient._seg(channelKey)}/tune',
+      query: {'viewer_id': ?_lastViewerId},
+      timeout: MediaServerTimeouts.tune,
+    );
+    if (tune.statusCode >= 400) _liveRefused(tune);
+    final data = tune.data;
+    if (data is! Map<String, dynamic>) return null;
+    final viewerId = data['viewer_id'];
+    if (viewerId is! String || viewerId.isEmpty) {
+      appLogger.w('[tofa] live tune answered without a viewer');
+      return null;
+    }
+    _liveViewer = viewerId;
+    final generation = data['tune_generation'];
+    final viewer = _TofaLiveViewer(this, viewerId, generation?.toString());
+    try {
+      final opened = data['mode'] == 'live_session'
+          ? await _openLiveSession(channelKey, quality, viewer, wait: wait)
+          : await _openLibraryRow(channelKey, quality, viewer, data);
+      if (opened == null) await viewer.release();
+      return opened;
+    } catch (_) {
+      await viewer.release();
+      rethrow;
+    }
+  }
+
+  /// A provider or tuner channel: `POST /live/viewers/{id}/session`, polled
+  /// until the stream reaches the live edge.
+  Future<LiveTvPlaybackSession?> _openLiveSession(
+    String channelKey,
+    TranscodeQualityPreset quality,
+    _TofaLiveViewer viewer, {
+    Future<void> Function(Duration)? wait,
+  }) async {
+    final kbps = quality.isOriginal ? null : quality.videoBitrateKbps;
+    final body = {
+      'profile': TofaPlaybackCaps.liveProfile(),
+      'at': null,
+      'audio_stream_index': null,
+      'max_bitrate': ?kbps,
+    };
+    final started = DateTime.now();
+    while (true) {
+      final response = await _liveRequest(
+        'POST',
+        '/api/v1/live/viewers/${TofaClient._seg(viewer.id)}/session',
+        body: body,
+        timeout: MediaServerTimeouts.tune,
+      );
+      if (response.statusCode >= 400) _liveRefused(response);
+      final session = response.data;
+      if (session is! Map<String, dynamic>) return null;
+      final ingest = session['ingest'] is Map ? session['ingest'] as Map : const {};
+      if (ingest['state'] == 'failed_terminal') {
+        appLogger.w('[tofa] live channel ingest failed reason=${ingest['reason'] ?? '-'}');
+        throw PlaybackException(t.liveTv.tofaChannelUnavailable, reason: PlaybackFailureReason.serverUnavailable);
+      }
+      final starting = ingest['state'] == 'connecting' || ingest['state'] == 'buffering';
+      final waited = DateTime.now().difference(started);
+      final url = session['playlist_url'];
+      final sessionId = session['session_id'];
+      if (session['live_edge_at'] != null ||
+          waited > (starting ? const Duration(seconds: 90) : const Duration(seconds: 15))) {
+        if (url is! String || url.isEmpty || sessionId is! String) {
+          appLogger.w('[tofa] live session answered without a stream');
+          return null;
+        }
+        viewer.sessionId = sessionId;
+        appLogger.i(
+          '[tofa] live channel session ready mode=${(session['selection'] is Map ? (session['selection'] as Map)['mode'] : null) ?? '-'}',
+        );
+        return _TofaLiveTvPlaybackSession(this, channelKey, quality, _api.resolveUrl(url), viewer, null);
+      }
+      await (wait ?? Future<void>.delayed)(const Duration(seconds: 1));
+    }
+  }
+
+  /// A library channel: the row on air, played as its file from where the
+  /// row is now (`in_ms` plus the time since `start_at`, 3 s ahead, within
+  /// the row), with the live parameters of `/stream/{file}/info`.
+  Future<LiveTvPlaybackSession?> _openLibraryRow(
+    String channelKey,
+    TranscodeQualityPreset quality,
+    _TofaLiveViewer viewer,
+    Map<String, dynamic> tune,
+  ) async {
+    final row = tune['current'];
+    if (row is! Map || row['kind'] != 'media' || row['media_file_id'] is! String || flexibleInt(row['in_ms']) == null) {
+      appLogger.i('[tofa] live library channel has nothing on air right now');
+      throw PlaybackException(t.liveTv.tofaChannelOffAir, reason: PlaybackFailureReason.noPlayableSource);
+    }
+    final fileId = row['media_file_id'] as String;
+    final inMs = flexibleInt(row['in_ms'])!;
+    final start = DateTime.tryParse(row['start_at']?.toString() ?? '');
+    final end = DateTime.tryParse(row['end_at']?.toString() ?? '');
+    var position = inMs;
+    if (start != null) {
+      final outMs = flexibleInt(row['out_ms']) ?? (end == null ? null : inMs + end.difference(start).inMilliseconds);
+      position = inMs + DateTime.now().add(const Duration(seconds: 3)).difference(start).inMilliseconds;
+      if (position < inMs) position = inMs;
+      if (outMs != null && position > outMs - 1) position = outMs - 1;
+    }
+    final playoutId = row['playout_id']?.toString();
+    final revision = tune['revision'];
     final response = await _api.request(
       'GET',
-      '/api/v1/stream/${TofaClient._seg(channelKey)}/info',
+      '/api/v1/stream/${TofaClient._seg(fileId)}/info',
       query: {
-        ...TofaPlaybackCaps.streamQuery(preset: quality, resumeTicks: 0),
-        'live_viewer_id': _liveViewerId,
+        ...TofaPlaybackCaps.streamQuery(preset: quality, resumeTicks: position * 10000),
+        'live_viewer_id': viewer.id,
+        'live_playout_id': ?playoutId,
         'live_revision': ?revision?.toString(),
       },
       timeout: MediaServerTimeouts.tune,
     );
-    if (response.statusCode >= 400) {
-      final message = tofaErrorMessage(response.data);
-      appLogger.w(
-        '[tofa] live channel refused HTTP ${response.statusCode} error=${tofaErrorCode(response.data) ?? '-'}',
-      );
-      throw PlaybackException(
-        message ?? t.messages.playbackFailed,
-        reason: response.statusCode == 503
-            ? PlaybackFailureReason.serverUnavailable
-            : response.statusCode == 403
-            ? PlaybackFailureReason.playbackNotAllowed
-            : PlaybackFailureReason.invalidPlaybackData,
-      );
-    }
+    if (response.statusCode >= 400) _liveRefused(response);
     final info = response.data;
     if (info is! Map<String, dynamic>) return null;
     final rawUrl = info['stream_url'];
@@ -200,15 +350,13 @@ extension _TofaLive on TofaClient {
       return null;
     }
     LogRedactionManager.registerRotatingToken(sessionToken);
-    final session = _TofaStreamSession(
-      sessionId: sessionId,
-      token: sessionToken,
-      itemId: channelKey,
-      fileId: channelKey,
-    );
+    final session = _TofaStreamSession(sessionId: sessionId, token: sessionToken, itemId: channelKey, fileId: fileId);
     _sessions[sessionId] = session;
-    appLogger.i('[tofa] live channel play_method=${info['play_method']} decision=${info['decision_mode']}');
-    return _TofaLiveTvPlaybackSession(this, channelKey, quality, _api.resolveUrl(rawUrl), session);
+    viewer
+      ..sessionId = sessionId
+      ..playoutId = playoutId;
+    appLogger.i('[tofa] live library channel play_method=${info['play_method']} decision=${info['decision_mode']}');
+    return _TofaLiveTvPlaybackSession(this, channelKey, quality, _api.resolveUrl(rawUrl), viewer, session);
   }
 
   Future<void> _stopLiveSession(_TofaStreamSession session) async {
@@ -225,6 +373,65 @@ extension _TofaLive on TofaClient {
       appLogger.d('[tofa] live stream stopped answered ${response.statusCode}');
     } catch (e) {
       appLogger.d('[tofa] live stream stop failed', error: e.runtimeType);
+    }
+  }
+}
+
+/// One tuned viewer: renewed on the server's schedule, deleted when it stops.
+class _TofaLiveViewer {
+  _TofaLiveViewer(this._client, this.id, this.generation);
+
+  final TofaClient _client;
+  final String id;
+  final String? generation;
+  String? sessionId;
+  String? playoutId;
+  Timer? _renewTimer;
+  bool _released = false;
+
+  /// `POST /live/viewers/{id}/renew`, then again after
+  /// `max(5, renew_after_seconds)` s. A 401/403/404/410 ends renewing.
+  Future<void> renew() async {
+    if (_released) return;
+    try {
+      final response = await _client._liveRequest(
+        'POST',
+        '/api/v1/live/viewers/${TofaClient._seg(id)}/renew',
+        body: {'current_session_id': sessionId, 'current_playout_id': playoutId},
+      );
+      if (_released) return;
+      if (const {401, 403, 404, 410}.contains(response.statusCode)) {
+        appLogger.i('[tofa] live viewer renewal refused HTTP ${response.statusCode}; not renewing');
+        return;
+      }
+      final data = response.data;
+      final after = data is Map ? flexibleInt(data['renew_after_seconds']) : null;
+      _schedule(Duration(seconds: after == null || after < 5 ? 30 : after));
+    } catch (e) {
+      appLogger.d('[tofa] live viewer renewal failed', error: e.runtimeType);
+      _schedule(const Duration(seconds: 15));
+    }
+  }
+
+  void _schedule(Duration delay) {
+    _renewTimer?.cancel();
+    if (_released) return;
+    _renewTimer = Timer(delay, () => unawaited(renew()));
+  }
+
+  /// `DELETE /live/viewers/{id}?tune_generation=&grace=skip`, once.
+  Future<void> release() async {
+    if (_released) return;
+    _released = true;
+    _renewTimer?.cancel();
+    try {
+      await _client._liveRequest(
+        'DELETE',
+        '/api/v1/live/viewers/${TofaClient._seg(id)}',
+        query: {'tune_generation': ?generation, 'grace': 'skip'},
+      );
+    } catch (e) {
+      appLogger.d('[tofa] live viewer release failed', error: e.runtimeType);
     }
   }
 }
@@ -248,7 +455,7 @@ class _TofaLiveTvSupport implements LiveTvSupport, LiveTvRecordedItems {
   /// as ("A finished recording plays like any other title").
   @override
   Future<List<LiveTvRecording>> fetchRecordings() async {
-    final data = await _client._api.getJson('/api/v1/live/recordings');
+    final data = await _client._liveGet('/api/v1/live/recordings');
     final rows = data is Map && data['recordings'] is List ? data['recordings'] as List : const [];
     return [
       for (final row in rows.whereType<Map<String, dynamic>>())
@@ -278,10 +485,10 @@ class _TofaLiveTvSupport implements LiveTvSupport, LiveTvRecordedItems {
     TranscodeQualityPreset quality = TranscodeQualityPreset.original,
   }) => _client._startLive(channelKey, quality);
 
-  // Tofa's own apps keep favourite channels, but the spec documents no
-  // favourites route: Plezilo keeps them on this device, per sign-in.
-  String get _favoritesKey => 'tofa_fav_channels:${_client.connection.id}';
-
+  // Server-side favourites (observed in Tofa's web app, 2026-11-26): the
+  // builtin tab of `GET /live/tabs` lists them (`GET /live/channels?tab_id=`),
+  // `PUT`/`DELETE /live/favorites/{channel}` change them. The server keeps no
+  // order of its own beyond the tab's.
   @override
   Future<String> buildFavoriteChannelSource({String? lineup}) async => 'server://${_client.serverId.value}/tofa';
 
@@ -291,27 +498,77 @@ class _TofaLiveTvSupport implements LiveTvSupport, LiveTvRecordedItems {
   @override
   FavoriteChannelPersistenceMode get favoritePersistenceMode => FavoriteChannelPersistenceMode.serverSlice;
 
-  @override
-  Future<List<FavoriteChannel>> fetchFavoriteChannels({bool migrate = true, void Function()? checkCurrent}) => _client
-      .favoritesRepository
-      .read(key: _favoritesKey, legacyKey: _favoritesKey, migrate: false, checkCurrent: checkCurrent);
+  Future<String?> _favoritesTabId() async {
+    final data = await _client._liveGet('/api/v1/live/tabs');
+    final tabs = data is Map && data['tabs'] is List ? data['tabs'] as List : const [];
+    for (final tab in tabs.whereType<Map>()) {
+      if (tab['builtin'] == true && tab['id'] != null) return tab['id'].toString();
+    }
+    return null;
+  }
 
   @override
-  Future<void> setFavoriteChannels(List<FavoriteChannel> channels, {void Function()? checkCurrent}) =>
-      _client.favoritesRepository.write(_favoritesKey, channels, checkCurrent: checkCurrent);
+  Future<List<FavoriteChannel>> fetchFavoriteChannels({bool migrate = true, void Function()? checkCurrent}) async {
+    final tabId = await _favoritesTabId();
+    checkCurrent?.call();
+    if (tabId == null) return const [];
+    final source = await buildFavoriteChannelSource();
+    final out = <FavoriteChannel>[];
+    String? cursor;
+    for (var page = 0; page < _TofaLive.maxChannelPages; page++) {
+      final data = await _client._liveGet(
+        '/api/v1/live/channels',
+        query: {'tab_id': tabId, 'limit': '${_TofaLive.channelPageSize}', 'cursor': ?cursor},
+      );
+      if (data is! Map) break;
+      for (final row in (data['channels'] is List ? data['channels'] as List : const []).whereType<Map>()) {
+        final channel = _client._channel(row.cast<String, dynamic>());
+        if (channel != null) out.add(FavoriteChannel.fromLiveTvChannel(channel, source));
+      }
+      final next = data['next_cursor'];
+      if (next is! String || next.isEmpty || next == cursor) break;
+      cursor = next;
+    }
+    checkCurrent?.call();
+    return out;
+  }
+
+  @override
+  Future<void> setFavoriteChannels(List<FavoriteChannel> channels, {void Function()? checkCurrent}) async {
+    final current = {for (final c in await fetchFavoriteChannels(checkCurrent: checkCurrent)) c.id};
+    final wanted = {for (final c in channels) c.id};
+    Object? firstError;
+    StackTrace? firstStack;
+    for (final (id, on) in [
+      for (final id in wanted.difference(current)) (id, true),
+      for (final id in current.difference(wanted)) (id, false),
+    ]) {
+      checkCurrent?.call();
+      try {
+        await _client._liveSend(on ? 'PUT' : 'DELETE', '/api/v1/live/favorites/${TofaClient._seg(id)}');
+      } catch (e, st) {
+        firstError ??= e;
+        firstStack ??= st;
+      }
+    }
+    if (firstError != null) Error.throwWithStackTrace(firstError, firstStack!);
+  }
 }
 
-/// One channel's stream session: a negotiated HLS URL, progress posts as
-/// heartbeats, `…/stopped` when it ends. No time-shift in Plezilo (the
-/// server's pause window is not exposed as a seekable range).
+/// One tuned channel: the stream URL, the viewer kept alive by renewals,
+/// and (for a library channel) the file's stream session, whose progress
+/// posts are the heartbeats. No time-shift in Plezilo.
 class _TofaLiveTvPlaybackSession implements LiveTvPlaybackSession {
-  _TofaLiveTvPlaybackSession(this._client, this._channelKey, this._quality, this._url, this._session);
+  _TofaLiveTvPlaybackSession(this._client, this._channelKey, this._quality, this._url, this._viewer, this._session) {
+    unawaited(_viewer.renew());
+  }
 
   final TofaClient _client;
   final String _channelKey;
   final TranscodeQualityPreset _quality;
   final String _url;
-  final _TofaStreamSession _session;
+  final _TofaLiveViewer _viewer;
+  final _TofaStreamSession? _session;
 
   @override
   LiveProgramInfo get program => LiveProgramInfo.none;
@@ -338,23 +595,31 @@ class _TofaLiveTvPlaybackSession implements LiveTvPlaybackSession {
     required int positionMs,
     required int durationMs,
   }) async {
+    final session = _session;
     if (state == 'stopped') {
-      await _client._stopLiveSession(_session);
+      await _end();
       return null;
     }
-    await _client._sendProgress(_session, Duration(milliseconds: positionMs), paused: state == 'paused');
+    if (session != null) {
+      await _client._sendProgress(session, Duration(milliseconds: positionMs), paused: state == 'paused');
+    }
     return null;
   }
 
-  @override
-  Future<void> discard() => _client._stopLiveSession(_session);
+  Future<void> _end() async {
+    final session = _session;
+    await Future.wait([_viewer.release(), if (session != null) _client._stopLiveSession(session)]);
+  }
 
-  /// A dropped stream starts the channel again (a fresh session), releasing
-  /// this one.
+  @override
+  Future<void> discard() => _end();
+
+  /// A dropped stream (or a library row that ended) tunes the channel again,
+  /// reusing the viewer, and releases this session.
   @override
   Future<LiveTvPlaybackSession?> recover({required bool directStream, required bool directStreamAudio}) async {
     final replacement = await _client._startLive(_channelKey, _quality);
-    if (replacement != null) unawaited(_client._stopLiveSession(_session));
+    if (replacement != null) unawaited(_end());
     return replacement;
   }
 }
@@ -469,7 +734,7 @@ class _TofaLiveTvDvrSupport implements LiveTvDvrSupport {
     if (request.type == MediaSubscription.typeSeries) {
       final keep = flexibleInt(request.prefs[_keepLast]);
       final anyChannel = request.prefs[_anyChannel] == true;
-      final response = await _client._api.request(
+      final response = await _client._liveRequest(
         'POST',
         '/api/v1/live/recording-rules',
         body: {
@@ -483,7 +748,7 @@ class _TofaLiveTvDvrSupport implements LiveTvDvrSupport {
       appLogger.i('[tofa] recording rule created');
       return null;
     }
-    final response = await _client._api.request(
+    final response = await _client._liveRequest(
       'POST',
       '/api/v1/live/recordings/scheduled',
       body: {'airing_id': airingId, 'channel_id': channelId},
@@ -526,7 +791,7 @@ class _TofaLiveTvDvrSupport implements LiveTvDvrSupport {
       if (prefs[_anyChannel] is bool) 'any_channel': prefs[_anyChannel],
       if (prefs.containsKey(_keepLast)) ...(keep == null || keep <= 0 ? {'keep_all': true} : {'keep_last': keep}),
     };
-    final response = await _client._api.request(
+    final response = await _client._liveRequest(
       'PATCH',
       '/api/v1/live/recording-rules/${TofaClient._seg(id)}',
       body: body,
@@ -540,15 +805,24 @@ class _TofaLiveTvDvrSupport implements LiveTvDvrSupport {
   Future<void> deleteRecordingRule(String subscriptionId) async {
     final id = _strip(subscriptionId, rulePrefix);
     if (id == null) {
-      // A one-off recording ("rec:"): no documented route cancels it.
-      throw UnsupportedError('Tofa has no route to cancel one scheduled recording');
+      // A one-off recording ("rec:"): `DELETE /live/recordings/{id}`.
+      return cancelGrab(subscriptionId);
     }
-    await _client._api.send('DELETE', '/api/v1/live/recording-rules/${TofaClient._seg(id)}');
+    await _client._liveSend(
+      'DELETE',
+      '/api/v1/live/recording-rules/${TofaClient._seg(id)}',
+      query: {'cancel_upcoming': 'true'},
+    );
   }
 
+  /// `DELETE /live/recordings/{id}` (observed in Tofa's web app, 2026-11-26).
   @override
-  Future<void> cancelGrab(String operationId) async =>
-      throw UnsupportedError('Tofa has no route to cancel one scheduled recording');
+  Future<void> cancelGrab(String operationId) async {
+    final id = _strip(operationId, recordingPrefix) ?? operationId;
+    if (id.isEmpty) throw ArgumentError.value(operationId, 'operationId', 'must not be empty');
+    await _client._liveSend('DELETE', '/api/v1/live/recordings/${TofaClient._seg(id)}');
+    appLogger.i('[tofa] scheduled recording cancelled');
+  }
 
   @override
   Future<List<MediaSubscription>> fetchSubscriptionMapping({
@@ -559,7 +833,7 @@ class _TofaLiveTvDvrSupport implements LiveTvDvrSupport {
 
   /// Recordings that have not ended: upcoming or in progress.
   Future<List<Map<String, dynamic>>> _pendingRecordings() async {
-    final data = await _client._api.getJson('/api/v1/live/recordings', query: {'include': 'scheduled'});
+    final data = await _client._liveGet('/api/v1/live/recordings', query: {'include': 'scheduled'});
     final rows = data is Map && data['recordings'] is List ? data['recordings'] as List : const [];
     return [
       for (final row in rows.whereType<Map<String, dynamic>>())
@@ -611,7 +885,7 @@ class _TofaLiveTvDvrSupport implements LiveTvDvrSupport {
 
   @override
   Future<List<MediaSubscription>> fetchRecordingRules({bool includeGrabs = true, bool includeStorage = true}) async {
-    final data = await _client._api.getJson('/api/v1/live/recording-rules');
+    final data = await _client._liveGet('/api/v1/live/recording-rules');
     final rules = [
       for (final row
           in (data is Map && data['rules'] is List ? data['rules'] as List : const [])

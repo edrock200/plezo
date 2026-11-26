@@ -124,7 +124,7 @@ Future<bool> confirmCancelGrab(BuildContext context, MediaServerClient client, M
     }
     return true;
   } on UnsupportedError {
-    // Tofa documents no route that cancels one scheduled recording.
+    // A backend that cannot cancel one scheduled recording.
     if (context.mounted) showSnackBar(context, t.liveTv.cancelRecordingUnsupported, type: SnackBarType.error);
     return false;
   } catch (e) {

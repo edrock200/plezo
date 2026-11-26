@@ -4400,6 +4400,12 @@ class Translations$liveTv$en {
 	/// en: 'Recorded'
 	String get finishedRecordings => 'Recorded';
 
+	/// en: 'This channel can't be played right now.'
+	String get tofaChannelUnavailable => 'This channel can\'t be played right now.';
+
+	/// en: 'Nothing is on this channel right now.'
+	String get tofaChannelOffAir => 'Nothing is on this channel right now.';
+
 	/// en: 'This recording is no longer on the server.'
 	String get recordingUnavailable => 'This recording is no longer on the server.';
 
@@ -11463,6 +11469,8 @@ extension on Translations {
 			'liveTv.dvrAdminRequired' => 'DVR settings require an admin account',
 			'liveTv.recordingFailed' => 'Couldn\'t schedule recording',
 			'liveTv.finishedRecordings' => 'Recorded',
+			'liveTv.tofaChannelUnavailable' => 'This channel can\'t be played right now.',
+			'liveTv.tofaChannelOffAir' => 'Nothing is on this channel right now.',
 			'liveTv.recordingUnavailable' => 'This recording is no longer on the server.',
 			'liveTv.cancelRecordingUnsupported' => 'This server doesn\'t let apps cancel a single scheduled recording.',
 			'liveTv.recordingTargetMissing' => 'Couldn\'t determine recording library',
@@ -11831,10 +11839,10 @@ extension on Translations {
 			'downloads.unknownShow' => 'Unknown Show',
 			'downloads.unknownSeason' => 'Unknown Season',
 			'downloads.unknownAlbum' => 'Unknown Album',
-			'downloads.completedOfTotal' => ({required Object completed, required Object total}) => '${completed}/${total} completed',
-			'downloads.errorFileNotFound' => 'File not found (404)',
 			_ => null,
 		} ?? switch (path) {
+			'downloads.completedOfTotal' => ({required Object completed, required Object total}) => '${completed}/${total} completed',
+			'downloads.errorFileNotFound' => 'File not found (404)',
 			'downloads.errorDownloadNotAllowed' => 'Download not allowed by the server (403)',
 			'downloads.errorDownloadFailed' => 'Download failed',
 			'downloads.errorDownloadFailedWithReason' => ({required Object reason}) => 'Download failed: ${reason}',
@@ -12345,10 +12353,10 @@ extension on Translations {
 			'addServer.tofaCodeSemantics' => ({required Object code}) => 'Sign-in code: ${code}',
 			'addServer.tofaQrSemantics' => ({required Object url, required Object code}) => 'Sign-in QR code. Or go to ${url} and enter ${code}.',
 			'addServer.tofaChooseProfile' => 'Who\'s watching?',
-			'addServer.tofaChooseProfileSubtitle' => 'Pick the Tofa profile to use on this device.',
-			'addServer.tofaNoProfiles' => 'This account has no Tofa profiles.',
 			_ => null,
 		} ?? switch (path) {
+			'addServer.tofaChooseProfileSubtitle' => 'Pick the Tofa profile to use on this device.',
+			'addServer.tofaNoProfiles' => 'This account has no Tofa profiles.',
 			'addServer.tofaProfileLocked' => 'PIN protected',
 			'addServer.tofaProfileKids' => 'Kids profile',
 			'addServer.tofaWrongPin' => 'Wrong PIN. Try again.',

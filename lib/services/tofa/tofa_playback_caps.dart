@@ -95,4 +95,21 @@ abstract final class TofaPlaybackCaps {
     // play method names are the only ones it uses.
     if (forceTranscode) 'force_method': 'Transcode',
   };
+
+  /// The playback profile of a Live session (`POST /live/viewers/{id}/session`
+  /// `profile`, as Tofa's web app sends it, 2026-11-26): the codec lists
+  /// comma-separated, the HDR flags as booleans, deinterlacing left to the
+  /// server.
+  static Map<String, Object?> liveProfile() => {
+    'direct_play_video_codecs': directPlayVideoCodecs().join(','),
+    'direct_play_audio_codecs': _audioCodecs.join(','),
+    'direct_play_containers': _containers.join(','),
+    'hls_video_codecs': hlsVideoCodecs().join(','),
+    'hls_audio_codecs': _hlsAudioCodecs.join(','),
+    'transcode_video_codecs': transcodeVideoCodecs().join(','),
+    'hdr_supported': true,
+    'h264_10bit_supported': false,
+    'dolby_vision_supported': false,
+    'deinterlacing_supported': false,
+  };
 }

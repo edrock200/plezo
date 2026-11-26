@@ -8,28 +8,11 @@ import 'package:plezy/media/media_server_client.dart';
 import 'package:plezy/media/server_capabilities.dart';
 import 'package:plezy/models/livetv_channel.dart';
 import 'package:plezy/models/media_subscription.dart';
-import 'package:plezy/services/favorite_channels_repository.dart';
 import 'package:plezy/services/playback_initialization_types.dart';
 import 'package:plezy/services/tofa/tofa_api.dart';
 import 'package:plezy/services/tofa/tofa_client.dart';
 
 import 'tofa_fixtures.dart';
-
-class _MemoryFavorites implements FavoriteChannelsRepository {
-  final Map<String, List<FavoriteChannel>> store = {};
-
-  @override
-  Future<List<FavoriteChannel>> read({
-    required String key,
-    required String legacyKey,
-    bool migrate = true,
-    void Function()? checkCurrent,
-  }) async => List.of(store[key] ?? const []);
-
-  @override
-  Future<void> write(String key, List<FavoriteChannel> channels, {void Function()? checkCurrent}) async =>
-      store[key] = List.of(channels);
-}
 
 Map<String, dynamic> _entry(
   String id, {
@@ -76,19 +59,16 @@ void main() {
   late FakeTofa fake;
   setUp(() => fake = FakeTofa());
 
-  TofaClient client() =>
-      TofaClient.forTesting(
-          tofaConnection(),
-          headers: const TofaClientHeaders(
-            clientVersion: '1.0',
-            platform: 'android',
-            deviceName: 'Test device',
-            deviceId: 'dev-1',
-          ),
-          httpClient: fake.client,
-        )
-        ..raceWait = (_) async {}
-        ..favoritesRepository = _MemoryFavorites();
+  TofaClient client() => TofaClient.forTesting(
+    tofaConnection(),
+    headers: const TofaClientHeaders(
+      clientVersion: '1.0',
+      platform: 'android',
+      deviceName: 'Test device',
+      deviceId: 'dev-1',
+    ),
+    httpClient: fake.client,
+  )..raceWait = (_) async {};
 
   test('Tofa offers Live TV and recording', () {
     expect(ServerCapabilities.tofa.liveTv, isTrue);
@@ -96,7 +76,42 @@ void main() {
   });
 
   group('availability', () {
-    test('channels mean Live TV; no access or no Live means none', () async {
+    test('live_tv in the capabilities and a channel, asked with the live header', () async {
+      fake.on(
+        'GET',
+        '/api/v1/system/info',
+        (_) => jsonResponse({
+          'version': '0.14',
+          'capabilities': ['live_tv'],
+        }),
+      );
+      fake.on('GET', '/api/v1/live/channels', (r) {
+        expect(r.headers['X-Tofa-Live-Capabilities'], 'live_session');
+        expect(r.url.queryParameters['limit'], '1');
+        return jsonResponse({
+          'channels': [_channel('ch-1', 1)],
+          'next_cursor': null,
+        });
+      });
+      expect(await client().liveTv.isAvailable(), isTrue);
+      fake.on('GET', '/api/v1/live/channels', (_) => tofaError(403, 'live_access_denied'));
+      expect(await client().liveTv.isAvailable(), isFalse);
+      fake.on('GET', '/api/v1/live/channels', (_) => jsonResponse({'channels': <Object>[], 'next_cursor': null}));
+      expect(await client().liveTv.isAvailable(), isFalse);
+    });
+
+    test('a server without the live_tv capability has none; an unreadable info still checks channels', () async {
+      fake.on(
+        'GET',
+        '/api/v1/system/info',
+        (_) => jsonResponse({
+          'version': '0.14',
+          'capabilities': ['sync.user_state'],
+        }),
+      );
+      expect(await client().liveTv.isAvailable(), isFalse);
+      expect(fake.to('GET', '/api/v1/live/channels'), isEmpty);
+      fake.on('GET', '/api/v1/system/info', (_) => tofaError(500, 'boom'));
       fake.on(
         'GET',
         '/api/v1/live/channels',
@@ -106,10 +121,6 @@ void main() {
         }),
       );
       expect(await client().liveTv.isAvailable(), isTrue);
-      fake.on('GET', '/api/v1/live/channels', (_) => tofaError(403, 'live_access_denied'));
-      expect(await client().liveTv.isAvailable(), isFalse);
-      fake.on('GET', '/api/v1/live/channels', (_) => jsonResponse({'channels': <Object>[], 'next_cursor': null}));
-      expect(await client().liveTv.isAvailable(), isFalse);
     });
 
     test('a server error is not taken for "no Live TV"', () async {
@@ -187,46 +198,97 @@ void main() {
   });
 
   group('playing a channel', () {
-    test('negotiates the channel with the viewer id and revision, heartbeats and stops', () async {
-      fake.on(
-        'GET',
-        '/api/v1/live/channels',
-        (_) => jsonResponse({
-          'channels': [_channel('ch-1', 1)],
-          'next_cursor': null,
-        }),
-      );
-      fake.on('GET', '/api/v1/stream/ch-1/info', (r) {
-        expect(r.url.queryParameters['live_viewer_id'], matches(RegExp(r'^[0-9a-f-]{36}$')));
-        expect(r.url.queryParameters['live_revision'], '7');
-        expect(r.url.queryParameters.containsKey('resume_ticks'), isTrue);
+    test('a library channel: tune, the row on air as its file, renew, release', () async {
+      final start = DateTime.now().toUtc().subtract(const Duration(minutes: 10));
+      fake.on('GET', '/api/v1/live/channels/ch-1/tune', (r) {
+        expect(r.headers['X-Tofa-Live-Capabilities'], 'live_session');
+        return jsonResponse({
+          'viewer_id': 'v-1',
+          'tune_generation': 3,
+          'mode': 'library',
+          'revision': 7,
+          'server_received_at': 0,
+          'server_sent_at': 0,
+          'current': {
+            'kind': 'media',
+            'media_file_id': 'f-9',
+            'playout_id': 'po-1',
+            'in_ms': 60000,
+            'out_ms': 3600000,
+            'start_at': start.toIso8601String(),
+            'end_at': start.add(const Duration(hours: 1)).toIso8601String(),
+          },
+        });
+      });
+      fake.on('GET', '/api/v1/stream/f-9/info', (r) {
+        final q = r.url.queryParameters;
+        expect(q['live_viewer_id'], 'v-1');
+        expect(q['live_playout_id'], 'po-1');
+        expect(q['live_revision'], '7');
+        final ticks = int.parse(q['resume_ticks']!);
+        // in_ms + 10 minutes on air (+3 s ahead), in ticks.
+        expect(ticks ~/ 10000, inInclusiveRange(660000, 664000));
         return jsonResponse(
           playbackInfo(playMethod: 'Transcode', streamUrl: '/api/v1/stream/s/sid-1/master.m3u8?st=sess-tok'),
         );
       });
+      fake.on('POST', '/api/v1/live/viewers/v-1/renew', (r) {
+        expect(jsonDecode(r.body), {'current_session_id': 'sid-1', 'current_playout_id': 'po-1'});
+        return jsonResponse({'renew_after_seconds': 30});
+      });
+      fake.on('DELETE', '/api/v1/live/viewers/v-1', (r) {
+        expect(r.url.queryParameters, {'tune_generation': '3', 'grace': 'skip'});
+        return http.Response('', 204);
+      });
       fake.onPrefix('POST', '/api/v1/stream/s/sid-1/', (_) => http.Response('', 204));
       final c = client();
-      await c.liveTv.fetchChannels();
       final session = await c.liveTv.startPlayback('ch-1');
-      expect(session, isNotNull);
       expect(session!.canTimeShift, isFalse);
       expect(await session.streamUrlAt(), endsWith('/api/v1/stream/s/sid-1/master.m3u8?st=sess-tok'));
-      expect(await session.streamUrlAt(offsetSeconds: 30), isNull);
+      await Future<void>.delayed(Duration.zero);
+      expect(fake.to('POST', '/api/v1/live/viewers/v-1/renew'), hasLength(1));
       await session.reportTimeline(state: 'playing', positionMs: 5000, durationMs: 0);
-      final progress = fake.to('POST', '/api/v1/stream/s/sid-1/progress').single;
-      expect(progress.url.queryParameters['st'], 'sess-tok');
-      expect(progress.headers.containsKey('Authorization'), isFalse);
-      expect((jsonDecode(progress.body) as Map)['is_paused'], isFalse);
+      expect(fake.to('POST', '/api/v1/stream/s/sid-1/progress'), hasLength(1));
       await session.reportTimeline(state: 'stopped', positionMs: 6000, durationMs: 0);
-      expect(fake.to('POST', '/api/v1/stream/s/sid-1/stopped'), hasLength(1));
       await session.discard();
-      expect(fake.to('POST', '/api/v1/stream/s/sid-1/stopped'), hasLength(1), reason: 'stopped once');
+      expect(fake.to('DELETE', '/api/v1/live/viewers/v-1'), hasLength(1), reason: 'released once');
+      expect(fake.to('POST', '/api/v1/stream/s/sid-1/stopped'), hasLength(1));
     });
 
-    test("a refusal shows the server's message", () async {
+    test('a provider channel: a live session polled until the live edge', () async {
+      var polls = 0;
       fake.on(
         'GET',
-        '/api/v1/stream/ch-1/info',
+        '/api/v1/live/channels/ch-2/tune',
+        (_) => jsonResponse({'viewer_id': 'v-2', 'tune_generation': 1, 'mode': 'live_session', 'current': null}),
+      );
+      fake.on('POST', '/api/v1/live/viewers/v-2/session', (r) {
+        final body = jsonDecode(r.body) as Map;
+        expect((body['profile'] as Map)['hls_video_codecs'], contains('h264'));
+        expect(body['at'], isNull);
+        polls++;
+        return jsonResponse({
+          'session_id': 'ls-1',
+          'playlist_url': '/api/v1/live/stream/ls-1/index.m3u8?lt=x',
+          'ingest': {'state': polls < 2 ? 'buffering' : 'live'},
+          'live_edge_at': polls < 2 ? null : '2026-11-26T10:00:00Z',
+          'selection': {'mode': 'copy'},
+        });
+      });
+      fake.on('POST', '/api/v1/live/viewers/v-2/renew', (_) => jsonResponse({'renew_after_seconds': 30}));
+      fake.on('DELETE', '/api/v1/live/viewers/v-2', (_) => http.Response('', 204));
+      final c = client();
+      final session = await c.liveTv.startPlayback('ch-2');
+      expect(polls, 2);
+      expect(await session!.streamUrlAt(), endsWith('/api/v1/live/stream/ls-1/index.m3u8?lt=x'));
+      await session.discard();
+      expect(fake.to('DELETE', '/api/v1/live/viewers/v-2'), hasLength(1));
+    });
+
+    test("a refused tune shows the server's message; an off-air library row says so", () async {
+      fake.on(
+        'GET',
+        '/api/v1/live/channels/ch-1/tune',
         (_) => tofaError(403, 'live_home_only', 'This channel plays only on your home network.'),
       );
       await expectLater(
@@ -235,17 +297,49 @@ void main() {
           isA<PlaybackException>().having((e) => e.message, 'message', 'This channel plays only on your home network.'),
         ),
       );
+      fake.on(
+        'GET',
+        '/api/v1/live/channels/ch-1/tune',
+        (_) => jsonResponse({
+          'viewer_id': 'v-3',
+          'mode': 'library',
+          'current': {'kind': 'intermission'},
+        }),
+      );
+      fake.on('DELETE', '/api/v1/live/viewers/v-3', (_) => http.Response('', 204));
+      await expectLater(client().liveTv.startPlayback('ch-1'), throwsA(isA<PlaybackException>()));
+      expect(fake.to('DELETE', '/api/v1/live/viewers/v-3'), hasLength(1), reason: 'the viewer is released');
     });
   });
 
-  test('favourite channels are kept on the device, per sign-in', () async {
-    final c = client();
-    final live = c.liveTv;
-    final source = await live.buildFavoriteChannelSource();
-    final channel = LiveTvChannel(key: 'ch-1', title: 'One', number: '1');
-    await live.setFavoriteChannels([FavoriteChannel.fromLiveTvChannel(channel, source)]);
+  test('favourite channels are the server builtin tab', () async {
+    fake.on(
+      'GET',
+      '/api/v1/live/tabs',
+      (_) => jsonResponse({
+        'tabs': [
+          {'id': 't-own', 'name': 'Sports', 'builtin': false},
+          {'id': 't-fav', 'name': 'Favourites', 'builtin': true},
+        ],
+      }),
+    );
+    fake.on('GET', '/api/v1/live/channels', (r) {
+      expect(r.url.queryParameters['tab_id'], 't-fav');
+      return jsonResponse({
+        'channels': [_channel('ch-1', 1)],
+        'next_cursor': null,
+      });
+    });
+    fake.onPrefix('PUT', '/api/v1/live/favorites/', (_) => http.Response('', 204));
+    fake.onPrefix('DELETE', '/api/v1/live/favorites/', (_) => http.Response('', 204));
+    final live = client().liveTv;
     expect((await live.fetchFavoriteChannels()).single.id, 'ch-1');
-    expect(fake.requests, isEmpty);
+    final source = await live.buildFavoriteChannelSource();
+    await live.setFavoriteChannels([
+      FavoriteChannel.fromLiveTvChannel(LiveTvChannel(key: 'ch-2', title: 'Two', number: '2'), source),
+    ]);
+    expect(fake.requests.where((r) => r.method == 'PUT').single.url.path, '/api/v1/live/favorites/ch-2');
+    expect(fake.requests.where((r) => r.method == 'DELETE').single.url.path, '/api/v1/live/favorites/ch-1');
   });
 
   group('recording', () {
@@ -368,8 +462,14 @@ void main() {
       await dvr.updateRecordingRule('rule:rule-1', {'new_only': false, 'keep_last': 0});
       await dvr.deleteRecordingRule('rule:rule-1');
       expect(fake.to('DELETE', '/api/v1/live/recording-rules/rule-1'), hasLength(1));
-      await expectLater(dvr.cancelGrab('rec:r-1'), throwsA(isA<UnsupportedError>()));
-      await expectLater(dvr.deleteRecordingRule('rec:r-1'), throwsA(isA<UnsupportedError>()));
+      fake.on('DELETE', '/api/v1/live/recordings/r-1', (_) => http.Response('', 204));
+      await dvr.cancelGrab('rec:r-1');
+      await dvr.deleteRecordingRule('rec:r-1');
+      expect(fake.to('DELETE', '/api/v1/live/recordings/r-1'), hasLength(2));
+      expect(
+        fake.to('DELETE', '/api/v1/live/recording-rules/rule-1').single.url.queryParameters['cancel_upcoming'],
+        'true',
+      );
     });
   });
 
