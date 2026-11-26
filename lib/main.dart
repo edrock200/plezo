@@ -87,6 +87,7 @@ import 'services/tofa/tofa_api_cache.dart';
 import 'services/iptv/iptv_api_cache.dart';
 import 'services/iptv/iptv_client.dart';
 import 'services/iptv/iptv_recorder.dart';
+import 'services/iptv/iptv_os_notifications.dart';
 import 'services/iptv/iptv_reminders.dart';
 import 'services/iptv/iptv_store.dart';
 import 'services/iptv/iptv_sync_service.dart';
@@ -1459,11 +1460,34 @@ class _MainAppState extends State<MainApp> with WidgetsBindingObserver {
       final client = await clientFor(sourceId);
       return client?.recordingTarget(channelId);
     };
-    unawaited(
-      IptvRecorder.instance.restore().catchError((Object e) => appLogger.w('[iptv] recordings not restored', error: e)),
+    Future<void> expandRules(String sourceId) async {
+      final client = await clientFor(sourceId);
+      await client?.expandRecordingRules();
+    }
+
+    IptvSyncService.instance.onGuideRefreshed = (sourceId) => unawaited(
+      expandRules(sourceId).catchError((Object e) => appLogger.w('[iptv] series rules not expanded', error: e)),
     );
     unawaited(
-      IptvReminders.instance.start().catchError((Object e) => appLogger.w('[iptv] reminders not started', error: e)),
+      IptvRecorder.instance
+          .restore()
+          .then((_) async {
+            // Series rules also look ahead at start-up: the stored guide may
+            // hold airings a rule has not scheduled yet.
+            final sources = {for (final rule in await IptvStore.instance.rules()) rule.sourceId};
+            for (final sourceId in sources) {
+              await expandRules(sourceId);
+            }
+          })
+          .catchError((Object e) => appLogger.w('[iptv] recordings not restored', error: e)),
+    );
+    unawaited(
+      IptvOsNotifications.initialize()
+          .then((notifications) {
+            IptvReminders.instance.notifier = notifications;
+            return IptvReminders.instance.start();
+          })
+          .catchError((Object e) => appLogger.w('[iptv] reminders not started', error: e)),
     );
   }
 

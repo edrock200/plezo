@@ -56,6 +56,12 @@ Future<void> showIptvReminderDialog(BuildContext context, IptvReminder reminder)
     cancelText: t.liveTv.reminderDismiss,
   );
   if (!watch || !context.mounted) return;
+  await tuneIptvReminder(context, reminder);
+}
+
+/// Tune a reminder's channel (Watch in the dialog, or a selected system
+/// notification).
+Future<void> tuneIptvReminder(BuildContext context, IptvReminder reminder) async {
   final multiServer = context.read<MultiServerProvider>();
   final client = multiServer.serverManager.iptvClient(reminder.sourceId);
   if (client == null) {

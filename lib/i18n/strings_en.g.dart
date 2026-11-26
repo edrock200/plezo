@@ -4565,14 +4565,17 @@ class Translations$liveTv$en {
 	/// en: 'Player controls'
 	String get playerControls => 'Player controls';
 
-	/// en: 'Recording until the end of the programme'
-	String get recordingStarted => 'Recording until the end of the programme';
+	/// en: 'Recording on this device until the programme ends. Plezilo can go to the background, but closing it stops the recording.'
+	String get recordingStarted => 'Recording on this device until the programme ends. Plezilo can go to the background, but closing it stops the recording.';
 
 	/// en: 'Couldn't start recording'
 	String get recordingFailedToStart => 'Couldn\'t start recording';
 
 	/// en: 'No channel ${number}'
 	String channelNotFound({required Object number}) => 'No channel ${number}';
+
+	/// en: 'Recording scheduled on this device. Leave Plezilo open or in the background (not closed) until it ends: a recording due while Plezilo is closed does not start.'
+	String get iptvRecordingScheduled => 'Recording scheduled on this device. Leave Plezilo open or in the background (not closed) until it ends: a recording due while Plezilo is closed does not start.';
 }
 
 // Path: collections
@@ -12066,9 +12069,10 @@ extension on Translations {
 			'liveTv.removeFavorite' => 'Remove from favourites',
 			'liveTv.noProgramInfo' => 'No guide information',
 			'liveTv.playerControls' => 'Player controls',
-			'liveTv.recordingStarted' => 'Recording until the end of the programme',
+			'liveTv.recordingStarted' => 'Recording on this device until the programme ends. Plezilo can go to the background, but closing it stops the recording.',
 			'liveTv.recordingFailedToStart' => 'Couldn\'t start recording',
 			'liveTv.channelNotFound' => ({required Object number}) => 'No channel ${number}',
+			'liveTv.iptvRecordingScheduled' => 'Recording scheduled on this device. Leave Plezilo open or in the background (not closed) until it ends: a recording due while Plezilo is closed does not start.',
 			'collections.title' => 'Collections',
 			'collections.collection' => 'Collection',
 			'collections.empty' => 'Collection is empty',
@@ -12373,9 +12377,9 @@ extension on Translations {
 			'downloads.syncRuleUnknownServer' => 'Unknown server',
 			'downloads.syncRuleListCreated' => 'Sync rule created',
 			'downloads.backgroundWarning.bannerBlocked' => 'Downloads will stop when you leave the app',
-			'downloads.backgroundWarning.bannerDegraded' => 'Background downloads may be limited',
 			_ => null,
 		} ?? switch (path) {
+			'downloads.backgroundWarning.bannerDegraded' => 'Background downloads may be limited',
 			'downloads.backgroundWarning.bannerAction' => 'Details',
 			'downloads.backgroundWarning.sheetTitle' => 'Background downloads are blocked',
 			'downloads.backgroundWarning.sheetTitleDegraded' => 'Background downloads may be limited',
@@ -12887,9 +12891,9 @@ extension on Translations {
 			'addServer.siloTryingAgain' => 'Trying again…',
 			'addServer.siloPasswordNotConfirmedTitle' => 'Password not confirmed',
 			'addServer.siloPasswordNotConfirmedLead' => 'Plezilo couldn\'t check whether your new password was saved. Try again in a moment.',
-			'addServer.siloCheckingPassword' => 'Checking…',
 			_ => null,
 		} ?? switch (path) {
+			'addServer.siloCheckingPassword' => 'Checking…',
 			'addServer.siloPasswordErrorEnterTemporary' => 'Enter the temporary password.',
 			'addServer.siloPasswordErrorEnterNew' => 'Enter a new password.',
 			'addServer.siloPasswordErrorMismatch' => 'The new passwords don\'t match.',

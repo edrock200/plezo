@@ -140,6 +140,9 @@ class PlezyActivity : FlutterActivity() {
   private val voiceSearchChannel = VoiceSearchChannel(this)
   private val userCertificateChannel = UserCertificateChannel()
   private val appIconChannel = AppIconChannel(this)
+  private val iptvRecordingChannel by lazy(LazyThreadSafetyMode.NONE) {
+    com.edde746.plezy.iptv.IptvRecordingChannel(applicationContext)
+  }
   private val siloPairingChannel by lazy { SiloPairingChannel(this) }
   private val exitDiagnosticsRequested = AtomicBoolean(false)
 
@@ -695,6 +698,7 @@ class PlezyActivity : FlutterActivity() {
   }
 
   override fun onDestroy() {
+    if (!isChangingConfigurations) iptvRecordingChannel.onDestroy()
     externalPlayerChannel.dispose()
     voiceSearchChannel.dispose()
     siloPairingChannel.dispose()
@@ -823,11 +827,14 @@ class PlezyActivity : FlutterActivity() {
 
   override fun onPause() {
     logTextInputDiag { "activity.onPause ${describeImeState()}" }
+    // Still visible here, so a foreground service may start for a due IPTV recording.
+    iptvRecordingChannel.onPause()
     super.onPause()
   }
 
   override fun onResume() {
     super.onResume()
+    iptvRecordingChannel.onResume()
     logTextInputDiag { "activity.onResume ${describeImeState()}" }
   }
 
@@ -966,6 +973,7 @@ class PlezyActivity : FlutterActivity() {
     flutterEngine.plugins.add(MpvPlayerPlugin())
     flutterEngine.plugins.add(ExoPlayerPlugin())
     flutterEngine.plugins.add(MpvAudioPlayerPlugin())
+    iptvRecordingChannel.attach(flutterEngine.dartExecutor.binaryMessenger)
 
     MethodChannel(flutterEngine.dartExecutor.binaryMessenger, DEVICE_CHANNEL).setMethodCallHandler { call, result ->
       when (call.method) {

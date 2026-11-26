@@ -2,6 +2,7 @@ import Flutter
 import UIKit
 import AVFoundation
 import MediaPlayer
+import UserNotifications
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
@@ -21,6 +22,9 @@ import MediaPlayer
     // Configure the non-mixing session; activate it only for playback: a video
     // player core claims it as it is created (MpvAudioSessionActivation), mpv's
     // audio output otherwise.
+    // IPTV reminders (flutter_local_notifications): show a reminder that is
+    // due while Plezilo is in front, and report a selected one to Dart.
+    UNUserNotificationCenter.current().delegate = self as? UNUserNotificationCenterDelegate
     do {
       let session = AVAudioSession.sharedInstance()
       try session.setCategory(.playback, mode: .default)

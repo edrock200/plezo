@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The IPTV recording foreground service's notification (IptvRecordingService). -->
+    <string name="iptv_recording_channel">Recordings</string>
+    <string name="iptv_recording_now">Plezilo is recording</string>
+    <string name="iptv_recording_waiting">Plezilo has a recording due</string>
+</resources>

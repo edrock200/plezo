@@ -1911,9 +1911,10 @@
     "removeFavorite": "Remove from favourites",
     "noProgramInfo": "No guide information",
     "playerControls": "Player controls",
-    "recordingStarted": "Recording until the end of the programme",
+    "recordingStarted": "Recording on this device until the programme ends. Plezilo can go to the background, but closing it stops the recording.",
     "recordingFailedToStart": "Couldn't start recording",
-    "channelNotFound": "No channel ${number}"
+    "channelNotFound": "No channel ${number}",
+    "iptvRecordingScheduled": "Recording scheduled on this device. Leave Plezilo open or in the background (not closed) until it ends: a recording due while Plezilo is closed does not start."
   },
   "collections": {
     "title": "Collections",

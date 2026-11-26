@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../exceptions/media_server_exceptions.dart';
 import '../../i18n/strings.g.dart';
+import '../../media/media_backend.dart';
 import '../../media/media_server_client.dart';
 import '../../models/livetv_program.dart';
 import '../../models/media_grab_operation.dart';
@@ -61,7 +62,12 @@ Future<RecordOutcome?> recordProgram(BuildContext context, MediaServerClient cli
   if (!context.mounted) return outcome;
   switch (outcome) {
     case RecordOutcome.scheduled:
-      showSnackBar(context, t.liveTv.recordingScheduled, type: SnackBarType.success);
+      // IPTV records on this device: say what that needs.
+      showSnackBar(
+        context,
+        client.backend == MediaBackend.iptv ? t.liveTv.iptvRecordingScheduled : t.liveTv.recordingScheduled,
+        type: SnackBarType.success,
+      );
     case RecordOutcome.alreadyScheduled:
       showSnackBar(context, t.liveTv.alreadyScheduled);
     case RecordOutcome.adminRequired:

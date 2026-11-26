@@ -117,6 +117,25 @@
             android:authorities="com.edrock200.plezilo.systemshelf.artwork"
             android:exported="false"
             android:grantUriPermissions="true" />
+        <!-- Keeps the process alive while an IPTV recording runs in the background
+             (com.edde746.plezy.iptv.IptvRecordingService). -->
+        <service
+            android:name=".iptv.IptvRecordingService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+        <!-- IPTV programme reminders (flutter_local_notifications scheduled notifications). -->
+        <receiver
+            android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
+        <receiver
+            android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
         <receiver
             android:name=".watchnext.SystemShelfUpdateReceiver"
             android:exported="false">

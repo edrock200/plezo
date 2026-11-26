@@ -1,3 +1,5 @@
+import '../services/iptv/iptv_os_notifications.dart';
+import '../services/iptv/iptv_store.dart';
 import '../services/iptv/iptv_reminders.dart';
 import '../services/iptv/iptv_sync_service.dart';
 import 'livetv/iptv_live_actions.dart';
@@ -1072,11 +1074,30 @@ class _MainScreenState extends State<MainScreen>
     IptvReminders.instance.onDue = (reminder) {
       if (mounted) unawaited(showIptvReminderDialog(context, reminder));
     };
+    _wireIptvNotificationTaps();
+  }
+
+  /// A selected reminder notification tunes its channel. The notifications
+  /// start after the main screen on a cold start, so try again shortly.
+  void _wireIptvNotificationTaps([int attempt = 0]) {
+    final notifications = IptvOsNotifications.instance;
+    if (notifications == null) {
+      if (attempt < 10 && IptvStore.isInitialized && IptvOsNotifications.platformSupported) {
+        Future<void>.delayed(const Duration(seconds: 1), () {
+          if (mounted) _wireIptvNotificationTaps(attempt + 1);
+        });
+      }
+      return;
+    }
+    notifications.onOpen = (reminder) {
+      if (mounted) unawaited(tuneIptvReminder(context, reminder));
+    };
   }
 
   void _unwireIptv() {
     IptvSyncService.instance.onSourceUpdated = null;
     IptvReminders.instance.onDue = null;
+    IptvOsNotifications.instance?.onOpen = null;
   }
 
   @override

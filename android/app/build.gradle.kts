@@ -317,6 +317,8 @@ android {
   useLibrary("android.car")
 
   compileOptions {
+    // flutter_local_notifications (IPTV reminders) needs java.time on older Android.
+    isCoreLibraryDesugaringEnabled = true
     sourceCompatibility = JavaVersion.VERSION_17
     targetCompatibility = JavaVersion.VERSION_17
   }
@@ -504,6 +506,8 @@ tasks.matching { it.name.startsWith("merge") && it.name.endsWith("JniLibFolders"
 }
 
 dependencies {
+  coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+
   // mpv-build's mpv-android library: libmpv, FFmpeg and the JNI glue with
   // its Kotlin API (com.edde746.mpv), including the playback policies the
   // mpv core routes with (GpuVoPolicy, MediaCodecQuery, VideoRectPolicy).
