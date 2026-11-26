@@ -105,6 +105,23 @@ abstract class ApiCache {
     }
   }
 
+  /// Deletes the volatile (unpinned) rows cached under [scopeId] — a removed
+  /// connection's browsing cache — in every registered database. Pinned rows
+  /// (offline metadata of downloads that still exist) are kept. No-op before
+  /// registration.
+  static Future<void> clearVolatileForScope(String scopeId) async {
+    if (scopeId.isEmpty) return;
+    final prefix = '$scopeId:';
+    final cleared = <AppDatabase>{};
+    for (final cache in _byBackend.values) {
+      final db = cache.database;
+      if (!cleared.add(db)) continue;
+      await (db.delete(
+        db.apiCache,
+      )..where((t) => t.cacheKey.substr(1, prefix.length).equals(prefix) & t.pinned.equals(false))).go();
+    }
+  }
+
   final AppDatabase _db;
 
   ApiCache(this._db);

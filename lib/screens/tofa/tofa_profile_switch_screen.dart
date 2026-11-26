@@ -7,9 +7,13 @@ import 'package:provider/provider.dart';
 import '../../focus/focusable_wrapper.dart';
 import '../../i18n/strings.g.dart';
 import '../../profiles/active_profile_binder.dart';
+import '../../connection/connection_registry.dart';
 import '../../profiles/active_profile_provider.dart';
+import '../../profiles/profile_connection_cleanup.dart';
 import '../../profiles/profile_connection.dart';
 import '../../profiles/profile_connection_registry.dart';
+import '../../providers/multi_server_provider.dart';
+import '../../services/storage_service.dart';
 import '../../services/tofa/tofa_auth_service.dart';
 import '../../services/tofa/tofa_client.dart';
 import '../../utils/app_logger.dart';
@@ -94,6 +98,12 @@ class _TofaProfileSwitchScreenState extends State<TofaProfileSwitchScreen> {
     final active = context.read<ActiveProfileProvider>();
     final joins = context.read<ProfileConnectionRegistry>();
     final binder = context.read<ActiveProfileBinder>();
+    final cleanup = ProfileConnectionCleanup(
+      profileConnections: joins,
+      connections: context.read<ConnectionRegistry>(),
+      storage: context.read<StorageService>(),
+      serverManager: context.read<MultiServerProvider>().serverManager,
+    );
     final plezoProfileId = active.activeId;
     if (plezoProfileId == null) {
       showErrorSnackBar(context, t.messages.noProfilesAvailable);
@@ -118,11 +128,16 @@ class _TofaProfileSwitchScreenState extends State<TofaProfileSwitchScreen> {
       );
       // The Plezilo profile now uses the new Tofa profile on this server,
       // not both (one active client per server).
-      if (previous != null && old.id != next.id) {
+      final retire = previous != null && old.id != next.id;
+      if (retire) {
         if (previous.isDefault) await joins.setDefault(plezoProfileId, next.id);
         await joins.remove(plezoProfileId, old.id);
       }
       await binder.rebindIfActive(plezoProfileId);
+      // The previous Tofa profile's connection is retired once nothing links
+      // it any more: its row and its still-running client would otherwise
+      // outlive a later removal of this sign-in.
+      if (retire) await cleanup.removeProfileConnection(profileId: plezoProfileId, connection: old);
       appLogger.i('[tofa] switched to another profile of the account');
       if (!mounted) return;
       showSuccessSnackBar(context, t.tofaExtras.profileSwitched(name: profile.name));

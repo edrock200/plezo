@@ -21,6 +21,7 @@ Released November 26, 2026. Android and Windows.
 - **Tofa's own scores:** Tofa titles show the server's critic and audience scores in words ("Tofa critics 85") next to IMDb, Rotten Tomatoes and Metacritic.
 - **Finished Tofa recordings:** Live TV's *Recordings* tab now lists what was recorded under *Recorded*; pick one to watch it.
 - Still not there for Tofa: cancelling one scheduled recording (Tofa's API has no way to do it; recording rules can be deleted), Watch Together and Tofa's remote control. Playing a Live channel follows the API as far as it is documented, so please report whether it works. All of this was built from Tofa's published API; please report what doesn't work.
+- **Removing a Tofa connection works again:** after you had switched Tofa profiles, removing the Tofa connection left the previous profile's connection saved and still talking to the server. Remove now takes the whole sign-in away, and the server stays gone after a restart.
 
 ## silo-preview-2.67.0
 

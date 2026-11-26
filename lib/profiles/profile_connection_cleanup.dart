@@ -2,8 +2,10 @@ import '../connection/connection.dart';
 import '../connection/connection_registry.dart';
 import '../media/ids.dart';
 import '../models/plex/plex_home_user.dart';
+import '../services/api_cache.dart';
 import '../services/multi_server_manager.dart';
 import '../services/storage_service.dart';
+import '../utils/app_logger.dart';
 import 'profile.dart';
 import 'profile_connection_registry.dart';
 import 'profile_merge.dart';
@@ -173,7 +175,8 @@ class ProfileConnectionCleanup {
     await _removeJellyfinConnection(connection);
   }
 
-  /// Removes a per-connection (MediaBrowser or Silo) connection and its client.
+  /// Removes a per-connection (MediaBrowser, Silo or Tofa) connection, its
+  /// client and its browsing cache.
   Future<void> _removeJellyfinConnection(Connection connection) async {
     await connections.remove(connection.id);
     final String rawServerId;
@@ -187,12 +190,42 @@ class ProfileConnectionCleanup {
       case TofaConnection():
         serverManager?.removeTofaConnection(connection);
         rawServerId = connection.serverId;
+        await _removeUnreferencedTofaSiblings(connection);
       case PlexAccountConnection():
         return;
     }
+    await _clearVolatileCache(connection.id);
     final serverId = ServerId.tryParse(rawServerId);
     if (serverId != null && !await _isServerReferenced(serverId)) {
       await storage.clearLibraryPreferencesForServerEverywhere(serverId);
+    }
+  }
+
+  /// Switching Tofa profiles (`TofaProfileSwitchScreen`) saves the new Tofa
+  /// profile as a sibling connection (`server/user/otherProfile`) of the same
+  /// sign-in, with the same tokens. A sibling no Plezilo profile links any
+  /// more is part of the sign-in being removed: without this its row stayed
+  /// saved and its client kept running (image-token timer, token refreshes
+  /// on the shared refresh token) after the user removed the connection.
+  Future<void> _removeUnreferencedTofaSiblings(TofaConnection removed) async {
+    final referenced = (await profileConnections.listAll()).map((row) => row.connectionId).toSet();
+    for (final other in await connections.list()) {
+      if (other is! TofaConnection || other.id == removed.id) continue;
+      if (other.serverId != removed.serverId || other.userId != removed.userId) continue;
+      if (referenced.contains(other.id)) continue;
+      appLogger.i('[tofa] removing an unlinked profile connection of the same sign-in');
+      await connections.remove(other.id);
+      serverManager?.removeTofaConnection(other);
+      await _clearVolatileCache(other.id);
+    }
+  }
+
+  Future<void> _clearVolatileCache(String scopeId) async {
+    try {
+      await ApiCache.clearVolatileForScope(scopeId);
+    } catch (e) {
+      // A cache that cannot be cleared must not keep the connection saved.
+      appLogger.w('Connection removal: clearing the cached pages failed', error: e.runtimeType);
     }
   }
 

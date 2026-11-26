@@ -287,9 +287,22 @@ class TofaClient
   @override
   LibraryEventChannel? createLibraryEventChannel() => null;
 
+  /// Home watch-state watchers this client started; closing the client
+  /// stops them (their sockets and poll timers), so a removed or switched-off
+  /// connection makes no further calls.
+  final Set<TofaHomeEventsWatcher> _eventWatchers = {};
+
+  void _stopEventWatchers() {
+    for (final watcher in _eventWatchers.toList()) {
+      watcher.stop();
+    }
+    _eventWatchers.clear();
+  }
+
   @override
   void close() {
     _closed = true;
+    _stopEventWatchers();
     _imageTokenTimer?.cancel();
     TofaDownloadTracker.instance.detach(this);
     _api.close();
@@ -298,6 +311,7 @@ class TofaClient
   @override
   Future<void> closeGracefully({Duration drainTimeout = const Duration(seconds: 2)}) async {
     _closed = true;
+    _stopEventWatchers();
     _imageTokenTimer?.cancel();
     TofaDownloadTracker.instance.detach(this);
     await _api.closeGracefully(drainTimeout: drainTimeout);
@@ -1413,7 +1427,7 @@ class TofaClient
   @override
   HomeWatchStateWatch? watchHomeWatchState(void Function(HomeWatchStateSignal signal) onSignal) {
     if (_closed || _sessionExpired || isOfflineMode) return null;
-    return TofaHomeEventsWatcher(
+    final watcher = TofaHomeEventsWatcher(
       url: TofaEvents.socketUrl(_api.baseUrl),
       profileId: connection.profileId,
       token: () => _api.accessToken,
@@ -1424,7 +1438,9 @@ class TofaClient
       onSignal: onSignal,
       supported: _watchStateEventsOffered,
       isClientUsable: () => !_closed && !_sessionExpired && !isOfflineMode,
-    )..start();
+    );
+    _eventWatchers.add(watcher);
+    return watcher..start();
   }
 
   /// The file to play for [item]: [requestedFileId] when it is one of the
