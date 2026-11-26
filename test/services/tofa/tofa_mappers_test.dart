@@ -148,4 +148,15 @@ void main() {
       expect(TofaMappers.fileIdsOf(restored), ['f-1']);
     });
   });
+
+  test("ratings keep IMDb, Rotten Tomatoes, Metacritic and Tofa's own scores", () {
+    final item = TofaMappers.summary({
+      ...mediaSummary('m-1'),
+      'rotten_tomatoes_score': 91,
+      'metacritic_score': 77,
+      'tofa_critics_rating': 85,
+      'tofa_audience_rating': 300,
+    }, _ctx)!;
+    expect(item.ratings!.map((r) => r.source), ['imdb', 'rottenTomatoesCritic', 'metacritic', 'tofaCritics']);
+  });
 }

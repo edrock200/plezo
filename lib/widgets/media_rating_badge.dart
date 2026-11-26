@@ -20,8 +20,9 @@ List<MediaRatingSource> mediaRatingsFor(MediaItem item, {MediaItem? fallbackItem
 
 /// Formatted value for [rating] — the brand badge's own formatting where the
 /// source has one, otherwise the neutral 0-10 rendering.
-String mediaRatingLabel(MediaRatingSource rating) =>
-    ratingInfoForSource(rating.source, rating.value)?.formattedValue ?? formatRating(rating.value);
+String mediaRatingLabel(MediaRatingSource rating) => ratingTextLabel(rating.source) != null
+    ? ratingTextValue(rating.value)
+    : ratingInfoForSource(rating.source, rating.value)?.formattedValue ?? formatRating(rating.value);
 
 List<MediaRatingSource> _ratingsFor(MediaItem item) {
   final ratings = item.ratings;
@@ -57,6 +58,14 @@ double inlineRatingBadgeWidth(
   double? spacing,
 }) {
   final size = iconSize ?? textStyle.fontSize ?? 13;
+  if (ratingTextLabel(rating.source) case final label?) {
+    return cachedSingleLineTextSize(
+      '$label ${mediaRatingLabel(rating)}',
+      style: textStyle,
+      textScaler: textScaler,
+      textDirection: textDirection,
+    ).width;
+  }
   final info = ratingInfoForSource(rating.source, rating.value);
   final labelWidth = cachedSingleLineTextSize(
     mediaRatingLabel(rating),
@@ -142,6 +151,12 @@ Widget _buildContent({
   required double? spacing,
 }) {
   final size = iconSize ?? style.fontSize ?? 13;
+  if (source != null) {
+    if (ratingTextLabel(source) case final label?) {
+      // Named in words, with no mark (Tofa's own scores).
+      return Text('$label ${ratingTextValue(value)}', maxLines: 1, overflow: TextOverflow.clip, style: style);
+    }
+  }
   final info = source == null ? null : ratingInfoForSource(source, value);
   return Row(
     mainAxisSize: MainAxisSize.min,

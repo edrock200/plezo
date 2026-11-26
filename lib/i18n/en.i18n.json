@@ -116,7 +116,10 @@
       "rottenTomatoesCritic": "Rotten Tomatoes critics",
       "rottenTomatoesAudience": "Rotten Tomatoes audience",
       "metacritic": "Metacritic",
-      "letterboxd": "Letterboxd"
+      "letterboxd": "Letterboxd",
+      "tofa": "Tofa",
+      "tofaCritics": "Tofa critics",
+      "tofaAudience": "Tofa audience"
     },
     "notAvailable": "N/A",
     "url": "URL",

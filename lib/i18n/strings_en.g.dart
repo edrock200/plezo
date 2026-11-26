@@ -7593,6 +7593,15 @@ class Translations$common$ratingSource$en {
 
 	/// en: 'Letterboxd'
 	String get letterboxd => 'Letterboxd';
+
+	/// en: 'Tofa'
+	String get tofa => 'Tofa';
+
+	/// en: 'Tofa critics'
+	String get tofaCritics => 'Tofa critics';
+
+	/// en: 'Tofa audience'
+	String get tofaAudience => 'Tofa audience';
 }
 
 // Path: common.mediaKind
@@ -9709,6 +9718,9 @@ extension on Translations {
 			'common.ratingSource.rottenTomatoesAudience' => 'Rotten Tomatoes audience',
 			'common.ratingSource.metacritic' => 'Metacritic',
 			'common.ratingSource.letterboxd' => 'Letterboxd',
+			'common.ratingSource.tofa' => 'Tofa',
+			'common.ratingSource.tofaCritics' => 'Tofa critics',
+			'common.ratingSource.tofaAudience' => 'Tofa audience',
 			'common.notAvailable' => 'N/A',
 			'common.url' => 'URL',
 			'common.letterKeys' => 'ABC',
@@ -10110,11 +10122,11 @@ extension on Translations {
 			'settings.exportDialogTitle' => 'Export Plezilo settings',
 			'themeEditor.builtIn' => 'Built-in',
 			'themeEditor.presets' => 'Presets',
+			_ => null,
+		} ?? switch (path) {
 			'themeEditor.custom' => 'Custom',
 			'themeEditor.customEmpty' => 'Not created yet',
 			'themeEditor.editCustom' => 'Edit custom theme',
-			_ => null,
-		} ?? switch (path) {
 			'themeEditor.editCustomDescription' => 'Choose every color yourself',
 			'themeEditor.locked' => 'Unlock with the Theme & Icon Pack',
 			'themeEditor.savedLocked' => 'Saved — unlocks with the Theme & Icon Pack',
@@ -10624,11 +10636,11 @@ extension on Translations {
 			'dialog.confirmAction' => 'Confirm Action',
 			'profiles.addPlezyProfile' => 'Add Plezilo profile',
 			'profiles.switchingProfile' => 'Switching profile…',
+			_ => null,
+		} ?? switch (path) {
 			'profiles.deleteThisProfileTitle' => 'Delete this profile?',
 			'profiles.deleteThisProfileMessage' => ({required Object displayName}) => 'Remove ${displayName}. Connections aren\'t affected.',
 			'profiles.active' => 'Active',
-			_ => null,
-		} ?? switch (path) {
 			'profiles.manage' => 'Manage',
 			'profiles.delete' => 'Delete',
 			'profiles.signOut' => 'Sign out',
@@ -11138,11 +11150,11 @@ extension on Translations {
 			'explore.detail.language' => 'Language',
 			'explore.detail.released' => 'Released',
 			'explore.detail.physicalRelease' => 'On disc',
+			_ => null,
+		} ?? switch (path) {
 			'explore.detail.ended' => 'Ended',
 			'explore.detail.addedOn' => ({required Object date}) => 'Added ${date}',
 			'explore.detail.yourRating' => 'Your rating',
-			_ => null,
-		} ?? switch (path) {
 			'explore.detail.budget' => 'Budget',
 			'explore.detail.revenue' => 'Box office',
 			'explore.detail.contentAdvisory' => 'Age guidance',
@@ -11652,11 +11664,11 @@ extension on Translations {
 			'companionRemote.pairing.availableDevices' => 'Available Devices',
 			'companionRemote.pairing.manualConnection' => 'Manual Connection',
 			'companionRemote.pairing.cryptoInitFailed' => 'Couldn\'t start secure connection. Sign in to Plex first.',
+			_ => null,
+		} ?? switch (path) {
 			'companionRemote.pairing.validationHostRequired' => 'Please enter host address',
 			'companionRemote.pairing.validationHostFormat' => 'Format must be IP:port (e.g., 192.168.1.100:48632)',
 			'companionRemote.pairing.connectionTimedOut' => 'Connection timed out. Use the same network on both devices.',
-			_ => null,
-		} ?? switch (path) {
 			'companionRemote.pairing.sessionNotFound' => 'Device not found. Make sure Plezilo is running on the host.',
 			'companionRemote.pairing.authFailed' => 'Authentication failed. Both devices need the same Plex account.',
 			'companionRemote.pairing.failedToConnect' => ({required Object error}) => 'Failed to connect: ${error}',
@@ -12166,11 +12178,11 @@ extension on Translations {
 			'siloPairing.signedInTitle' => 'Signed in',
 			'siloPairing.signedInCount' => ({required Object n}) => 'Signed in ${n} accounts',
 			'siloPairing.signedInBody' => ({required Object server}) => 'Signed in to ${server}. Choose another account on your phone or tablet, or continue here.',
+			_ => null,
+		} ?? switch (path) {
 			'siloPairing.continueHere' => 'Continue',
 			'siloPairing.completedTitle' => 'You\'re all set',
 			'siloPairing.savingAccounts' => 'Setting up the accounts from your phone or tablet…',
-			_ => null,
-		} ?? switch (path) {
 			'siloPairing.skipAccount' => 'Skip this account',
 			'siloPairing.summaryTitle' => ({required num n}) => (_root.$meta.cardinalResolver ?? PluralResolvers.cardinal('en'))(n, one: '${n} account added', other: '${n} accounts added', ), 
 			'siloPairing.summaryNoneTitle' => 'No accounts were added',

@@ -146,6 +146,11 @@ abstract final class TofaMappers {
         scale: 100,
       ),
       ?MediaRatingSource.fromScale('metacritic', flexibleDouble(json['metacritic_score']), scale: 100),
+      // Tofa's own scores, shown in words. Unverified scale: integers the
+      // spec does not bound; read as out of 100 (a larger value is dropped).
+      ?MediaRatingSource.fromScale('tofaCritics', flexibleDouble(json['tofa_critics_rating']), scale: 100),
+      ?MediaRatingSource.fromScale('tofaAudience', flexibleDouble(json['tofa_audience_rating']), scale: 100),
+      ?MediaRatingSource.fromScale('tofa', flexibleDouble(json['tofa_rating']), scale: 100),
     ];
     return out.isEmpty ? null : out;
   }

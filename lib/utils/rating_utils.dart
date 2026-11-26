@@ -71,8 +71,22 @@ String? ratingSourceLabel(String source) => switch (source) {
   'mal' => t.common.ratingSource.mal,
   'anilist' => t.common.ratingSource.anilist,
   'trakt' => t.common.ratingSource.trakt,
+  'tofa' => t.common.ratingSource.tofa,
+  'tofaCritics' => t.common.ratingSource.tofaCritics,
+  'tofaAudience' => t.common.ratingSource.tofaAudience,
   _ => null,
 };
+
+/// Sources shown as words instead of a mark ("Tofa critics 85"): Tofa's own
+/// scores, whose logo Plezilo may not use. The value is written as the whole
+/// number the server sent (out of 100; unverified, the spec gives no scale).
+String? ratingTextLabel(String source) => switch (source) {
+  'tofa' || 'tofaCritics' || 'tofaAudience' => ratingSourceLabel(source),
+  _ => null,
+};
+
+/// [ratingTextLabel]'s value, back on the source's own 0-100 scale.
+String ratingTextValue(double value) => (value * 10).round().toString();
 
 const String _imdbAsset = 'assets/rating_icons/imdb.svg';
 const String _tmdbAsset = 'assets/rating_icons/tmdb.svg';
