@@ -24,7 +24,9 @@ import '../../media/media_hub.dart';
 import '../../media/media_item.dart';
 import '../../media/media_kind.dart';
 import '../../media/media_library.dart';
+import '../../media/media_part_timeline.dart';
 import '../../media/media_person.dart';
+import '../../media/media_version.dart';
 import '../../media/remote_trailer.dart';
 import '../../media/home_watch_state.dart';
 import '../../media/media_playlist.dart';
@@ -76,7 +78,15 @@ part 'tofa_client_quickview.dart';
 
 /// One live Tofa stream session (`/stream/{file}/info`'s `session_id`).
 class _TofaStreamSession {
-  _TofaStreamSession({required this.sessionId, required this.token, required this.itemId, required this.fileId});
+  _TofaStreamSession({
+    required this.sessionId,
+    required this.token,
+    required this.itemId,
+    required this.fileId,
+    this.partStart = Duration.zero,
+    this.partDuration,
+    this.setFileIds = const [],
+  });
 
   final String sessionId;
 
@@ -84,6 +94,23 @@ class _TofaStreamSession {
   final String token;
   final String itemId;
   final String fileId;
+
+  /// One part of a multi-part set: where it starts on the item's timeline
+  /// (the player reports item time; Tofa's progress is per file), its
+  /// length, and every file of the set (non-empty only for the last part).
+  final Duration partStart;
+  final Duration? partDuration;
+  final List<String> setFileIds;
+  bool get isPart => partDuration != null;
+
+  /// The last item-time position reported.
+  Duration? lastPosition;
+
+  /// [position] (item time) on this session's file.
+  Duration filePosition(Duration position) {
+    final relative = position - partStart;
+    return relative.isNegative ? Duration.zero : relative;
+  }
 
   /// The server answered 410: the session is over and nothing more is sent.
   bool gone = false;
@@ -654,14 +681,20 @@ class TofaClient
   }
 
   static List<String> _allFileIds(Map<String, dynamic> detail) {
-    final ids = <String>[for (final f in TofaMappers.playableFiles(detail['files'])) f['id'] as String];
+    final ids = <String>[
+      for (final f in TofaMappers.playableFiles(detail['files'])) f['id'] as String,
+      ...TofaMappers.laterPartIds(detail['files']),
+    ];
     final seasons = detail['seasons'];
     if (seasons is List) {
       for (final season in seasons.whereType<Map>()) {
         final episodes = season['episodes'];
         if (episodes is! List) continue;
         for (final episode in episodes.whereType<Map>()) {
-          ids.addAll([for (final f in TofaMappers.playableFiles(episode['files'])) f['id'] as String]);
+          ids.addAll([
+            for (final f in TofaMappers.playableFiles(episode['files'])) f['id'] as String,
+            ...TofaMappers.laterPartIds(episode['files']),
+          ]);
         }
       }
     }
@@ -1096,10 +1129,11 @@ class TofaClient
   /// The file ids a write acts on: the item's own, else those of a fresh read
   /// of it (a Continue Watching card names only the file it resumes).
   Future<List<String>> _fileIdsForWrite(MediaItem item) async {
-    final known = TofaMappers.fileIdsOf(item);
+    // A multi-part set's later parts are marked with it.
+    final known = [...TofaMappers.fileIdsOf(item), ...TofaMappers.partFileIdsOf(item)];
     if (known.isNotEmpty) return known;
     final fresh = await _fetchItem(item.id);
-    return fresh == null ? const [] : TofaMappers.fileIdsOf(fresh);
+    return fresh == null ? const [] : [...TofaMappers.fileIdsOf(fresh), ...TofaMappers.partFileIdsOf(fresh)];
   }
 
   @override
@@ -1430,20 +1464,31 @@ class TofaClient
   @override
   Future<PlaybackInitializationResult> getPlaybackInitialization(PlaybackInitializationOptions options) async {
     final metadata = options.metadata;
-    final String fileId;
+    String fileId;
     final Map<String, dynamic> info;
+    MediaPartTimeline? timeline;
+    var streamFileId = '';
     try {
       fileId = await chooseFile(metadata, requestedFileId: options.selectedMediaSourceId);
+      // A multi-part set opens the part holding the start (item time); the
+      // server is asked for that file from its own position.
+      final opened = await _partTimeline(metadata, fileId, options.startPosition ?? Duration.zero);
+      timeline = opened?.timeline;
+      streamFileId = timeline?.current.partId ?? fileId;
+      // The version is its part 1's id, whichever part was named.
+      fileId = opened?.versionId ?? fileId;
+      final start = opened?.itemStart ?? options.startPosition ?? Duration.zero;
+      final fileStart = timeline == null ? start : start - timeline.current.start;
       final audioIndex = switch (options.selectedAudioStreamId) {
         final id? when id > 0 => id - 1,
         _ => null,
       };
       final response = await _api.request(
         'GET',
-        '/api/v1/stream/${_seg(fileId)}/info',
+        '/api/v1/stream/${_seg(streamFileId)}/info',
         query: TofaPlaybackCaps.streamQuery(
           preset: options.qualityPreset,
-          resumeTicks: tofaTicksFromDuration(options.startPosition ?? Duration.zero),
+          resumeTicks: tofaTicksFromDuration(fileStart.isNegative ? Duration.zero : fileStart),
           audioStreamIndex: audioIndex,
           forceTranscode: options.forceTranscode,
         ),
@@ -1480,12 +1525,25 @@ class TofaClient
     LogRedactionManager.registerRotatingToken(sessionToken);
     final playMethod = info['play_method'] is String ? info['play_method'] as String : 'DirectPlay';
     final isOriginal = playMethod == 'DirectPlay';
+    // The part before this one (a stacked item moving on) ends here.
+    for (final earlier in [..._sessions.values]) {
+      if (earlier.itemId == metadata.id && earlier.isPart && !earlier.stopped) {
+        unawaited(_endSession(earlier, earlier.lastPosition ?? earlier.partStart, null));
+      }
+    }
+    final span = timeline?.current;
     _sessions[sessionId] = _TofaStreamSession(
       sessionId: sessionId,
       token: sessionToken,
       itemId: metadata.id,
-      fileId: fileId,
+      fileId: streamFileId,
+      partStart: span?.start ?? Duration.zero,
+      partDuration: span?.duration,
+      setFileIds: timeline != null && !timeline.hasNext ? [for (final p in timeline.parts) p.partId] : const [],
     );
+    if (timeline != null) {
+      appLogger.i('[tofa] multi-part: playing part ${timeline.currentIndex + 1}/${timeline.parts.length}');
+    }
     _playingFileIds[metadata.id] = fileId;
 
     final startTicks = (info['start_position_ticks'] as num?)?.toInt() ?? 0;
@@ -1569,6 +1627,8 @@ class TofaClient
         chapters: const [],
         mediaSourceId: fileId,
         mediaIndex: versionIndex < 0 ? 0 : versionIndex,
+        partIndex: timeline?.currentIndex ?? 0,
+        partTimeline: timeline,
         defaultAudioStreamIndex: selectedAudio == null ? null : selectedAudio + 1,
       ),
       subtitleSidecars: sidecars,
@@ -1580,6 +1640,38 @@ class TofaClient
       selectedMediaSourceId: fileId,
       // Tofa's relay caps each stream's bandwidth (2 Mbps on the free tier).
       playbackNotice: _endpointKind == TofaEndpointKind.relay ? t.videoControls.tofaRelayNotice : null,
+    );
+  }
+
+  /// The joined timeline of [fileId]'s version when it is a multi-part set
+  /// (`MediaVersion.parts`, see `TofaMappers.partSet`), with the part holding
+  /// [position] open; null for a single file.
+  ///
+  /// [fileId] may also be a later part (Continue Watching resumes the file it
+  /// names); [position] is then that file's own, and [itemStart] says where
+  /// it is on the joined timeline.
+  Future<({MediaPartTimeline timeline, Duration itemStart, String versionId})?> _partTimeline(
+    MediaItem item,
+    String fileId,
+    Duration position,
+  ) async {
+    MediaVersion? find(List<MediaVersion>? versions) =>
+        versions?.where((v) => v.parts.any((p) => p.id == fileId)).firstOrNull;
+    var version = find(item.mediaVersions);
+    if (version == null && item.mediaVersions != null && item.mediaVersions!.any((v) => v.id == fileId)) return null;
+    version ??= find((await _fetchItem(item.id))?.mediaVersions);
+    if (version == null || version.parts.length < 2) return null;
+    final whole = MediaPartTimeline.fromParts(version.parts);
+    if (whole == null) {
+      appLogger.w('[tofa] multi-part set without every part length; playing the file alone');
+      return null;
+    }
+    final named = version.parts.indexWhere((p) => p.id == fileId);
+    final itemStart = named > 0 ? whole.parts[named].start + position : position;
+    return (
+      timeline: MediaPartTimeline.fromParts(version.parts, currentIndex: whole.indexAt(itemStart))!,
+      itemStart: itemStart,
+      versionId: version.id,
     );
   }
 
@@ -1657,11 +1749,16 @@ class TofaClient
     bool ended = false,
   }) async {
     if (session.gone || session.stopped) return;
+    session.lastPosition = position;
     final response = await _api.request(
       'POST',
       '/api/v1/stream/s/${_seg(session.sessionId)}/progress',
       query: {'st': session.token},
-      body: {'position_ticks': tofaTicksFromDuration(position), 'is_paused': paused, 'ended': ended},
+      body: {
+        'position_ticks': tofaTicksFromDuration(session.filePosition(position)),
+        'is_paused': paused,
+        'ended': ended,
+      },
       auth: false,
     );
     if (response.statusCode == 410) {
@@ -1773,12 +1870,39 @@ class TofaClient
       await _putProgress(itemId, position, duration);
       return;
     }
+    await _endSession(session, position, duration);
+  }
+
+  /// Whether [position] (item time) is the end of [session]'s file.
+  static bool _sessionEnded(_TofaStreamSession session, Duration position, Duration? duration) =>
+      session.isPart ? _isEnd(session.filePosition(position), session.partDuration) : _isEnd(position, duration);
+
+  /// The last position, then `POST …/stopped`. The last part of a set that
+  /// played to its end also marks every file of the set watched
+  /// (unverified: how Tofa rolls a set up; this makes the title watched
+  /// whichever file it reads).
+  Future<void> _endSession(_TofaStreamSession session, Duration position, Duration? duration) async {
+    final ended = _sessionEnded(session, position, duration);
     try {
-      await _sendProgress(session, position, ended: _isEnd(position, duration));
+      await _sendProgress(session, position, ended: ended);
+      if (ended && session.setFileIds.isNotEmpty) {
+        await _api.send(
+          'POST',
+          '/api/v1/media/watched/batch',
+          body: {
+            'items': [
+              for (final file in session.setFileIds) {'media_file_id': file, 'watched': true},
+            ],
+          },
+        );
+        appLogger.d('[tofa] multi-part set finished; ${session.setFileIds.length} files marked watched');
+      }
+    } catch (e) {
+      appLogger.d('[tofa] final progress failed', error: e.runtimeType);
     } finally {
       session.stopped = true;
       _sessions.remove(session.sessionId);
-      _details.remove(TofaMappers.mediaIdOf(itemId));
+      _details.remove(TofaMappers.mediaIdOf(session.itemId));
       final response = await _api.request(
         'POST',
         '/api/v1/stream/s/${_seg(session.sessionId)}/stopped',

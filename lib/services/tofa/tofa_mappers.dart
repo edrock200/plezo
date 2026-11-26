@@ -45,6 +45,10 @@ abstract final class TofaRaw {
 
   /// Continue Watching's file id, the one playback resumes.
   static const resumeFileId = 'tofa_resume_file_id';
+
+  /// The later parts (part 2+) of the item's multi-part sets: watched writes
+  /// cover them too.
+  static const partFileIds = 'tofa_part_file_ids';
 }
 
 /// Maps Tofa's `/api/v1` JSON onto Plezilo's neutral models.
@@ -235,9 +239,10 @@ abstract final class TofaMappers {
 
   /// One file (`MediaFile`) as a version. Files after the first part of a
   /// multi-part set are not versions of their own (see [playableFiles]).
-  static MediaVersion? version(Map<String, dynamic> file) {
+  static MediaVersion? version(Map<String, dynamic> file, {List<Map<String, dynamic>>? set}) {
     final id = _string(file['id']);
     if (id == null) return null;
+    final members = set == null || set.length < 2 ? [file] : set;
     final height = flexibleInt(file['height']);
     final streams = <MediaStream>[
       if (_string(file['video_codec']) case final codec?)
@@ -283,22 +288,113 @@ abstract final class TofaMappers {
       bitrate: bitrateKbpsFromBps(flexibleInt(file['bitrate'])),
       container: _string(file['container']),
       name: _string(file['edition']),
+      // A multi-part set is one version stacked over its files, in
+      // `part_number` order ([partSet]); the player joins them.
       parts: [
-        MediaPart(
-          id: id,
-          container: _string(file['container']),
-          sizeBytes: flexibleInt(file['file_size']),
-          durationMs: flexibleInt(file['duration_ms']),
-          accessible: file['available'] == false ? false : null,
-          streams: streams,
-        ),
+        for (final member in members)
+          MediaPart(
+            id: _string(member['id'])!,
+            container: _string(member['container']),
+            sizeBytes: flexibleInt(member['file_size']),
+            durationMs: flexibleInt(member['duration_ms']),
+            accessible: member['available'] == false ? false : null,
+            streams: identical(member, file) ? streams : const [],
+          ),
       ],
     );
   }
 
+  /// The multi-part set [first] (part 1) starts (`part_number`/`part_count`:
+  /// "Play the members of a set back to back in this order; members are
+  /// alternatives to each other only when their edition differs"): the
+  /// available files of [files] with the same edition and part count, in
+  /// part order. A set with a part missing, or a file that is not part 1 of
+  /// one, is just [first] (fail closed: no gap is played over).
+  static List<Map<String, dynamic>> partSet(Map<String, dynamic> first, Object? files) {
+    final count = flexibleInt(first['part_count']);
+    if (flexibleInt(first['part_number']) != 1 || count == null || count < 2 || files is! List) return [first];
+    final members = [
+      for (final f in files.whereType<Map<String, dynamic>>())
+        if (_string(f['id']) != null &&
+            f['available'] != false &&
+            flexibleInt(f['part_number']) != null &&
+            flexibleInt(f['part_count']) == count &&
+            _string(f['edition']) == _string(first['edition']) &&
+            _string(f['episode_id']) == _string(first['episode_id']))
+          f,
+    ]..sort((a, b) => flexibleInt(a['part_number'])!.compareTo(flexibleInt(b['part_number'])!));
+    for (var i = 0; i < members.length; i++) {
+      if (flexibleInt(members[i]['part_number']) != i + 1) return [first];
+    }
+    if (members.length != count || !identical(members.first, first)) return [first];
+    return members;
+  }
+
+  /// Ids of the later parts of every set among [files].
+  static List<String> laterPartIds(Object? files) => [
+    for (final first in playableFiles(files))
+      for (final member in partSet(first, files).skip(1)) _string(member['id'])!,
+  ];
+
+  /// Watch state of a title or episode whose files may be multi-part sets.
+  /// Unverified: how Tofa rolls a set's per-file progress up to the title.
+  /// Plezilo counts a set watched when its last part is completed, and
+  /// resumes in the furthest part with progress (item time: the parts
+  /// before it plus its position).
+  static ({bool watched, int? offsetMs, int? lastViewedAt}) itemWatchState(
+    Object? files,
+    Map<String, Map<String, dynamic>> progress,
+  ) {
+    final starts = playableFiles(files);
+    final single = <String>[];
+    ({bool watched, int? offsetMs, int? lastViewedAt})? stacked;
+    for (final first in starts) {
+      final set = partSet(first, files);
+      if (set.length < 2) {
+        single.add(_string(first['id'])!);
+        continue;
+      }
+      var start = 0;
+      int? offset;
+      int? lastViewed;
+      var watched = false;
+      for (var i = 0; i < set.length; i++) {
+        final row = progress[_string(set[i]['id'])];
+        final length = flexibleInt(set[i]['duration_ms']) ?? 0;
+        if (row != null) {
+          final at = _epochSeconds(row['last_watched_at'] ?? row['updated_at']);
+          if (at != null && (lastViewed == null || at > lastViewed)) lastViewed = at;
+          if (row['completed'] == true) {
+            if (i == set.length - 1) watched = true;
+            offset = i == set.length - 1 ? null : start + length;
+          } else {
+            final position = flexibleInt(row['position_ms']);
+            if (position != null && position > 0) offset = start + position;
+          }
+        }
+        start += length;
+      }
+      if (watched || offset != null || lastViewed != null) {
+        stacked = (watched: watched, offsetMs: watched ? null : offset, lastViewedAt: lastViewed);
+      }
+    }
+    final plain = fileWatchState(single, progress);
+    if (stacked == null) return plain;
+    return (
+      watched: plain.watched || stacked.watched,
+      offsetMs: plain.offsetMs ?? stacked.offsetMs,
+      lastViewedAt: [?plain.lastViewedAt, ?stacked.lastViewedAt].fold<int?>(null, (a, b) => a == null || b > a ? b : a),
+    );
+  }
+
+  /// The later-part ids a mapped item carries.
+  static List<String> partFileIdsOf(MediaItem item) {
+    final raw = item.raw?[TofaRaw.partFileIds];
+    return raw is List ? [for (final v in raw) ?_string(v)] : const [];
+  }
+
   /// The files a title or episode can start: available ones that are not a
-  /// later part of a multi-part set (Plezilo plays one file per version; the
-  /// later parts of a cd1/cd2 movie are a follow-up).
+  /// later part of a multi-part set (a set is one version; see [partSet]).
   static List<Map<String, dynamic>> playableFiles(Object? files) {
     if (files is! List) return const [];
     return [
@@ -310,10 +406,19 @@ abstract final class TofaMappers {
     ];
   }
 
-  static int? _filesDurationMs(List<Map<String, dynamic>> files) {
-    for (final file in files) {
-      final ms = flexibleInt(file['duration_ms']);
-      if (ms != null && ms > 0) return ms;
+  /// The first startable file's length; a multi-part set's is all its parts.
+  static int? _itemDurationMs(Object? files) {
+    for (final first in playableFiles(files)) {
+      var total = 0;
+      for (final member in partSet(first, files)) {
+        final ms = flexibleInt(member['duration_ms']);
+        if (ms == null || ms <= 0) {
+          total = 0;
+          break;
+        }
+        total += ms;
+      }
+      if (total > 0) return total;
     }
     return null;
   }
@@ -397,7 +502,7 @@ abstract final class TofaMappers {
     final files = playableFiles(json['files']);
     final runtime = flexibleInt(json['runtime_minutes']);
     final fileIds = [for (final f in files) f['id'] as String];
-    final state = fileWatchState(fileIds, progress);
+    final state = itemWatchState(json['files'], progress);
     int? leafCount;
     int? viewedLeafCount;
     int? childCount;
@@ -413,14 +518,13 @@ abstract final class TofaMappers {
               in (season['episodes'] is List ? season['episodes'] as List : const [])
                   .whereType<Map<String, dynamic>>()) {
             leafCount = leafCount! + 1;
-            final ids = [for (final f in playableFiles(episode['files'])) f['id'] as String];
-            if (fileWatchState(ids, progress).watched) viewedLeafCount = viewedLeafCount! + 1;
+            if (itemWatchState(episode['files'], progress).watched) viewedLeafCount = viewedLeafCount! + 1;
           }
         }
       }
     }
     final studios = _strings(json['studios']);
-    final durationMs = _filesDurationMs(files) ?? (runtime == null || runtime <= 0 ? null : runtime * 60000);
+    final durationMs = _itemDurationMs(json['files']) ?? (runtime == null || runtime <= 0 ? null : runtime * 60000);
     return TofaMediaItem(
       id: id,
       kind: kind,
@@ -455,7 +559,9 @@ abstract final class TofaMappers {
       roles: _roles(json['cast']),
       directors: _crew(json['crew'], 'Director'),
       writers: _crew(json['crew'], 'Writer'),
-      mediaVersions: kind == MediaKind.movie ? [for (final f in files) ?version(f)] : null,
+      mediaVersions: kind == MediaKind.movie
+          ? [for (final f in files) ?version(f, set: partSet(f, json['files']))]
+          : null,
       libraryId: _string(json['library_id']),
       libraryTitle: libraryTitle,
       serverId: ctx.serverId,
@@ -463,6 +569,8 @@ abstract final class TofaMappers {
       raw: {
         TofaRaw.mediaId: id,
         if (kind == MediaKind.movie) TofaRaw.fileIds: fileIds,
+        if (kind == MediaKind.movie && laterPartIds(json['files']).isNotEmpty)
+          TofaRaw.partFileIds: laterPartIds(json['files']),
         TofaRaw.tmdbId: ?flexibleInt(json['tmdb_id']),
         TofaRaw.imdbId: ?(_string(json['imdb_id']) ?? _providerId(json['provider_ids'], 'imdb')),
         'tvdb_id': ?_providerId(json['provider_ids'], 'tvdb'),
@@ -580,8 +688,9 @@ abstract final class TofaMappers {
     if (episodeId == null || number == null) return null;
     final files = playableFiles(json['files']);
     final fileIds = [for (final f in files) f['id'] as String];
-    final state = fileWatchState(fileIds, progress);
+    final state = itemWatchState(json['files'], progress);
     final runtime = flexibleInt(json['runtime_minutes']);
+    final laterParts = laterPartIds(json['files']);
     return TofaMediaItem(
       id: episodeItemId(show.id, episodeId),
       kind: MediaKind.episode,
@@ -600,12 +709,12 @@ abstract final class TofaMappers {
       grandparentArtPath: show.artPath,
       thumbPath: _absoluteUrl(json['still_path']) ?? artworkPath(show.id, 'backdrop_thumb'),
       artPath: show.artPath,
-      durationMs: _filesDurationMs(files) ?? (runtime == null || runtime <= 0 ? null : runtime * 60000),
+      durationMs: _itemDurationMs(json['files']) ?? (runtime == null || runtime <= 0 ? null : runtime * 60000),
       viewCount: state.watched ? 1 : 0,
       viewOffsetMs: state.offsetMs,
       lastViewedAt: state.lastViewedAt,
       contentRating: show.contentRating,
-      mediaVersions: [for (final f in files) ?version(f)],
+      mediaVersions: [for (final f in files) ?version(f, set: partSet(f, json['files']))],
       libraryId: show.libraryId,
       libraryTitle: show.libraryTitle,
       serverId: ctx.serverId,
@@ -617,6 +726,7 @@ abstract final class TofaMappers {
         TofaRaw.seasonNumber: seasonNumber,
         TofaRaw.episodeNumber: number,
         TofaRaw.fileIds: fileIds,
+        if (laterParts.isNotEmpty) TofaRaw.partFileIds: laterParts,
       },
     );
   }
