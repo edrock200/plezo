@@ -1476,8 +1476,40 @@ class DiscoverProvider extends ChangeNotifier with DisposableChangeNotifierMixin
   /// The online set changed: merge newly online servers' rows, and start or
   /// stop watch-state streams (a server gone offline or signed out stops).
   void _onOnlineServersChanged(Set<String> onlineServerIds) {
+    _dropServersNoLongerInProfile();
     unawaited(syncToOnlineServers(onlineServerIds));
     _syncWatchStateWatches();
+  }
+
+  /// Leave out the Continue Watching rows, absorbed copies and hubs of servers
+  /// the profile no longer has (a connection switched off or removed). A
+  /// server that is only offline stays expected and keeps its rows; nothing is
+  /// pruned while the binder is still wiring servers, when the sets are
+  /// mid-change.
+  void _dropServersNoLongerInProfile() {
+    if (isDisposed || isProfileBinding()) return;
+    final known = {..._multiServer.serverIds, ..._multiServer.expectedServerIds};
+    bool gone(String? serverId) => serverId != null && !known.contains(serverId);
+    final onDeck = [
+      for (final item in _onDeck)
+        if (!gone(item.serverId)) item,
+    ];
+    final hubs = [
+      for (final hub in _hubs)
+        if (!gone(hub.serverId)) hub,
+    ];
+    final droppedRows = onDeck.length != _onDeck.length;
+    final droppedHubs = hubs.length != _hubs.length;
+    final hadCopies = _continueWatchingCopies.values.expand((c) => c).any((c) => gone(c.serverId));
+    if (!droppedRows && !droppedHubs && !hadCopies) return;
+    if (droppedRows) _replaceOnDeck(onDeck, hasMore: _hasMoreContinueWatching);
+    if (hadCopies) _keepContinueWatchingCopies((item) => !gone(item.serverId));
+    if (droppedHubs) _replaceHubs(hubs);
+    _loadedOnDeckServerIds = _loadedOnDeckServerIds.where((id) => !gone(id)).toSet();
+    _loadedHubServerIds = _loadedHubServerIds.where((id) => !gone(id)).toSet();
+    appLogger.i('DiscoverProvider: left out the rows of servers no longer in the profile');
+    safeNotifyListeners();
+    if (droppedRows) unawaited(_syncSystemShelf(_onDeck));
   }
 
   /// Online servers whose client can re-read its Home alone, by server id.

@@ -170,6 +170,9 @@ class _FakeClient implements MediaServerClient {
   }
 
   @override
+  void close() {}
+
+  @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
@@ -1384,6 +1387,30 @@ void main() {
     await provider.syncToOnlineServers({'server_1', 'server_2'});
     expect(aggregation.onDeckCalls, callsBefore + 2);
     expect(provider.onDeck.map((i) => i.id), containsAll(['a', 'b']));
+  });
+
+  test('a server that leaves the profile takes its Continue Watching rows and hubs with it', () async {
+    manager.debugRegisterClientForTesting(_FakeClient(serverIdValue: 'server_2'));
+    aggregation.onDeckResult = () => [_item('a'), _item('b', serverId: 'server_2')];
+    aggregation.hubsResult = () => [_hub('hub-1')];
+    await provider.load();
+    expect(provider.onDeck.map((i) => i.id), ['a', 'b']);
+
+    // Switched off or removed: the server is gone from the manager.
+    manager.removeServer(ServerId('server_2'));
+    await pumpEventQueue();
+    expect(provider.onDeck.map((i) => i.id), ['a']);
+    expect(shelfSyncs.last.$2.map((i) => i.id), ['a'], reason: 'the TV shelf follows');
+  });
+
+  test('nothing is pruned while the profile binder runs', () async {
+    manager.debugRegisterClientForTesting(_FakeClient(serverIdValue: 'server_2'));
+    aggregation.onDeckResult = () => [_item('a'), _item('b', serverId: 'server_2')];
+    await provider.load();
+    isBinding = true;
+    manager.removeServer(ServerId('server_2'));
+    await pumpEventQueue();
+    expect(provider.onDeck.map((i) => i.id), ['a', 'b']);
   });
 
   test('dispose unregisters the online-servers listener', () {

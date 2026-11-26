@@ -185,6 +185,10 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> with Controll
       // success path must reach the helper's catch so the recovery attempt —
       // and the rethrow — still run.
       await scope.binder.rebindIfActive(_profile.id);
+      // A rebind requested while another is running only queues; Home's
+      // reload is skipped mid-binding, which left the removed server's
+      // Continue Watching rows on screen. Wait for the binding to settle.
+      await scope.active.awaitBindingSettle();
       if (endedOwner != null && scope.active.activeId == endedOwner) {
         scope.shelf.beginProfileSession(endedOwner);
         if (scope.multiServer.hasConnectedServers) await scope.discover?.load();
@@ -208,6 +212,8 @@ class _ProfileDetailScreenState extends State<ProfileDetailScreen> with Controll
         if (updated != null) {
           if (!enabled) scope.serverManager.disconnectConnection(conn);
           await scope.binder.rebindActive();
+          // As after a removal: Home's reload below must not run mid-binding.
+          await scope.active.awaitBindingSettle();
           await scope.hiddenLibraries?.refresh();
         }
         if (shelfOwner != null && scope.active.activeId == shelfOwner) {

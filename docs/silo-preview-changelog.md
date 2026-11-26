@@ -4,6 +4,12 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **A switched-off or removed server leaves Continue Watching at once:** after you switched a connection off (or removed it), its titles could stay in Continue Watching and other Home rows until Home reloaded later. Home now drops that server's titles as soon as it leaves your profile, and reloads only once Plezilo has finished reconnecting your other servers. A server that is just temporarily offline keeps its titles, as before.
+
+## silo-preview-2.71.0
+
+Released November 26, 2026. Android and Windows.
+
 - **Hidden libraries stay out of Continue Watching on Silo and Tofa:** a library you hid in Plezilo could still put its titles in Continue Watching when it was on a Silo or Tofa server, because those servers don't say which library a Continue Watching title comes from. Plezilo now finds out (on Silo from the hidden library's own Continue Watching list, on Tofa by looking the titles up) and leaves them out. Plex and Jellyfin already did this.
 
 ## silo-preview-2.70.0
