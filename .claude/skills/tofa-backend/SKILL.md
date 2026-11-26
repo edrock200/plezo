@@ -207,13 +207,19 @@ Omitting `resume_ticks` lets the server resolve the resume point and return it.
 - `admin_stopped` refusals may carry `stop_message`.
 - 403 is access or profile, 404 is an unknown id, 503 is relay or server busy. Retry 503 once with back-off.
 
-## Live events (not used yet)
+## Live events (Home's watch state)
 
 - `ws(s)://{server}/api/v1/ws`. Authenticate with the first frame `{"type":"auth","token":…}`; the server answers
   `{"type":"auth_ok"}`.
 - Events are `WsEvent` frames: `StreamStarted`/`Progress`/`Stopped`, `MediaAdded`/`Updated`/`Deleted`,
   `WatchStateChanged` (capability `ws.watch_state_changed`) and `EventsMissed` (refetch).
 - Keepalive: the server pings every 30 s. Events are never replayed.
+- Plezilo (`tofa_events.dart`, `TofaClient` as `HomeWatchStateClient`): reads `GET /system/info` once; without
+  `ws.watch_state_changed` in a `capabilities` list it only checks Home every 2 min. Otherwise it opens the socket
+  (relay path kept) with the REST client/profile headers but no `Authorization`, sends the auth frame, and after
+  `auth_ok` signals on `WatchStateChanged` of its own `profile_id` and on `EventsMissed`; a reconnect after a drop
+  catches up once. A sign-in refused before any success stops the socket for that watch (checks only). Unverified:
+  which profile a socket acts as.
 
 ## Connecting from away
 
@@ -237,8 +243,9 @@ to the address the user typed (LAN or custom URL); relay support is a follow-up.
     refresh, connection-failure counting, 503 `server_relay_not_connected` retries.
   - `tofa_auth_service.dart`: server probe, device flow (`TofaDeviceSignIn`, also `.account` for account-first
     sign-in), `GET /servers`, `server-session`, profiles, verify-pin.
-  - `tofa_client.dart` plus its parts: `_home` (Home rows), `_quickview` (chapters, markers, previews), `_downloads`,
-    `_connect` (address race).
+  - `tofa_client.dart` plus its parts: `_home` (Home and library rows), `_collections`, `_live` (Live TV and
+    recording), `_people` (cast, people search, trailers), `_quickview` (chapters, markers, previews), `_downloads`,
+    `_connect` (address race); `tofa_events.dart` (watch-state socket).
   - `tofa_mappers.dart`, `tofa_library_options.dart` (facets → sorts/filters), `tofa_downloads.dart` (download record,
     qualities, offline extras), `tofa_endpoints.dart` (connection-info, race), `tofa_playback_caps.dart`,
     `tofa_api_cache.dart`.
@@ -258,10 +265,49 @@ to the address the user typed (LAN or custom URL); relay support is a follow-up.
   `quality`, `letters`, `watched` counts, `years`); `/media`'s own `sort`/`order`/`watched`/`quality`/`letter` are
   plain strings in the spec. `order` is sent only when `default_order` is `asc`/`desc`. Genres tab:
   `GET /media/genres`.
-- **Home**: Recently Added (only when the facets list a date-added sort: `added_at`, `created_at` or `date_added`,
-  sent with `order=desc`), `/users/me/suggested` (`items`), `/media/binge-ready` (seasons), `/users/me/watchlist`
-  (owned titles), `/collections/home-rows` (`pinned_collection` rows), all with `Future.wait`.
-  `latest-episodes` and `browse/sections` make no row.
+- **Home** (`ServerCapabilities.tofa.richHubs` is true, so Home reads `fetchGlobalHubs`; without it Home only had
+  per-library Recently Added): Recently Added per `GET /browse/sections` section (`kind` `library` → `library_id`,
+  `type` → `media_type`; sections with `total` 0 skipped; one row for all when the read fails), each only when that
+  scope's facets list a date-added sort (`added_at`, `created_at` or `date_added`, sent with `order=desc`);
+  `/users/me/suggested` (`items`), `/media/binge-ready` (seasons), `/users/me/watchlist` (owned titles),
+  `/collections/home-rows` (`pinned_collection` rows), all with `Future.wait`. `latest-episodes` makes no row.
+- **Library Recommended tab** (`fetchLibraryHubs`): no per-library row list exists in the spec, so rows are built
+  from `/media` parameters and that library's facets: Continue Watching (`watched=in_progress`, only when the facets'
+  `watched` lists it and the caller wants playback rows), Recently Added, Suggested and Ready to Binge narrowed to the
+  library's `library_id`, Recently Released (`release_date` desc + `released_only`), Top Rated (`rating`, else
+  `imdb_rating`, desc), Unwatched (`watched=unwatched`, `sort=random` when listed) and one row per genre the facets
+  list first (at most 5). A `/media` row's hub id is `tofa:q:<base64url JSON of its query>`, so "View all" pages
+  the same query.
+- **Collections** (`tofa_client_collections.dart`): ids `tofa-collection:{id}` (franchise/curated,
+  `GET /collections`, `/collections/{id}` with `AnnotatedDiscoveryItem` members; only `in_library` ones with
+  `local_media_id`) and `tofa-custom:{id}` (`GET /collections/custom`, `/collections/custom/{id}` with `MediaSummary`
+  items). They span libraries (no `library_id`), so every library's Collections tab lists both lists (2-minute
+  cache; one list failing leaves the other). Play/Shuffle: `GET /collections/{id}/play?mode=in_order`
+  (`CollectionPlayQueueEntry`: movies by `media_id`, episodes matched by season/episode number in their series);
+  a 4xx answer (unverified: custom ids there) plays the members in order. Artwork `poster_url`/`backdrop_url`/
+  `logo_url`/`poster_path` is used only when absolute or a `/api/…` route (signed with the image token; form
+  unverified). Read-only: no edit, delete or "add to collection". Search adds `SearchResponse.collections`.
+- **Live TV** (`tofa_client_live.dart`, capabilities `liveTv`/`liveTvDvr`): available when `GET /live/channels`
+  lists a channel (403/404 = none, other errors kept as transient). Channels page by `next_cursor`; the guide is
+  read in ≤24 h windows (`from`/`to` in UTC ms) with its cursor; an entry's `guid` (`tofa-airing:{channel}/{airing}`)
+  is set only when `recordable` and not a `placeholder`; an inline `recording` gives `rec:{id}` / `rule:{rule_id}`
+  keys. Playing a channel: `GET /stream/{channel_id}/info` with the usual caps, a per-client uuid `live_viewer_id` and
+  the channel's `revision` as `live_revision` (unverified: the spec names no live route; `live_playout_id` and
+  `X-Tofa-Live-Capabilities` are not sent); the session's progress posts are the heartbeats, `…/stopped` ends it,
+  no time-shift. The player's live path is used, so the VOD `live_start_index=0` never applies. Favourite channels
+  are kept on the device per connection (no favourites route in the spec). Recording: "this programme" `POST
+  /live/recordings/scheduled {airing_id, channel_id}` (201 new, 200 = already set → "already scheduled"; 409 is a
+  tuner/quota refusal, reported as a failure); "every airing" `POST /live/recording-rules` with `from_airing_id`,
+  `new_only`, `any_channel` or `channel_id`, `keep_last`; rules list/edit (`PATCH`, `keep_all` for "keep all") and
+  delete. Scheduled recordings are `GET /live/recordings?include=scheduled` rows without `actual_end`,
+  `missed_reason` or `error` (`state` lists no values). No documented route cancels one scheduled recording: the UI
+  says so. Finished recordings are not listed in Plezilo's Live TV.
+- **People**: a cast member's id is `tofa-person:{name}`; their titles are `GET /media?cast={name}` (unverified that
+  `cast` takes a name), the biography `GET /discovery/people/by-name` (fails soft when discovery is off). People
+  search: `GET /search`'s `actors` with `media_count` > 0.
+- **Trailers**: `youtube_trailer_id` of a movie or series detail → `RemoteTrailerClient` (YouTube embed).
+- **Catalog matching**: `findByExternalIds` uses `GET /media/by-tmdb/{tmdb}?media_type=movie|tv` (404 = not in the
+  library; no TMDB id = cannot run); a later season is required to exist.
 - **Watchlist**: `MembershipListsClient` (in `silo_memberships.dart`) is the neutral interface the detail page and card
   menu use; Silo has Watchlist + Favorites, Tofa Watchlist only. Tofa titles carry no watchlist flag: the client reads
   the list (2-minute freshness) and answers through `SiloMembershipStore`'s `known` hook.
@@ -281,11 +327,32 @@ to the address the user typed (LAN or custom URL); relay support is a follow-up.
   15 s). On the relay, playback shows a bandwidth notice (`PlaybackInitializationResult.playbackNotice`).
 - **Account-first sign-in**: device flow without `server_id` (cloud token) → `GET /servers` → pick → `POST
   /servers/{id}/server-session`; the connection's address is the server's `connect_url`, else its relay.
-- Not in this version: external players, playlists, collections pages, people, live TV, sign-out revoke (none in the
-  public spec), multi-part files beyond part 1, live events.
+- Declined after the full audit (2026-11-26), with the reason:
+  - Playlists: the spec has none. External players: not offered for Tofa. Sign-out revoke: no public route.
+  - Multi-part files beyond part 1: Tofa keeps progress per file and the spec does not say how a stacked title's
+    progress and watched state work; Plezilo's stacked-part player would need that mapping.
+  - Requests and Discovery (pages, lanes, shelves, radar, `/discovery/detail`, seen/not-interested, `/requests`):
+    Plezilo's request screens are built on Silo's API types (`SiloRequestsApi`); Tofa needs its own request UI.
+  - Subtitle search/download (`/subtitles/fetch/...`): the player's search sheet is Plex's OpenSubtitles flow and
+    Silo's own tools; a Tofa path needs its own integration.
+  - In-session audio/subtitle/quality/seek routes: Plezilo renegotiates `/stream/{id}/info` for a track or quality
+    change, which the spec supports; bitmap subtitles of a remux/transcode are not offered (no burn-in request).
+  - Watch history (`/watch/history`): Plezilo has no history screen. Problem reports: no report UI (Plezy's
+    services are off).
+  - Profile switching without signing in again, profile create/edit, avatars: a Tofa connection is one profile, as
+    for Silo; the picker shows initials (avatar URLs' auth unverified).
+  - Tofa's own scores (`tofa_*_rating`): Plezilo's rating badges have fixed sources; a Tofa badge would need a mark
+    of ours (Tofa's logo is not licensed). IMDb, Rotten Tomatoes and Metacritic are shown.
+  - Watch Together (`wt_` frames on `/api/v1/ws`) and remote control (`/remote/*`): Plezilo's own Watch Together and
+    companion remote use their own protocols; bridging Tofa's is a project of its own.
+  - Music/audiobooks: `MediaType` is `movie`/`tv`/`other` only.
+  - Admin-only routes (libraries, scans, users, settings, lifecycle, webhooks, problem-report resolution) are out of
+    scope.
 - Unverified on a real server (all fail closed and are marked in code): codec-list format; `max_bitrate` unit;
   `force_method` values; that the facets' `watched` field names are `/media?watched=` values; `segment_type` names;
   that `auth.token` is the download route's `st` and `quality` takes the option's tag; that `request_id` of the
   preparation route is the `client_request_id`; `bandwidth_limit`'s unit (not turned into a cap); whether
   `stream_url`/HLS variants keep `st`, also through the relay; relative URL base; wrong-PIN status;
-  `X-Tofa-Platform` values for desktops; avatar URLs needing a bearer.
+  `X-Tofa-Platform` values for desktops; avatar URLs needing a bearer; the live channel playback route and params;
+  collection artwork URL form; `/collections/{id}/play` for custom ids; `/media?cast=` taking a name; the events
+  socket's profile.

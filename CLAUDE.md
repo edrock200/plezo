@@ -86,7 +86,9 @@ agent needs. The code still says "Plezy" in internal names (Dart package `plezy`
 - Tofa: `/api/v1` plus the cloud service (sign-in, `connection-info`, relay); facts in the `tofa-backend`
   skill. Never use Tofa's logo (not licensed to us): `BackendBadge` draws a neutral "T" badge. Offer only
   sort and filter values `/media/facets` lists. The detail page and card menu reach Silo's and Tofa's
-  Watchlist through `MembershipListsClient`; keep Silo's behaviour identical when touching it.
+  Watchlist through `MembershipListsClient`; keep Silo's behaviour identical when touching it. Tofa is a
+  `richHubs` backend (Home reads `fetchGlobalHubs`) with Live TV and recording; the skill lists what was audited
+  and declined (requests, subtitle search, multi-part, Watch Together) and why.
 - The app is one build for phone, tablet, desktop and TV. Every new screen must work with touch
   **and** D-pad: use `FocusableButton`, `FocusableTextFormField`, `FocusableWrapper` and give each
   focusable a `FocusNode` with explicit `onNavigateUp/Down` where the default order is wrong. TV
