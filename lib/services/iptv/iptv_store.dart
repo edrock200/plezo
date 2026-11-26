@@ -187,6 +187,8 @@ class IptvVodRow {
     this.extension,
     this.plot,
     this.genre,
+    this.url,
+    this.headers = const {},
   });
 
   final String sourceId;
@@ -204,6 +206,11 @@ class IptvVodRow {
   final String? extension;
   final String? plot;
   final String? genre;
+
+  /// M3U movies only: the playlist entry's address and its own headers.
+  /// Xtream rows never store an address (it carries the login).
+  final String? url;
+  final Map<String, String> headers;
 }
 
 class IptvGroup {
@@ -383,7 +390,7 @@ const _schema = <String>[
   '''CREATE TABLE IF NOT EXISTS vod (
     source_id TEXT NOT NULL, kind TEXT NOT NULL, id TEXT NOT NULL, name TEXT NOT NULL, name_lower TEXT NOT NULL,
     category_id TEXT, poster TEXT, rating REAL, year INTEGER, added INTEGER, ext TEXT, plot TEXT, genre TEXT,
-    sort_index INTEGER NOT NULL, PRIMARY KEY (source_id, kind, id))''',
+    sort_index INTEGER NOT NULL, url TEXT, headers TEXT, PRIMARY KEY (source_id, kind, id))''',
   'CREATE INDEX IF NOT EXISTS vod_category ON vod (source_id, kind, category_id, sort_index)',
   'CREATE INDEX IF NOT EXISTS vod_added ON vod (source_id, kind, added)',
   '''CREATE TABLE IF NOT EXISTS channel_overrides (
@@ -474,6 +481,9 @@ class IptvDatabase extends GeneratedDatabase {
           'ALTER TABLE programmes_staging ADD COLUMN is_new INTEGER NOT NULL DEFAULT 0',
           'ALTER TABLE recordings ADD COLUMN rule_id TEXT',
           'ALTER TABLE recordings ADD COLUMN episode TEXT',
+          // M3U movies keep their playlist address (never an Xtream one).
+          'ALTER TABLE vod ADD COLUMN url TEXT',
+          'ALTER TABLE vod ADD COLUMN headers TEXT',
         ]) {
           try {
             await customStatement(statement);
@@ -952,7 +962,7 @@ class IptvStore {
       await db.customStatement('DELETE FROM groups WHERE source_id = ? AND kind = ?', [sourceId, kind.id]);
       await _insertMany(
         'INSERT OR REPLACE INTO vod (source_id, kind, id, name, name_lower, category_id, poster, rating, year, added, '
-        'ext, plot, genre, sort_index) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        'ext, plot, genre, sort_index, url, headers) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [
           for (final r in rows)
             [
@@ -970,6 +980,8 @@ class IptvStore {
               r.plot,
               r.genre,
               r.sortIndex,
+              r.url,
+              r.headers.isEmpty ? null : jsonEncode(r.headers),
             ],
         ],
       );
@@ -991,6 +1003,8 @@ class IptvStore {
     extension: row.readNullable<String>('ext'),
     plot: row.readNullable<String>('plot'),
     genre: row.readNullable<String>('genre'),
+    url: row.readNullable<String>('url'),
+    headers: _headers(row.readNullable<String>('headers')),
   );
 
   static String _vodOrder(String? sort, bool descending) {

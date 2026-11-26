@@ -142,6 +142,28 @@ class IptvSyncWorker {
     return sha1.convert(utf8.encode(basis)).toString().substring(0, 16);
   }
 
+  static const _movieExtensions = {
+    'mp4', 'mkv', 'avi', 'mov', 'm4v', 'wmv', 'flv', 'webm', 'mpg', 'mpeg', 'divx', 'ogv', '3gp', //
+  };
+  static final _movieGroup = RegExp(r'\b(movies?|vod|films?|series|cinema)\b', caseSensitive: false);
+
+  /// Whether a playlist entry looks like a movie file rather than a channel
+  /// (for "Treat movie files as movies"): a video-file address, or a
+  /// Movies/VOD/Series group whose address is not a live stream (`.ts`,
+  /// `.m3u8`, `/live/`). Entries with catch-up are always channels.
+  static bool looksLikeMovie(M3uEntry entry) {
+    if (entry.catchup != null || entry.catchupSource != null) return false;
+    final path = (Uri.tryParse(entry.url)?.path ?? entry.url).toLowerCase();
+    final dot = path.lastIndexOf('.');
+    final ext = dot < 0 || dot < path.lastIndexOf('/') ? '' : path.substring(dot + 1);
+    if (_movieExtensions.contains(ext)) return true;
+    if (ext == 'ts' || ext == 'm3u8' || path.contains('/live/')) return false;
+    final group = entry.group;
+    return group != null && _movieGroup.hasMatch(group);
+  }
+
+  static final _yearInName = RegExp(r'[\(\[]((?:19|20)\d{2})[\)\]]\s*$');
+
   Future<int> _importM3u(IptvConnection c) async {
     _progress(IptvSyncPhase.playlist);
     final address = c.m3uFilePath ?? c.m3uUrl;
@@ -150,9 +172,38 @@ class IptvSyncWorker {
     final channels = <IptvChannel>[];
     final groups = <String, int>{};
     final seenIds = <String, int>{};
+    final movies = <IptvVodRow>[];
+    final movieGroups = <String, int>{};
     var index = 0;
     final header = await M3uStreamParser.parse(M3uStreamParser.linesOf(bytes), (entry) {
       if (entry.url.isEmpty) return;
+      if (c.m3uMoviesAsVod && looksLikeMovie(entry)) {
+        var id = 'm${m3uChannelId(entry)}';
+        final dup = seenIds[id] = (seenIds[id] ?? 0) + 1;
+        if (dup > 1) id = '$id~$dup';
+        final group = entry.group;
+        if (group != null) movieGroups.putIfAbsent(group, () => movieGroups.length);
+        final name = entry.displayName;
+        final year = _yearInName.firstMatch(name);
+        final path = (Uri.tryParse(entry.url)?.path ?? '').toLowerCase();
+        final dot = path.lastIndexOf('.');
+        movies.add(
+          IptvVodRow(
+            sourceId: c.id,
+            kind: IptvGroupKind.movie,
+            id: id,
+            name: name,
+            sortIndex: movies.length,
+            categoryId: group,
+            poster: entry.tvgLogo,
+            year: year == null ? null : int.tryParse(year.group(1)!),
+            extension: dot < 0 ? null : path.substring(dot + 1),
+            url: entry.url,
+            headers: entry.headers,
+          ),
+        );
+        return;
+      }
       var id = m3uChannelId(entry);
       final dup = seenIds[id] = (seenIds[id] ?? 0) + 1;
       if (dup > 1) id = '$id~$dup';
@@ -208,10 +259,17 @@ class IptvSyncWorker {
                       headers: ch.headers,
                     ),
           ];
-    if (withDefaults.isEmpty) throw const IptvSyncException('the playlist has no channels');
+    if (withDefaults.isEmpty && movies.isEmpty) throw const IptvSyncException('the playlist has no channels');
     await store.replaceChannels(c.id, withDefaults, [
       for (final e in groups.entries) IptvGroup(kind: IptvGroupKind.live, id: e.key, name: e.key, sortIndex: e.value),
     ]);
+    // Movie files (when asked for) become the Movies library; turning the
+    // setting off clears it.
+    await store.replaceVod(c.id, IptvGroupKind.movie, movies, [
+      for (final e in movieGroups.entries)
+        IptvGroup(kind: IptvGroupKind.movie, id: e.key, name: e.key, sortIndex: e.value),
+    ]);
+    if (c.m3uMoviesAsVod) appLogger.i('[iptv] playlist movies=${movies.length} categories=${movieGroups.length}');
     await store.putMeta(c.id, IptvMetaKeys.headerEpg, header.epgUrls.isEmpty ? null : header.epgUrls.join('\n'));
     appLogger.i(
       '[iptv] playlist imported channels=${withDefaults.length} groups=${groups.length} guides=${header.epgUrls.length}',

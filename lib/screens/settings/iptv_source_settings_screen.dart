@@ -392,7 +392,7 @@ class _IptvSourceSettingsScreenState extends State<IptvSourceSettingsScreen> {
                     value: c.includeVod,
                     onChanged: (v) => unawaited(_save(c.copyWith(includeVod: v), refreshPlaylist: true)),
                   ),
-                ] else
+                ] else ...[
                   _row(
                     icon: Symbols.link_rounded,
                     title: t.iptv.playlistUrl,
@@ -408,6 +408,14 @@ class _IptvSourceSettingsScreenState extends State<IptvSourceSettingsScreen> {
                             apply: (v) => unawaited(_save(c.copyWith(m3uUrl: v), refreshPlaylist: true)),
                           ),
                   ),
+                  _switch(
+                    icon: Symbols.movie_rounded,
+                    title: t.iptv.m3uMoviesAsVod,
+                    subtitle: t.iptv.m3uMoviesAsVodHint,
+                    value: c.m3uMoviesAsVod,
+                    onChanged: (v) => unawaited(_save(c.copyWith(m3uMoviesAsVod: v), refreshPlaylist: true)),
+                  ),
+                ],
                 _row(
                   icon: Symbols.schedule_rounded,
                   title: t.iptv.playlistRefresh,
@@ -563,7 +571,7 @@ class _IptvSourceSettingsScreenState extends State<IptvSourceSettingsScreen> {
                           sourceId: c.id,
                           lockedGroups: c.lockedGroups,
                           store: widget.store,
-                          includeVod: c.isXtream && c.includeVod,
+                          includeVod: c.isXtream ? c.includeVod : c.m3uMoviesAsVod,
                         ),
                       ),
                     );

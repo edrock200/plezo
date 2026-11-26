@@ -14,6 +14,7 @@ import 'package:plezy/services/iptv/iptv_client.dart';
 import 'package:plezy/services/iptv/iptv_parental.dart';
 import 'package:plezy/services/iptv/iptv_store.dart';
 import 'package:plezy/services/iptv/iptv_sync_worker.dart';
+import 'package:plezy/services/iptv/m3u_parser.dart';
 import 'package:plezy/services/iptv/xtream_api.dart';
 import 'package:plezy/services/playback_initialization_types.dart';
 
@@ -115,6 +116,67 @@ void main() {
       expect(lone!.epgChannelId, ch.tvgId);
       expect((await store.channel(source.id, 'manual'))!.epgChannelId, 'ch5.fake');
       worker.close();
+    });
+  });
+
+  group('M3U movie files', () {
+    void addMovies() => server.extraM3u =
+        '#EXTINF:-1 tvg-logo="${server.base}/p/a.jpg" group-title="Films",Arrival Day (2016)\n'
+        '#EXTVLCOPT:http-referrer=https://ref.example/\n'
+        '${server.base}/files/arrival.mkv\n'
+        '#EXTINF:-1 group-title="VOD",Night Train\n'
+        '${server.base}/files/night\n'
+        '#EXTINF:-1 group-title="VOD",Live in VOD group\n'
+        '${server.base}/live/x/y/9.ts\n';
+
+    test('off by default: movie files stay channels', () async {
+      addMovies();
+      final source = m3uSource(server.base);
+      final worker = IptvSyncWorker(store: store, now: () => server.now);
+      expect(await worker.importPlaylist(source), 9);
+      final client = IptvClient(source, store: store, now: () => server.now);
+      expect(await client.fetchLibraries(), isEmpty);
+    });
+
+    test('opt-in: a Movies library that plays the entry with its headers', () async {
+      addMovies();
+      final source = IptvConnection.fromConfigJson(
+        id: 'iptv-m3u-movies',
+        json: {...m3uSource(server.base).toConfigJson(), 'm3uMoviesAsVod': true},
+        createdAt: DateTime(2026),
+      );
+      expect(source.m3uMoviesAsVod, isTrue);
+      expect(m3uSource(server.base).toConfigJson().containsKey('m3uMoviesAsVod'), isFalse);
+      final worker = IptvSyncWorker(store: store, now: () => server.now);
+      expect(await worker.importPlaylist(source), 7, reason: 'the .ts entry in a VOD group stays a channel');
+      final client = IptvClient(source, store: store, now: () => server.now);
+      final libraries = await client.fetchLibraries();
+      expect(libraries.map((l) => l.kind), [MediaKind.movie]);
+      final page = await client.fetchLibraryPagedContent(libraries.single.id, query: const LibraryQuery());
+      expect(page.items.map((i) => i.title).toSet(), {'Arrival Day (2016)', 'Night Train'});
+      final arrival = page.items.firstWhere((i) => i.title!.startsWith('Arrival'));
+      expect(arrival.year, 2016);
+      final movie = (await client.fetchItem(arrival.id))!;
+      final init = await client.getPlaybackInitialization(
+        PlaybackInitializationOptions(metadata: movie, selectedMediaIndex: 0),
+      );
+      expect(init.videoUrl, '${server.base}/files/arrival.mkv');
+      expect(client.streamHeaders['Referer'], 'https://ref.example/');
+
+      // Turning it off again clears the library on the next refresh.
+      final off = source.copyWith(m3uMoviesAsVod: false);
+      expect(await worker.importPlaylist(off), 9);
+      expect(await store.vodCount(off.id, IptvGroupKind.movie), 0);
+    });
+
+    test('what counts as a movie file', () {
+      M3uEntry entry(String url, {String? group}) =>
+          M3uEntry(url: url, title: 'x', attributes: {'group-title': ?group});
+      expect(IptvSyncWorker.looksLikeMovie(entry('http://h.example/a/b.MP4?token=1')), isTrue);
+      expect(IptvSyncWorker.looksLikeMovie(entry('http://h.example/a/b.ts', group: 'Movies')), isFalse);
+      expect(IptvSyncWorker.looksLikeMovie(entry('http://h.example/a/b', group: 'Series EN')), isTrue);
+      expect(IptvSyncWorker.looksLikeMovie(entry('http://h.example/a/b', group: 'Moviestar TV')), isFalse);
+      expect(IptvSyncWorker.looksLikeMovie(entry('http://h.example/a/b', group: 'News')), isFalse);
     });
   });
 
@@ -417,6 +479,22 @@ void main() {
       expect(seasonsAfter.first.viewCount, 1);
       await client.markUnwatched(series);
       expect((await client.fetchItem('s3001'))!.viewedLeafCount, 0);
+    });
+
+    test('large lists are decoded while they download, up to a cap', () async {
+      XtreamApi api({int? cap}) => XtreamApi(
+        XtreamCredentials(baseUrl: server.base, username: 'demo', password: 'secret'),
+        maxListBytes: cap ?? XtreamApi.defaultMaxListBytes,
+      );
+      final normal = api();
+      expect(await normal.vodStreams(), hasLength(4));
+      normal.close();
+      final capped = api(cap: 64);
+      await expectLater(
+        capped.vodStreams(),
+        throwsA(isA<XtreamRequestException>().having((e) => e.message, 'message', 'too large')),
+      );
+      capped.close();
     });
 
     test('live only leaves the libraries out', () async {

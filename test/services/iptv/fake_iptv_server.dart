@@ -61,8 +61,12 @@ class FakeIptvServer {
         ..writeln('#EXTVLCOPT:http-user-agent=FakePlayer/1.0')
         ..writeln('$base/stream/$i.ts');
     }
+    b.write(extraM3u);
     return b.toString();
   }
+
+  /// More playlist entries after the channels.
+  String extraM3u = '';
 
   /// More `<programme>` elements for the guide (series-rule tests).
   String extraGuide = '';

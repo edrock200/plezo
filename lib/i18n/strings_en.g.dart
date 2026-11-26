@@ -8180,6 +8180,12 @@ class Translations$iptv$en {
 
 	/// en: 'Turn on if catch-up does not play: some servers answer only this route'
 	String get timeshiftPhpHint => 'Turn on if catch-up does not play: some servers answer only this route';
+
+	/// en: 'Treat movie files as movies'
+	String get m3uMoviesAsVod => 'Treat movie files as movies';
+
+	/// en: 'Entries whose address is a video file (such as .mp4 or .mkv), or that sit in a Movies, VOD or Series group, appear in a Movies library instead of the channel list.'
+	String get m3uMoviesAsVodHint => 'Entries whose address is a video file (such as .mp4 or .mkv), or that sit in a Movies, VOD or Series group, appear in a Movies library instead of the channel list.';
 }
 
 // Path: appIcon.names
@@ -13344,6 +13350,8 @@ extension on Translations {
 			'iptv.channelResult' => ({required Object number}) => 'Channel ${number}',
 			'iptv.timeshiftPhp' => 'Catch-up through timeshift.php',
 			'iptv.timeshiftPhpHint' => 'Turn on if catch-up does not play: some servers answer only this route',
+			'iptv.m3uMoviesAsVod' => 'Treat movie files as movies',
+			'iptv.m3uMoviesAsVodHint' => 'Entries whose address is a video file (such as .mp4 or .mkv), or that sit in a Movies, VOD or Series group, appear in a Movies library instead of the channel list.',
 			_ => null,
 		};
 	}

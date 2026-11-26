@@ -218,7 +218,8 @@ class IptvClient implements MediaServerClient, RemoteTrailerClient {
   // Libraries: Xtream movies and series
   // ---------------------------------------------------------------------------
 
-  bool get _hasVod => _connection.isXtream && _connection.includeVod;
+  /// Xtream movies and series, or (opt-in) an M3U playlist's movie files.
+  bool get _hasVod => _connection.isXtream ? _connection.includeVod : _connection.m3uMoviesAsVod;
 
   @override
   Future<List<MediaLibrary>> fetchLibraries() async {
@@ -1393,12 +1394,18 @@ class IptvClient implements MediaServerClient, RemoteTrailerClient {
 
   /// The headers the source's streams need (its user-agent and referrer).
   /// Channels with their own headers send those instead (see the live
-  /// session).
+  /// session); so does the M3U movie [streamUrlFor] last resolved (the
+  /// player reads these right after the playback start resolves its URL).
   @override
   Map<String, String> get streamHeaders => {
     if (_connection.userAgent != null) 'User-Agent': _connection.userAgent!,
     if (_connection.referrer != null) 'Referer': _connection.referrer!,
+    ..._itemHeaders,
   };
+
+  /// The playlist entry's own headers (`#EXTVLCOPT`, `|User-Agent=`) of the
+  /// M3U movie being started; empty for anything else.
+  Map<String, String> _itemHeaders = const {};
 
   @override
   Future<ExternalIds> fetchExternalIds(String itemId) async {
@@ -1546,11 +1553,17 @@ class IptvClient implements MediaServerClient, RemoteTrailerClient {
   /// The stream address of a movie, episode or recording.
   @visibleForTesting
   Future<String?> streamUrlFor(MediaItem item) async {
+    _itemHeaders = const {};
     final parsed = IptvItemId.parse(item.id);
     final api = _xtream;
     switch (parsed) {
       case IptvMovieId(:final streamId):
-        if (api == null) return null;
+        if (api == null) {
+          // An M3U movie file plays from its playlist address.
+          final row = await store.vodRow(_connection.id, IptvGroupKind.movie, streamId);
+          _itemHeaders = row?.headers ?? const {};
+          return row?.url;
+        }
         final ext =
             item.raw?['ext'] as String? ??
             (await store.vodRow(_connection.id, IptvGroupKind.movie, streamId))?.extension ??

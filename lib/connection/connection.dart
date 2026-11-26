@@ -920,6 +920,11 @@ class IptvConnection extends Connection {
   /// Xtream: also show the movie and series libraries.
   final bool includeVod;
 
+  /// M3U: entries that look like movie files (a `.mp4`/`.mkv`/... address,
+  /// or a Movies/VOD/Series group) become a Movies library instead of
+  /// channels. Off by default.
+  final bool m3uMoviesAsVod;
+
   /// Groups shown only after the profile PIN (or always hidden for a profile
   /// without one) — the parental filter.
   final List<String> lockedGroups;
@@ -946,6 +951,7 @@ class IptvConnection extends Connection {
     this.epgFutureDays = 3,
     this.numbering = IptvChannelNumbering.playlist,
     this.includeVod = true,
+    this.m3uMoviesAsVod = false,
     this.lockedGroups = const [],
     required this.createdAt,
     this.lastAuthenticatedAt,
@@ -1007,6 +1013,7 @@ class IptvConnection extends Connection {
     int? epgFutureDays,
     IptvChannelNumbering? numbering,
     bool? includeVod,
+    bool? m3uMoviesAsVod,
     List<String>? lockedGroups,
     DateTime? lastAuthenticatedAt,
     bool? enabled,
@@ -1033,6 +1040,7 @@ class IptvConnection extends Connection {
       epgFutureDays: epgFutureDays ?? this.epgFutureDays,
       numbering: numbering ?? this.numbering,
       includeVod: includeVod ?? this.includeVod,
+      m3uMoviesAsVod: m3uMoviesAsVod ?? this.m3uMoviesAsVod,
       lockedGroups: lockedGroups ?? this.lockedGroups,
       createdAt: createdAt,
       lastAuthenticatedAt: lastAuthenticatedAt ?? this.lastAuthenticatedAt,
@@ -1065,6 +1073,7 @@ class IptvConnection extends Connection {
     'epgFutureDays': epgFutureDays,
     'numbering': numbering.name,
     'includeVod': includeVod,
+    if (m3uMoviesAsVod) 'm3uMoviesAsVod': true,
     'lockedGroups': lockedGroups,
   };
 
@@ -1105,6 +1114,7 @@ class IptvConnection extends Connection {
       epgFutureDays: number(json['epgFutureDays'], 3),
       numbering: IptvChannelNumbering.parse(json['numbering']),
       includeVod: json['includeVod'] as bool? ?? true,
+      m3uMoviesAsVod: json['m3uMoviesAsVod'] == true,
       lockedGroups: locked is List ? locked.whereType<String>().toList() : const [],
       createdAt: createdAt,
       lastAuthenticatedAt: lastAuthenticatedAt,
