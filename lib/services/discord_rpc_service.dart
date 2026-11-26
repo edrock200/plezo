@@ -360,7 +360,10 @@ class DiscordRPCService {
         imageUrl,
         // Silo image URLs authorise themselves (signed, or presigned on
         // another host), so the account token is never sent with them.
-        headers: client.backend == MediaBackend.silo || client.backend == MediaBackend.tofa
+        headers:
+            client.backend == MediaBackend.silo ||
+                client.backend == MediaBackend.tofa ||
+                client.backend == MediaBackend.iptv
             ? null
             : client.streamHeaders,
         timeout: const Duration(seconds: 10),

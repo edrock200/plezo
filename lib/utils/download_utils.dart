@@ -96,6 +96,10 @@ Future<DownloadResult?> showDownloadOptionsAndQueue(
   required DownloadProvider downloadProvider,
   Future<void> Function()? onDelete,
 }) async {
+  if (!metadata.backend.supportsDownloads) {
+    appLogger.d('Downloads are not supported for ${metadata.backend.id} items');
+    return null;
+  }
   if (!await confirmBackgroundDownloadRestrictions(context) || !context.mounted) return null;
 
   final kind = metadata.kind;

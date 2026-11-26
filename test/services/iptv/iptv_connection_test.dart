@@ -59,6 +59,16 @@ void main() {
     expect(c.displaySubtitle, 'Xtream · x.example');
   });
 
+  test('IPTV titles are never offered for download, and no other backend lost downloads', () {
+    expect(MediaBackend.iptv.supportsDownloads, isFalse);
+    for (final backend in MediaBackend.values.where((b) => b != MediaBackend.iptv)) {
+      expect(backend.supportsDownloads, isTrue, reason: backend.id);
+    }
+    expect(MediaBackend.fromId('iptv'), MediaBackend.iptv);
+    expect(MediaBackend.fromString('iptv'), MediaBackend.iptv);
+    expect(MediaBackend.iptv.usesMediaBrowserApi, isFalse);
+  });
+
   test('config JSON round-trips every field', () {
     final original = fullSource();
     final restored = IptvConnection.fromConfigJson(

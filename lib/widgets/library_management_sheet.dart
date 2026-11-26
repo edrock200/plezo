@@ -135,7 +135,11 @@ List<MediaLibrary> reconcileLibraryOrder(List<MediaLibrary> sheetOrder, List<Med
 List<ContextMenuItem> _getLibraryMenuItems(MediaLibrary library) {
   // Silo starts scans and metadata refreshes from its own dashboard; SiloClient has no endpoint
   // for either, so its libraries get no admin entries rather than one that always fails.
-  if (library.backend == MediaBackend.silo || library.backend == MediaBackend.tofa) return const [];
+  if (library.backend == MediaBackend.silo ||
+      library.backend == MediaBackend.tofa ||
+      library.backend == MediaBackend.iptv) {
+    return const [];
+  }
   // Scan and refresh metadata are the admin actions every backend supports —
   // Plex hits `/library/sections/{id}/refresh` (with `force=1` to refresh);
   // MediaBrowser servers post to `/Items/{id}/Refresh` (the library view is

@@ -146,7 +146,10 @@ class _MenuContext {
   /// does not capture), so MediaBrowser non-admins only get playlists. Plex
   /// keeps offering collections to everyone, as before.
   bool get canManageCollections =>
-      (isPlex || isAdmin) && itemBackend != MediaBackend.silo && itemBackend != MediaBackend.tofa;
+      (isPlex || isAdmin) &&
+      itemBackend != MediaBackend.silo &&
+      itemBackend != MediaBackend.tofa &&
+      itemBackend != MediaBackend.iptv;
 }
 
 /// Whether the picked entry navigated away, in which case the menu must not
@@ -531,6 +534,7 @@ class MediaContextMenuState extends State<MediaContextMenu> {
     if (mediaItem != null &&
         mediaItem.backend != MediaBackend.silo &&
         mediaItem.backend != MediaBackend.tofa &&
+        mediaItem.backend != MediaBackend.iptv &&
         (mediaKind == MediaKind.movie || mediaKind == MediaKind.show) &&
         catalogSources != null &&
         catalogSources.watchlistCapableSources.isNotEmpty &&
@@ -627,7 +631,9 @@ class MediaContextMenuState extends State<MediaContextMenu> {
         ),
       // Silo's collections and box sets are read-only for clients; Plezilo
       // edits no Tofa playlists or collections.
-      if (menu.itemBackend != MediaBackend.silo && menu.itemBackend != MediaBackend.tofa)
+      if (menu.itemBackend != MediaBackend.silo &&
+          menu.itemBackend != MediaBackend.tofa &&
+          menu.itemBackend != MediaBackend.iptv)
         _MenuAction(value: 'delete', icon: Symbols.delete_rounded, label: t.common.delete, destructive: true),
     ];
   }
@@ -823,6 +829,7 @@ class MediaContextMenuState extends State<MediaContextMenu> {
     // skip entirely.
     final canDownload =
         !PlatformDetector.isAppleTV() &&
+        mediaItem.backend.supportsDownloads &&
         (mediaItem.isVideoContent || mediaKind == MediaKind.album || mediaKind == MediaKind.track) &&
         !SiloMappers.isAudiobook(mediaItem);
     final downloadProvider = canDownload ? Provider.of<DownloadProvider>(context, listen: false) : null;

@@ -66,6 +66,10 @@ enum MediaBackend {
     };
   }
 
+  /// Whether titles of this backend can be downloaded. IPTV titles stream
+  /// from the provider and are recorded (live) instead.
+  bool get supportsDownloads => this != MediaBackend.iptv;
+
   /// True for backends served by the MediaBrowser HTTP API — Jellyfin and its
   /// Emby ancestor. They share one client stack, one query grammar and one set
   /// of DTO shapes, so behaviour keyed to "not Plex" should test this instead
