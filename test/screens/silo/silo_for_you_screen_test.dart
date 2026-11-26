@@ -141,11 +141,17 @@ Future<SiloForYouScreenState> _pump(WidgetTester tester, List<SiloClient> client
   return tester.state<SiloForYouScreenState>(find.byType(SiloForYouScreen));
 }
 
-/// Bounded pumps: real HTTP mocks answer on the event loop.
+/// Bounded pumps: real HTTP mocks answer on the event loop. A fixed six
+/// rounds were too few on a loaded machine (an empty feed reads the Watchlist
+/// after the feed, a chain of answers), so keep pumping while the page still
+/// reads something, up to about 5 s.
 Future<void> _settle(WidgetTester tester) async {
-  for (var i = 0; i < 6; i++) {
+  for (var i = 0; i < 100; i++) {
     await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 10)));
     await tester.pump(const Duration(milliseconds: 50));
+    if (i < 5) continue;
+    final page = find.byType(SiloForYouScreen);
+    if (page.evaluate().isEmpty || !tester.state<SiloForYouScreenState>(page).busyForTesting) break;
   }
 }
 

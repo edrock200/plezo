@@ -164,6 +164,11 @@ class SiloForYouScreenState extends State<SiloForYouScreen> with RouteAware {
   @visibleForTesting
   SiloForYouTab get tab => _tab;
 
+  /// Whether a feed or list read is still running, for tests that wait for
+  /// the page to settle instead of a fixed number of frames.
+  @visibleForTesting
+  bool get busyForTesting => _recsLoading || _lists.values.any((l) => l.loading || l.loadingMore);
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
