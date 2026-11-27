@@ -4,6 +4,12 @@ What changed in each preview (Android, and Windows and macOS where the release h
 
 ## Next preview
 
+- **IPTV: the guide from your Xtream login, sooner and more reliably:** you don't need to enter a guide address for an Xtream login. Plezilo now reads the guide right after the channels, before movies and series, so a big catalogue no longer holds it up, and a problem with one no longer stops the other. Big guides get more time to start and only fail if the download stalls. If your provider's guide can't be read, is empty, or leaves channels out, Plezilo reads each channel's guide from the provider instead, for the channels on screen (in the guide, the channel list, the mini guide and the info banner). The source's settings now say where the guide comes from, how many programmes it has and when it was updated, and whether Plezilo is reading each channel's guide instead. *Refresh guide* reads only the guide again. *(please test with your provider)*
+
+## silo-preview-2.75.0
+
+Released November 26, 2026. Android and Windows.
+
 - **Fixed: Plezilo freezing and closing with a very large IPTV source:** on TVs and Fire TV sticks, an Xtream source with tens of thousands of channels, movies and series could make Plezilo freeze and close a while after it was added, and then at every start. Plezilo now reads such lists a little at a time instead of all at once, and keeps the old lists if a refresh is cut off. Automatic refreshes now wait about a minute after start-up, until Home has loaded, and Home, search and Live TV's availability no longer read every channel. If Plezilo is closed in the middle of a refresh, the next start skips that source's refresh and its settings say *The last refresh did not finish; Plezilo stopped it. Refresh by hand to try again.*; *Refresh now* still works. If it happens twice in a row, Plezilo waits until the source's next refresh time. *(please test with your provider)*
 
 ## silo-preview-2.74.0

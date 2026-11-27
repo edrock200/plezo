@@ -83,6 +83,29 @@ opens the same file in its own isolate (`IptvDatabase.openSync`); WAL mode lets 
   `jsonDecode`d alone; network chunks are fed in 32 KB slices so a batch stays near 2000 rows. Only category
   names and group order are kept while rows stream. `maxListRows` (5 million) only stops an endless answer.
   `liveStreams()` etc. still return whole lists, for small lists and tests only.
+- **Refresh order** (`runIptvRefreshSteps`, used by the isolate job and in-process): live channels
+  (`importPlaylist(c, withVod: false)`), then the guide (`importEpg`), then Xtream movies and series
+  (`importVod`, its own sync kind `vod`). Each step is caught and recorded on its own; the first error is
+  reported. `refresh(vod:)` defaults to `playlist`; the add screen imports the playlist alone, then queues guide
+  + VOD. `importPlaylist(c)` without `withVod: false` still imports VOD too (tests and helpers).
+- **Guide downloads**: 120 s for the answer to start, then a 60 s stall timeout per chunk (`'stalled'`), no total
+  cap; the source's User-Agent (else `Plezilo`) and Referer are sent; gzip is sniffed from the magic bytes
+  (`XmltvStreamParser.decodeBytes`), whatever the content type says. Meta `guide_state`
+  (`IptvMetaKeys.guideState`): `{own: ok|empty|failed|none, error, programmes}` for the source's own guide
+  (Xtream `xmltv.php`, the playlist header's); the settings "Guide" row turns it into a sentence (origin ·
+  programmes · channels read from the provider · updated …, plus the failure and the fallback). "Refresh guide"
+  reads only the guide.
+- **Xtream per-channel guide fallback** (`iptv_client_guide.dart`, `_IptvGuideFallback`): a channel with an
+  Xtream stream id and nothing stored for the next hour under its `IptvChannel.guideKey` (`epg_id`, else
+  `xs:<stream id>`) has its listing read from `get_simple_data_table` (else `get_short_epg&limit=12`) and stored in
+  `programmes` (`putChannelProgrammes`), with `epg_fetched` (schema 4) giving a 2 h freshness (a failure is also
+  marked, so a failing provider is not hammered). At most 4 at once, one in flight per channel. Listings use
+  `start_timestamp`/`stop_timestamp`, else `start`/`end` in the server's local time minus
+  `XtreamAccount.serverOffset` (`XtreamApi.parseListings`). Triggers: `nowNext` (banner, channel list, mini guide;
+  waits up to 8 s) and the guide grid through `LiveTvGuideOnDemand.channelsShown` (the grid reports channel rows
+  as they are built, debounced; it reloads its schedule on `guideFilled` = `IptvDataRevision.guide`). A guide
+  refresh's commit clears `epg_fetched`. Never `await` `_inFlight.remove(...)` in `whenComplete` (it returned the
+  future itself and deadlocked).
 - Guide matching and the guide's wanted ids read channels with `forEachChannelGuideKey` (a few columns, 5000 a
   page), never `store.channels`.
 - Playlist: channels are swapped in by one transaction. Ids are stable across refreshes — Xtream `x<stream_id>`,
