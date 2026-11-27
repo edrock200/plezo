@@ -3288,6 +3288,21 @@
     "timeshiftPhpHint": "Turn on if catch-up does not play: some servers answer only this route",
     "m3uMoviesAsVod": "Treat movie files as movies",
     "m3uMoviesAsVodHint": "Entries whose address is a video file (such as .mp4 or .mkv), or that sit in a Movies, VOD or Series group, appear in a Movies library instead of the channel list.",
-    "refreshInterrupted": "The last refresh did not finish; Plezilo stopped it. Refresh by hand to try again."
+    "refreshInterrupted": "The last refresh did not finish; Plezilo stopped it. Refresh by hand to try again.",
+    "guideFromXtream": "From your Xtream login",
+    "guideFromPlaylist": "From the playlist's guide",
+    "guideFromAddresses": "From your guide addresses",
+    "guideNoAddress": "No guide address",
+    "guideProgrammes": "${count} programmes",
+    "guideUpdated": "updated ${when}",
+    "guideJustNow": "just now",
+    "guideMinutesAgo": "${n} min ago",
+    "guideHoursAgo": "${n} h ago",
+    "guideDaysAgo": "${n} days ago",
+    "guideXtreamFailed": "Your Xtream login's guide could not be read (${reason}). Plezilo reads each channel's guide from the provider instead.",
+    "guideXtreamEmpty": "Your Xtream login's guide was empty. Plezilo reads each channel's guide from the provider instead.",
+    "guideFromProvider": "${count} channels read from the provider",
+    "refreshGuide": "Refresh guide",
+    "refreshGuideHint": "Reads only the guide again"
   }
 }

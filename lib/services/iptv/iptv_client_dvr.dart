@@ -272,7 +272,7 @@ extension IptvClientRules on IptvClient {
     final shown = await shownChannels();
     final byEpg = <String, List<IptvShownChannel>>{};
     for (final s in shown) {
-      final epg = s.channel.epgChannelId;
+      final epg = s.channel.guideKey;
       if (epg != null && epg.isNotEmpty) byEpg.putIfAbsent(epg, () => []).add(s);
     }
     final existing = await store.recordings(sourceId: _connection.id);

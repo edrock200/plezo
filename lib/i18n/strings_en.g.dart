@@ -8189,6 +8189,51 @@ class Translations$iptv$en {
 
 	/// en: 'The last refresh did not finish; Plezilo stopped it. Refresh by hand to try again.'
 	String get refreshInterrupted => 'The last refresh did not finish; Plezilo stopped it. Refresh by hand to try again.';
+
+	/// en: 'From your Xtream login'
+	String get guideFromXtream => 'From your Xtream login';
+
+	/// en: 'From the playlist's guide'
+	String get guideFromPlaylist => 'From the playlist\'s guide';
+
+	/// en: 'From your guide addresses'
+	String get guideFromAddresses => 'From your guide addresses';
+
+	/// en: 'No guide address'
+	String get guideNoAddress => 'No guide address';
+
+	/// en: '${count} programmes'
+	String guideProgrammes({required Object count}) => '${count} programmes';
+
+	/// en: 'updated ${when}'
+	String guideUpdated({required Object when}) => 'updated ${when}';
+
+	/// en: 'just now'
+	String get guideJustNow => 'just now';
+
+	/// en: '${n} min ago'
+	String guideMinutesAgo({required Object n}) => '${n} min ago';
+
+	/// en: '${n} h ago'
+	String guideHoursAgo({required Object n}) => '${n} h ago';
+
+	/// en: '${n} days ago'
+	String guideDaysAgo({required Object n}) => '${n} days ago';
+
+	/// en: 'Your Xtream login's guide could not be read (${reason}). Plezilo reads each channel's guide from the provider instead.'
+	String guideXtreamFailed({required Object reason}) => 'Your Xtream login\'s guide could not be read (${reason}). Plezilo reads each channel\'s guide from the provider instead.';
+
+	/// en: 'Your Xtream login's guide was empty. Plezilo reads each channel's guide from the provider instead.'
+	String get guideXtreamEmpty => 'Your Xtream login\'s guide was empty. Plezilo reads each channel\'s guide from the provider instead.';
+
+	/// en: '${count} channels read from the provider'
+	String guideFromProvider({required Object count}) => '${count} channels read from the provider';
+
+	/// en: 'Refresh guide'
+	String get refreshGuide => 'Refresh guide';
+
+	/// en: 'Reads only the guide again'
+	String get refreshGuideHint => 'Reads only the guide again';
 }
 
 // Path: appIcon.names
@@ -13356,6 +13401,21 @@ extension on Translations {
 			'iptv.m3uMoviesAsVod' => 'Treat movie files as movies',
 			'iptv.m3uMoviesAsVodHint' => 'Entries whose address is a video file (such as .mp4 or .mkv), or that sit in a Movies, VOD or Series group, appear in a Movies library instead of the channel list.',
 			'iptv.refreshInterrupted' => 'The last refresh did not finish; Plezilo stopped it. Refresh by hand to try again.',
+			'iptv.guideFromXtream' => 'From your Xtream login',
+			'iptv.guideFromPlaylist' => 'From the playlist\'s guide',
+			'iptv.guideFromAddresses' => 'From your guide addresses',
+			'iptv.guideNoAddress' => 'No guide address',
+			'iptv.guideProgrammes' => ({required Object count}) => '${count} programmes',
+			'iptv.guideUpdated' => ({required Object when}) => 'updated ${when}',
+			'iptv.guideJustNow' => 'just now',
+			'iptv.guideMinutesAgo' => ({required Object n}) => '${n} min ago',
+			'iptv.guideHoursAgo' => ({required Object n}) => '${n} h ago',
+			'iptv.guideDaysAgo' => ({required Object n}) => '${n} days ago',
+			'iptv.guideXtreamFailed' => ({required Object reason}) => 'Your Xtream login\'s guide could not be read (${reason}). Plezilo reads each channel\'s guide from the provider instead.',
+			'iptv.guideXtreamEmpty' => 'Your Xtream login\'s guide was empty. Plezilo reads each channel\'s guide from the provider instead.',
+			'iptv.guideFromProvider' => ({required Object count}) => '${count} channels read from the provider',
+			'iptv.refreshGuide' => 'Refresh guide',
+			'iptv.refreshGuideHint' => 'Reads only the guide again',
 			_ => null,
 		};
 	}

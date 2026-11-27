@@ -1,7 +1,7 @@
 import 'dart:async';
 import '../../../media/ids.dart';
 
-import 'package:flutter/foundation.dart' show ValueListenable;
+import 'package:flutter/foundation.dart' show Listenable, ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter/services.dart';
@@ -20,6 +20,7 @@ import '../../../models/livetv_channel.dart';
 import '../../../models/livetv_program.dart';
 import '../../../models/media_grab_operation.dart';
 import '../../../providers/multi_server_provider.dart';
+import '../../../media/live_tv_support.dart';
 import '../../../media/media_server_client.dart';
 import '../../../theme/mono_tokens.dart';
 import '../../../utils/app_logger.dart';
@@ -347,6 +348,11 @@ class GuideTabState extends State<GuideTab>
 
   @override
   void dispose() {
+    _shownFlush?.cancel();
+    _guideFilledReload?.cancel();
+    for (final source in _guideFilledSources) {
+      source.removeListener(_onGuideFilled);
+    }
     _programLoadGeneration++;
     _selectLongPressController.dispose();
     _guideFocusNode.dispose();
@@ -1567,10 +1573,52 @@ class GuideTabState extends State<GuideTab>
     );
   }
 
+  /// Channels whose rows were built (on screen or about to be), per server,
+  /// for backends that fill their guide on demand ([LiveTvGuideOnDemand]).
+  final Map<String, Set<String>> _pendingShown = {};
+  final Set<String> _sentShown = {};
+  final Set<Listenable> _guideFilledSources = {};
+  Timer? _shownFlush;
+  Timer? _guideFilledReload;
+
+  void _noteShown(LiveTvChannel channel, MediaServerClient? client) {
+    final serverId = channel.serverId;
+    if (serverId == null || client?.liveTv is! LiveTvGuideOnDemand) return;
+    if (!_sentShown.add('$serverId\u0000${channel.key}')) return;
+    _pendingShown.putIfAbsent(serverId, () => {}).add(channel.key);
+    _shownFlush ??= Timer(const Duration(milliseconds: 300), _flushShown);
+  }
+
+  void _flushShown() {
+    _shownFlush = null;
+    if (!mounted) return;
+    final multiServer = context.read<MultiServerProvider>();
+    final pending = Map.of(_pendingShown);
+    _pendingShown.clear();
+    for (final entry in pending.entries) {
+      final serverId = serverIdOrNull(entry.key);
+      final live = serverId == null ? null : multiServer.getClientForServer(serverId)?.liveTv;
+      if (live is! LiveTvGuideOnDemand) continue;
+      final onDemand = live as LiveTvGuideOnDemand;
+      if (_guideFilledSources.add(onDemand.guideFilled)) onDemand.guideFilled.addListener(_onGuideFilled);
+      onDemand.channelsShown(entry.value.toList(), from: _gridStart, to: _gridEnd);
+    }
+  }
+
+  /// Programmes arrived for rows on screen: read the schedule again (once
+  /// per burst).
+  void _onGuideFilled() {
+    _guideFilledReload?.cancel();
+    _guideFilledReload = Timer(const Duration(milliseconds: 600), () {
+      if (mounted && !_isLoading) unawaited(_loadPrograms());
+    });
+  }
+
   Widget _buildChannelCell(LiveTvChannel channel, ThemeData theme, {required int index}) {
     final multiServer = context.read<MultiServerProvider>();
     final serverId = serverIdOrNull(channel.serverId);
     final client = serverId == null ? null : multiServer.getClientForServer(serverId);
+    _noteShown(channel, client);
 
     return _GuideFocusSelector(
       valueListenable: _focusSnapshot,

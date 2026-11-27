@@ -41,6 +41,11 @@ abstract final class IptvMetaKeys {
 
   /// The last Xtream account answer ([XtreamAccount.toJson]).
   static const account = 'xtream_account';
+
+  /// How the last guide refresh went for the source's own guide (Xtream
+  /// `xmltv.php`, or the playlist header's): JSON `{own, error, programmes}`,
+  /// `own` one of `ok`, `empty`, `failed`, `none`.
+  static const guideState = 'guide_state';
 }
 
 /// Imports a source's playlist and guide into the [IptvStore].
@@ -62,6 +67,7 @@ class IptvSyncWorker {
 
   static const playlistKind = 'playlist';
   static const epgKind = 'epg';
+  static const vodKind = 'vod';
 
   void _progress(IptvSyncPhase phase, {int count = 0, String? message}) =>
       onProgress?.call(IptvSyncProgress(phase, count: count, message: message));
@@ -87,7 +93,8 @@ class IptvSyncWorker {
     final request = http.Request('GET', uri)..headers.addAll(_requestHeaders(c));
     final http.StreamedResponse response;
     try {
-      response = await _client.send(request).timeout(const Duration(seconds: 60));
+      // Big panels take a while to start a guide of hundreds of MB.
+      response = await _client.send(request).timeout(const Duration(seconds: 120));
     } on TimeoutException {
       throw const IptvSyncException('timeout');
     } catch (e) {
@@ -101,16 +108,24 @@ class IptvSyncWorker {
       await response.stream.drain<void>();
       throw IptvSyncException('HTTP ${response.statusCode}');
     }
-    return response.stream;
+    // No total cap: a slow download may take long, a stalled one fails.
+    return response.stream.timeout(
+      const Duration(seconds: 60),
+      onTimeout: (sink) {
+        sink.addError(const IptvSyncException('stalled'));
+        sink.close();
+      },
+    );
   }
 
   // ---- playlist -------------------------------------------------------------
 
-  /// Import the channel list (and, for Xtream, movies and series). Returns
-  /// the number of channels.
-  Future<int> importPlaylist(IptvConnection c) async {
+  /// Import the channel list (and, for Xtream with [withVod], movies and
+  /// series; the refresh imports those last, after the guide: [importVod]).
+  /// Returns the number of channels.
+  Future<int> importPlaylist(IptvConnection c, {bool withVod = true}) async {
     try {
-      final count = c.isXtream ? await _importXtream(c) : await _importM3u(c);
+      final count = c.isXtream ? await _importXtream(c, withVod: withVod) : await _importM3u(c);
       await store.recordSync(c.id, playlistKind, ok: true, count: count);
       await rematch(c);
       _progress(IptvSyncPhase.done, count: count);
@@ -287,7 +302,26 @@ class IptvSyncWorker {
     userAgent: c.userAgent,
   );
 
-  Future<int> _importXtream(IptvConnection c) async {
+  /// Xtream movies and series on their own (recorded as [vodKind]), so a
+  /// big catalogue never holds up the channels or the guide.
+  Future<void> importVod(IptvConnection c) async {
+    if (!c.isXtream) return;
+    if (!c.includeVod) {
+      await store.replaceVod(c.id, IptvGroupKind.movie, const [], const []);
+      await store.replaceVod(c.id, IptvGroupKind.series, const [], const []);
+      await store.recordSync(c.id, vodKind, ok: true);
+      return;
+    }
+    try {
+      final total = await _importXtreamVod(c, _xtream(c));
+      await store.recordSync(c.id, vodKind, ok: true, count: total);
+    } on XtreamAuthException {
+      await store.recordSync(c.id, vodKind, ok: false, error: 'login refused');
+      throw const IptvSyncException('login refused', authFailed: true);
+    }
+  }
+
+  Future<int> _importXtream(IptvConnection c, {bool withVod = true}) async {
     _progress(IptvSyncPhase.playlist);
     final api = _xtream(c);
     final account = await api.account();
@@ -345,6 +379,7 @@ class IptvSyncWorker {
         IptvGroup(kind: IptvGroupKind.live, id: e.key, name: e.key, sortIndex: e.value),
     ]);
     appLogger.i('[iptv] xtream live imported channels=$index categories=${categories.length}');
+    if (!withVod) return index;
     if (c.includeVod) {
       await _importXtreamVod(c, api);
     } else {
@@ -395,7 +430,7 @@ class IptvSyncWorker {
     }
   }
 
-  Future<void> _importXtreamVod(IptvConnection c, XtreamApi api) async {
+  Future<int> _importXtreamVod(IptvConnection c, XtreamApi api) async {
     _progress(IptvSyncPhase.movies);
     final movies = await _importVodList(
       c,
@@ -451,6 +486,7 @@ class IptvSyncWorker {
       },
     );
     if (series != null) appLogger.i('[iptv] xtream series imported=$series');
+    return (movies ?? 0) + (series ?? 0);
   }
 
   static int? _year(Map<String, dynamic> row) {
@@ -483,16 +519,37 @@ class IptvSyncWorker {
     ];
   }
 
+  /// The source's own guide addresses (Xtream `xmltv.php`, the playlist
+  /// header's), when the source's guide is used.
+  Future<Set<String>> _ownGuideUrls(IptvConnection c) async {
+    if (!c.useSourceEpg) return const {};
+    if (c.isXtream) return {_xtream(c).xmltvUri().toString()};
+    final header = await store.meta(c.id, IptvMetaKeys.headerEpg);
+    return {
+      if (header != null)
+        for (final u in header.split('\n'))
+          if (u.trim().isNotEmpty) u.trim(),
+    };
+  }
+
+  Future<void> _putGuideState(IptvConnection c, {required String own, String? error, int programmes = 0}) =>
+      store.putMeta(c.id, IptvMetaKeys.guideState, jsonEncode({'own': own, 'error': ?error, 'programmes': programmes}));
+
   /// Import every guide of [c] into the store, keeping the configured window
   /// and only the guide channels some playlist channel can use. Returns the
   /// programmes stored.
   Future<int> importEpg(IptvConnection c) async {
     final urls = await guideUrls(c);
+    final ownUrls = await _ownGuideUrls(c);
     if (urls.isEmpty) {
       await store.recordSync(c.id, epgKind, ok: true, count: 0);
+      await _putGuideState(c, own: 'none');
       appLogger.i('[iptv] guide: no guide address');
       return 0;
     }
+    String? ownOutcome;
+    String? ownError;
+    var ownProgrammes = 0;
     _progress(IptvSyncPhase.guide);
     final wantedIds = <String>{};
     final wantedNames = <String>{};
@@ -598,6 +655,10 @@ class IptvSyncWorker {
         await pending;
         stored += parser.programmes;
         coveredByEarlier.addAll(coveredHere);
+        if (ownUrls.contains(urls[u])) {
+          ownProgrammes += parser.programmes;
+          ownOutcome = ownProgrammes > 0 ? 'ok' : (ownOutcome == 'ok' ? 'ok' : 'empty');
+        }
         appLogger.i(
           '[iptv] guide ${u + 1}/${urls.length} read channels=${parser.channels} programmes=${parser.programmes} '
           'skipped=${parser.skipped}',
@@ -607,7 +668,16 @@ class IptvSyncWorker {
         failures++;
         lastError = e is IptvSyncException ? e.message : 'unreadable guide (${e.runtimeType})';
         appLogger.w('[iptv] guide ${u + 1}/${urls.length} failed: $lastError');
+        if (ownUrls.contains(urls[u]) && ownOutcome != 'ok') {
+          ownOutcome = 'failed';
+          ownError = lastError;
+        }
       }
+    }
+    final own = ownUrls.isEmpty ? 'none' : ownOutcome ?? 'failed';
+    await _putGuideState(c, own: own, error: ownError, programmes: ownProgrammes);
+    if (c.isXtream && own != 'ok') {
+      appLogger.i('[iptv] xtream guide $own; channels read their guide from the provider when shown');
     }
     if (failures == urls.length) {
       await store.beginProgrammeImport(c.id);

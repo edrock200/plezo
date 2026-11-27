@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart' show ValueNotifier, visibleForTesting;
+import 'package:flutter/foundation.dart' show Listenable, ValueNotifier, visibleForTesting;
 import 'package:http/http.dart' as http;
 
 import '../../connection/connection.dart';
@@ -59,6 +59,7 @@ import 'xtream_api.dart';
 
 part 'iptv_client_live.dart';
 part 'iptv_client_dvr.dart';
+part 'iptv_client_guide.dart';
 
 /// [MediaServerClient] for one IPTV source: an M3U playlist or an Xtream
 /// login, with its guides.
@@ -156,8 +157,12 @@ class IptvClient implements MediaServerClient, RemoteTrailerClient {
   @override
   Object get authenticationSessionId => _authSession;
 
+  /// The provider's per-channel guide, read for channels on screen.
+  late final _IptvGuideFallback _guideFallback = _IptvGuideFallback(this);
+
   @override
   void close() {
+    _guideFallback.close();
     if (_closed) return;
     _closed = true;
     if (_ownsHttp) _http.close();

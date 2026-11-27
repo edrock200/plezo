@@ -208,7 +208,7 @@ class _AddIptvScreenState extends State<AddIptvScreen> with AsyncFormStateMixin,
           lastAuthenticatedAt: DateTime.now(),
         );
         setState(() => _importingId = id);
-        await _sync.refresh(id, connection: connection, playlist: true, epg: false);
+        await _sync.refresh(id, connection: connection, playlist: true, epg: false, vod: false);
         final record = await _sync.store.syncRecord(id, IptvSyncWorker.playlistKind);
         if (record.lastSuccess == null) {
           await _sync.store.deleteSource(id);
@@ -217,7 +217,7 @@ class _AddIptvScreenState extends State<AddIptvScreen> with AsyncFormStateMixin,
         }
         // The guide follows in the background (automatic refreshes may not
         // have started yet this run).
-        unawaited(_sync.refresh(id, connection: connection, playlist: false, epg: true));
+        unawaited(_sync.refresh(id, connection: connection, playlist: false, epg: true, vod: true));
         return connection;
       },
       errorMapper: (e) {

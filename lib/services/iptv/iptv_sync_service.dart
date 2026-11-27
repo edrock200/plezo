@@ -39,12 +39,41 @@ class IptvSourceSyncStatus {
 
 /// One refresh job sent to the background isolate.
 class _SyncJob {
-  const _SyncJob(this.connection, this.databasePath, this.playlist, this.epg, this.progress);
+  const _SyncJob(this.connection, this.databasePath, this.playlist, this.epg, this.vod, this.progress);
   final IptvConnection connection;
   final String databasePath;
   final bool playlist;
   final bool epg;
+  final bool vod;
   final SendPort progress;
+}
+
+/// One refresh, in order: live channels, then the guide, then (Xtream) movies
+/// and series, so a big catalogue never holds the guide up. Each step is
+/// recorded on its own and a failed step does not stop the next. Returns the
+/// first error, or null.
+Future<String?> runIptvRefreshSteps(
+  IptvSyncWorker worker,
+  IptvConnection c, {
+  required bool playlist,
+  required bool epg,
+  required bool vod,
+}) async {
+  String? error;
+  Future<void> step(Future<void> Function() run) async {
+    try {
+      await run();
+    } on IptvSyncException catch (e) {
+      error ??= e.message;
+    } catch (e) {
+      error ??= 'refresh failed (${e.runtimeType})';
+    }
+  }
+
+  if (playlist) await step(() => worker.importPlaylist(c, withVod: false));
+  if (epg) await step(() => worker.importEpg(c));
+  if (vod && c.isXtream) await step(() => worker.importVod(c));
+  return error;
 }
 
 /// Runs in the background isolate: its own connection to the IPTV database,
@@ -57,13 +86,7 @@ Future<String?> _runSyncJob(_SyncJob job) async {
     onProgress: (p) => job.progress.send([p.phase.index, p.count, p.message]),
   );
   try {
-    if (job.playlist) await worker.importPlaylist(job.connection);
-    if (job.epg) await worker.importEpg(job.connection);
-    return null;
-  } on IptvSyncException catch (e) {
-    return e.message;
-  } catch (e) {
-    return 'refresh failed (${e.runtimeType})';
+    return await runIptvRefreshSteps(worker, job.connection, playlist: job.playlist, epg: job.epg, vod: job.vod);
   } finally {
     worker.close();
     await db.close();
@@ -298,18 +321,30 @@ class IptvSyncService {
 
     final needPlaylist = stale(playlist, c.playlistRefreshHours);
     final needEpg = needPlaylist || stale(epg, c.epgRefreshHours);
-    if (!needPlaylist && !needEpg) return;
-    await refresh(sourceId, playlist: needPlaylist, epg: needEpg);
+    var needVod = false;
+    if (c.isXtream && !needPlaylist) {
+      needVod = stale(await store.syncRecord(sourceId, IptvSyncWorker.vodKind), c.playlistRefreshHours);
+    }
+    if (!needPlaylist && !needEpg && !needVod) return;
+    await refresh(sourceId, playlist: needPlaylist, epg: needEpg, vod: needPlaylist || needVod);
   }
 
   /// Refresh now (the user asked, or [check] found it stale). Shares a running
   /// refresh of the same source.
-  Future<void> refresh(String sourceId, {bool playlist = true, bool epg = true, IptvConnection? connection}) {
+  /// [vod] (default: with the playlist) also reads Xtream movies and series,
+  /// after the guide.
+  Future<void> refresh(
+    String sourceId, {
+    bool playlist = true,
+    bool epg = true,
+    bool? vod,
+    IptvConnection? connection,
+  }) {
     final c = connection ?? _sources[sourceId];
     if (c == null) return Future<void>.value();
     final running = _running[sourceId];
     if (running != null) return running;
-    final job = _queue.then((_) => _run(c, playlist: playlist, epg: epg));
+    final job = _queue.then((_) => _run(c, playlist: playlist, epg: epg, vod: vod ?? playlist));
     _queue = job.catchError((_) {});
     _running[sourceId] = job;
     return job.whenComplete(() => _running.remove(sourceId));
@@ -317,7 +352,7 @@ class IptvSyncService {
 
   bool isRunning(String sourceId) => _running.containsKey(sourceId);
 
-  Future<void> _run(IptvConnection c, {required bool playlist, required bool epg}) async {
+  Future<void> _run(IptvConnection c, {required bool playlist, required bool epg, required bool vod}) async {
     final notifier = statusOf(c.id);
     notifier.value = notifier.value.copyWith(
       running: true,
@@ -350,7 +385,7 @@ class IptvSyncService {
           }
         });
         try {
-          error = await _spawn(_SyncJob(c, path, playlist, epg, port.sendPort));
+          error = await _spawn(_SyncJob(c, path, playlist, epg, vod, port.sendPort));
         } finally {
           await sub.cancel();
           port.close();
@@ -358,10 +393,7 @@ class IptvSyncService {
       } else {
         final worker = IptvSyncWorker(store: store, onProgress: onProgress, client: httpClientFactory?.call());
         try {
-          if (playlist) await worker.importPlaylist(c);
-          if (epg) await worker.importEpg(c);
-        } on IptvSyncException catch (e) {
-          error = e.message;
+          error = await runIptvRefreshSteps(worker, c, playlist: playlist, epg: epg, vod: vod);
         } finally {
           worker.close();
         }

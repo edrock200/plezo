@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -15,6 +16,7 @@ import '../../services/iptv/iptv_client.dart';
 import '../../services/iptv/iptv_parental.dart';
 import '../../services/iptv/iptv_store.dart';
 import '../../services/iptv/iptv_sync_service.dart';
+import '../../services/iptv/iptv_sync_worker.dart';
 import '../../services/iptv/xtream_api.dart';
 import '../../utils/app_logger.dart';
 import '../../utils/dialogs.dart';
@@ -68,17 +70,71 @@ class _IptvSourceSettingsScreenState extends State<IptvSourceSettingsScreen> {
     unawaited(_loadStats());
   }
 
+  Map<String, Object?>? _guideState;
+  int _guideFromProvider = 0;
+
+  static String _ago(DateTime when) {
+    final d = DateTime.now().difference(when);
+    if (d.inMinutes < 1) return t.iptv.guideJustNow;
+    if (d.inHours < 1) return t.iptv.guideMinutesAgo(n: d.inMinutes);
+    if (d.inDays < 1) return t.iptv.guideHoursAgo(n: d.inHours);
+    return t.iptv.guideDaysAgo(n: d.inDays);
+  }
+
+  /// The guide's state in plain words: where it comes from, how many
+  /// programmes, when it was read, and whether the Xtream login's own guide
+  /// failed (then each channel's guide is read from the provider).
+  String _guideLine(IptvConnection c, IptvSyncRecord record) {
+    final own = _guideState?['own'];
+    final reason = _guideState?['error'];
+    final String origin;
+    if (c.isXtream && c.useSourceEpg && (own == 'ok' || own == null)) {
+      origin = t.iptv.guideFromXtream;
+    } else if (!c.isXtream && c.useSourceEpg && own == 'ok') {
+      origin = t.iptv.guideFromPlaylist;
+    } else if (c.epgUrls.isNotEmpty) {
+      origin = t.iptv.guideFromAddresses;
+    } else if (c.isXtream && c.useSourceEpg) {
+      origin = t.iptv.guideFromXtream;
+    } else {
+      origin = t.iptv.guideNoAddress;
+    }
+    final parts = <String>[
+      origin,
+      t.iptv.guideProgrammes(count: NumberFormat.decimalPattern().format(_programmeCount)),
+      if (_guideFromProvider > 0) t.iptv.guideFromProvider(count: _guideFromProvider),
+      if (record.lastSuccess != null) t.iptv.guideUpdated(when: _ago(record.lastSuccess!)) else t.iptv.neverRefreshed,
+    ];
+    final line = parts.join(' · ');
+    if (c.isXtream && c.useSourceEpg && own == 'failed') {
+      return '$line\n${t.iptv.guideXtreamFailed(reason: reason is String ? reason : '-')}';
+    }
+    if (c.isXtream && c.useSourceEpg && own == 'empty') return '$line\n${t.iptv.guideXtreamEmpty}';
+    final error = record.error;
+    if (error != null && error != IptvSyncService.interruptedError) return '$line\n${t.iptv.lastError(error: error)}';
+    return line;
+  }
+
   Future<void> _loadStats() async {
     try {
       final channels = await _store.channelCount(_connection.id);
       final programmes = await _store.programmeCount(_connection.id);
       final client = _client();
       final account = client == null ? null : await client.storedAccount();
+      final rawGuide = await _store.meta(_connection.id, IptvMetaKeys.guideState);
+      final fromProvider = await _store.guideFetchedCount(_connection.id);
+      Map<String, Object?>? guideState;
+      try {
+        final decoded = rawGuide == null ? null : jsonDecode(rawGuide);
+        if (decoded is Map) guideState = decoded.cast<String, Object?>();
+      } catch (_) {}
       if (!mounted) return;
       setState(() {
         _channelCount = channels;
         _programmeCount = programmes;
         _account = account;
+        _guideState = guideState;
+        _guideFromProvider = fromProvider;
       });
     } catch (e) {
       appLogger.d('[iptv] source stats unreadable (${e.runtimeType})');
@@ -296,7 +352,13 @@ class _IptvSourceSettingsScreenState extends State<IptvSourceSettingsScreen> {
                   _row(
                     icon: Symbols.calendar_view_day_rounded,
                     title: t.iptv.guide,
-                    subtitle: _syncLine(status.epg, counted: (n) => t.iptv.programmesCount(count: n)),
+                    subtitle: _guideLine(c, status.epg),
+                    onTap: status.running ? null : () => unawaited(_refresh(playlist: false, guide: true)),
+                  ),
+                  _row(
+                    icon: Symbols.event_repeat_rounded,
+                    title: t.iptv.refreshGuide,
+                    subtitle: t.iptv.refreshGuideHint,
                     onTap: status.running ? null : () => unawaited(_refresh(playlist: false, guide: true)),
                   ),
                   _row(

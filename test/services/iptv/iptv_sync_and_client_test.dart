@@ -357,13 +357,14 @@ void main() {
     }
 
     test('live addresses, timeshift catch-up and the short guide fallback', () async {
+      server.simpleTableEmpty = true;
       final client = await xtreamClient();
       final session = (await client.liveTv.startPlayback('x1001'))!;
       expect(await session.streamUrlAt(), '${server.base}/live/demo/secret/1001.ts');
       final window = session.captureBuffer!;
       final url = await session.streamUrlAt(offsetSeconds: window.seekEndSeconds.round() - 1800);
       expect(url, matches(RegExp(r'/timeshift/demo/secret/30/\d{4}-\d{2}-\d{2}:\d{2}-\d{2}/1001\.ts$')));
-      // No guide imported: now/next from get_short_epg.
+      // No guide imported and no full listing: now/next from get_short_epg.
       final nn = await client.nowNext('x1001');
       expect(nn.now?.title, 'Short Now');
       expect(nn.next?.title, 'Short Next');

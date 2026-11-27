@@ -79,6 +79,11 @@ class IptvChannel {
 
   /// The guide channel this channel reads (the user's choice, else the match).
   final String? epgChannelId;
+
+  /// The key its programmes are stored under: the guide channel, else (an
+  /// Xtream channel without one) `xs:<stream id>` for the guide read from the
+  /// provider channel by channel.
+  String? get guideKey => epgChannelId ?? (xtreamId == null ? null : 'xs:$xtreamId');
   final String? manualEpgId;
   final bool hidden;
 
@@ -395,6 +400,11 @@ const _schema = <String>[
     source_id TEXT NOT NULL, id TEXT NOT NULL, display_name TEXT NOT NULL, name_norm TEXT NOT NULL, icon TEXT,
     PRIMARY KEY (source_id, id, name_norm))''',
   'CREATE INDEX IF NOT EXISTS epg_channels_norm ON epg_channels (source_id, name_norm)',
+  // Channels whose guide was read from the provider one by one (Xtream
+  // per-channel guide), and when: the 2 h freshness of that fallback.
+  '''CREATE TABLE IF NOT EXISTS epg_fetched (
+    source_id TEXT NOT NULL, channel_id TEXT NOT NULL, fetched_at INTEGER NOT NULL,
+    PRIMARY KEY (source_id, channel_id))''',
   '''CREATE TABLE IF NOT EXISTS epg_channels_staging (
     source_id TEXT NOT NULL, id TEXT NOT NULL, display_name TEXT NOT NULL, name_norm TEXT NOT NULL, icon TEXT,
     PRIMARY KEY (source_id, id, name_norm))''',
@@ -479,7 +489,7 @@ class IptvDatabase extends GeneratedDatabase {
   Iterable<TableInfo<Table, Object?>> get allTables => const [];
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -769,11 +779,12 @@ class IptvStore {
     final out = <String>[];
     for (var i = 0; i < list.length; i += 500) {
       final slice = list.sublist(i, i + 500 > list.length ? list.length : i + 500);
+      final marks = List.filled(slice.length, '?').join(', ');
       final rows = await db
           .customSelect(
-            'SELECT id FROM channels WHERE source_id = ? AND epg_id IN (${List.filled(slice.length, '?').join(', ')}) '
-            'ORDER BY sort_index',
-            variables: [Variable(sourceId), for (final id in slice) Variable(id)],
+            'SELECT id FROM channels WHERE source_id = ? AND (epg_id IN ($marks) '
+            "OR (epg_id IS NULL AND 'xs:' || xtream_id IN ($marks))) ORDER BY sort_index",
+            variables: [Variable(sourceId), for (final id in slice) Variable(id), for (final id in slice) Variable(id)],
           )
           .get();
       out.addAll(rows.map((r) => r.read<String>('id')));
@@ -956,9 +967,96 @@ class IptvStore {
         [sourceId],
       );
       await db.customStatement('DELETE FROM programmes_staging WHERE source_id = ?', [sourceId]);
+      // The per-channel guide rows went with the old guide: read them again.
+      await db.customStatement('DELETE FROM epg_fetched WHERE source_id = ?', [sourceId]);
     });
     final row = await db
         .customSelect('SELECT COUNT(*) AS n FROM programmes WHERE source_id = ?', variables: [Variable(sourceId)])
+        .getSingle();
+    return row.read<int>('n');
+  }
+
+  /// Whether guide channel [key] has a programme overlapping `[from, to)`.
+  Future<bool> hasProgrammes(String sourceId, String key, {required int from, required int to}) async {
+    final row = await db
+        .customSelect(
+          'SELECT 1 FROM programmes WHERE source_id = ? AND channel = ? AND stop > ? AND start < ? LIMIT 1',
+          variables: [Variable(sourceId), Variable(key), Variable(from), Variable(to)],
+        )
+        .getSingleOrNull();
+    return row != null;
+  }
+
+  /// Store a channel's guide read from the provider: replaces what overlaps
+  /// it, and records when ([guideFetchedAt]).
+  Future<void> putChannelProgrammes(
+    String sourceId,
+    String channelId,
+    String key,
+    List<IptvProgramme> programmes, {
+    required int fetchedAt,
+  }) async {
+    await db.transaction(() async {
+      if (programmes.isNotEmpty) {
+        var first = programmes.first.start;
+        var last = programmes.first.stop;
+        for (final p in programmes) {
+          if (p.start < first) first = p.start;
+          if (p.stop > last) last = p.stop;
+        }
+        await db.customStatement(
+          'DELETE FROM programmes WHERE source_id = ? AND channel = ? AND stop > ? AND start < ?',
+          [sourceId, key, first, last],
+        );
+        await _insertMany(
+          'INSERT INTO programmes (source_id, channel, start, stop, title, sub_title, descr, category, icon, '
+          'episode, season, ep, rating, year, title_lower, is_new) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [
+            for (final p in programmes)
+              [
+                sourceId,
+                key,
+                p.start,
+                p.stop,
+                p.title,
+                p.subTitle,
+                p.description,
+                p.category,
+                p.icon,
+                p.episode,
+                p.season,
+                p.episodeNumber,
+                p.rating,
+                p.year,
+                p.title.toLowerCase(),
+                p.isNew ? 1 : 0,
+              ],
+          ],
+        );
+      }
+      await db.customStatement(
+        'INSERT OR REPLACE INTO epg_fetched (source_id, channel_id, fetched_at) VALUES (?, ?, ?)',
+        [sourceId, channelId, fetchedAt],
+      );
+    });
+  }
+
+  /// When [channelId]'s guide was last read from the provider (epoch
+  /// seconds), or null.
+  Future<int?> guideFetchedAt(String sourceId, String channelId) async {
+    final row = await db
+        .customSelect(
+          'SELECT fetched_at FROM epg_fetched WHERE source_id = ? AND channel_id = ?',
+          variables: [Variable(sourceId), Variable(channelId)],
+        )
+        .getSingleOrNull();
+    return row?.read<int>('fetched_at');
+  }
+
+  /// Channels whose guide was read from the provider one by one.
+  Future<int> guideFetchedCount(String sourceId) async {
+    final row = await db
+        .customSelect('SELECT COUNT(*) AS n FROM epg_fetched WHERE source_id = ?', variables: [Variable(sourceId)])
         .getSingle();
     return row.read<int>('n');
   }
@@ -1609,6 +1707,7 @@ class IptvStore {
         'programmes_staging',
         'epg_channels',
         'epg_channels_staging',
+        'epg_fetched',
         'vod',
         'vod_staging',
         'channel_overrides',

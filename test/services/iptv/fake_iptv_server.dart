@@ -28,6 +28,16 @@ class FakeIptvServer {
   /// Serve this many made-up movies from `get_vod_streams` (a huge catalogue).
   int? syntheticMovies;
 
+  /// `xmltv.php`: its HTTP status, an empty body, or gzip bytes without a
+  /// gzip content type (some panels do that).
+  int xmltvStatus = 200;
+  bool xmltvEmpty = false;
+  bool xmltvGzipNoHeader = false;
+
+  /// `get_simple_data_table` answers no listings (then `get_short_epg` is
+  /// asked).
+  bool simpleTableEmpty = false;
+
   /// Cut the list answers (`get_*_streams`, `get_series`) off half way, as a
   /// dropped connection would.
   bool truncateLists = false;
@@ -304,8 +314,30 @@ class FakeIptvServer {
             },
           ],
         };
-      case 'get_simple_data_table':
+      case 'get_simple_data_table' when simpleTableEmpty:
         return {'epg_listings': <Object>[]};
+      case 'get_simple_data_table':
+        // The provider's own full listing of one channel: hourly from 3 h ago
+        // to 6 h ahead, start/end in the server's local time (UTC here) and
+        // no timestamps, titles in base64.
+        final id = q['stream_id'] ?? '';
+        final hour = DateTime.utc(now.year, now.month, now.day, now.hour);
+        String local(DateTime t) =>
+            '${t.year}-${'${t.month}'.padLeft(2, '0')}-${'${t.day}'.padLeft(2, '0')} '
+            '${'${t.hour}'.padLeft(2, '0')}:00:00';
+        return {
+          'epg_listings': [
+            for (var h = -3; h < 6; h++)
+              {
+                'id': '$id$h',
+                'epg_id': '',
+                'title': base64.encode(utf8.encode('Table $id at $h')),
+                'description': base64.encode(utf8.encode('From the table')),
+                'start': local(hour.add(Duration(hours: h))),
+                'end': local(hour.add(Duration(hours: h + 1))),
+              },
+          ],
+        };
     }
     return <Object>[];
   }
@@ -340,6 +372,9 @@ class FakeIptvServer {
     }
     if (path == '/xmltv.php') {
       if (!_authorised(q)) return (status: 401, body: const [], type: 'text/plain');
+      if (xmltvStatus != 200) return (status: xmltvStatus, body: text('<html>Not found</html>'), type: 'text/html');
+      if (xmltvEmpty) return (status: 200, body: const [], type: 'application/xml');
+      if (xmltvGzipNoHeader) return (status: 200, body: gzip.encode(text(xmltv())), type: 'application/xml');
       return (status: 200, body: text(xmltv()), type: 'application/xml');
     }
     if (path == '/playlist.m3u') return (status: 200, body: text(m3u()), type: 'audio/x-mpegurl');

@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart' show Listenable;
+
 import 'media_item.dart';
 import 'media_source_info.dart';
 import '../models/livetv_capture_buffer.dart';
@@ -128,6 +130,16 @@ abstract class LiveTvPlaybackSession {
 /// with every open of the session's URLs.
 abstract interface class LiveTvStreamHeaders {
   Map<String, String> get streamHeaders;
+}
+
+/// Optional capability of a [LiveTvSupport] whose guide is filled on demand,
+/// a channel at a time (an IPTV provider's per-channel guide): the guide grid
+/// says which channels it has on screen, and reads the schedule again when
+/// [guideFilled] changes. Never blocks: the rows arrive later.
+abstract interface class LiveTvGuideOnDemand {
+  void channelsShown(List<String> channelKeys, {required DateTime from, required DateTime to});
+
+  Listenable get guideFilled;
 }
 
 /// Optional capability of a [LiveTvSupport]: what the Live TV screens need

@@ -434,12 +434,27 @@ class XtreamApi {
     return data is Map ? data.cast<String, dynamic>() : null;
   }
 
-  List<XtreamEpgEntry> _listings(Object? data) {
+  /// `epg_listings` rows. Times are `start_timestamp`/`stop_timestamp`
+  /// (UTC epoch), else `start`/`end` (`YYYY-MM-DD hh:mm:ss`, the server's
+  /// local time: [serverOffset] from the account answer).
+  static List<XtreamEpgEntry> parseListings(Object? data, {Duration serverOffset = Duration.zero}) {
     final rows = data is Map && data['epg_listings'] is List ? data['epg_listings'] as List : const [];
     final out = <XtreamEpgEntry>[];
+    int? local(Object? v) {
+      final text = xtreamString(v);
+      if (text == null) return null;
+      final parsed = DateTime.tryParse('${text.replaceFirst(' ', 'T')}Z');
+      if (parsed == null) return null;
+      return parsed.subtract(serverOffset).millisecondsSinceEpoch ~/ 1000;
+    }
+
     for (final row in rows.whereType<Map>()) {
-      final start = xtreamInt(row['start_timestamp']);
-      final stop = xtreamInt(row['stop_timestamp']) ?? xtreamInt(row['end_timestamp']);
+      final start = xtreamInt(row['start_timestamp']) ?? local(row['start']);
+      final stop =
+          xtreamInt(row['stop_timestamp']) ??
+          xtreamInt(row['end_timestamp']) ??
+          local(row['end']) ??
+          local(row['stop']);
       if (start == null || stop == null) continue;
       out.add(
         XtreamEpgEntry(
@@ -458,11 +473,18 @@ class XtreamApi {
     return out;
   }
 
-  Future<List<XtreamEpgEntry>> shortEpg(String streamId, {int limit = 4}) async =>
-      _listings(await _get({'action': 'get_short_epg', 'stream_id': streamId, 'limit': '$limit'}));
+  Future<List<XtreamEpgEntry>> shortEpg(
+    String streamId, {
+    int limit = 4,
+    Duration serverOffset = Duration.zero,
+  }) async => parseListings(
+    await _get({'action': 'get_short_epg', 'stream_id': streamId, 'limit': '$limit'}),
+    serverOffset: serverOffset,
+  );
 
-  Future<List<XtreamEpgEntry>> simpleDataTable(String streamId) async =>
-      _listings(await _get({'action': 'get_simple_data_table', 'stream_id': streamId}));
+  /// A channel's full listing (the provider's per-channel guide).
+  Future<List<XtreamEpgEntry>> simpleDataTable(String streamId, {Duration serverOffset = Duration.zero}) async =>
+      parseListings(await _get({'action': 'get_simple_data_table', 'stream_id': streamId}), serverOffset: serverOffset);
 
   String _u() => Uri.encodeComponent(credentials.username);
   String _p() => Uri.encodeComponent(credentials.password);

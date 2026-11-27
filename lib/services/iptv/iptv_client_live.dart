@@ -153,7 +153,7 @@ extension IptvClientLive on IptvClient {
     final byEpg = <String, List<IptvShownChannel>>{};
     var maxShift = 0;
     for (final s in shown) {
-      final epg = s.channel.epgChannelId;
+      final epg = s.channel.guideKey;
       if (epg == null || epg.isEmpty) continue;
       byEpg.putIfAbsent(epg, () => []).add(s);
       final shift = _shiftSeconds(s.channel).abs();
@@ -214,9 +214,22 @@ extension IptvClientLive on IptvClient {
     if (shown == null) return (now: null, next: null);
     final ch = shown.channel;
     final now = (at ?? _now()).millisecondsSinceEpoch ~/ 1000;
-    final epg = ch.epgChannelId;
+    final epg = ch.guideKey;
     final shift = _shiftSeconds(ch);
-    if (epg != null && epg.isNotEmpty) {
+    final stored = epg == null || epg.isEmpty ? null : await _storedNowNext(epg, now, shift);
+    if (stored != null) return stored;
+    // Nothing stored: the provider's per-channel guide (Xtream), stored for
+    // the next time; waited for briefly here (a banner or list row).
+    final filled = await _guideFallback
+        .ensure(ch)
+        .timeout(const Duration(seconds: 8), onTimeout: () => false)
+        .catchError((_) => false);
+    if (filled && epg != null) return await _storedNowNext(epg, now, shift) ?? (now: null, next: null);
+    return (now: null, next: null);
+  }
+
+  Future<IptvNowNext?> _storedNowNext(String epg, int now, int shift) async {
+    {
       final rows = await store.programmes(
         _connection.id,
         from: now - shift.abs(),
@@ -235,32 +248,7 @@ extension IptvClientLive on IptvClient {
       }
       if (current != null || next != null) return (now: current, next: next);
     }
-    final api = _xtream;
-    final xtreamId = ch.xtreamId;
-    if (api == null || xtreamId == null) return (now: null, next: null);
-    try {
-      final entries = await api.shortEpg(xtreamId, limit: 3);
-      IptvProgramme? current;
-      IptvProgramme? next;
-      for (final e in entries) {
-        final p = IptvProgramme(
-          epgChannelId: e.epgId ?? ch.id,
-          start: e.start,
-          stop: e.stop,
-          title: e.title,
-          description: e.description,
-        );
-        if (p.start <= now && p.stop > now) {
-          current ??= p;
-        } else if (p.start > now) {
-          next ??= p;
-        }
-      }
-      return (now: current, next: next);
-    } catch (e) {
-      appLogger.d('[iptv] short guide unavailable (${e.runtimeType})');
-      return (now: null, next: null);
-    }
+    return null;
   }
 
   /// A channel even when it is not shown (hidden, locked): for the player of
@@ -412,13 +400,13 @@ extension IptvClientLive on IptvClient {
     final epgIds = {for (final p in rows) p.epgChannelId};
     if (warm != null) {
       for (final s in warm.channels) {
-        final epg = s.channel.epgChannelId;
+        final epg = s.channel.guideKey;
         if (epg != null && epgIds.contains(epg)) byEpg.putIfAbsent(epg, () => []).add(s);
       }
     } else if (epgIds.isNotEmpty) {
       final ids = await store.channelIdsByEpg(_connection.id, epgIds);
       for (final s in await _shownByIds(ids)) {
-        final epg = s.channel.epgChannelId;
+        final epg = s.channel.guideKey;
         if (epg != null) byEpg.putIfAbsent(epg, () => []).add(s);
       }
     }
@@ -445,9 +433,32 @@ extension IptvClientLive on IptvClient {
 }
 
 /// Live TV of an IPTV source.
-class _IptvLiveTvSupport implements LiveTvSupport, LiveTvChannelGroups, LiveTvRecordedItems {
+class _IptvLiveTvSupport implements LiveTvSupport, LiveTvChannelGroups, LiveTvRecordedItems, LiveTvGuideOnDemand {
   _IptvLiveTvSupport(this._client);
   final IptvClient _client;
+
+  /// Rows on screen in the guide grid: their channels without a stored guide
+  /// get the provider's per-channel guide (Xtream), in the background.
+  @override
+  void channelsShown(List<String> channelKeys, {required DateTime from, required DateTime to}) {
+    if (_client._xtream == null || channelKeys.isEmpty) return;
+    unawaited(() async {
+      try {
+        final warm = _client._warmChannels;
+        final channels = warm != null
+            ? [for (final k in channelKeys) ?warm.byId[k]?.channel]
+            : await _client.store.channelsByIds(_client.connection.id, channelKeys);
+        for (final ch in channels) {
+          unawaited(_client._guideFallback.ensure(ch).catchError((_) => false));
+        }
+      } catch (e) {
+        appLogger.d('[iptv] guide rows not filled (${e.runtimeType})');
+      }
+    }());
+  }
+
+  @override
+  Listenable get guideFilled => IptvDataRevision.guide;
 
   @override
   LiveTvDvrSupport? get dvr => _IptvDvr(_client);
@@ -685,6 +696,12 @@ class IptvDataRevision {
 
   /// Notifies after favourites changed (Home's Live TV row).
   static final ValueNotifier<int> favorites = ValueNotifier(0);
+
+  /// Notifies after programmes arrived outside a refresh (the provider's
+  /// per-channel guide): the guide reads its schedule again.
+  static final ValueNotifier<int> guide = ValueNotifier(0);
+
+  static void bumpGuide() => guide.value++;
 
   static int of(String sourceId) => _revisions[sourceId] ?? 0;
 
